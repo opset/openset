@@ -1,0 +1,28 @@
+[{
+    "name": "product_name",
+    "type": "text"
+}, {
+    "name": "product_price",
+    "type": "double"
+}, {
+    "name": "product_shipping",
+    "type": "double"
+}, {
+    "name": "shipper",
+    "type": "text"
+}, {
+    "name": "total",
+    "type": "double"
+}, {
+    "name": "shipping",
+    "type": "double"
+}, {
+    "name": "product_tags",
+    "type": "text"
+}, {
+    "name": "product_group",
+    "type": "text"
+}, {
+    "name": "cart_size",
+    "type": "int"
+}]

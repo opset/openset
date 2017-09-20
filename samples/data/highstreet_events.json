@@ -1,0 +1,165 @@
+[
+    {
+        "person": "Tommy",
+        "stamp": "2017-01-01T05:30:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 122.73,
+            "shipping": 8.99,
+            "shipper": "fedex",
+            "cart_size": 2,
+            "_": [
+                {
+                    "product_name": "grommet",
+                    "product_price": 94.74,
+                    "product_tags": ["red", "small", "rubber"],
+                    "product_group": ["garage", "basement"]
+                },
+                {
+                    "product_name": "shag rug",
+                    "product_price": 27.99,
+                    "product_tags": ["red", "shaggy", "retro"],
+                    "_": [
+                        {
+                        "product_group": "bedroom"
+                        },
+                        {
+                        "product_group": "bathroom"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    {
+        "person": "Klara",
+        "stamp": "2017-01-03T13:15:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 27.99,
+            "shipping": 7.85,
+            "shipper": "fedex",
+            "cart_size": 1,
+            "_": [
+                {
+                    "product_name": "shag rug",
+                    "product_price": 27.99,
+                    "product_tags": ["orange", "shaggy", "retro"],
+                    "product_group": ["bedroom", "bathroom"]
+                }
+            ]
+        }
+    },
+    {
+        "person": "Kyle",
+        "stamp": "2017-01-02T13:01:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 155.93,
+            "shipping": 7.85,
+            "shipper": "ground",
+            "cart_size": 3,
+            "_": [
+                {
+                    "product_name": "fly rod",
+                    "product_price": 99.95,
+                    "product_tags": ["carbon-fibre", "fishing", "gear"],
+                    "product_group": ["outdoor", "angling"]
+                },
+                {
+                    "product_name": "triple hook jigger",
+                    "product_price": 27.99,
+                    "product_tags": ["fishing", "lures"],
+                    "product_group": ["outdoor", "angling"]
+                },
+                {
+                    "product_name": "deluxe spinner",
+                    "product_price": 27.99,
+                    "product_tags": ["fishing", "lures"],
+                    "product_group": ["outdoor", "angling"]
+                }
+            ]
+        }
+    },
+    {
+        "person": "Klara",
+        "stamp": "2017-01-05T13:15:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 167.94,
+            "shipping": 7.85,
+            "shipper": "fedex",
+            "cart_size": 2,
+            "_": [
+                {
+                    "product_name": "panini press",
+                    "product_price": 67.99,
+                    "product_tags": ["small-appliance", "stainless", "cooking"],
+                    "product_group": ["kitchen", "restaurant"]
+                },
+                {
+                    "product_name": "fly rod",
+                    "product_price": 99.95,
+                    "product_tags": ["carbon-fibre", "fishing", "gear"],
+                    "product_group": ["outdoor", "angling"]
+                }
+            ]
+        }
+    },
+    {
+        "person": "Tommy",
+        "stamp": "2017-01-06T06:00:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 717.98,
+            "shipping": 8.99,
+            "shipper": "ground",
+            "cart_size": 2,
+            "_": [
+                {
+                    "product_name": "panini press",
+                    "product_price": 67.99,
+                    "product_tags": ["small-appliance", "stainless", "cooking"],
+                    "product_group": ["kitchen"]
+                },
+                {
+                    "product_name": "espresso mmachine",
+                    "product_price": 649.99,
+                    "product_tags": ["small-appliance", "stainless", "coffee"],
+                    "product_group": ["kitchen", "restaurant"]
+                }
+            ]
+        }
+    },
+    {
+        "person": "Klara",
+        "stamp": "2017-01-07T13:05:00Z",
+        "action" : "purchase",
+        "attr":{
+            "total": 145.93,
+            "shipping": 7.85,
+            "shipper": "ground",
+            "cart_size": 3,
+            "_": [
+                {
+                    "product_name": "fly rod",
+                    "product_price": 99.95,
+                    "product_tags": ["carbon-fibre", "fishing", "gear"],
+                    "product_group": ["outdoor", "angling"]
+                },
+                {
+                    "product_name": "gilded spoon",
+                    "product_price": 27.99,
+                    "product_tags": ["fishing", "lures"],
+                    "product_group": ["outdoor", "angling"]
+                },
+                {
+                    "product_name": "double spinner",
+                    "product_price": 17.99,
+                    "product_tags": ["fishing", "lures"],
+                    "product_group": ["outdoor", "angling"]
+                }
+            ]
+        }
+    }
+]

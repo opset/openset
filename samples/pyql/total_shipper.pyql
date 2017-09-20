@@ -1,0 +1,8 @@
+aggregate:
+    count person
+    count shipper
+    sum shipping
+    sum total
+
+match:
+    tally(shipper)
