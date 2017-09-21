@@ -25,9 +25,9 @@ PyQL is an iteration language. Data in OpenSet consists of event sets (one for e
 
 PyQL is meant to be small. Small is fast.
 
-# An OpenSet query is different
+# Anatomy of an  OpenSet query
 
-To understand how a query works in OpenSet you must understand how it organizes data, and how it simplifies complex problems.
+To understand how a query works in OpenSet you must understand how it organizes data, and how it simplifies complex problems. The best way to explain this is by example.
 
 #### The scenario
 
@@ -47,9 +47,9 @@ For output you make a JSON document and store the **first feature**, and under i
 
 I bet this script has less than 10 lines code. 
 
-Fortunately, this is how OpenSet solves most problems. All behavioural problems are treated as single customer problems. That's because internally all customer events are pre-mapped and sorted into compressed user event sets. 
+Fortunately, this is how OpenSet solves most problems. All behavioural problems are treated as single customer problems. That's because internally all user events are pre-mapped to individual users where they are sorted into compressed user event sets. If you have a million users in your dataset, you will essentially have a million really small tables.
 
-Pre-mapped, pre-sorted and pre-indexed data means you only have to focus on the question (not mapping and chaining jobs, or inner and out joins ).
+Data that's pre-mapped, pre-sorted and pre-indexed means you only have to focus on the question (no more mapping and chaining jobs, or nested queries and joins).
 
 How might this look. Lets assume that when a user performs an action, an with an `action`of `feature_used` is stored, and with that `action` a property of `feature_name` is stored.
 
