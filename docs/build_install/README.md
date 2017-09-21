@@ -37,7 +37,7 @@ You will find recent versions of these projects under [openset/vendor](https://g
 cd openset
 mkdir Release
 cd Release
-cmake -DCMAKE_C_COMPILER=gcc-7.2 -DCMAKE_CXX_COMPILER=g++-7.2 -DCMAKE_BUILD_TYPE=Release ../
+cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=Release 
 make
 ```
 &nbsp;&nbsp;&nbsp;&nbsp; or, to build debug:
@@ -45,7 +45,7 @@ make
 cd openset
 mkdir Debug
 cd Debug
-cmake -DCMAKE_C_COMPILER=gcc-7.2 -DCMAKE_CXX_COMPILER=g++-7.2 /..
+cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 
 make
 ```
 4. You should now have a file named openset. Copy this to a directory named `openset`and ensure the file has execute permission using `chmod +x openset`
