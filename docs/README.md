@@ -1,8 +1,7 @@
 # Documentation
 
-&nbsp;
 
-Topics - 
+**topics**
 
 * [Building and Installing](https://github.com/perple-io/openset/tree/master/docs/build_install)  
 * [PyQL query language](https://github.com/perple-io/openset/tree/master/docs/pyql/README.md)
