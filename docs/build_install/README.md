@@ -10,13 +10,17 @@ OpenSet incorporates the following amazing and wonderful open source projects:
 - [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
 - [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). A good hash is hard to find, a fast hash is even harder --- Yann has created both.
 
-You will find recent versions of these projects under [/vendors](#) in the openset repo.
+You will find recent versions of these projects under [openset/vendor](https://github.com/perple-io/openset/tree/master/vendor) in the OpenSet repo.
 
 #### Linux requirements
 
 - Unbutu 14.04 (16.04 recommended)
 - CMake 3.6+
-- gcc 7.2
+- GCC 7.2+
+- GDB 7+ (optional)
+- Node.js 5+
+
+> :pushpin: passing `--version` to these tools on the command line will help you verify they are the correct version.  If you need to install these? click [here](https://github.com/perple-io/openset/blob/master/docs/build_install/build_tools.md).
 
 #### Windows requirements
 
@@ -33,18 +37,18 @@ You will find recent versions of these projects under [/vendors](#) in the opens
 cd openset
 mkdir Release
 cd Release
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake -DCMAKE_C_COMPILER=gcc-7.2 -DCMAKE_CXX_COMPILER=g++-7.2 -DCMAKE_BUILD_TYPE=Release ../
 make
 ```
-or for a debug build:
+&nbsp;&nbsp;&nbsp;&nbsp; or, to build debug:
 ```bash
 cd openset
 mkdir Debug
 cd Debug
-cmake ..
+cmake -DCMAKE_C_COMPILER=gcc-7.2 -DCMAKE_CXX_COMPILER=g++-7.2 /..
 make
 ```
-1. You should now have a file named openset. Copy this to a directory named `openset`and ensure the file has execute permission using `chmod +x openset`
+4. You should now have a file named openset. Copy this to a directory named `openset`and ensure the file has execute permission using `chmod +x openset`
 
 #### Building on Windows
 
