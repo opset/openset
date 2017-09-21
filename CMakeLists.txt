@@ -65,8 +65,6 @@ set(SOURCE_FILES
         src/asyncloop.h
         src/asyncpool.cpp
         src/asyncpool.h
-        src/attr.cpp
-        src/attr.h
         src/attributeblob.cpp
         src/attributeblob.h
         src/attributes.cpp
@@ -126,10 +124,8 @@ set(SOURCE_FILES
         src/result.h
         src/rpc.cpp
         src/rpc.h
+		src/sentinel.h
         src/sentinel.cpp
-        src/serialize.h
-        src/serialize.cpp
-        src/serialize.h
         src/service.cpp
         src/service.h
         src/shuttle.h

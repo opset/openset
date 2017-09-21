@@ -1,9 +1,11 @@
 # OpenSet
 
 
-OpenSet is a programmable engine for rapidly extracting behavior from user event data. 
+OpenSet is a MIT licensed programmable engine for rapidly extracting behavior from user event data. 
 
 If you have apps, websites, or IoT devices that generate user data, you might find OpenSet really useful.
+
+OpenSet is a streaming solution and can ingest data at up to 35,000 lines per second per node (fully indexed and replicated). OpenSet has been tested on datasets with millions of users and billions of rows.
 
 &nbsp;
 
