@@ -1,4 +1,6 @@
-# Installation prerequisites
+# Building and Installing OpenSet
+
+#### Installation prerequisites
 
 OpenSet is written in modern C++ (using some of the latest features from C++11/14/17). There are around 150k lines of code, as such the most recent compilers are required.
 
