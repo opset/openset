@@ -5,4 +5,4 @@ aggregate:
     sum total
 
 match:
-    tally(shipper)
+    tally('all', shipper)

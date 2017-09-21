@@ -189,7 +189,7 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 					resCol.index, 
 					resCol.modifier == modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
 					recast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
-					columns->cols[COL_STAMP]
+					resCol.schemaColumn == COL_UUID ? 0 : columns->cols[COL_STAMP]
 				};
 
 				// emplace try will return false if the value exists

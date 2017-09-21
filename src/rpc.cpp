@@ -1,3 +1,6 @@
+#include <stdexcept>
+#include <cinttypes>
+
 #include "rpc.h"
 #include "cjson/cjson.h"
 #include "str/strtools.h"
@@ -19,7 +22,6 @@
 #include "internodemessage.h"
 #include "names.h"
 
-#include <stdexcept>
 
 using namespace std;
 using namespace openset::comms;
@@ -1451,15 +1453,15 @@ void Insert::onInsert(
 	std::unordered_map<int64_t, std::vector<char*>> remoteGather;
 
 	const auto mapper = openset::globals::mapper->getPartitionMap();
-	
+
 	for (auto row : rows)
 	{
 		const auto uuid = row->xPathString("/person", "");
 		const auto uuHash = MakeHash(uuid) % 17783LL;
-		const auto destination = cast<int>(uuHash % partitions->getPartitionMax());
+		const auto destination = cast<int32_t>(std::abs(uuHash) % partitions->getPartitionMax());
 
 		const auto mapInfo = globals::mapper->partitionMap.getState(destination, globals::running->nodeId);
-
+		
 		if (mapInfo == openset::mapping::NodeState_e::active_owner ||
 			mapInfo == openset::mapping::NodeState_e::active_clone)
 		{

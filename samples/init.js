@@ -20,11 +20,18 @@ var args = require('command-line-args')([{
     defaultValue: 2020
 }])
 
-console.log('\n\n-------------------------------------------------');
+console.log('\n\n-----------------------------------------------------');
 console.log(' OpenSet Sample Initializer');
 console.log('-----------------------------------------------------\n');
 console.log(' -h --host <ip address> // default 127.0.0.1');
-console.log(' -p --port <port>       // default 2020\n');
+console.log(' -p --port <port>       // default 2020');
+console.log('    --help                       // display help');
+console.log('');
+
+if (args.help) {
+    console.log('\n\n');
+    process.exit(0);
+}
 
 console.log('+ using ' + args.host + ':' + args.port + '\n');
 
@@ -41,7 +48,7 @@ async.series([
         command = {
             action: "init_cluster",
             params: {
-                partitions: 4
+                partitions: 12
             }
         };
 

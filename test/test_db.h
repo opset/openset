@@ -25,7 +25,7 @@ inline Tests test_db()
 	auto user1_raw_inserts = R"raw_inserts(
 	[
 		{
-			"person": "user1_@test.com",
+			"person": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "page_view",
 			"attr":{				
@@ -33,7 +33,7 @@ inline Tests test_db()
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"person": "user1@test.com",
 			"stamp": 1458820840,
 			"action": "page_view",
 			"attr":{				
@@ -43,7 +43,7 @@ inline Tests test_db()
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"person": "user1@test.com",
 			"stamp": 1458820841,
 			"action": "page_view",
 			"attr":{				
@@ -53,7 +53,7 @@ inline Tests test_db()
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"person": "user1@test.com",
 			"stamp": 1458820900,
 			"action": "page_view",
 			"attr":{				
@@ -79,8 +79,8 @@ inline Tests test_db()
 	agg:
 		count person
 		count {{attr_page}}
-		{{attr_ref}} << 1
-		{{attr_keyword}} << 1
+		{{attr_ref}}
+		{{attr_keyword}}
 
 	match:
 		tally(person, \
@@ -332,7 +332,7 @@ inline Tests test_db()
 				auto totalsNode = dataNodes[0]->xPath("/c");				
 				auto values = cjson::Stringify(totalsNode);
 
-				ASSERT(values == "[1,4,2,2]");
+				ASSERT(values == "[1,4,2,6]");
 
 			}
 		},
@@ -419,7 +419,7 @@ inline Tests test_db()
 				auto totalsNode = dataNodes[0]->xPath("/c");
 				auto values = cjson::Stringify(totalsNode);
 
-				ASSERT(values == "[1,4,2,2]");
+				ASSERT(values == "[1,4,2,6]");
 
 			}
 		}

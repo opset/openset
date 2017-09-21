@@ -4,4 +4,4 @@ aggregate:
     sum product_price as total_spent with product_name
 
 match where product_group is 'outdoor':
-    tally(shipper, product_tags, product_name)
+    tally(product_tags, product_name)

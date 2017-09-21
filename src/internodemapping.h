@@ -189,9 +189,9 @@ namespace openset
 					return result;
 				}
 
+				// lock externally before calling this funtion
 				std::vector<int64_t> getReplicas()
 				{
-					csLock lock(cs);
 					std::vector<int64_t> result;
 
 					for (auto &n : nodes)
