@@ -1,14 +1,26 @@
 # OpenSet
 
-> _everyone is data._
 
 OpenSet is an OpenSource a programmable engine for rapidly extracts behavior metrics from user generated event data. 
 
-:coffee: Please note that OpenSet is currently pre-release, pre-beta, pre-alpha etc.  
+> :coffee: Please note that OpenSet is currently pre-release, pre-beta, pre-alpha etc.  
 
-#### Extract sequences easily:
+**shortcuts**
+*  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
+*  [Sample Code](https://github.com/perple-io/openset/tree/master/samples)
+*  [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
-OpenSet makes it easy to extract before/after, path-to, path-from, funnel and cohort type metrics from user event streams. 
+## Features and Abilities
+
+OpenSet has four main abilities -
+1. Perform feature extraction of user behavior in event streams.
+2. Taxonomical aggregates and analytics.
+3. Emit events based on behavior, activity and inactivity.
+4. Segmentation and segment math on both attributes and behaviors.
+
+#### Extract sequences easily
+
+OpenSet makes it easy to extract before/after, path-to, path-from, funnel and cohort  sequences from user event streams. 
 
 - people that purchased a fish also purchased a tank, food, pebbles and ornaments. 
 - what common paths do users follow from feature X to feature Y.
@@ -18,7 +30,7 @@ OpenSet makes it easy to extract before/after, path-to, path-from, funnel and co
 - find users that did X four months ago, but not within the last three.
 - or anything else you can imagine.
 
-#### Analytics on anything people can do:
+#### Analytics on anything people can do
 
 OpenSet always generates taxonomical results. If you choose to group your results (i.e. country, product, week, day of week) all aggregates will be performed correctly through the taxonomy as events are counted, that includes unique user counts (UU counts), counts, sums, averages etc.
 
@@ -28,21 +40,21 @@ OpenSet always generates taxonomical results. If you choose to group your result
 - standard aggregates: UU count, count, sum, min, max, avg.
 - if you recorded it, you can group and aggregate it.
 
-#### Eventing:
+#### Eventing
 
 OpenSet can emit events for behaviors that have, or have not happened - or - have, or have not happened after a certain amount of time. Our event emitter allows for multiple subscribers to the same event stream in either a full or round-robin configurations.
 
 Behavioral eventing makes it easy to listen for things like "users that have not logged in for 45 days", or "people who signed up a week ago, but have not created a profile yet" and do something about it.
 
-#### Segmentation:
+#### Segmentation
 
 OpenSet brings behavior to segmentation. Creating segments of users that did (or did not) perform a sequence of events is easy. Additionally, OpenSet can keep those segments up-to-date as well as generate derivative segments by combining existing segments.
 
 Segment math includes: population, intersection, union, compliment and difference.
 
-#### Programmable:
+#### Programmable
 
-OpenSet uses a Python-like macro language to define it's queries called PyQL. 
+OpenSet uses a Python-like macro language called PyQL to define it's queries. 
 
 
 # Examples
@@ -63,7 +75,7 @@ match where product_group is 'outdoor':
     # aggregate it's levels
     tally(get_day_of_week(event_time()), product_name)
 ```
-> :pushpin:  Check out the event data for this query [here](#).
+> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
 Which might return something like:
 ```javascript
@@ -132,7 +144,7 @@ match where action is 'purchase': # match one
 
     # loop back to top
 ```
-> :pushpin:  Check out the event data for this query [here](#).
+> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
 Which will return a tree of initial products and subsequent products purchased:
 ```javascript
@@ -175,7 +187,7 @@ Which will return a tree of initial products and subsequent products purchased:
 }
 ```
 
-> :pushpin: more examples can be found here [here](#).
+> :pushpin: more examples can be found here [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
 # Installation prerequisites
 
