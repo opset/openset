@@ -214,7 +214,7 @@ my_dict.clear() # dict will be empty
 
 ##### .keys
 
-Returns the keys in a dictionary type as a List. 
+Returns the keys in a dictionary container as a List. 
 
 ```python
 my_dict = { 
@@ -230,6 +230,33 @@ some_keys = my_dict.keys()
 ## Row Iterators
 
 ##### match
+
+Match is the standard row Iterator. When a user record is mounted, a PyQL script started is started with the iterator on the first row of their event list.
+
+```
+match:
+    do_something() # on each row
+```
+
+``` 
+match 5:
+    do_something() # on the first five matches
+```
+
+``` 
+match where some_column is 'some_value':
+    do_something() # on each row that matches the filter
+```
+
+```
+match 1 where some_column is 'some_value':
+    do_something() # on the first match that matches the filter
+```
+
+```
+match 
+```
+
 ##### iter_get
 ##### iter_set
 ##### iter_move_last
@@ -237,8 +264,36 @@ some_keys = my_dict.keys()
 ##### iter_next
 ##### iter_prev
 ##### event_count
-##### within
-##### between
+
+##### iter_within
+Is the timestamp for the current row iterator between two dates.
+
+Match rows within 5 days of the users first event. Notice the `5 days` notation, in PyQL you can use `# unit` where unit is `seconds`, `minutes`, `hours` or `days`
+```python
+match where iter_within(5 days, first_event):
+   do_something() # on rows within 5 days of first_event
+```
+Match rows within 12 hours of the users last event.
+```python
+match where iter_within(12 hours, last_event):
+   do_something() # on rows within 12 hours of last_event
+```
+Nested match, where the inner match event is within 12 hours of the outer match (`first_match` and `prev_match` are automatically created and can be used in your filters, or any other function).
+```python
+match where action is 'purchase': 
+   match 1 where iter_within(12 hours, last_match):
+       do_something() # on rows within 12 hours of last_event
+```
+
+See the [time](#) section for useful data_values for `iter_within`
+
+##### iter_between
+
+Match between two dates (ISO 8601 strings, unix epoch seconds or unix epoch milliseconds).
+```python
+match where iter_between('2017-09-21T22:00:00Z', '2017-09-21T22:59:59Z'):
+   do_something() # on rows between these dates
+```
 
 ## Functions, Iterators and Flow Control
 
