@@ -54,27 +54,32 @@ Data that's pre-mapped, pre-sorted and pre-indexed means you only have to focus 
 How might this look. Lets assume that when a user performs an action, an with an `action`of `feature_used` is stored, and with that `action` a property of `feature_name` is stored.
 
 ```python
-aggregate:
+aggregate: # what we want to count
     people
       
 # match one row where action is 'feature_used'
 match 1 where action is 'feature_used':
+
     first_feature = feature_name # save the feature name
     iter_next() # move past first match
+    
     # match 3 rows where action is 'feature_used' and
     # the feature_name isn't the same as the first match
     match 3 where action is 'feature_used' and 
             feature_name is not 'first_feature':
+            
         # store it in our result set, with the new feature_name
-        # grouped under the first_feature
-        # and  aggregate people
+        # grouped under the first_feature and aggregate people
         tally(first_feature, feature_name)
 ```
 
-That's it. :boom:
+That's it. :boom: Just 5  lines of code (plus 2 to define the aggregator).
 
 This little PyQL script will be compiled and distributed across all your nodes and all the processor cores within those nodes. You will get a giant JSON document in milliseconds.
 
-> :fearful: What is `match`... way up at the top of this document we mentioned that PyQL is an iteration language. `match` is a event iterator that combines a optional limiter and the functionality of an SQL where clause. `match` iterators can be nested.
+> :fearful: Wait a second, what is `match`? Earlier we mentioned that PyQL is an iteration language. The match statement `match` is a fancy event iterator that combines an optional limiter and the functionality of an SQL where clause. `match` iterators can contain conditions and date ranges, and can be nested, continued and broken like regular iterators.
+
+#### Query Structure
+
 
 
