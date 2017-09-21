@@ -7,6 +7,8 @@ OpenSet uses a language called PyQL to define it's queries. PyQL is inspired by 
 4. Easy to extend.
 5. Simple to implement (more or less).
 
+You can find the language refernce [here](https://github.com/perple-io/openset/blob/master/docs/pyql/language_reference.md).
+
 #### What PyQL is not...
 
 PyQL is not Python. 

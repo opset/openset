@@ -1,10 +1,12 @@
 # Documentation
 
+&nbsp;
 
 **topics**
 
 * [Building and Installing](https://github.com/perple-io/openset/tree/master/docs/build_install)  
-* [PyQL query language](https://github.com/perple-io/openset/tree/master/docs/pyql/README.md)
+* [PyQL query language concepts](https://github.com/perple-io/openset/tree/master/docs/pyql/README.md)
+* [PyQL language reference](https://github.com/perple-io/openset/blob/master/docs/pyql/language_reference.md)
 * [Admin](#)  (coming soon)
 * [Clustering](#) (coming soon)
 
