@@ -5,6 +5,8 @@ OpenSet is a programmable engine for rapidly extracting behavior from user event
 
 If you have apps, websites, or IoT devices that generate user data, you might find OpenSet really useful.
 
+&nbsp;
+
 > :coffee: Please note that OpenSet is currently pre-release, pre-beta, pre-alpha etc.  
 
 &nbsp;
