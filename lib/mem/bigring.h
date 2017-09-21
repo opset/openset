@@ -696,7 +696,7 @@ public:
 				ring->items[index].first.~K();
 				ring->items[index].second.~V();
 				if (ring == root)
-					memset(ring->items + index, 0xff, sizeof bigRingPage<K,V>::item_s);
+					memset(ring->items + index, 0xff, sizeof(bigRingPage<K,V>::item_s));
 			}
 			++index;
 		}

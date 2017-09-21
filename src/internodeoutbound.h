@@ -84,7 +84,7 @@ namespace openset
 				struct addrinfo hints, *servinfo;
 				int rv;
 
-				memset(&hints, 0, sizeof hints);
+				memset(&hints, 0, sizeof(hints));
 				// specify what type of entry we are looking for
 				hints.ai_family = AF_INET; 
 				hints.ai_socktype = SOCK_STREAM;

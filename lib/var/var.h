@@ -1018,6 +1018,8 @@ public:
 			return dictValue ? static_cast<int>(dictValue->size()) : 0;
 		if (type == valueType::SET)
 			return setValue ? static_cast<int>(setValue->size()) : 0;
+		if (type == valueType::STR)
+			return valueString.length();
 		return 0;
 	}
 

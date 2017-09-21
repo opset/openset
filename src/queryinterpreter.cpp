@@ -1384,13 +1384,22 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			auto res = (stackPtr - 1);
 			if (var->typeof() == cvar::valueType::LIST)
 			{
+				if (!var->getList() || var->getList()->size() == 0)
+				{
+					*res = NULLCELL;
+					break;
+				}
 				auto value = var->getList()->back();
 				var->getList()->pop_back();
-				//var->getList()->erase(var->getList()->begin());
 				*res = value;
 			}
 			else if (var->typeof() == cvar::valueType::DICT)
 			{
+				if (!var->getDict() || var->getDict()->size() == 0)
+				{
+					*res = NULLCELL;
+					break;
+				}
 				auto value = var->getDict()->begin();
 				var->getDict()->erase(value);
 				var->dict(); // result is a Dict
@@ -1398,6 +1407,11 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
+				if (!var->getSet() || var->getSet()->size() == 0)
+				{
+					*res = NULLCELL;
+					break;
+				}
 				auto value = *var->getSet()->begin();
 				var->getSet()->erase(value);
 				*res = value;

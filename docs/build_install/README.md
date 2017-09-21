@@ -31,7 +31,12 @@ You will find recent versions of these projects under [openset/vendor](https://g
 #### Building on Linux
 
 1. Ensure you have the prerequisite build tools listed above.
-2. clone this repo (probably in your home directory).
+2. clone this repo (recursively, and probably in your home directory).
+```bash
+mkdir openset
+cd openset
+git clone --recursive https://github.com/perple-io/openset.git 
+```
 3. build OpenSet release:
 ```bash
 cd openset
@@ -52,7 +57,12 @@ make
 
 #### Building on Windows
 
-1. Clone this repo.
+1. Clone this repo (recursively as it has linked repos)
+```bash
+mkdir openset
+cd openset
+git clone --recursive https://github.com/perple-io/openset.git 
+```
 2. Open the `openset` folder in VisualStudio
 3. Open the file `CMakeList.txt`, wait for VisualStudio to index it.
 4. In the `Project Settings` dropdown select `x64-Release` or `x64-debug`
