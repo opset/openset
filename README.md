@@ -1,9 +1,13 @@
 # OpenSet
 
 
-OpenSet is an OpenSource a programmable engine for rapidly extracts behavior metrics from user generated event data. 
+OpenSet is a programmable engine for rapidly extracting behavior from user event data. 
+
+If you have apps, websites, or IoT devices that generate user data, you might find OpenSet really useful.
 
 > :coffee: Please note that OpenSet is currently pre-release, pre-beta, pre-alpha etc.  
+
+&nbsp;
 
 **shortcuts**
 *  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
@@ -13,7 +17,7 @@ OpenSet is an OpenSource a programmable engine for rapidly extracts behavior met
 ## Features and Abilities
 
 OpenSet has four main abilities -
-1. Perform feature extraction of user behavior in event streams.
+1. Perform feature extraction of behavior from user event streams.
 2. Taxonomical aggregates and analytics.
 3. Emit events based on behavior, activity and inactivity.
 4. Segmentation and segment math on both attributes and behaviors.
