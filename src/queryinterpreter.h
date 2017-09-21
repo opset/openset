@@ -158,12 +158,8 @@ namespace openset
 					rowStamp <= compStamp + milliseconds);
 			}
 
-			// these are C++ functions that are callable form PyQL script (hence the pythonic naming)
-#ifdef _MSC_VER
-			void __fastcall marshal_tally(int paramCount, col_s* columns, int currentRow);
-#else
-			void marshal_tally(int paramCount, col_s* columns, int currentRow) __attribute__((fastcall));
-#endif
+			void marshal_tally(int paramCount, col_s* columns, int currentRow);
+
 			void marshal_schedule(int paramCount);
 			void marshal_emit(int paramCount);
 			void marshal_log(int paramCount);
@@ -187,18 +183,8 @@ namespace openset
 			// get a string from the literals script block by ID
 			string getLiteral(int64_t id) const;
 
-#ifdef _MSC_VER
-			bool __fastcall marshal(instruction_s* inst, int& currentRow);
-#else
-			bool marshal(instruction_s* inst, int& currentRow) __attribute__((fastcall));
-#endif
-
-
-#ifdef _MSC_VER
-			void __fastcall opRunner(instruction_s* inst, int currentRow = 0);
-#else
-			void opRunner(instruction_s* inst, int currentRow = 0) __attribute__((fastcall));
-#endif
+			bool marshal(instruction_s* inst, int& currentRow);
+			void opRunner(instruction_s* inst, int currentRow = 0);
 
 			void setScheduleCB(function<bool(int64_t functionHash, int seconds)> cb);
 			void setEmitCB(function<bool(string emitMessage)> cb);
