@@ -2,13 +2,13 @@
 
 #### Installation prerequisites
 
-OpenSet is written in modern C++ (using some of the latest features from C++11/14/17). There are around 150k lines of code, as such the most recent compilers are required.
+OpenSet is written in modern C++ (using some of the latest features from C++11/14/17). There are around 100k lines of code, and you will need a recent compiler to build them.
 
 OpenSet incorporates the following amazing and wonderful open source projects:
 
 - [libuv](https://github.com/libuv/libuv), the famous portable async io library written for Node.js. It's extensive and written good old fashioned C, at the moment we primarily use the async TCP components to serve connections.
-- [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
-- [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). A good hash is hard to find, a fast hash is even harder --- Yann has created both.
+- [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by Yann Collet. Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
+- [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  Yann Collet. A good hash is hard to find, a fast hash is even harder --- Yann has created both.
 
 You will find recent versions of these projects under [openset/vendor](https://github.com/perple-io/openset/tree/master/vendor) in the OpenSet repo.
 
