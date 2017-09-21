@@ -231,9 +231,7 @@ inline Tests test_zorder()
 				auto grid = person.getGrid();
 				auto json = grid->toJSON(false); // non-condensed
 
-				cout << cjson::Stringify(&json, true) << endl;
-
-				cout << endl;
+				// TODO - finish test
 
 			}
 		}
