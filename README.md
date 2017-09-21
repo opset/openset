@@ -218,9 +218,9 @@ I love programming, I've been doing it since I was kid, and I especially love C+
 
 Way back in 2005 I came across an interesting problem while at DeepMetrix. We produced an excellent little product called LiveStats. Everyday over a million websites got their metrics using our software.
 
-LiveStats created around 40 reports.The reports were predefined and continuously updated using data log files and on-page scripts. 
+LiveStats created around 40 reports. The reports were predefined and continuously updated using data from weblogs and page-scripts.
 
-This approach seemed perfect... until one day Anheuser-Busch called (they make a famous beer if you haven't heard of them). They wanted to drill into their data, and they wanted to see their data was grouped and tabulated as saw fit, and they wanted this all in real-time. It was a compelling problem and they were willing to pay handsomely if we could solve it.
+This approach seemed perfect... until one day Anheuser-Busch called (they make a famous beer). They wanted to drill into their data, and they wanted to see their data was grouped and tabulated as saw fit, and they wanted this all in real-time. It was a compelling problem and they were willing to pay handsomely if we could solve it.
 
 Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone. 
 
