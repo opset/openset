@@ -187,87 +187,11 @@ Which will return a tree of initial products and subsequent products purchased:
 }
 ```
 
-> :pushpin: more examples can be found here [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
-
-# Installation prerequisites
-
-OpenSet is written in modern C++ (using some of the latest features from C++11/14/17). There are around 150k lines of code, as such the most recent compilers are required.
-
-OpenSet incorporates the following amazing and wonderful open source projects:
-
-- [libuv](https://github.com/libuv/libuv), the famous portable async io library written for Node.js. It's extensive and written good old fashioned C, at the moment we primarily use the async TCP components to serve connections.
-- [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
-- [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  [Yann Collet](https://www.linkedin.com/in/yann-collet-5ba1904). A good hash is hard to find, a fast hash is even harder --- Yann has created both.
-
-You will find recent versions of these projects under [/vendors](#) in the openset repo.
-
-#### Linux requirements
-
-- Unbutu 14.04 (16.04 recommended)
-- CMake 3.6+
-- gcc 7.2
-
-#### Windows requirements
-
-- A version of Windows made in the last decade.
-- Visual Studio 2017 (Version 15.3.4)
-- Visual Studio tools for CMake 1.0 (installs CMake 3.6+)
-
-#### Building on Linux
-
-1. Ensure you have the prerequisite build tools listed above.
-2. clone this repo (probably in your home directory).
-3. build OpenSet release:
-```bash
-cd openset
-mkdir Release
-cd Release
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-```
-or for a debug build:
-```bash
-cd openset
-mkdir Debug
-cd Debug
-cmake ..
-make
-```
-1. You should now have a file named openset. Copy this to a directory named `openset`and ensure the file has execute permission using `chmod +x openset`
-
-#### Building on Windows
-
-1. Clone this repo.
-2. Open the `openset` folder in VisualStudio
-3. Open the file `CMakeList.txt`, wait for VisualStudio to index it.
-4. In the `Project Settings` dropdown select `x64-Release` or `x64-debug`
-5. In the `Select Startup Item` dropdown (next to the Project Settings)  select `openset.exe`
-6. From the `CMake` dropdown select `Build All`
-7. From the `CMake` dropdown expand `Cache (build type)` and select `Open Cache Folder`
-8. You should now have a `Folder` open, and within it `openset.exe`, copy this a folder somewhere called `openset` 
-
-### Running OpenSet
-
-The following command line options can be used
-
-- `--test` runs internal tests to confirm OpenSet is operating correctly.
-- `--host'` specifies the ip/hostname to answer on (optional, defaults to 0.0.0.0)
-- `--hostext` specifies an external host name that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs (defaults to the machine name)
-- `--port` specifies the port that to answer on (optional, defaults to 2020)
-- `--portext` specifies the external port that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs if port mapping is used (defaults to the 2020)
-- `--data` path to data if using commits (optional, defaults to current directory `./`)
-- `--help` shows the help
-
-When you start OpenSet it will wait in a `ready` state. You must initialize OpenSet in one of two ways to make it `active`.
-
-1. Make it the Cluster Leader by sending an `init_cluster` command, this must be done even you only intend to run a cluster of one.
-2. Join it to a cluster. You can connect to any node in a running cluster and send a `invite_node` command. The command will be routed through whichever node is the elected leader, and the target node will be invited into the cluster.
-
-# Tools
+> :pushpin: more sample code can be found here [here](https://github.com/perple-io/openset/tree/master/samples).
 
 # RoadMap
 
-There are many items on the wish list, then there are things that need to be done so we can move to an alpha release:
+OpenSet is pre-alpha. There are many items on the wish list, then there are things that need to be done so we can move to an alpha release:
 
 - user properties (allow for storage and querying of non-event user data, i.e. name) 
 - more error handling
@@ -278,15 +202,17 @@ There are many items on the wish list, then there are things that need to be don
 - HTTP/HTTPS API proxy. 
 - refactoring (add more consts, more member initialization, tidy up some ugly stuff)
 
-# About
+# Inspiration
 
-My name is Seth Hamilton. I've written commercial software my entire career. 
+Hello, my name Seth.
 
-My released my first product in 1992 when I was 17 ---  a graphical BBS product called RoboBOARD. After that came live web analytics (DeepMetrix) and network monitoring (ipMonitor). My last startup (rare.io) did marketing automation. In all I've founded three startups, and was involved in two major acquisition --- by all measures I have a brilliant career. 
+I've written commercial software my entire life. 
 
-However, in 2015 I found myself writing my first resume and it dawned on me that that despite writing millions of LOC, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point. 
+My first product was released in 1992  ---  a graphical BBS product called RoboBOARD. After that came web analytics (DeepMetrix) and network monitoring (ipMonitor). My last startup (rare.io) did marketing automation. In all I've founded three startups, and I've been involved in two major acquisition --- by all measures I have had an exciting career. 
 
-I love programming and I especially love C++, and thought this unique data solution might be a good project to give back to the community.
+However, in 2015 I found myself writing my first resume and came to a realization. Despite writing millions of LOC, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point in time. 
+
+I love programming, I've been doing it since I was kid, and I especially love C++, and extra love messing with data. So, thought this unique data solution written in C++ might be a good project to give back to the community.
 
 #### Origin of the idea...
 
