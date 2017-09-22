@@ -1393,7 +1393,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 				auto value = var->getDict()->begin();
 				var->getDict()->erase(value);
 				var->dict(); // result is a Dict
-				(*res) = { value->first, value->second };
+				(*res) = cvar::o{ value->first, value->second };
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
