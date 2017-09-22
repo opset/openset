@@ -50,7 +50,7 @@ namespace openset
 			year_date,
 		};
 
-		enum class opCode_e : int64_t
+		enum class opCode_e : int32_t
 		{
 			NOP = 0, // No operation
 
@@ -159,8 +159,8 @@ namespace openset
 			marshal_iter_prev,
 			marshal_iter_event, // not implemented yet
 			marshal_event_count,
-			marshal_dt_within,
-			marshal_dt_between,
+			marshal_iter_within,
+			marshal_iter_between,
 			marshal_population,
 			marshal_intersection,
 			marshal_union,
@@ -290,6 +290,7 @@ namespace openset
 					{"first_match", MakeHash("first_match")},
 			};
 
+/*
 		enum class within_e : int
 		{
 			live,
@@ -308,6 +309,7 @@ namespace openset
 					{"previous_match", within_e::prev_match},
 					{"first_match", within_e::first_match},
 			};
+*/
 
 		enum class timeSwitch_e : int
 		{
@@ -507,8 +509,8 @@ namespace openset
 					{"iter_next", marshals_e::marshal_iter_next },
 					{"iter_prev", marshals_e::marshal_iter_prev },
 					{"event_count", marshals_e::marshal_event_count },
-					{"_dt_within", marshals_e::marshal_dt_within},
-					{"_dt_between", marshals_e::marshal_dt_between},
+					{"iter_within", marshals_e::marshal_iter_within},
+					{"iter_between", marshals_e::marshal_iter_between},
 					{"population", marshals_e::marshal_population },
 					{"intersection", marshals_e::marshal_intersection},
 					{"union", marshals_e::marshal_union},
@@ -590,7 +592,7 @@ namespace openset
 					{"<>",opCode_e::OPNEQ},
 					{"not",opCode_e::OPNOT},
 					{"isnot",opCode_e::OPNEQ},
-					{"within",opCode_e::OPWTHN},
+					// {"within",opCode_e::OPWTHN},
 			};
 
 		static const unordered_map<string, opCode_e> mathAssignmentOperators = {
@@ -607,8 +609,8 @@ namespace openset
 					{opCode_e::OPLT, "<"},
 					{opCode_e::OPEQ, "=="},
 					{opCode_e::OPNEQ, "!="},
-					{opCode_e::OPNOT, "!"},
-					{opCode_e::OPWTHN, "within"}
+					{opCode_e::OPNOT, "!"}
+					// {opCode_e::OPWTHN, "within"}
 			};
 
 		// Math

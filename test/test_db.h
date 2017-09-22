@@ -89,6 +89,30 @@ inline Tests test_db()
              {{attr_keyword}})
 	)pyql");
 
+	auto test_within_pyql = fixIndent(R"pyql(
+	agg:
+		count person
+		count page
+
+	sort:
+		page
+
+	match where page is 'home page':		
+		iter_next()
+		match where iter_within(10 seconds, prev_match):
+			tally('test1', 'home_page', page)
+		break
+
+	iter_move_first()
+
+	match where page is 'home page':		
+		iter_next()
+		match where iter_within(100 seconds, prev_match):
+			tally('test2', 'home_page', page)
+		break
+
+	)pyql");
+
 
 	/* In order to make the engine start there are a few required objects as 
 	 * they will get called in the background during testing:
@@ -421,6 +445,112 @@ inline Tests test_db()
 
 				ASSERT(values == "[1,4,2,6]");
 
+			}
+		},
+		{
+			"db: test within()", [database, test_within_pyql]() {
+
+				openset::query::ParamVars params;
+
+				params["attr_page"] = "page";
+				params["attr_ref"] = "referral_source";
+				params["attr_keyword"] = "referral_search";
+				params["root_name"] = "root";
+
+				auto table = database->getTable("__test001__");
+				auto parts = table->getPartitionObjects(0); // partition zero for test				
+
+				openset::query::macro_s queryMacros; // this is our compiled code block
+				openset::query::QueryParser p;
+
+				// compile this - passing in the template vars
+				p.compileQuery(test_within_pyql.c_str(), table->getColumns(), queryMacros, &params);
+
+				//cout << openset::query::MacroDbg(queryMacros) << endl;
+				
+				// mount the compiled query to an interpretor
+				auto interpreter = new openset::query::Interpreter(queryMacros);
+
+				openset::result::ResultSet resultSet;
+				interpreter->setResultObject(&resultSet);
+
+				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+				ASSERT(personRaw != nullptr);
+				auto mappedColumns = interpreter->getReferencedColumns();
+				ASSERT(mappedColumns.size() == 4);
+
+				Person person; // Person overlay for personRaw;
+				person.mapTable(table, 0, mappedColumns);
+
+				person.mount(personRaw); // this tells the person object where the raw compressed data is
+				person.prepare(); // this actually decompresses
+
+								  // this mounts the now decompressed data (in the person overlay)
+								  // into the interpreter
+				interpreter->mount(&person);
+
+				// run it
+				interpreter->exec();
+				ASSERT(p.error.inError() == false);
+
+				// just getting a pointer to the results for nicer readability
+				auto result = interpreter->result;
+
+				//ASSERT(result->results.size() != 0);
+
+				// we are going to sort the list, this is done for merging, but
+				// being we have one partition in this test we won't actually be merging.
+				result->makeSortedList();
+
+				// the merger was made to merge a fancy result structure, we
+				// are going to manually stuff our result into this
+				std::vector<openset::result::ResultSet*> resultSets;
+				// populate or vector of results, so we can merge
+				//responseData.push_back(&res);
+				resultSets.push_back(interpreter->result);
+
+				// this is the merging object, it merges results from multiple 
+				// partitions into a result that can serialized to JSON, or to 
+				// binary for distributed queries
+				openset::result::ResultMuxDemux merger;
+				cjson resultJSON; // we are going to populate this
+								  // make some JSON
+				auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
+				auto text = merger.mergeText(queryMacros, table, resultSets);
+				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+
+				// NOTE - uncomment if you want to see the results
+				//cout << cjson::Stringify(&resultJSON, true) << endl;
+
+				auto underScoreNode = resultJSON.xPath("/_");
+				ASSERT(underScoreNode != nullptr);
+
+				/* This test runs two nearly identical matches. 
+				 * 
+				 * The difference the `iter_within` timing, in "test1" it checks
+				 * within 10 seconds, and there can be only one match.
+				 * 
+				 * In "test2" it checks within 100 seconds and there are two matches.
+				 * 
+				 * The results are sorted, so the second test shows up first.
+				 * 
+				 * On the root "_" node the first "c" should be [1,2]
+				 * In the second row "c" should be [1,1]
+				 * 
+				 * Note: you can see it by uncommenting the stringify above)
+				 */
+
+				auto dataNodes = underScoreNode->getNodes();
+				ASSERT(dataNodes.size() == 2);
+				
+				auto totalsNode = dataNodes[0]->xPath("/c");
+				auto values = cjson::Stringify(totalsNode);
+				ASSERT(values == "[1,2]");
+
+				totalsNode = dataNodes[1]->xPath("/c");
+				values = cjson::Stringify(totalsNode);
+				ASSERT(values == "[1,1]");
+				
 			}
 		}
 	};

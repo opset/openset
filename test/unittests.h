@@ -8,13 +8,14 @@
 #include "test_zorder.h"
 #include "../src/logger.h"
 
-inline bool unitTest()
+bool unitTest()
 {
 	Tests allTests;
 
 	Logger::get().suspendLogging(true); // turn off the default logger, reduce output noise
 
-	auto add = [&allTests](Tests newTests) {
+	// addes all the tests in a test_unit (test units are in the includes above)
+	const auto add = [&allTests](Tests newTests) {
 		allTests.insert(allTests.end(), newTests.begin(), newTests.end());
 	};
 

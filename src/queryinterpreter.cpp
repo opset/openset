@@ -503,48 +503,13 @@ void openset::query::Interpreter::marshal_dt_within(int paramCount, int64_t rowS
 	}
 
 	--stackPtr;
-	auto mode = withinSwitchMap.find(*stackPtr);
+	auto compareStamp = stackPtr->getInt64();
+	compareStamp = Epoch::fixMilli(compareStamp);
 
 	--stackPtr;
-	auto milliseconds = *stackPtr;
+	const auto milliseconds = stackPtr->getInt64();
 
-	if (mode == withinSwitchMap.end())
-	{
-		error.set(
-			errors::errorClass_e::run_time,
-			errors::errorCode_e::date_within_malformed,
-			"date within malformed");
-		*stackPtr = NULLCELL;
-		++stackPtr;
-		return;
-	}
-
-	auto pass = false;
-
-	switch (mode->second)
-	{
-		case within_e::live:
-			// is rowStamp we milliseconds +/- of Now
-			pass = within(Now(), rowStamp, milliseconds);
-			break;
-		case within_e::first_event:
-			pass = within(rows->front()->cols[0], rowStamp, milliseconds);
-			break;
-		case within_e::last_event:
-			pass = within(rows->back()->cols[0], rowStamp, milliseconds);
-			break;
-		case within_e::prev_match:
-			pass = within(matchStampPrev.size() > 1 ? *(matchStampPrev.end() - 2) : matchStampTop, rowStamp, milliseconds);
-			break;
-		case within_e::first_match:
-			pass = within(matchStampTop, rowStamp, milliseconds);
-			break;
-		default:
-			// TODO runtime error?
-			break;
-	}
-
-	*stackPtr = pass ? true : false;
+	*stackPtr = within(compareStamp, rowStamp, milliseconds);
 	++stackPtr;
 }
 
@@ -567,7 +532,32 @@ void openset::query::Interpreter::marshal_dt_between(int paramCount, int64_t row
 	--stackPtr;
 	auto start_stamp = *stackPtr;
 
-	*stackPtr = (rowStamp >= start_stamp && rowStamp < end_stamp) ? 1 : 0;
+	// If it's a strong then convert stamp to unixtime
+	if (start_stamp.typeof() == cvar::valueType::STR)
+		start_stamp = Epoch::ISO8601ToEpoch(start_stamp);
+
+	// If it's a strong then convert stamp to unixtime
+	if (end_stamp.typeof() == cvar::valueType::STR)
+		end_stamp = Epoch::ISO8601ToEpoch(end_stamp);
+
+	if (start_stamp < 0 || end_stamp < 0)
+	{
+		error.set(
+			errors::errorClass_e::run_time,
+			errors::errorCode_e::sdk_param_count,
+			"date error in between statement");
+		*stackPtr = NULLCELL;
+		++stackPtr;
+		return;
+	}
+
+	// make sure the stamp is in milliseconds
+	start_stamp = Epoch::fixMilli(start_stamp);
+	end_stamp = Epoch::fixMilli(start_stamp);
+	
+	*stackPtr = 
+		(rowStamp >= start_stamp.getInt64() && 
+ 		rowStamp < end_stamp.getInt64()) ? 1 : 0;
 	++stackPtr;
 }
 
@@ -1052,15 +1042,15 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		++stackPtr;
 		break;
 	case marshals_e::marshal_event_time:
-		*stackPtr = (*rows)[currentRow]->cols[0];
+		*stackPtr = (*rows)[currentRow]->cols[COL_STAMP];
 		++stackPtr;
 		break;
 	case marshals_e::marshal_last_event:
-		*stackPtr = rows->back()->cols[0];
+		*stackPtr = rows->back()->cols[COL_STAMP];
 		++stackPtr;
 		break;
 	case marshals_e::marshal_first_event:
-		*stackPtr = rows->front()->cols[0];
+		*stackPtr = rows->front()->cols[COL_STAMP];
 		++stackPtr;
 		break;
 	case marshals_e::marshal_prev_match:
@@ -1227,11 +1217,11 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		break;
 	case marshals_e::marshal_iter_prev:
 		break;
-	case marshals_e::marshal_dt_within:
-		marshal_dt_within(inst->extra, (*rows)[currentRow]->cols[0]);
+	case marshals_e::marshal_iter_within:
+		marshal_dt_within(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
 		break;
-	case marshals_e::marshal_dt_between:
-		marshal_dt_between(inst->extra, (*rows)[currentRow]->cols[0]);
+	case marshals_e::marshal_iter_between:
+		marshal_dt_between(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
 		break;
 	case marshals_e::marshal_population:
 		marshal_population(inst->extra);
