@@ -1,5 +1,7 @@
 # OpenSet
 
+[![Build Status](https://travis-ci.org/perple-io/openset.svg?branch=master)](https://travis-ci.org/perple-io/openset) 
+
 
 OpenSet is a MIT licensed programmable engine for rapidly extracting behavior from user event data. 
 
