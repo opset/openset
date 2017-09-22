@@ -1,4 +1,16 @@
 language: cpp
+
+addons:
+    apt:
+        sources:
+            - llvm-toolchain-precise
+            - ubuntu-toolchain-r-test
+            - kalakris-cmake
+        packages:
+            - g++-7
+            - gcc-7
+            - cmake
+
 compiler:
   - gcc-7
 before_script:
