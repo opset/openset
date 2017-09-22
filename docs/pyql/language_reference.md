@@ -278,14 +278,14 @@ Match rows within 12 hours of the users last event.
 match where iter_within(12 hours, last_event):
    do_something() # on rows within 12 hours of last_event
 ```
-Nested match, where the inner match event is within 12 hours of the outer match (`first_match` and `prev_match` are automatically created and can be used in your filters, or any other function).
+Nested match, where the inner match event is within 12 hours of the outer match (`first_match`, `prev_match`, `last_event` and `first_event` are automatically created and can be used in your filters, or any other function).
 ```python
 match where action is 'purchase': 
    match 1 where iter_within(12 hours, last_match):
        do_something() # on rows within 12 hours of last_event
 ```
 
-See the [time](#) section for useful data_values for `iter_within`
+See the [time](#) section for useful data_values for `iter_within`. 
 
 ##### iter_between
 

@@ -1,7 +1,6 @@
 #include "queryparser.h"
 #include <unordered_set>
 #include "str/strtools.h"
-#include "time/epoch.h"
 
 #include <limits>
 #include <sstream>
@@ -59,9 +58,9 @@ bool QueryParser::isValue(string value)
 
 int64_t QueryParser::expandTime(string value)
 {
-	int64_t returnValue = 0;
+	int64_t returnValue;
 
-	auto lastChar = value[value.length() - 1];
+	const auto lastChar = value[value.length() - 1];
 
 	if (lastChar < '0' || lastChar > '9')
 	{
@@ -100,7 +99,7 @@ QueryParser::LineParts QueryParser::breakLine(const string &text)
 
 	// lambda to trim, push and clear a word/symbol into the
 	// current line
-	auto push = [](string& part, LineParts& partList)
+	const auto push = [](string& part, LineParts& partList)
 	{
 		part = trim(part, " ");
 		if (part.length())
@@ -111,7 +110,7 @@ QueryParser::LineParts QueryParser::breakLine(const string &text)
 	string part;
 
 	auto c = text.c_str(); // cursor
-	auto end = c + text.length();
+	const auto end = c + text.length();
 
 	while (c < end)
 	{
@@ -176,7 +175,7 @@ QueryParser::LineParts QueryParser::breakLine(const string &text)
 		}
 		else if (*c == '\'' || *c == '\"')
 		{
-			auto endChar = *c;
+			const auto endChar = *c;
 			push(part, parts);
 
 			part += *c;
@@ -243,10 +242,9 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 	FirstPass_s current;
 
 	auto c = query; // cursor
-	auto end = query + strlen(query);
+	const auto end = query + strlen(query);
 
 	auto lineCount = 0;
-	auto tabDepth = 0;
 	auto lastIsContinued = false;
 
 	while (c < end)
@@ -263,8 +261,9 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 			case 0:
 			case 0x1a:
 			case '\n':
+			{
 				++lineCount;
-				tabDepth = 0;
+				auto tabDepth = 0;
 
 				// count our spaces
 				for (const auto s : current.text)
@@ -281,7 +280,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 				{
 					lastIsContinued = true;
 				}
-				else 
+				else
 				{
 
 					if (!lastIsContinued)
@@ -313,7 +312,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 
 					// caveman text search through line to look for 
 					// template variables to replace				
-					auto changed = true;
+					bool changed;
 
 					do
 					{
@@ -346,8 +345,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 										current.text.insert(idx, k.second);
 								}
 							}
-					}
-					while (changed);
+					} while (changed);
 
 					// break line into words
 					current.parts = breakLine(current.text);
@@ -357,7 +355,8 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 
 				// reset the line accumulator
 				current.clear();
-				break;
+			}
+			break;
 
 			default:
 				current.text += *c;
@@ -437,8 +436,6 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 					
 					auto distinct = std::string{ alias };
 
-					auto index = 2;
-
 					auto nonDistinct = false;
 
 					// if it's long enough an the 3rd item is "as"
@@ -480,8 +477,8 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 							"lambas can only be used with `var` type aggregaters",
 							c.debug
 						};
-						
-						index = lambdaIdx + 1;
+
+						const auto index = lambdaIdx + 1;
 						vector<string> lambdaCapture;
 						copy(c.parts.begin() + index, c.parts.end(),
 						     back_inserter(lambdaCapture));
@@ -683,7 +680,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 		else if (operators.find(conditions[index]) !=
 			operators.end())
 		{
-			int newindex = parseConditions(
+			const int newindex = parseConditions(
 				conditions,
 				opList,
 				index + 1,
@@ -700,7 +697,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 		else if (math.find(conditions[index]) !=
 			math.end())
 		{
-			int newindex = parseConditions(
+			const int newindex = parseConditions(
 				conditions,
 				opList,
 				index + 1,
@@ -724,7 +721,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				break;
 			}
 
-			int newIndex = parseConditions(
+			const int newIndex = parseConditions(
 				conditions,
 				opList,
 				index + 1,
@@ -814,7 +811,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				else if (isFloat(value))
 				{
 					double dblValue;
-					auto lastChar = value[value.length() - 1];
+					const auto lastChar = value[value.length() - 1];
 
 					if (lastChar < '0' || lastChar > '9')
 					{
@@ -1063,7 +1060,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 	auto i = 0;
 
-	auto pushBlock = [&](MiddleOpList& lambdaBlock, int newId, blockType_e blockType = blockType_e::code)
+	const auto pushBlock = [&](MiddleOpList& lambdaBlock, int newId, blockType_e blockType = blockType_e::code)
 	{
 		MiddleBlock_s newBlock;
 		newBlock.blockId = newId;
@@ -1077,8 +1074,6 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 	while (i < lines.size())
 	{
-		auto lastBlock = -1;
-
 		if (lines[i].parts[0] == "sort")
 		{
 			// skip this, handled in initial pass
@@ -1137,7 +1132,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 		}
 		else if (lines[i].parts[0] == "def")
 		{
-			auto functionName = lines[i].parts[1];
+			const auto functionName = lines[i].parts[1];
 
 			LineParts varList;
 
@@ -1315,6 +1310,17 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 					break;
 				}
+			}
+
+			if (!((lines[i].parts.size() >= 2 && lines[i].parts[1] == "where") ||
+				(lines[i].parts.size() >= 3 && lines[i].parts[2] == "where")))
+			{
+				throw ParseFail_s{
+					errors::errorClass_e::parse,
+					errors::errorCode_e::syntax_error,
+					"match missing where",
+					lines[i].debug
+				};
 			}
 
 			int64_t lambdaId = -1;
@@ -1725,7 +1731,6 @@ void QueryParser::extractFunction(LineParts& conditions, int startIdx, int& endI
 	if (index + 1 < conditions.size() &&
 		conditions[index + 1] != "(")
 	{
-		bracketComplete = true;
 		endIdx = startIdx;
 		return;
 	}
@@ -1762,7 +1767,6 @@ void QueryParser::extractFunction(LineParts& conditions, int startIdx, int& endI
 
 void QueryParser::extractParam(LineParts& conditions, int startIdx, int& endIdx)
 {
-	auto bracketComplete = false;
 	auto index = startIdx;
 	auto brackets = 0;
 
@@ -1854,7 +1858,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					auto brackets = 0;
 					auto allCounted = false;
 
-					auto originalIndex = index;
+					const auto originalIndex = index;
 
 					while (index < conditions.size()) // look for ending two brackets
 					{
@@ -1951,9 +1955,9 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 						line.debug
 					};
 
-					auto agg = aggregate[0];
-					auto variable = aggregate[1];
-					auto functionName = "__func_agg" + to_string(++autoCounter);
+					const auto agg = aggregate[0];
+					const auto variable = aggregate[1];
+					const auto functionName = "__func_agg" + to_string(++autoCounter);
 
 					// replace what captured in aggregate above with a function 
 					// call we just made up
@@ -2260,7 +2264,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 							line.debug 
 						};
 
-					auto key = conditions[idx + 1];
+					const auto key = conditions[idx + 1];
 					LineParts newStatement = { "__del", "(" };
 					newStatement.insert(
 						newStatement.end(), 
@@ -2283,10 +2287,9 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				if (conditions.size() > index + 1 &&
 					conditions[index] == "{")
 				{
+					const auto originalIndex = index;
 					auto brackets = 0;
 					auto allCounted = false;
-
-					auto originalIndex = index;
 
 					while (index < conditions.size()) // look for ending two brackets
 					{
@@ -2338,8 +2341,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					// 2. x in [y0,y1,y2,y3] # when used in where clause
 					// 3. x in y # as in:  if x in y
 					// this is the `in` #2
-					auto in = conditions[index + 1];
-					auto originalIndex = index;
+					const auto in = conditions[index + 1];
 
 					int reinsertIdx;
 					auto left = extractVariableReverse(
@@ -2349,7 +2351,6 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					// the left side variable
 
 					index = reinsertIdx + 1; // move to after the word 'in'
-
 
 					int funcEndIdx;
 					extractFunction(conditions, index, funcEndIdx);
@@ -2385,7 +2386,6 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 						replacement.end());
 
 					// start over
-					index = 0;
 					changes = true; // loop again
 					break;
 				}
@@ -2394,7 +2394,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					conditions[index + 1] == "in" &&
 					conditions[0] == "next")
 				{
-					auto var = conditions[index];
+					const auto var = conditions[index];
 
 					if (conditions.size() < index + 4)
 						throw ParseFail_s{ 
@@ -2416,7 +2416,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 							line.debug
 						};
 
-					auto startIdx = index;
+					const auto startIdx = index;
 					index += 3; // move past first [
 
 					auto closingIdx = index;
@@ -2472,8 +2472,6 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					conditions.erase(conditions.begin() + startIdx, conditions.begin() + closingIdx);
 					conditions.insert(conditions.begin() + startIdx, orParts.begin(), orParts.end());
 
-					index = closingIdx;
-
 					changes = true; // loop again
 					break;
 				}
@@ -2491,18 +2489,19 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				//      some_dict.append({"this":"that"})
 				// becomes:
 				//      append(@some_dict, {"this":"that"})
-				auto pos = std::string::npos;
 
-				if ((pos = conditions[index].find(".pop")) != std::string::npos ||
+				// 
+				if (basic_string<char>::size_type pos; 
+				    (pos = conditions[index].find(".pop")) != std::string::npos ||
 					(pos = conditions[index].find(".clear")) != std::string::npos ||
 					(pos = conditions[index].find(".keys")) != std::string::npos)
 				{
-					auto command = "__" + conditions[index].substr(pos + 1);
-					auto containerRef = "@" + conditions[index].substr(0, pos);
+					const auto command = "__" + conditions[index].substr(pos + 1);
+					const auto containerRef = "@" + conditions[index].substr(0, pos);
 
 					LineParts inParts;
 
-					auto startIdx = index;
+					const auto startIdx = index;
 					index += 2;
 					auto closingIdx = index;
 					auto brackets = 1;
@@ -2535,27 +2534,28 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					conditions.insert(conditions.begin() + startIdx, newSection.begin(), newSection.end());
 
 					// start over
-					index = 0;
 					changes = true; // loop again
 					break;
 
 				}
 
-				if ((pos = conditions[index].find(".append")) != std::string::npos ||
+				if (basic_string<char>::size_type pos; 
+				    (pos = conditions[index].find(".append")) != std::string::npos ||
 					(pos = conditions[index].find(".add")) != std::string::npos ||
 					(pos = conditions[index].find(".remove")) != std::string::npos ||
 					(pos = conditions[index].find(".update")) != std::string::npos)
 				{
+					const auto command = "__" + conditions[index].substr(pos+1);
+					const auto containerRef = "@" + conditions[index].substr(0, pos);
+					
+					const auto startIdx = index;
 
-					auto command = "__" + conditions[index].substr(pos+1);
-					auto containerRef = "@" + conditions[index].substr(0, pos);
-
-					LineParts inParts;
-
-					auto startIdx = index;
 					index += 2;
 					auto closingIdx = index;
 					auto brackets = 1;
+
+					LineParts inParts;
+
 
 					for (auto idx = index; idx < conditions.size(); idx++)
 					{
@@ -2587,7 +2587,6 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					conditions.insert(conditions.begin() + startIdx, newSection.begin(), newSection.end());
 
 					// start over
-					index = 0;
 					changes = true; // loop again
 					break;
 				}
@@ -2665,12 +2664,12 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				if (index + 1 < conditions.size() &&
 					timeConstants.count(conditions[index + 1]))
 				{
-					auto item = conditions[index];
-					auto timeConst = conditions[index + 1];
+					const auto item = conditions[index];
+					const auto timeConst = conditions[index + 1];
 
 					conditions.erase(conditions.begin() + index, conditions.begin() + index + 2);
 
-					auto timeValue = timeConstants.at(timeConst);
+					const auto timeValue = timeConstants.at(timeConst);
 
 					// It's an optimizing compiler now!
 					if (isNumeric(item))
@@ -2695,151 +2694,6 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
-				if (conditions[index] == "between" &&
-					index + 3 < conditions.size())
-				{
-					auto startDate = conditions[index + 1];
-					auto endDate = conditions[index + 3];
-
-					if (conditions[index + 2] != "and")				
-						throw ParseFail_s{
-							errors::errorClass_e::parse,
-							errors::errorCode_e::date_range_and_expected,
-							"expecting 'and' in 'between' clause",
-							line.debug
-						};
-
-					// parse the dates if they are strings, we only ever
-					// want to see UTC epoch time
-
-					string start = "";
-					string end = "";
-
-					// TODO - support ISO 8601 dates with TZ
-					if (isString(startDate))
-						start = to_string(Epoch::ISO8601ToEpoch(stripQuotes(startDate)));
-
-					if (isString(endDate))
-						end = to_string(Epoch::ISO8601ToEpoch(stripQuotes(endDate)));
-
-					if (start == "" || start == "-1")
-						throw ParseFail_s{
-							errors::errorClass_e::parse,
-							errors::errorCode_e::date_parse_error,
-							"start date malformed",
-							line.debug 
-						};
-
-					if (end == "" || end == "-1")
-						throw ParseFail_s{
-							errors::errorClass_e::parse,
-							errors::errorCode_e::date_parse_error,
-							"end date malformed",
-							line.debug
-						};
-
-
-					conditions.erase(conditions.begin() + index, conditions.begin() + index + 4);
-
-					vector<string> inject = {
-							"_dt_between",
-							"(",
-							start,
-							",",
-							end,
-							")"
-						};
-
-					conditions.insert(conditions.begin() + index, inject.begin(), inject.end());
-
-					if (conditions.size() > index + inject.size() &&
-						conditions.at(index + inject.size()) == "where")
-					{
-						// we need AND for the conditions (and it happens to be where the where was)
-						*(conditions.begin() + index + inject.size()) = "and";
-						// we will nest the rest of the condition in brackets to ensure this
-						// all evaluates correctly
-						conditions.insert(conditions.begin() + index + inject.size() + 1, "(");
-						conditions.insert(conditions.begin() + index, "where");
-						conditions.push_back(")");
-					}
-					else // if there is no where, we must add one for our date
-					{
-						conditions.insert(conditions.begin() + index, "where");
-					}
-
-					changes = true;
-					break;
-				}
-
-				// TRANSLATE COLUMN SYNTAX: convert column["some_column_name"] into column.some_column_name
-				if (conditions[index] == "within" &&
-					index + 4 < conditions.size())
-				{
-					auto relativeTime = conditions[index + 4];
-					auto itemCount = 5;
-
-					if (index + 5 < conditions.size() &&
-						conditions[index + 5] != "where")
-					{
-						auto test = relativeTime + "_" + conditions[index + 5];
-
-						// if this is one of the allowed withinConstants we will
-						// quote it and use it, otherwise, we are using a variable
-						if (withinConstants.count(test))
-							relativeTime = "'" + test + "'";
-
-						itemCount++;
-					}
-					else if (withinConstants.count(relativeTime))
-					{
-						relativeTime = "'" + relativeTime + "'";
-					}
-
-					if (timeConstants.count(conditions[index + 2]) == 0) // is the second thing a time constant
-						throw ParseFail_s{
-							errors::errorClass_e::parse,
-							errors::errorCode_e::date_within_malformed,
-							"expecting time constant (i.e. seconds, minutes, hours, days)",
-							line.debug 
-						};
-
-					// inject this
-					vector<string> inject = {
-							"_dt_within",
-							"(",
-							conditions[index + 1], // number
-							conditions[index + 2], // days, hours, minutes, seconds
-							",",
-							relativeTime, // whatever we captured above for relative time
-							")"
-						};
-
-					conditions.erase(conditions.begin() + index, conditions.begin() + index + itemCount);
-					conditions.insert(conditions.begin() + index, inject.begin(), inject.end());
-
-					// conditions follow the date in the query, but really
-					// at compile time we move this into the where clause
-					if (conditions.size() > index + inject.size() &&
-						conditions.at(index + inject.size()) == "where")
-					{
-						// we need AND for the conditions (and it happens to be where the where was)
-						*(conditions.begin() + index + inject.size()) = "and";
-						// we will nest the rest of the condition in brackets to ensure this
-						// all evaluates correctly
-						conditions.insert(conditions.begin() + index + inject.size() + 1, "(");
-						conditions.insert(conditions.begin() + index, "where");
-						conditions.push_back(")");
-					}
-					else // if there is no where, we must add one for our date
-					{
-						conditions.insert(conditions.begin() + index, "where");
-					}
-
-					changes = true;
-					break;
-				}
-
 				// bottom of line iteration
 				++index;
 			}
@@ -2850,7 +2704,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 		if (changeCounter)
 		{
 			std::string translation = "";
-			for (auto c : lines[lineIndex].parts)
+			for (const auto c : lines[lineIndex].parts)
 				translation += c + " ";
 			lines[lineIndex].debug.translation.assign(translation);
 		}
@@ -3027,10 +2881,9 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 	// helper to convert our regular macro Ops to Hint style Ops
 	auto convertOp = [](string op) -> hintOp_e
-	{
-		auto opCode = hintOp_e::UNSUPPORTED;
+	{		
+		const auto opIter = operators.find(op); 
 
-		auto opIter = operators.find(op);
 		if (opIter == operators.end())
 		{
 			auto logIter = logicalOperators.find(op);
@@ -3046,7 +2899,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 	// store textual values as we come across them
 	// we will call store when we hit a logical operator
-	auto accumulate = [&accumulation](string item)
+	const auto accumulate = [&accumulation](string item)
 	{
 		accumulation.push_back(item);
 	};
@@ -3056,7 +2909,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	// possible, will return FALSE if it could not
 	// so the logical operator can be bypassed in the
 	// output (we cull functions calls and user variables)
-	auto store = [&]()
+	const auto store = [&]()
 	{
 		if (!accumulation.size())
 		{
@@ -3165,6 +3018,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				case hintOp_e::PUSH_LTE:
 					op = hintOp_e::PUSH_GT;
 					break;
+				default: ;
 			}
 		}
 
@@ -3223,7 +3077,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				break;
 			}
 
-			int newIndex = parseHintConditions(
+			const int newIndex = parseHintConditions(
 				conditions,
 				opList,
 				index + 1,
@@ -3279,7 +3133,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 void QueryParser::evaluateHints(string hintName, HintOpList& hintOps)
 {
-	auto hint = hintMap.find(hintName);
+	const auto hint = hintMap.find(hintName);
 
 	if (hint == hintMap.end())
 		return; // this is valid
@@ -3393,7 +3247,7 @@ void QueryParser::build(
 	// index the text literals
 	for (auto& t : vars.literals)
 	{
-		auto trimmed = stripQuotes(t.first);
+		const auto trimmed = stripQuotes(t.first);
 		t.second = finVars.literals.size(); // index - set to current length 
 		textLiteral_s literal;
 		literal.hashValue = MakeHash(trimmed);
@@ -3406,7 +3260,7 @@ void QueryParser::build(
 	{
 		if (v.modifier == modifiers_e::var)
 			continue;
-		auto tableVar = vars.tableVars.find(v.actual);
+		const auto tableVar = vars.tableVars.find(v.actual);
 		if (tableVar == vars.tableVars.end())		
 			throw ParseFail_s{
 				errors::errorClass_e::parse,
@@ -3422,7 +3276,7 @@ void QueryParser::build(
 	{
 		if (v.modifier == modifiers_e::var)
 			continue;
-		auto tableVar = vars.tableVars.find(v.distinctColumnName);
+		const auto tableVar = vars.tableVars.find(v.distinctColumnName);
 		if (tableVar == vars.tableVars.end())
 			throw ParseFail_s{
 				errors::errorClass_e::parse,
@@ -3435,7 +3289,7 @@ void QueryParser::build(
 
 	for (auto& s: vars.sortOrder)
 	{
-		auto selectVar = vars.columnVars.find(s.name);
+		const auto selectVar = vars.columnVars.find(s.name);
 
 		if (selectVar == vars.columnVars.end())
 			throw ParseFail_s{
@@ -3687,7 +3541,6 @@ void QueryParser::build(
 							c.debug 
 						};
 
-						break;
 					case opCode_e::CALL:
 						if (marshals.find(c.valueString) != marshals.end())
 						{
@@ -3746,7 +3599,7 @@ void QueryParser::build(
 							"something strange happenned",
 							c.debug
 						};
-						break;
+
 				}
 			}
 		}
@@ -3874,7 +3727,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, macro_s& 
 		if (!hintNames.size())
 			hintNames.push_back("_");
 
-		for (auto n : hintNames)
+		for (const auto &n : hintNames)
 		{
 			auto hintPair = HintPair(n, {});
 			evaluateHints(n, hintPair.second);
@@ -3958,9 +3811,7 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 	string functionName;
 
 	auto c = query; // cursor
-	auto end = query + strlen(query) + 1;
-
-	int tabDepth = 0;
+	const auto end = query + strlen(query) + 1;
 
 	while (c < end)
 	{
@@ -3975,8 +3826,8 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 
 			case 0:
 			case '\n':
-
-				tabDepth = 0;
+			{
+				auto tabDepth = 0;
 				// count our spaces
 				for (const auto s : current)
 				{
@@ -4022,10 +3873,10 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 						// get our next function name
 						functionName = current.substr(8, current.length() - 9);
 
-						auto spacePos = functionName.find(' ');
+						const auto spacePos = functionName.find(' ');
 						if (spacePos != string::npos)
 						{
-							auto flags = "@flags " + functionName.substr(spacePos + 1);
+							const auto flags = "@flags " + functionName.substr(spacePos + 1);
 							functionName = functionName.substr(0, spacePos);
 							accumulatedLines.push_back(flags);
 						}
@@ -4038,7 +3889,8 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 
 				// reset the line accumulator
 				current.clear();
-				break;
+			}
+			break;
 
 			default:
 				current += *c;
@@ -4137,7 +3989,7 @@ string openset::query::MacroDbg(macro_s& macro)
 	auto count = 0;
 	for (auto& m: macro.code)
 	{
-		auto opString = opDebugStrings.find(m.op)->second;
+		const auto opString = opDebugStrings.find(m.op)->second;
 		ss << padding(count, 4, true, '0') << "  ";
 		ss << padding(opString, 12, false);
 		ss << padding(m.value, 13, left);
@@ -4160,7 +4012,7 @@ string openset::query::MacroDbg(macro_s& macro)
 		ss << "--------------------------------" << endl;
 		for (auto& i : index)
 		{
-			auto op = hintOperatorsDebug.find(i.op)->second;
+			const auto op = hintOperatorsDebug.find(i.op)->second;
 			ss << padding(op, 14, false);
 
 			switch (i.op)
@@ -4181,6 +4033,7 @@ string openset::query::MacroDbg(macro_s& macro)
 				case hintOp_e::PUSH_PRESENT:
 					ss << padding(i.column, 32, false);
 					break;
+				default: ;
 			}
 
 			ss << endl;
