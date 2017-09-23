@@ -29,4 +29,4 @@ build:
 test_script:
   - cd %APPVEYOR_BUILD_FOLDER%
   - cd build
-  - ctest -R openset-unit-test
+  - ctest -C %CONFIG% -R openset-unit-test
