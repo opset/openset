@@ -17,10 +17,10 @@ before_build:
   - cd %CONFIG%
   - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
 
-build_script:
-  - cd %APPVEYOR_BUILD_FOLDER%
-  - cd %CONFIG%
-  - cmake --build .
+build:
+  project: %CONFIG%\openset.sln # path to Visual Studio solution or project
+  parallel: true            # enable MSBuild parallel builds
+  verbosity: normal         # MSBuild verbosity level {quiet|minimal|normal|detailed}
 
 test_script:
   - cd %APPVEYOR_BUILD_FOLDER%

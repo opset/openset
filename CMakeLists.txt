@@ -9,7 +9,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
 	if (MSVC)
-		add_definitions(/std:c++17)
+		add_definitions(/std:c++17 /Oi)
 	else()
 		add_definitions(-m64 -std=c++17 -pthread -g -static-libstdc++ -static-libgcc)
 	endif()
