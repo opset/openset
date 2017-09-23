@@ -8,9 +8,11 @@ environment:
   matrix:
     # - GENERATOR: "Ninja"
     #  CONFIG: Debug
+    #  configuration: Debug
 
     - GENERATOR: "Ninja"
       CONFIG: Release
+      configuration: Release
 
 install:
   - git submodule update --init --recursive
