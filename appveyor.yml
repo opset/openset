@@ -11,11 +11,14 @@ environment:
 install:
   - git submodule update --init --recursive
 
-build_script:
+before_build:
   - cd %APPVEYOR_BUILD_FOLDER%
   - mkdir %CONFIG%
   - cd %CONFIG%
   - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
+
+build_script:
+  - cmake --build . --target all
 
 test_script:
   - cd %APPVEYOR_BUILD_FOLDER%
