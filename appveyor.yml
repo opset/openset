@@ -6,8 +6,8 @@ environment:
   MSVC_DEFAULT_OPTIONS: OFF
 
   matrix:
-    - GENERATOR: "Ninja"
-      CONFIG: Debug
+    # - GENERATOR: "Ninja"
+    #  CONFIG: Debug
 
     - GENERATOR: "Ninja"
       CONFIG: Release
