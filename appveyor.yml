@@ -1,9 +1,11 @@
+os: Visual Studio 2017
+
 environment:
   matrix:
-    - GENERATOR: "Visual Studio 15 Win64"
+    - GENERATOR: "Ninja"
       CONFIG: Debug
 
-    - GENERATOR: "Visual Studio 15 Win64"
+    - GENERATOR: "Ninja"
       CONFIG: Release
 
 install:
@@ -13,7 +15,7 @@ build_script:
   - cd %APPVEYOR_BUILD_FOLDER%
   - mkdir %CONFIG%
   - cd %CONFIG%
-  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=%CONFIG%
+  - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
 
 test_script:
   - ps: cd _builds
