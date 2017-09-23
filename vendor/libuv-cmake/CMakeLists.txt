@@ -27,6 +27,7 @@ if(MSVC)
 
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_definitions(/O2)
+        remove_definitions(/RTC1)
     else()
         add_definitions(/Oi)
     endif()
