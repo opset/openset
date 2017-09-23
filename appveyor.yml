@@ -1,0 +1,32 @@
+os: Visual Studio 2017
+platform: x64
+
+environment:
+
+  MSVC_DEFAULT_OPTIONS: OFF
+
+  matrix:
+    - GENERATOR: "Ninja"
+      configuration: Debug
+
+    - GENERATOR: "Ninja"
+      configuration: Release
+
+install:
+  - git submodule update --init --recursive
+
+before_build:
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - mkdir build
+  - cd build
+  - cmake .. -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%configuration%
+
+build:
+  project: build\openset.sln # path to Visual Studio solution or project
+  parallel: true            # enable MSBuild parallel builds
+  verbosity: normal         # MSBuild verbosity level {quiet|minimal|normal|detailed}
+
+test_script:
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - cd build
+  - ctest -C %configuration% -R openset-unit-test

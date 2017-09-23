@@ -24,6 +24,14 @@ set(SOURCES
 
 if(MSVC)
     add_definitions(-D_WIN32_WINNT=0x0600 -D_GNU_SOURCE -D_CRT_SECURE_NO_WARNINGS)
+
+    if(CMAKE_BUILD_TYPE MATCHES Release)
+        add_definitions(/O2)
+        remove_definitions(/RTC1)
+    else()
+        add_definitions(/Oi)
+    endif()
+
     set (SOURCES ${SOURCES}
         ${LIBUVDIR}/include/uv-win.h
         ${LIBUVDIR}/src/win/async.c
@@ -58,7 +66,7 @@ if(MSVC)
         ${LIBUVDIR}/src/win/winapi.c
         ${LIBUVDIR}/src/win/winapi.h
         ${LIBUVDIR}/src/win/winsock.c
-        ${LIBUVDIR}/src/win/winsock.h    
+        ${LIBUVDIR}/src/win/winsock.h
         )
 
     add_library(uv ${SOURCES})

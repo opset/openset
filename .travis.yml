@@ -1,6 +1,5 @@
 language: cpp
 
-
 addons:
     apt:
         sources:
@@ -21,13 +20,17 @@ install:
     fi
   - cmake --version
 
+env:
+- BUILD="Release"
+- BUILD="Debug"
+
 compiler:
   - gcc-7
 before_script:
   - cd ${TRAVIS_BUILD_DIR}
-  - mkdir Release
-  - cd Release
-  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=Release
+  - mkdir $BUILD
+  - cd $BUILD
+  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=$BUILD
 script:
   - make
-  - ctest openset-unit-test
+  - ctest -R openset-unit-test
