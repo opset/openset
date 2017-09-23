@@ -20,18 +20,17 @@ install:
     fi
   - cmake --version
 
-matrix:
-  env:
-    - BUILD="Release"
-    - BUILD="Debug"
+env:
+- BUILD="Release"
+- BUILD="Debug"
 
 compiler:
   - gcc-7
 before_script:
   - cd ${TRAVIS_BUILD_DIR}
-  - mkdir ${BUILD}
-  - cd ${BUILD}
-  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=${BUILD}
+  - mkdir $BUILD
+  - cd $BUILD
+  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=$BUILD
 script:
   - make
   - ctest -R openset-unit-test
