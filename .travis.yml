@@ -21,8 +21,9 @@ install:
   - cmake --version
 
 matrix:
-  - BUILD=Release
-  - BUILD=Debug
+  env:
+    - BUILD="Release"
+    - BUILD="Debug"
 
 compiler:
   - gcc-7
