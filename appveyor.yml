@@ -15,12 +15,12 @@ before_build:
   - cd %APPVEYOR_BUILD_FOLDER%
   - mkdir %CONFIG%
   - cd %CONFIG%
-  - cmake .. -GNinja -DCMAKE_BUILD_TYPE=%CONFIG%
+  - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
 
 build_script:
   - cd %APPVEYOR_BUILD_FOLDER%
   - cd %CONFIG%
-  - cmake --build . --config %CONFIG%
+  - cmake --build .
 
 test_script:
   - cd %APPVEYOR_BUILD_FOLDER%
