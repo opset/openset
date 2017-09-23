@@ -1,6 +1,10 @@
 os: Visual Studio 2017
+platform: x64
 
 environment:
+
+  MSVC_DEFAULT_OPTIONS: OFF
+
   matrix:
     - GENERATOR: "Ninja"
       CONFIG: Debug
@@ -13,12 +17,12 @@ install:
 
 before_build:
   - cd %APPVEYOR_BUILD_FOLDER%
-  - mkdir %CONFIG%
-  - cd %CONFIG%
-  - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
+  - mkdir build
+  - cd build
+  - cmake .. -G "Visual Studio 15 2017 Win64" -DCMAKE_BUILD_TYPE=%CONFIG%
 
 build:
-  project: %CONFIG%\openset.sln # path to Visual Studio solution or project
+  project: build\openset.sln # path to Visual Studio solution or project
   parallel: true            # enable MSBuild parallel builds
   verbosity: normal         # MSBuild verbosity level {quiet|minimal|normal|detailed}
 
