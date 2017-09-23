@@ -18,5 +18,6 @@ build_script:
   - cmake .. -DCMAKE_BUILD_TYPE=%CONFIG%
 
 test_script:
-  - ps: cd _builds
+  - cd %APPVEYOR_BUILD_FOLDER%
+  - cd %CONFIG%
   - ctest -R openset-unit-test
