@@ -40,9 +40,9 @@ void AsyncPool::mapPartitionsToAsyncWorkers()
 	resumeAsync(); // resume all async workers
 
 	if (!partitions.size())
-		Logger::get().info('!', "this node is empty, initialize it as a new cluster or join it to an existing cluster");
+		Logger::get().info("this node is empty, initialize it as a new cluster or join it to an existing cluster");
 	else
-		Logger::get().info('!', "mapped " + to_string(partitions.size()) + " active partitions.");
+		Logger::get().info("mapped " + to_string(partitions.size()) + " active partitions.");
 }
 
 void AsyncPool::suspendAsync()
@@ -173,7 +173,7 @@ void AsyncPool::cellFactory(std::vector<int> partitionList, function<OpenLoop*(A
 		}
 		else
 		{
-			Logger::get().info('@', "partition missing");
+			Logger::get().error("partition missing (" + to_string(pid) + ")");
 		}
 	}
 }
@@ -383,7 +383,7 @@ void AsyncPool::startAsync()
 
 	
 
-	Logger::get().info('+', "Creating " + to_string(workerMax) + " partition pool threads.");
+	Logger::get().info("Creating " + to_string(workerMax) + " partition pool threads.");
 
 	vector<std::thread> workers;
 	workers.reserve(workerMax);

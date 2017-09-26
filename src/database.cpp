@@ -81,7 +81,7 @@ void Database::loadConfig()
 
 	if (tableDoc.empty())
 	{
-		Logger::get().info(' ', "no tables configured.");
+		Logger::get().error("no tables configured.");
 		return;
 	}
 
@@ -99,7 +99,7 @@ void Database::loadConfig()
 		newTable(name);
 	}
 
-	Logger::get().info('+', "loaded " + to_string(count) + " tables.");
+	Logger::get().info("loaded " + to_string(count) + " tables.");
 
 }
 

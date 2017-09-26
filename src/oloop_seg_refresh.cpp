@@ -43,7 +43,7 @@ void OpenLoopSegmentRefresh::storeSegment(IndexBits* bits) const
 	parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
 	parts->setSegmentTTL(segmentName, macros.segmentTTL);
 
-	Logger::get().info(' ', "did refresh on " + table->getName() + "/" + segmentName + ".");
+	Logger::get().info("did refresh on " + table->getName() + "/" + segmentName + ".");
 }
 
 bool OpenLoopSegmentRefresh::nextExpired()

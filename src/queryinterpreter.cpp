@@ -575,7 +575,7 @@ void openset::query::Interpreter::marshal_bucket(int paramCount)
 	}
 
 	--stackPtr;
-	int64_t bucket = (*stackPtr * 100);
+	const int64_t bucket = (*stackPtr * 100);
 
 	--stackPtr;
 	int64_t value = (*stackPtr * 100);
@@ -1162,7 +1162,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		 * main body, it will exit the current query silently (without error)
 		 */
 
-		auto currentGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
+		const auto currentGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
 											   // an "event" can contian many rows so,
 											   // watch the group column and iterate 
 											   // until the row group changes

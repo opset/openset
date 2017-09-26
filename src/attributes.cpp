@@ -337,7 +337,7 @@ int64_t Attributes::deserialize(char* mem)
 
 	if (blockSize == 0)
 	{
-		Logger::get().info('!', "no attributes to deserialize for partition " + to_string(partition));
+		Logger::get().info("no attributes to deserialize for partition " + to_string(partition));
 		return 16;
 	}
 

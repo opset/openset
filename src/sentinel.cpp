@@ -48,14 +48,14 @@ bool openset::mapping::Sentinel::failCheck()
 	{
 		//enterErrorState(); // enter error state if we aren't already
 
-		Logger::get().info('!', "NODE DOWN - " + to_string(failedCount) + " node(s) down... verifying");
+		Logger::get().error("NODE DOWN - " + to_string(failedCount) + " node(s) down... verifying");
 		ThreadSleep(500);
 
 		failedCount = mapper->countFailedRoutes();
 
 		if (!failedCount)
 		{
-			Logger::get().info('!', "NODE DOWN - connections re-established");
+			Logger::get().info("NODE DOWN - connections re-established");
 			return true;
 		}
 
@@ -70,7 +70,7 @@ bool openset::mapping::Sentinel::failCheck()
 			mapper->removeRoute(d);
 		}
 
-		Logger::get().info('!', to_string(deadRoutes.size()) + " node(s) removed.");
+		Logger::get().info(to_string(deadRoutes.size()) + " node(s) removed.");
 
 		//enterErrorState();
 		if (isSentinel())
@@ -93,7 +93,7 @@ bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, in
 	params->set("target_node", targetNode);
 	params->set("partition", partitionId);
 
-	Logger::get().info('>', "dispatching transfer " + to_string(partitionId) + " to " + globals::mapper->getRouteName(targetNode));
+	Logger::get().info("dispatching transfer " + to_string(partitionId) + " to " + globals::mapper->getRouteName(targetNode));
 
 	int64_t jsonLength;
 	auto jsonPtr = cjson::StringifyCstr(&request, jsonLength);
@@ -107,7 +107,7 @@ bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, in
 	if (!message)
 	{
 		openset::globals::mapper->getPartitionMap()->setState(partitionId, targetNode, openset::mapping::NodeState_e::free);
-		Logger::get().info('!', "xfer error on paritition " + to_string(partitionId) + ".");
+		Logger::get().error("xfer error on paritition " + to_string(partitionId) + ".");
 		return false;
 	}
 
@@ -234,7 +234,7 @@ void openset::mapping::Sentinel::runMonitor()
 			continue;
 		}
 
-		Logger::get().info('@', "waiting for cluster - " + to_string(up) + ":" + to_string(routes) + " reporting.");
+		Logger::get().info("waiting for cluster - " + to_string(up) + ":" + to_string(routes) + " reporting.");
 
 		if (routes == up)
 			break;
@@ -242,7 +242,7 @@ void openset::mapping::Sentinel::runMonitor()
 		ThreadSleep(100);
 	}
 
-	Logger::get().info('#', "cluster complete.");
+	Logger::get().info("cluster complete.");
 
 	auto mapTime = Now();
 
@@ -262,7 +262,7 @@ void openset::mapping::Sentinel::runMonitor()
 			if (actingSentinel)
 			{
 				actingSentinel = false;
-				Logger::get().info('-', "no longer team leader.");
+				Logger::get().info("no longer team leader.");
 				//purgeTransferQeueue(); // clear the queue, it's not our job to watch it now
 			}
 
@@ -279,14 +279,14 @@ void openset::mapping::Sentinel::runMonitor()
 		if (!actingSentinel)
 		{
 			actingSentinel = true;
-			Logger::get().info('+', "promoted to team leader.");
+			Logger::get().info("promoted to team leader.");
 
 			// purge placeholders - send a map
 			partitionMap->purgeByState(NodeState_e::active_placeholder);
 			if (broadcastMap())
-				Logger::get().info('>', "promotion - broadcast new map.");
+				Logger::get().info("promotion - broadcast new map.");
 			else
-				Logger::get().info('!', "promotion - broadcast failed.");
+				Logger::get().error("promotion - broadcast failed.");
 			continue;
 		}
 
@@ -333,12 +333,12 @@ void openset::mapping::Sentinel::runMonitor()
 				{
 					if (!promoted)
 					{
-						Logger::get().info('-', "partition " + to_string(p) + " changed to ACTIVE on " + openset::globals::mapper->getRouteName(n) + ".");
+						Logger::get().info("partition " + to_string(p) + " changed to ACTIVE on " + openset::globals::mapper->getRouteName(n) + ".");
 						partitionMap->setOwner(p, n);
 					}
 					else
 					{
-						Logger::get().info('-', "partition " + to_string(p) + " changed to CLONE " + openset::globals::mapper->getRouteName(n) + ".");
+						Logger::get().info("partition " + to_string(p) + " changed to CLONE " + openset::globals::mapper->getRouteName(n) + ".");
 						partitionMap->setState(p, n, NodeState_e::active_clone);
 					}
 
@@ -348,7 +348,7 @@ void openset::mapping::Sentinel::runMonitor()
 				// nothing was promoted... this is bad
 				if (!promoted)
 				{
-					Logger::get().info('@', "cluster is toast, missing replica for partition " + to_string(p) + ".");
+					Logger::get().error("cluster is broken, missing replica for partition " + to_string(p) + ".");
 					// TODO - Handle FUBAR scenario
 					return; // leave
 				}
@@ -391,11 +391,11 @@ void openset::mapping::Sentinel::runMonitor()
 
 			if (broadcastMap())
 			{
-				Logger::get().info('>', "primary check - broadcast new map.");
+				Logger::get().info("primary check - broadcast new map.");
 			}
 			else
 			{
-				Logger::get().info('!', "primary check - broadcast failed.");
+				Logger::get().error("primary check - broadcast failed.");
 			}
 
 			// go back up and test all logic
@@ -461,7 +461,7 @@ void openset::mapping::Sentinel::runMonitor()
 
 				if (sourceNode == -1)
 				{
-					Logger::get().info('@', "a source node for partition " + to_string(p) + " could net be found (replication " + to_string(replicas) + ").");
+					Logger::get().error("a source node for partition " + to_string(p) + " could net be found (replication " + to_string(replicas) + ").");
 					continue;
 				}
 
@@ -500,12 +500,12 @@ void openset::mapping::Sentinel::runMonitor()
 				{
 					printMap();
 					ThreadSleep(5000);
-					Logger::get().info('@', "a target node for partition " + to_string(p) + " could net be found (replication " +  to_string(replicas) + ").");
+					Logger::get().error("a target node for partition " + to_string(p) + " could net be found (replication " +  to_string(replicas) + ").");
 					// TODO - Handle FUBAR scenario
 					continue; // leave
 				}
 
-				Logger::get().info('!', "partition " + to_string(p) + " being replicated to " + globals::mapper->getRouteName(targetNode) + ".");
+				Logger::get().info("partition " + to_string(p) + " being replicated to " + globals::mapper->getRouteName(targetNode) + ".");
 
 				// update this map
 
@@ -515,18 +515,18 @@ void openset::mapping::Sentinel::runMonitor()
 
 				// broadcast this revised map
 				if (broadcastMap())
-					Logger::get().info('>', "replication check (1) - broadcast new map.");
+					Logger::get().info("replication check (1) - broadcast new map.");
 				else
-					Logger::get().info('!', "replication check (1) - broadcast failed.");
+					Logger::get().error("replication check (1) - broadcast failed.");
 
 				//  TRANSFER PARTITION HERE 				
 				if (tranfer(p, sourceNode, targetNode)) // update the map again!
 					mapper->partitionMap.setState(p, targetNode, NodeState_e::active_clone);
 
 				if (broadcastMap())
-					Logger::get().info('>', "replication check (2) - broadcast new map.");
+					Logger::get().info("replication check (2) - broadcast new map.");
 				else
-					Logger::get().info('!', "replication check (2) - broadcast failed.");
+					Logger::get().error("replication check (2) - broadcast failed.");
 
 				// we want to go back to the top after each transfer and see if any other conditions have changed
 				break; 
@@ -585,9 +585,9 @@ void openset::mapping::Sentinel::runMonitor()
 
 						// broadcast this revised map
 						if (broadcastMap())
-							Logger::get().info('>', "balance - swapping roles on partition " + to_string(partition) + ".");
+							Logger::get().info("balance - swapping roles on partition " + to_string(partition) + ".");
 						else
-							Logger::get().info('!', "error balance - swapping roles on partition " + to_string(partition) + ".");
+							Logger::get().error("error balance - swapping roles on partition " + to_string(partition) + ".");
 
 						break;
 					}
@@ -604,9 +604,9 @@ void openset::mapping::Sentinel::runMonitor()
 
 						// broadcast this revised map
 						if (broadcastMap())
-							Logger::get().info('>', "balance - moving roles on partition " + to_string(partition) + ".");
+							Logger::get().info("balance - moving roles on partition " + to_string(partition) + ".");
 						else
-							Logger::get().info('!', "error balance - moving roles on partition " + to_string(partition) + ".");
+							Logger::get().error("error balance - moving roles on partition " + to_string(partition) + ".");
 
 						//  TRANSFER PARTITION HERE 				
 						if (tranfer(partition, heavyNode, targetNode)) // update the map again!
@@ -621,9 +621,9 @@ void openset::mapping::Sentinel::runMonitor()
 						}					
 
 						if (broadcastMap())
-							Logger::get().info('>', "replication check (2) - broadcast new map.");
+							Logger::get().info("replication check (2) - broadcast new map.");
 						else
-							Logger::get().info('!', "replication check (2) - broadcast failed.");
+							Logger::get().error("replication check (2) - broadcast failed.");
 
 						break;
 
@@ -686,9 +686,9 @@ void openset::mapping::Sentinel::runMonitor()
 
 					// broadcast this revised map
 					if (broadcastMap())
-						Logger::get().info('>', "balance (clones) - moving roles on partition " + to_string(partition) + ".");
+						Logger::get().info("balance (clones) - moving roles on partition " + to_string(partition) + ".");
 					else
-						Logger::get().info('!', "error balance (clones) - moving roles on partition " + to_string(partition) + ".");
+						Logger::get().error("error balance (clones) - moving roles on partition " + to_string(partition) + ".");
 
 					//  TRANSFER PARTITION HERE 				
 					if (tranfer(partition, heavyNode, targetNode)) // update the map again!
@@ -706,9 +706,9 @@ void openset::mapping::Sentinel::runMonitor()
 					}
 
 					if (broadcastMap())
-						Logger::get().info('>', "replication check (clones) - broadcast new map.");
+						Logger::get().info("replication check (clones) - broadcast new map.");
 					else
-						Logger::get().info('!', "replication check (clones) - broadcast failed.");
+						Logger::get().error("replication check (clones) - broadcast failed.");
 
 
 				}

@@ -123,7 +123,7 @@ void Internode::initConfigureNode(Database* database, AsyncPool* asyncEngine, cj
 	const auto partitionMax = request->xPathInt("/params/partition_max", 0);
 
 	cout << endl;
-	Logger::get().info('!', "Joining cluster as: '" + nodeName + "'.");
+	Logger::get().info("Joining cluster as: '" + nodeName + "'.");
 	cout << endl;
 
 	// assign a new node id
@@ -166,7 +166,7 @@ void Internode::initConfigureNode(Database* database, AsyncPool* asyncEngine, cj
 
 	asyncEngine->resumeAsync();
 
-	Logger::get().info('!', "configured for " + to_string(partitionMax) + " partitions.");
+	Logger::get().info("configured for " + to_string(partitionMax) + " partitions.");
 
 	response->set("configured", true);
 }
@@ -184,11 +184,11 @@ void Internode::nodeAdd(Database* database, AsyncPool* partitions, cjson* reques
 	if (host.length() && port && nodeId)
 	{
 		openset::globals::mapper->addRoute(nodeName, nodeId, host, port);
-		Logger::get().info('+', "added route " + globals::mapper->getRouteName(nodeId) + " @" + host + ":" + to_string(port) + ".");
+		Logger::get().info("added route " + globals::mapper->getRouteName(nodeId) + " @" + host + ":" + to_string(port) + ".");
 	}
 	else
 	{
-		Logger::get().info('!', "change_cluster:node_add - missing params");
+		Logger::get().error("change_cluster:node_add - missing params");
 		error(
 			openset::errors::Error{
 				openset::errors::errorClass_e::config,
@@ -215,7 +215,7 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 			tables.push_back(t.second);
 	}
 	
-	Logger::get().info('*', "transfer started for partition " + to_string(partitionId) + ".");
+	Logger::get().info("transfer started for partition " + to_string(partitionId) + ".");
 
 	globals::async->suspendAsync();
 
@@ -263,15 +263,15 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 				blockSize);
 
 			if (!responseMessage)
-				Logger::get().info('!', "xfer error " + t->getName() + ".");
+				Logger::get().error("xfer error " + t->getName() + ".");
 			else
-				Logger::get().info('+', "transfered " + t->getName() + " on " + openset::globals::mapper->getRouteName(partitionId) + ".");
+				Logger::get().info("transfered " + t->getName() + " on " + openset::globals::mapper->getRouteName(partitionId) + ".");
 		}
 	}
 
 	globals::async->resumeAsync();
 
-	Logger::get().info('*', "transfer complete on partition " + to_string(partitionId) + ".");
+	Logger::get().info("transfer complete on partition " + to_string(partitionId) + ".");
 
 	response->set("response", "thank you.");
 }
@@ -308,13 +308,13 @@ void Internode::mapChange(Database* database, AsyncPool* asyncEngine, cjson* req
 
 	const auto removeRoute = [&](int64_t nodeId)
 	{
-		Logger::get().info('-', "removing route via mapping change");
+		Logger::get().info("removing route via mapping change");
 		globals::mapper->removeRoute(nodeId);
 	};
 
 	const auto addRoute = [&](std::string name, int64_t nodeId, std::string host, int port)
 	{
-		Logger::get().info('+', "adding route '" + name + "' via mapping change");
+		Logger::get().info("adding route '" + name + "' via mapping change");
 		globals::mapper->addRoute(name, nodeId, host, port);
 	};
 
@@ -466,7 +466,7 @@ void Admin::onMessage(
 		{
 			auto sentinelRoute = openset::globals::sentinel->getSentinel();
 
-			Logger::get().info('>', "forwarding invite to sentinal '" + openset::globals::mapper->getRouteName(sentinelRoute) + "'");
+			Logger::get().info("forwarding invite to sentinal '" + openset::globals::mapper->getRouteName(sentinelRoute) + "'");
 
 			const auto responseMessage = openset::globals::mapper->dispatchSync(
 				sentinelRoute,
@@ -480,7 +480,7 @@ void Admin::onMessage(
 			}
 			else
 			{
-				Logger::get().info('!', "error forwarding node invitiation");
+				Logger::get().error("error forwarding node invitiation");
 				response.set("error", true);
 			}
 		}
@@ -595,7 +595,7 @@ void Admin::initCluster(
 		globals::running->setNodeName(openset::config::createName());
 		globals::running->state = openset::config::nodeState_e::active;
 		globals::running->partitionMax = partitionMax;		
-		Logger::get().info('!', "Initialized as: '" + globals::running->nodeName +"'.");
+		Logger::get().info("Initialized as: '" + globals::running->nodeName +"'.");
 	}
 
 	openset::globals::mapper->partitionMap.clear();
@@ -610,7 +610,7 @@ void Admin::initCluster(
 	partitions->mapPartitionsToAsyncWorkers();
 
 	auto logLine = "configured for " + to_string(partitionMax) + " partitions.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);	
 
 	// routes are broadcast to nodes, we use the external host and port
@@ -628,7 +628,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 	if (globals::running->state != openset::config::nodeState_e::active)
 	{
-		Logger::get().info('!', "node must be initialized to invite other nodes.");
+		Logger::get().error("node must be initialized to invite other nodes.");
 		response->set("class", "config");
 		response->set("error", "node_not_initialized");
 		return;
@@ -641,7 +641,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 	if (!host.length() || !port)
 	{
-		Logger::get().info('!', "invite node: missing params.");
+		Logger::get().error("invite node: missing params.");
 		error(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
@@ -657,7 +657,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 	if (!client.openConnection())
 	{
-		Logger::get().info('!', "invite node: could not connect " + host + ":" + to_string(port) + ".");
+		Logger::get().error("invite node: could not connect " + host + ":" + to_string(port) + ".");
 		error(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
@@ -670,7 +670,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 	// Step 1 - Verify that the remote node exists and is able to join
 	{
-		Logger::get().info('+', "inviting node " + host + ":" + to_string(port) + ".");
+		Logger::get().info("inviting node " + host + ":" + to_string(port) + ".");
 
 		cjson initRequest;
 		initRequest.set("action", "cluster_member"); 
@@ -696,7 +696,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 		if (clientResponseHeader.isError() || !initResponseData)
 		{
-			Logger::get().info('!', "invited node " + host + ":" + to_string(port) + " could not be reached.");
+			Logger::get().info("invited node " + host + ":" + to_string(port) + " could not be reached.");
 			response->set("class", "config");
 			response->set("error", "verify_node_could_not_be_reached");
 			return;
@@ -710,7 +710,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 		if (clientResponseJson.xPathBool("/part_of_cluster", true))  
 		{
-			Logger::get().info('!', "invited node " + host + ":" + to_string(port) + " not available to join cluster.");
+			Logger::get().error("invited node " + host + ":" + to_string(port) + " not available to join cluster.");
 			response->set("class", "config");
 			response->set("error", "verify_node_not_available");
 			return;
@@ -753,7 +753,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 		auto rpcJSON = cjson::Stringify(&configBlock);
 
-		Logger::get().info('+', "configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
+		Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
 		openset::comms::RouteHeader_s route;
 		route.route = 0; // special case where we set this to zero (new node has no id)
@@ -769,7 +769,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 		if (clientResponseHeader.isError() || !initResponseData)
 		{
-			Logger::get().info('!', "invited node " + host + ":" + to_string(port) + " could not be reached.");
+			Logger::get().error("invited node " + host + ":" + to_string(port) + " could not be reached.");
 			response->set("class", "config");
 			response->set("error", "config_node_could_not_be_reached");
 			return;
@@ -783,7 +783,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 
 		if (!clientResponseJson.xPathBool("/configured", false))
 		{
-			Logger::get().info('!', "invited node " + host + ":" + to_string(port) + " could not be configured.");
+			Logger::get().info("invited node " + host + ":" + to_string(port) + " could not be configured.");
 			response->set("class", "config");
 			response->set("error", "config_node_not_configured");
 			return;
@@ -794,7 +794,7 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 	// add the new node to the local dispatchAsync list, then
 	// fork out the node_add command to any other nodes
 	{
-		Logger::get().info('>', "broadcasting membership for node " + newNodeName + " @" + host + ":" + to_string(port));
+		Logger::get().info("broadcasting membership for node " + newNodeName + " @" + host + ":" + to_string(port));
 
 		// add the new route to the local route map, that way it will
 		// receive the broadcast in the next step
@@ -961,7 +961,7 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 	//cjson::toFile(globals::running->path + "tables/" + tableName + "/table.json", &tableJson, true);
 
 	auto logLine = "table '" + tableName + "' created.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 
 }
@@ -1037,7 +1037,7 @@ void Admin::describeTable(
 		}
 
 	auto logLine = "describe table '" + tableName + "'.";
-	Logger::get().info(' ', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
 
@@ -1139,7 +1139,7 @@ void Admin::addColumn(
 	columns->setColumn(lowest, name, colType, false, false);
 
 	const auto logLine = "added column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
 
@@ -1204,7 +1204,7 @@ void Admin::dropColumn(
 	//table->saveConfig();
 
 	const auto logLine = "dropped column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
 
@@ -1301,7 +1301,7 @@ void Admin::setTrigger(Database* database, AsyncPool* partitions, cjson* request
 	// table->saveConfig();
 
 	auto logLine = "set trigger '" + triggerName + "' on table '" + tableName + "'.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 
 }
@@ -1349,7 +1349,7 @@ void Admin::describeTriggers(Database* database, AsyncPool* partitions, cjson* r
 	}
 
 	auto logLine = "describe triggers on table '" + tableName + "'.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
 
@@ -1402,7 +1402,7 @@ void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* reques
 	table->forceReload();
 
 	auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
-	Logger::get().info('!', logLine);
+	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
 
@@ -1446,7 +1446,7 @@ void Insert::onInsert(
 
 	auto rows = eventsNode->getNodes();
 
-	Logger::get().info('+', "Inserting " + to_string(rows.size()) + " events.");
+	Logger::get().info("Inserting " + to_string(rows.size()) + " events.");
 
 	// vectors go gather locally inserted, or remotely distributed events from this set
 	std::unordered_map<int, std::vector<char*>> localGather;
@@ -1567,7 +1567,7 @@ void Insert::onInsert(
 		}
 
 		if (sleepCount)
-			Logger::get().info('~', "insert drain for " + to_string(Now() - sleepStart) + "ms on partition " + 
+			Logger::get().info("insert drain timer for " + to_string(Now() - sleepStart) + "ms on partition " + 
 				to_string(parts->partition) + ".");
 	}
 
@@ -1625,7 +1625,7 @@ void Feed::onSub(
 			if (message->clientConnection && 
 				message->clientConnection->dropped)
 			{
-				Logger::get().info(' ', "subscriber '" + subName + "' on table '" + tableName + "' connection lost.");
+				Logger::get().error("subscriber '" + subName + "' on table '" + tableName + "' connection lost.");
 				message->clientConnection->holdDropped = false;
 				return;
 			}
@@ -1769,7 +1769,7 @@ void forkQuery(
 		{
 			// there is an error message from one of the participing nodes
 			// TODO - handle error
-			Logger::get().info('@', "some kinda strange");
+			Logger::get().error("some kinda strange");
 		}
 	}
 	
@@ -1888,7 +1888,7 @@ void forkQuery(
 	// send back the resulting JSON
 	message->reply(&resultJSON);
 
-	Logger::get().info('+', "Query on " + table->getName());
+	Logger::get().info("Query on " + table->getName());
 
 	// free up the responses
 	openset::globals::mapper->releaseResponses(result);
@@ -1914,7 +1914,7 @@ void Query::onQuery(
 {
 
 	std::string log = "Inbound query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
-	Logger::get().info('+', log);
+	Logger::get().info(log);
 
 	const auto tableName = request->xPathString("/params/table", "");
 	const auto queryCode = request->xPathString("/params/code", "");
@@ -2174,7 +2174,7 @@ void Query::onQuery(
 
 			message->reply(buffer, bufferLength);
 
-			Logger::get().info('+', "Fork query on " + table->getName());
+			Logger::get().info("Fork query on " + table->getName());
 
 			// clean up all those resultSet*
 			for (auto r : resultSets)
@@ -2442,7 +2442,7 @@ void Query::onCount(
 			// reply is responsible for buffer
 			message->reply(buffer, bufferLength);
 
-			Logger::get().info('+', "Fork count(s) on " + table->getName());
+			Logger::get().info("Fork count(s) on " + table->getName());
 
 			// clean up all those resultSet*
 			for (auto r : resultSets)
@@ -2463,7 +2463,7 @@ void Query::onCount(
 		return new OpenLoopCount(shuttle, table, queries, resultSets[loop->getWorkerId()], instance);
 	});
 
-	Logger::get().info('+', "Started " + to_string(workers) + " count worker async cells.");
+	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 
 void InternodeXfer::onXfer(
@@ -2474,7 +2474,7 @@ void InternodeXfer::onXfer(
 	// This is a binary message, it will contain an inbound table for a given partition.
 	// in the header will be the partition, and table name. 
 
-	Logger::get().info('>', "transfer in (received " + to_string(message->length) + " bytes).");
+	Logger::get().info("transfer in (received " + to_string(message->length) + " bytes).");
 
 	auto read = message->data;
 

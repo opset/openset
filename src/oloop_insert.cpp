@@ -20,7 +20,7 @@ OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
 	tablePartitioned(tablePartitioned),
 	runCount(0)
 {
-	Logger::get().info('+', "insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
+	Logger::get().info("insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 OpenLoopInsert::~OpenLoopInsert()
@@ -80,7 +80,7 @@ void OpenLoopInsert::run()
 	{
 		// if we are not in owner or clone state we are just going to backlog
 		// the inserts until our state changes, then we will perform inserts
-		Logger::get().info('~', "skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
+		Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
 		this->scheduleFuture(1000);
 		return;
 	}	
