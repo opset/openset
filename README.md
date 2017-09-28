@@ -23,6 +23,7 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 **shortcuts**
 *  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
+*  [Docker Images](https://github.com/perple-io/openset/tree/master/docs/docker)
 *  [Sample Code](https://github.com/perple-io/openset/tree/master/samples)
 *  [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
