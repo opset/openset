@@ -63,7 +63,7 @@ conn = openset.init({
 command = {
     action: "init_cluster",
     params: {
-        partitions: 4
+        partitions: args.num
     }
 };
 

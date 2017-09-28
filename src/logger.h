@@ -161,7 +161,7 @@ private:
 				std::cout << txt; // write to console
 
 				auto LOG_LEVEL = (line.level == level_e::info) ? LOG_INFO : (line.level == level_e::error ? LOG_ERR : LOG_DEBUG);
-				syslog(LOG_LEVEL, "%s", line.msg.c_str());
+				syslog(LOG_LEVEL, "%s %s", level.c_str(), line.msg.c_str());
 #endif
 			}
 			

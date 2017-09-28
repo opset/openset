@@ -72,7 +72,7 @@ if(MSVC)
     add_library(uv ${SOURCES})
 	target_link_libraries(uv advapi32 iphlpapi psapi userenv shell32 ws2_32)
 else()
-    add_definitions(-g -m64 --std=gnu89 -pedantic -Wall -Wextra -Wno-unused-parameter -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -static-libstdc++ -static-libgcc)
+    add_definitions(-g -m64 --std=gnu89 -pedantic -Wall -Wextra -Wno-unused-parameter -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -static -static-libstdc++ -static-libgcc)
 
     if(CMAKE_BUILD_TYPE MATCHES Release)
          add_definitions(-O3)
