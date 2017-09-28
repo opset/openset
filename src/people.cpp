@@ -126,7 +126,7 @@ int64_t People::deserialize(char* mem)
 
 	if (blockSize == 0)
 	{
-		Logger::get().info('!', "no people to deserialize for partition " + to_string(partition));
+		Logger::get().error("no people to deserialize for partition " + to_string(partition));
 		return 16;
 	}
 

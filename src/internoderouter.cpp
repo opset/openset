@@ -159,7 +159,7 @@ openset::comms::Message* openset::mapping::Mapper::dispatchSync(int64_t route, r
 
 		if (!tRoute || tRoute->isDead())
 		{
-			Logger::get().info('!', "xfer error.");
+			Logger::get().error("xfer error.");
 			break;
 		}
 	}
@@ -554,7 +554,7 @@ void openset::mapping::Mapper::deserializeRoutes(cjson* doc)
 {
 	if (doc->empty())
 	{
-		Logger::get().info(' ', "no inter-node routes configured.");
+		Logger::get().error("no inter-node routes configured.");
 		return;
 	}
 
@@ -596,7 +596,7 @@ void openset::mapping::Mapper::loadRoutes()
 
 	deserializeRoutes(&tableDoc);
 
-	Logger::get().info('+', "loaded routes.");	
+	Logger::get().info("loaded routes.");	
 }
 
 
@@ -614,7 +614,7 @@ void openset::mapping::Mapper::saveRoutes()
 
 void openset::mapping::Mapper::run() const
 {
-	Logger::get().info('+', "inter-node communications initialized.");
+	Logger::get().info("inter-node communications initialized.");
 
 	while (true)
 	{

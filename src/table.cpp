@@ -241,10 +241,10 @@ void Table::deserializeTriggers(cjson* doc)
 
 		triggerConf[trigInfo->name] = trigInfo;
 
-		Logger::get().info(' ', "initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
+		Logger::get().info("initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
 	}
 
-	Logger::get().info('+', "added " + to_string(count) + " columns to table '" + name + "'");
+	Logger::get().info("added " + to_string(count) + " columns to table '" + name + "'");
 
 }
 
@@ -301,13 +301,13 @@ void Table::saveConfig()
 	cjson tableDoc;
 	serializeTable(&tableDoc);	
 	// save it out
-	Logger::get().info('+', "config saved for table '" + name + "'");
+	Logger::get().info("config saved for table '" + name + "'");
 	cjson::toFile(globals::running->path + "tables/" + name + "/table.json", &tableDoc, true);
 
 	cjson triggerDoc;
 	serializeTriggers(&triggerDoc);
 	// save it out
-	Logger::get().info('+', "triggers saved for table '" + name + "'");
+	Logger::get().info("triggers saved for table '" + name + "'");
 	cjson::toFile(globals::running->path + "tables/" + name + "/triggers.json", &triggerDoc, true);
 
 }

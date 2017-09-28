@@ -25,7 +25,7 @@ console.log(' OpenSet Sample Initializer');
 console.log('-----------------------------------------------------\n');
 console.log(' -h --host <ip address> // default 127.0.0.1');
 console.log(' -p --port <port>       // default 2020');
-console.log('    --help                       // display help');
+console.log('    --help              // display help');
 console.log('');
 
 if (args.help) {

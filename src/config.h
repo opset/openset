@@ -41,7 +41,7 @@ namespace openset
 						exit(1);
 					}
 					hostExternal = hostName;
-					Logger::get().info('*', "external host defaulting to hostname: '" + hostExternal + "'");
+					Logger::get().info("external host defaulting to hostname: '" + hostExternal + "'");
 				}
 
 				if (!portExternal)

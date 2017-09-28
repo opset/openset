@@ -39,7 +39,7 @@ void openset::mapping::OutboundClient::request(openset::comms::Message* message)
 
 void openset::mapping::OutboundClient::runLocalLoop()
 {
-	Logger::get().info('+', "Created local pump for " +  globals::mapper->getRouteName(routingTo) + ".");
+	Logger::get().info("Created local pump for " +  globals::mapper->getRouteName(routingTo) + ".");
 
 	while (true)
 	{
@@ -83,7 +83,7 @@ void openset::mapping::OutboundClient::runLocalLoop()
 
 void openset::mapping::OutboundClient::runRemote()
 {
-	Logger::get().info('+', "Created remote pump for " + globals::mapper->getRouteName(routingTo) + " @ " + host + ":" + to_string(port));
+	Logger::get().info("Created remote pump for " + globals::mapper->getRouteName(routingTo) + " @ " + host + ":" + to_string(port));
 
 	openConnection();
 
@@ -130,7 +130,7 @@ void openset::mapping::OutboundClient::runRemote()
 			else
 			{
 				++retryCount;
-				Logger::get().info(' ', "connect/retry node " + globals::mapper->getRouteName(routingTo) + " @ " + host + ":" + to_string(port) + " (try " + to_string(retryCount) + ")");
+				Logger::get().error("connect/retry node " + globals::mapper->getRouteName(routingTo) + " @ " + host + ":" + to_string(port) + " (try " + to_string(retryCount) + ")");
 				ThreadSleep(100);				
 			}
 
@@ -237,7 +237,7 @@ bool openset::mapping::OutboundClient::openConnection()
 	std::string ip;
 	if (!dnsCache.lookup(host, port, ip))
 	{
-		Logger::get().info('!', "could not resolve host '" + host + "'");
+		Logger::get().error("could not resolve host '" + host + "'");
 		return false;
 	}
 	

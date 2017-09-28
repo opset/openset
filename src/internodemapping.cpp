@@ -367,7 +367,7 @@ void openset::mapping::PartitionMap::changeMapping(
 {
 	if (!config)
 	{
-		Logger::get().info('!', "expecting /cluster in changeMapping.");
+		Logger::get().error("expecting /cluster in changeMapping.");
 		return;
 	}
 
@@ -446,7 +446,7 @@ void openset::mapping::PartitionMap::changeMapping(
 					if (nodePtr->nodeId == globals::running->nodeId && deletePartition_cb)
 					{
 						deletePartition_cb(p.first);
-						Logger::get().info('-', "removing local partition " + to_string(p.first) + ".");
+						Logger::get().info("removing local partition " + to_string(p.first) + ".");
 					}
 
 					nodePtr->nodeId = 0;
@@ -460,7 +460,7 @@ void openset::mapping::PartitionMap::changeMapping(
 	if (addPartition_cb)
 		for (auto p : newPartitions)
 		{
-			Logger::get().info('+', "adding local partition " + to_string(p) + ".");
+			Logger::get().info("adding local partition " + to_string(p) + ".");
 			addPartition_cb(p);
 		}
 

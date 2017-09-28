@@ -641,7 +641,7 @@ void uvServer::serve(string IP, int32_t port, int32_t workerPool)
 	workers.reserve(workerCount);
 	threads.reserve(workerCount);
 		
-	Logger::get().info('+', "Creating " + to_string(workerCount) + " conduits...");
+	Logger::get().info("Creating " + to_string(workerCount) + " conduits...");
 	// make vWorker instances and start their threads
 	for (auto i = 0; i < workerCount; i++)
 	{
@@ -680,13 +680,13 @@ void uvServer::serve(string IP, int32_t port, int32_t workerPool)
 
 	if (r)
 	{
-		Logger::get().info('!', "Could not start server on " + IP + ":" + port);
+		Logger::get().info("Could not start server on " + IP + ":" + port);
 		return;
 	}
 
 	ThreadSleep(1000);
-	Logger::get().info('*', "Server listening on " + IP + ":" + port + ".");
-	Logger::get().info('+', "Waiting...");
+	Logger::get().info("Server listening on " + IP + ":" + port + ".");
+	Logger::get().info("Waiting...");
 
 	// Loop forever... never give up
 	uv_run(loop, UV_RUN_DEFAULT);

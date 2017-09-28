@@ -43,13 +43,13 @@ void Config::setState(nodeState_e state)
 	switch (state)
 	{
 		case nodeState_e::ready_wait:
-			Logger::get().info('!', "node ready and waiting.");
+			Logger::get().info("node ready and waiting.");
 			break;
 		case nodeState_e::resume_wait:
-			Logger::get().info('!', "node wait waiting to resume.");
+			Logger::get().info("node wait waiting to resume.");
 			break;
 		case nodeState_e::active:
-			Logger::get().info('!', "node is active.");
+			Logger::get().info("node is active.");
 			break;
 	}
 }
@@ -64,7 +64,7 @@ void Config::setRootPath(string path)
 
 		if (!openset::IO::File::FileExists(path + "openset.json"))
 		{
-			Logger::get().info('!', "existing configuration available");
+			Logger::get().info("existing configuration available");
 			existingConfig = true;
 			// load the config version saved to disk for try restart
 			configVersion = getExistingConfigVersion();
@@ -72,10 +72,7 @@ void Config::setRootPath(string path)
 	}
 	catch (std::string e)
 	{
-		std::cout << "! error: " << e << ""
-			<< std::endl << std::endl << "* halt" << std::endl << std::endl;
-		std::this_thread::sleep_for(chrono::seconds(5));
-		exit(1);
+		Logger::get().fatal("could not configure");
 	}
 
 }
@@ -121,7 +118,7 @@ int64_t Config::getExistingConfigVersion() const
 
 void Config::load()
 {
-	Logger::get().info('+', "loading settings");
+	Logger::get().info("loading settings");
 
 	csLock lock(cs); // scoped lock
 	cjson doc(path + "openset.json");

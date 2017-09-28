@@ -92,7 +92,7 @@ namespace openset
 				// this will get us a list of IPs on that host that match our hints
 				if ((rv = getaddrinfo(host.c_str(), nullptr, &hints, &servinfo)) != 0)
 				{
-					Logger::get().info('!', "could not resolve host '" + host + "'");
+					Logger::get().error("could not resolve host '" + host + "'");
 					return false;
 				}
 

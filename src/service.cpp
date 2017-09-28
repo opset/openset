@@ -113,7 +113,7 @@ namespace openset
 		// BTW - this function will never return...
 		server.serve(IP, port, pool);
 
-		cout << "************** FAIL *****************" << endl;
+		Logger::get().error("could not start server");
 
 		return true;
 	}

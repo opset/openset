@@ -62,7 +62,7 @@ auto banner = R"banner(
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
 #endif
 
-	args.fix(); // fix the default starup arguments after WSAStartup (on windows)
+	args.fix(); // fix the default startup arguments after WSAStartup (on windows)
 
 	// initialize our global config object
 	openset::globals::running = new openset::config::Config(args);
