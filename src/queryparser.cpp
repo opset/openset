@@ -2591,6 +2591,12 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
+				if (conditions[index] == "people")
+				{
+					conditions[index] = "__uuid";
+					changes = true;
+					break;
+				}
 
 				if (conditions[index] == "person")
 				{
