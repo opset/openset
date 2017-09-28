@@ -78,6 +78,8 @@ else()
          add_definitions(-O3)
     endif()
 
+	set(CMAKE_STATIC_LINKER_FLAGS "${CMAKE_STATIC_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+
     include_directories(${LIBUVDIR}/src/unix)
     set(SOURCES ${SOURCES}
         ${LIBUVDIR}/include/uv-unix.h
