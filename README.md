@@ -38,18 +38,22 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 ### 1. Re-eventing
 
-Translate event streams into behavioral event streams. For example, translate raw app usage data (clicks and feature usage) into scenario based events. OpenSet can ingest high speed data, and emit behavioral events for single users from that stream. i.e.
+![Segments](docs/img/re-event-matrix.svg)
 
-- used your app more than 5 times.
-- has been actively using your app for 90 days.
-- has not used feature X in 30 days.
-- has used feature X but not feature Y within 14 days of signup.
-- spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
-- was in Spain in 2015, but did not visit a European destination in 2017.
+Translate live event streams into behavioral event streams. For example, translate raw app usage data (clicks and feature usage) into scenario based events. OpenSet can ingest high speed data, and emit behavioral events for single users from that stream. For example:
 
-The event emitted will contain a time, an event name and the persons ID that triggered the event.
+- people who used your app more than 5 times.
+- people that have been actively using your app for 90 days.
+- people that have not used feature X in 30 days.
+- people that used feature X but not feature Y within their first 14 days.
+- people who spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
+- people who were in Spain visited Spain but did not visit another European destination within 180 days.
+
+The event emitted will contain a time, an event name and the persons ID that triggered the event. Events are emitted within milliseconds of their due time, where they are queued for consumption. Queues listeners can be configured to receive complete subscriptions, or share a subscription to allow for round robin message distribution.
 
 ### 2. Sequence Extraction
+
+![Segments](docs/img/chains-of-events.svg)
 
 Extract the common chains of events that lead people to a target behavior.
 
@@ -72,11 +76,12 @@ Extract sequences or chains of events between a source and target behavior:
 
 OpenSet can generate multi-level population counted aggregates at  to 16 pivot depths, on nearly any combination of event property, count, time value, or date value.
 
-OpenSet brings behavior to segmentation. OpenSet can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. 
+![Pivots](docs/img/pivots.svg)
 
+OpenSet brings behavior to segmentation. OpenSet can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. 
 ![Segments](docs/img/segment_circles.svg)
 
-Segments can be analyzed to extract differences between the events gather for two different segments. 
+Segments can be compared to extract differences between their events and attributes.
 
 Segments can be used to extract analytics for a given group of people.
 
