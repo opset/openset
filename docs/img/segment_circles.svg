@@ -1,0 +1,32 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!--Generator: Xara Designer (www.xara.com), SVG filter version: 6.0.0.4-->
+<svg stroke-width="0.501" stroke-linejoin="bevel" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" width="720pt" height="750pt" viewBox="0 0 720 750">
+ <defs>
+	</defs>
+ <g id="Document" fill="none" stroke="black" font-family="Times New Roman" font-size="16" transform="scale(1 -1)">
+  <g id="Spread" transform="translate(0 -750)">
+   <g id="Page background">
+    <path d="M 0,749.999 L 0,0 L 719.999,0 L 719.999,749.999 L 0,749.999 Z" stroke-linejoin="bevel" stroke="none" stroke-width="0" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+   </g>
+   <g id="MouseOff">
+    <path d="M 0,750 L 0,618.749 L 599.997,618.749 L 599.997,750 L 0,750 Z" fill="#ffffff" stroke="none" stroke-linecap="round" stroke-width="1.528" stroke-linejoin="miter" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 171.579,692.246 C 185.353,706.02 207.711,706.02 221.485,692.246 C 235.26,678.472 235.26,656.114 221.485,642.34 C 207.711,628.566 185.353,628.566 171.579,642.34 C 157.805,656.114 157.805,678.472 171.579,692.246 Z" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 226.477,692.246 C 240.251,706.02 262.609,706.02 276.383,692.246 C 290.157,678.472 290.157,656.114 276.383,642.34 C 262.609,628.566 240.251,628.566 226.477,642.34 C 212.702,656.114 212.702,678.472 226.477,692.246 Z" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <text xml:space="preserve" transform="translate(159.949 718.923) scale(1 -1)" font-size="19.885" font-family="Arial" fill="#000000" stroke="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="0.355" stroke-miterlimit="79.8403193612775"><tspan x="0" y="0">Intersection</tspan></text>
+    <path d="M 223.981,689.433 C 234.427,676.534 234.427,657.966 223.981,645.068 C 213.534,657.966 213.534,676.534 223.981,689.433 Z" fill="#43b344" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <text xml:space="preserve" transform="translate(309.808 718.923) scale(1 -1)" font-size="19.885" font-family="Arial" fill="#000000" stroke="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="0.355" stroke-miterlimit="79.8403193612775"><tspan x="0" y="0">Dif</tspan><tspan x="23.945" y="0">ference</tspan></text>
+    <path d="M 321.437,692.246 C 335.211,706.02 357.57,706.02 371.344,692.246 C 385.118,678.472 385.118,656.114 371.344,642.34 C 357.57,628.566 335.211,628.566 321.437,642.34 C 307.663,656.114 307.663,678.472 321.437,692.246 Z" fill="#43b344" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 376.335,692.246 C 390.109,706.02 412.467,706.02 426.241,692.246 C 440.015,678.472 440.015,656.114 426.241,642.34 C 412.467,628.566 390.109,628.566 376.335,642.34 C 362.561,656.114 362.561,678.472 376.335,692.246 Z" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 373.839,689.517 C 384.285,676.618 384.285,658.05 373.839,645.152 C 363.392,658.05 363.392,676.618 373.839,689.517 Z" fill="#ffffff" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <text xml:space="preserve" transform="translate(11.229 718.923) scale(1 -1)" font-size="19.885" font-family="Arial" fill="#000000" stroke="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="0.355" stroke-miterlimit="79.8403193612775"><tspan x="0" y="0">Union</tspan></text>
+    <path d="M 22.859,692.246 C 36.633,706.02 58.991,706.02 72.765,692.246 C 86.539,678.472 86.539,656.114 72.765,642.34 C 58.991,628.566 36.633,628.566 22.859,642.34 C 9.085,656.114 9.085,678.472 22.859,692.246 Z" fill="#43b344" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 77.757,692.246 C 91.531,706.02 113.889,706.02 127.663,692.246 C 141.437,678.472 141.437,656.114 127.663,642.34 C 113.889,628.566 91.531,628.566 77.757,642.34 C 63.982,656.114 63.982,678.472 77.757,692.246 Z" fill="#43b344" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 75.261,689.517 C 85.707,676.618 85.707,658.05 75.261,645.152 C 64.814,658.05 64.814,676.618 75.261,689.517 Z" fill="#43b344" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 457.816,710.418 L 457.816,629.932 L 586.812,629.932 L 586.812,710.418 L 457.816,710.418 Z" stroke-linecap="round" stroke-width="0.876" fill="#43b344" stroke-linejoin="miter" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <text xml:space="preserve" transform="translate(457.765 721.764) scale(1 -1)" font-size="19.885" font-family="Arial" fill="#000000" stroke="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="0.355" stroke-miterlimit="79.8403193612775"><tspan x="0" y="0">Compliment</tspan></text>
+    <path d="M 495.672,695.087 C 509.446,708.861 531.804,708.861 545.578,695.087 C 559.352,681.313 559.352,658.955 545.578,645.181 C 531.804,631.407 509.446,631.407 495.672,645.181 C 481.898,658.955 481.898,681.313 495.672,695.087 Z" fill="#ffffff" stroke-width="0.876" stroke-linejoin="round" stroke-linecap="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+   </g>
+  </g>
+ </g>
+</svg>

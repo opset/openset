@@ -27,54 +27,66 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 *  [Sample Code](https://github.com/perple-io/openset/tree/master/samples)
 *  [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
-## Features and Abilities
+## 4 Strengths
 
-OpenSet has four main abilities -
-1. Perform feature extraction of behavior from user event streams.
-2. Taxonomical aggregates and analytics.
-3. Emit events based on behavior, activity and inactivity.
-4. Segmentation and segment math on both attributes and behaviors.
 
-#### Extract sequences easily
 
-OpenSet makes it easy to extract before/after, path-to, path-from, funnel and cohort  sequences from user event streams. 
+1. Re-evening
+2. Sequence Extraction
+3. Analytics & Segmentation
+4. Person Extraction
 
-- people that purchased a fish also purchased a tank, food, pebbles and ornaments. 
-- what common paths do users follow from feature X to feature Y.
-- what sequence helped people discover 
-- what are the next 3 most common features users access after feature X.
-- who are most active 1% of users.
-- find users that did X four months ago, but not within the last three.
-- or anything else you can imagine.
+### 1. Re-eventing
 
-#### Analytics on anything people can do
+Translate event streams into behavioral event streams. For example, translate raw app usage data (clicks and feature usage) into scenario based events. OpenSet can ingest high speed data, and emit behavioral events for single users from that stream. i.e.
 
-OpenSet always generates taxonomical results. If you choose to group your results (i.e. country, product, week, day of week) all aggregates will be performed correctly through the taxonomy as events are counted, that includes unique user counts (UU counts), counts, sums, averages etc.
+- used your app more than 5 times.
+- has been actively using your app for 90 days.
+- has not used feature X in 30 days.
+- has used feature X but not feature Y within 14 days of signup.
+- spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
+- was in Spain in 2015, but did not visit a European destination in 2017.
 
-- count people that did X then Y by day for the last three months.
-- count people purchases, avg. cart size, and sum sales by product, by month.
-- aggregates by groups and nested groups (dates, items, values).
-- standard aggregates: UU count, count, sum, min, max, avg.
-- if you recorded it, you can group and aggregate it.
+The event emitted will contain a time, an event name and the persons ID that triggered the event.
 
-#### Eventing
+### 2. Sequence Extraction
 
-OpenSet can emit events for behaviors that have, or have not happened - or - have, or have not happened after a certain amount of time. Our event emitter allows for multiple subscribers to the same event stream in either a full or round-robin configurations.
+Extract the common chains of events that lead people to a target behavior.
 
-Behavioral eventing makes it easy to listen for things like "users that have not logged in for 45 days", or "people who signed up a week ago, but have not created a profile yet" and do something about it.
+- extract the countries of origin for people that visited a given destination.
+- extract the sequence of countries visited by people that arrived at a given destination.
+- extract the app features used by customers before upgrading to your premium plan.
 
-#### Segmentation
+Extract the next thing, or the next _n_ things people do after they perform a target behavior:
 
-OpenSet brings behavior to segmentation. Creating segments of users that did (or did not) perform a sequence of events is easy. Additionally, OpenSet can keep those segments up-to-date as well as generate derivative segments by combining existing segments.
+- what products are commonly purchased with product X
+- what are products purchased within the next 30 days after product X
+- what features do users utilize after feature X.
 
-Segment math includes: population, intersection, union, compliment and difference.
+Extract sequences or chains of events between a source and target behavior:
 
-#### Programmable
+- What countries do people visit after visiting country X, but before visiting country Y.
+- What site features do customers use after coming from promo X but before signing up.
 
-OpenSet uses a Python-like macro language called PyQL to define it's queries. 
+### 3. Analytics & Segmentation
 
+OpenSet can generate multi-level population counted aggregates at  to 16 pivot depths, on nearly any combination of event property, count, time value, or date value.
+
+OpenSet brings behavior to segmentation. OpenSet can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. 
+
+![Segments](docs/img/segment_circles.svg)
+
+Segments can be analyzed to extract differences between the events gather for two different segments. 
+
+Segments can be used to extract analytics for a given group of people.
+
+### 4. Person Extraction
+
+Load or stream events (app, web, IoT, etc) into OpenSet and extract the history and attributes for single users in milliseconds. It doesn't matter if you have millions of events, or you are inserting thousand of events per second, OpenSet extract users by ID in real-time.
 
 # Examples
+
+OpenSet uses a Python-like macro language called PyQL to define it's queries. 
 
 #### Simple query:
 

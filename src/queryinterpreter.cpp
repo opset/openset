@@ -1128,7 +1128,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		*(stackPtr - 1) = Epoch::epochQuarterNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_quarter:
-		*(stackPtr - 1) = Epoch::fixMilli((Epoch::epochQuarterDate(*(stackPtr - 1)));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochQuarterDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_year:
 		*(stackPtr - 1) = Epoch::epochYearNumber(*(stackPtr - 1));
