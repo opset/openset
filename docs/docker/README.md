@@ -1,4 +1,4 @@
-## OepnSetDocker Hub
+## OpenSet on Docker Hub
 
 The latest release can be found on **[Docker Hub](https://hub.docker.com/r/opset/openset_x64_rel/)**. 
 
@@ -19,10 +19,11 @@ docker run -p 2020:2020 -e OS_HOST=<HOST IP> -e OS_PORT=2020 --rm=true -d opset/
 docker ps
 ```
 
-##### To see what's happening inside (tailing forever) -
+##### To see what's happening inside  -
 ```bash
 docker logs {{funny_name or container_id}} -f
 ```
+> :pushpin: use `-f` to tail log forever.
 
 ##### To stop it -
 ```bash

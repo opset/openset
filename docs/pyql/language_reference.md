@@ -380,7 +380,7 @@ match where iter_between('2017-09-21T22:00:00Z', '2017-09-21T22:59:59Z'):
 
 `def`defines a function in PyQL, just as it does in Python. There are some notable differences though, mainly that PyQL doesn't support named parameters or `**args`. In that sense PyQL functions are a bit old-school.
 
-```
+```python
 def my_function(a_string, an_int):
     return a_string + ' ' + an_int
     
@@ -408,47 +408,278 @@ def ten_x(some_value, another_value):
 ```
 
 ##### if, elif and else
-##### for and in
+
+Conditionals in PyQL work as they do in Pyhon.
+
+```python
+if x > 0:
+    do_something_postitive()
+elif x < 0:
+    do_something_negative()
+else:
+    do_something_neutral()
+```
+
+##### for / in
+
+PyQL supports `for`/`in` loops. 
+
+When iterating lists and sets the value parameter will be populated with the values in the container.
+```python
+for some_value in some_list:
+   do_something(some_value)
+```
+
+When iterating dictionaries the value parameter will be populated with the keys in the dictionary.
+```python
+for some_key in some_dict:
+   do_something(some_key)
+```
+
+When iterating dictionaries you can ask for both the key and the value by providing two value variables.
+```python
+for some_key, some_value in some_dict:
+   do_something(some_key, some_value)
+```
+
 ##### continue
+
+`continue` returns execution back to the top of  a loop, and proceeds to the next iteration. `continue` can be used in `match` and `for/in` loops. 
+
+```python
+for some_value in some_set:
+   if some_value < 5: # if value is < 5 go back to top of loop
+       continue
+   do_something(some_value)
+```
+
 ##### break
+
+`break` will exit a loop. `break` can be used in `match` and `for/in` loops
+
+```python
+for some_value in some_set:
+   if some_value < 5: # if value is < 5 stop looping
+       break
+   do_something(some_value)
+```
+
+Unlike Python, the `break` statement in PyQL has a few added features. With PyQL being focused on iteration having being able to provide more direction to `break` is convenient. 
+
+- `break all` will break all nested loops including the outermost (top) loop. Code will resume running on the line of code after the top loop.
+- `break top` will beak all nested loops within outermost (top) loop. The top loop will continue iterating. 
+- `break #` will break a certain number of nested loops (`#`). A regular `break` is same as specifying `break 1`. 
+
 ##### exit
+
+Exit the PyQL script. The next user will be queued and the script will be restarted.
 
 ## Time 
 
 ##### now
+
+Get the current time in Unix epoch milliseconds. 
+
+```python
+match 1 where action is 'purchase': # just match first found
+   first_match_time = event_time # save the time of this event
+
+# how long ago in milliseconds was the first purchase
+how_long_ago = now - first_match_time          
+```
+
 ##### event_time
-##### last_event
+
+Returns the the `event_time` in Unix epoch milliseconds at the current event iterator position.
+
+```python
+match 1 where action is 'purchase': # match first purchase
+
+   first_match_time = event_time # save the time of this event
+   iter_next()
+   
+   match where action is 'purchase': # match remaining purchases
+       last_match_time = event_time
+       
+# time between first and last purcahse
+time_between = last_match_time - first_match_time
+```
+
 ##### first_event
+
+`first_event` will return the Unix epoch milliseconds for the first event in the users event set.
+
+```python
+user_active_span = last_event - first_event
+```
+
+##### last_event
+
+`last_event` will return the Unix epoch milliseconds for the last event in the users event set.
+
+```python
+user_active_span = last_event - first_event
+```
+
 ##### prev_match
+
+`prev_match` is useful for nested `match` iterators. The timestamp of the event that triggered the last match (the nearest outer match) will be returned.
+
+```python
+match where action is 'purchase': # match all purchase events
+
+   # note - prev_match was set on the match above
+   iter_next()
+   
+   match where action is 'purchase': # match remaining purchases
+       if event_time - prev_match > 30 days:
+           do_something() # 30 or more days between these purchases
+```
+
+> :pushpin: `prev_match` will be correct at all depths in a nested `match` loop. If you `break` a loop `prev_match` will contain the correct value for the new level of loop nesting.
+
 ##### first_match
+
+See `prev_match`. The difference between `first_match` and `prev_match` is that on deeply nested `match` loops, `first_match` will always contain the match time for the very most outer loop.
+
 ##### fix
-##### to_seconds
-##### to_minutes
-##### to_hours
-##### to_days
-##### get_second
-##### date_second
-##### get_minute
-##### date_minute
-##### get_hour
-##### date_hour
-##### date_day
-##### get_day_of_week
-##### get_day_of_month
-##### get_day_of_year
-##### date_week
-##### date_month
-##### get_month
-##### get_quarter
-##### date_quarter
-##### get_year
-##### date_year
+
+`fix` converts an integer, floating point or string (contain a number) into a fixed decimal place string. Bankers rounding is applied.
+
+The first parameter is the value to fix. The second parameter is the number of decimal places. If you simply want to truncate (and round) you can pass 0.
+
+```python
+total_money_spent = 37.05782
+total_money_spent = fix(total_money_spent, 2)
+# total_money_spenct now is "37.06"
+total_money_spent = fix(total_money_spent, 0)
+# total_money_spenct now is "37"
+```
+
+##### to_seconds, to_minutes, to_hours and to_days
+
+the `to_seconds`, `to_minutes`, `to_hours` and `to_days` convert millisecond time-spans into their respective unit. Each function takes one parameter. Time is truncated to the nearest lower unit (the second, minute, hour or day the millisecond occurred in). 
+
+```python
+match 1 where action is 'purchase': # just match first found
+   first_match_time = event_time # save the time of this event
+
+# how long ago in milliseconds was the first purchase
+how_long_ago_in_days = to_days(now - first_match_time)
+```
+
+##### get_second, get_minute, get_hour, get_month, get_quarter, and get_year
+
+When given a Unix epoch timestamp, the `get_second`, `get_minute`, `get_hour`, `get_month`, `get_quarter`, and `get_year` functions will the numeric value they correspond to. For example, `get_minute(event_time)` will return a value between `0-59`.
+
+```python
+# count all people that purchased by year and quarter
+match where action is 'purchase': # match all purchase events
+    tally(get_year(event_time), get_quarter(event_time))
+```
+
+##### get_day_of_week, get_day_of_month, and get_day_of_year
+
+The `get_day_of_week`,` get_day_of_month`, and `get_day_of_year` functions are similar to the other `get_` date functions, but process variations of `day`. When given a Unix epoch timestamp they will return the value they correspond to.
+
+```python
+# count all people that purchased by day of week
+match where action is 'purchase': # match all purchase events
+    tally(get_day_of_week(event_time))
+```
+
+##### date_second, date_minute, date_hour, date_day, date_week, date_month, date_quarter and date_year
+
+The `date_` functions are similar to the `day_` function, but instead of returning cardinal values for things like `get_day`, they return properly truncated and interval correct Unix timestamps. 
+
+For example, `get_month(event_time)` would return the month number for the `event_time`, whereas `date_month(event_time)` would return the Unix stamp for the very millisecond that month started. 
+
+```python
+# count all people by date for month of purchase
+match where action is 'purchase': # match all purchase events
+    tally(date_month(event_time))
+```
 
 ## Tally, Emit, Schedule
 
 ##### emit
-##### tally
+
+The `emit` function is used in OpenSet triggers, it is used to emit a named event to a trigger channel. 
+
+```python
+# count product_skus in purchases, when they reach 100
+# emit an event and schedule a folloup tirgger to run in 90 days
+def on_insert():
+    counter = 0    
+    match where action is 'purchase' and product_sku is not None:
+        counter += 1
+        if counter >= 100:
+            schedule(90 days, "check_for_200")
+            emit("reached one hundred purcahsed")
+```
+
+> :pushpin: `emit` also exits a script
+
 ##### schedule
+
+The `schedule` function is used in OpenSet triggers. `schedule` takes two parameters, the first being the future time to schedule at, and the second being the name of the function in the trigger script to execute at that time.
+
+```python
+# count product_skus in purchases, when they reach 100
+# emit an event and schedule a folloup tirgger to run in 90 days
+def on_insert():
+    counter = 0    
+    match where action is 'purchase' and product_sku is not None:
+        counter += 1
+        if counter >= 100:
+            schedule(90 days, "check_for_200")
+            emit("reached one hundred purcahsed")
+```
+
+##### tally
+
+The `tally` function has two modes, one for queries, and the other for segmentation. 
+
+When used in a query, the `tally` takes one or more grouping parameters. Results returned by OpenSet are in a tree format. Aggregators specified in the the `agg:` section will be executed using the current event iterator for each level of the tree.
+
+The following PyQL will generate a tree:
+```python
+tally("root", "branch1", "leaf1")
+tally("root", "branch1", "leaf2")
+tally("root", "branch2", "leaf1")
+tally("root", "branch2", "leaf2")
+```
+that has this structure:
+```
+root
+    /branch1
+        /leaf1
+        /leaf2
+    /branch2
+        /leaf1
+        /leaf2
+```
+
+Generally tally is used to create useful pivots. For example if your events contained the attributes `country` and `product` you could generate a tree of `products` by `country` easily aggregating `people` for each `tally`:
+
+```python
+agg:
+    people
+    
+match where product is not None and country is not None:
+    tally(country, product)
+```
+or, if you wanted to see `country` by `product`:
+```python
+agg:
+    people
+    
+match where product is not None and country is not None:
+    tally(product, country)
+```
+
+> :pushpin: Tally used for segmentation will be discussed in a segmentation document.
+
 
 ## Session Functions
 

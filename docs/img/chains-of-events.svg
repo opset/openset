@@ -1,0 +1,293 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!--Generator: Xara Designer (www.xara.com), SVG filter version: 6.0.0.4-->
+<svg stroke-width="0.501" stroke-linejoin="bevel" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" version="1.1" overflow="visible" width="600pt" height="222pt" viewBox="0 0 600 222">
+ <defs>
+  <marker id="DefaultArrowScaled" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_1" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_1" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_2" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_2" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_3" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_3" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_4" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_4" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_5" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_5" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_6" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_6" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_7" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_7" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_8" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_8" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_9" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_9" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_10" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_10" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_11" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_11" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_12" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_12" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_13" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_13" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_14" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_14" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_15" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_15" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_16" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_16" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_17" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_17" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_18" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_18" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowScaled_19" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+  <marker id="DefaultArrowStyled_19" markerUnits="strokeWidth" viewBox="0 0 1 1" markerWidth="6" markerHeight="6" overflow="visible" orient="auto" fill="#999999" fill-opacity="1.000000">
+   <!-- REF_ARROW_ANGLED -->
+   <g transform="scale(0.0092592592)">
+    <path d="M -27 54 L -9 0 L -27 -54 L 135 0 z"/>
+   </g>
+  </marker>
+ </defs>
+ <g id="Document" fill="none" stroke="black" font-family="Times New Roman" font-size="16" transform="scale(1 -1)">
+  <g id="Spread" transform="translate(0 -222)">
+   <g id="Page background">
+    <path d="M 0.001,221.999 L 0.001,0 L 599.998,0 L 599.998,221.999 L 0.001,221.999 Z" stroke-linejoin="bevel" stroke="none" stroke-width="0" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+   </g>
+   <g id="MouseOff">
+    <path d="M 79.031,178.283 L 117.281,178.283" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 144.671,178.283 L 172.796,178.283" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_1)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 199.411,178.283 L 227.537,178.283" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_2)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 257.664,178.283 L 285.79,178.283" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_3)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 313.598,178.283 L 341.725,178.283" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_4)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 370.468,178.283 C 426.414,178.5 406.274,134.279 421.174,124.492" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_5)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 200.802,143.117 L 228.927,143.117" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_6)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 147.84,176.314 C 173.818,169.125 140.206,141.864 173.818,140.437" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_7)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 257.952,105.147 L 286.076,105.147" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_8)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 318.147,105.71 C 364.934,106.407 382.284,106.406 415.597,106.406" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_9)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 79.031,178.283 C 116.16,177.967 71.511,68.289 118.107,67.568" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_10)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 144.671,66.602 L 172.796,66.602" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_11)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 202.786,66.602 L 230.912,66.602" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_12)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 202.786,28.351 L 230.912,28.351" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_13)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 257.664,28.351 L 285.79,28.351" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_14)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 317.594,29.297 C 391.828,31.501 410.68,71.629 422.437,85.43" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_15)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 146.823,65.556 C 172.8,58.365 139.189,31.106 172.8,29.679" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_16)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 202.954,141.148 C 228.931,133.957 195.319,106.699 228.931,105.27" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_17)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 261.568,66.28 C 383.644,66.28 388.262,85.008 417.854,96.656" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_18)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 125.512,184.605 C 129.464,191.027 137.884,193.031 144.306,189.079 C 150.728,185.127 152.733,176.708 148.781,170.285 C 144.828,163.863 136.409,161.859 129.987,165.811 C 123.565,169.763 121.56,178.182 125.512,184.605 Z" stroke="none" fill="#00bfbf" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 181.417,185.892 C 185.369,192.314 193.789,194.318 200.211,190.366 C 206.633,186.414 208.638,177.995 204.686,171.572 C 200.733,165.15 192.314,163.146 185.892,167.098 C 179.47,171.05 177.465,179.469 181.417,185.892 Z" stroke="none" fill="#00bfbf" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 235.979,185.892 C 239.932,192.314 248.351,194.318 254.773,190.366 C 261.195,186.414 263.2,177.995 259.248,171.572 C 255.296,165.15 246.876,163.146 240.454,167.098 C 234.032,171.05 232.027,179.469 235.979,185.892 Z" stroke="none" fill="#00bfbf" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 294.697,185.892 C 298.649,192.314 307.069,194.318 313.491,190.366 C 319.913,186.414 321.918,177.995 317.966,171.572 C 314.013,165.15 305.594,163.146 299.172,167.098 C 292.75,171.05 290.745,179.469 294.697,185.892 Z" stroke="none" fill="#00bfbf" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 349.387,185.892 C 353.339,192.314 361.759,194.318 368.181,190.366 C 374.603,186.414 376.608,177.995 372.656,171.572 C 368.703,165.15 360.284,163.146 353.862,167.098 C 347.44,171.05 345.435,179.469 349.387,185.892 Z" stroke="none" fill="#00bfbf" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 181.274,150.276 C 185.226,156.698 193.645,158.703 200.068,154.751 C 206.49,150.799 208.494,142.379 204.542,135.957 C 200.59,129.535 192.171,127.53 185.748,131.482 C 179.326,135.435 177.322,143.854 181.274,150.276 Z" stroke="none" fill="#007f7f" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 237.691,112.308 C 241.643,118.73 250.063,120.734 256.485,116.782 C 262.907,112.83 264.912,104.411 260.96,97.988 C 257.007,91.566 248.588,89.562 242.166,93.514 C 235.744,97.466 233.739,105.885 237.691,112.308 Z" stroke="none" fill="#004040" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 294.84,112.308 C 298.792,118.73 307.212,120.734 313.634,116.782 C 320.056,112.83 322.061,104.411 318.109,97.988 C 314.157,91.566 305.737,89.562 299.315,93.514 C 292.893,97.466 290.888,105.885 294.84,112.308 Z" stroke="none" fill="#004040" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 125.655,73.761 C 129.607,80.183 138.027,82.187 144.449,78.235 C 150.871,74.283 152.876,65.864 148.924,59.441 C 144.972,53.019 136.552,51.015 130.13,54.967 C 123.708,58.919 121.703,67.338 125.655,73.761 Z" stroke="none" fill="#ff8200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 181.274,73.761 C 185.226,80.183 193.645,82.187 200.068,78.235 C 206.49,74.283 208.494,65.864 204.542,59.441 C 200.59,53.019 192.171,51.015 185.748,54.967 C 179.326,58.919 177.322,67.338 181.274,73.761 Z" stroke="none" fill="#ff8200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 239.675,73.761 C 243.628,80.183 252.047,82.187 258.469,78.235 C 264.891,74.283 266.896,65.864 262.944,59.441 C 258.992,53.019 250.572,51.015 244.15,54.967 C 237.728,58.919 235.723,67.338 239.675,73.761 Z" stroke="none" fill="#ff8200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 181.56,35.511 C 185.512,41.933 193.932,43.937 200.354,39.985 C 206.776,36.033 208.781,27.614 204.829,21.191 C 200.877,14.769 192.457,12.765 186.035,16.717 C 179.613,20.669 177.608,29.088 181.56,35.511 Z" stroke="none" fill="#bf6200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 239.675,35.511 C 243.628,41.933 252.047,43.937 258.469,39.985 C 264.891,36.033 266.896,27.614 262.944,21.191 C 258.992,14.769 250.572,12.765 244.15,16.717 C 237.728,20.669 235.723,29.088 239.675,35.511 Z" stroke="none" fill="#bf6200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 294.554,35.511 C 298.506,41.933 306.925,43.937 313.348,39.985 C 319.77,36.033 321.774,27.614 317.822,21.191 C 313.87,14.769 305.451,12.765 299.028,16.717 C 292.606,20.669 290.602,29.088 294.554,35.511 Z" stroke="none" fill="#bf6200" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 426.816,112.585 L 438.191,101.443 L 435.461,85.757 L 449.573,93.131 L 463.647,85.688 L 460.994,101.389 L 472.423,112.475 L 456.672,114.803 L 449.659,129.098 L 442.579,114.837 L 426.816,112.585 Z" fill="#d4c100" stroke-linecap="round" stroke="none" stroke-width="0.6" stroke-linejoin="miter" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 261.45,142.667 C 384.066,142.667 379.553,123.414 417.53,115.376" fill="none" stroke="#999999" stroke-width="0.9" marker-end="url(#DefaultArrowStyled_19)" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 237.691,150.276 C 241.643,156.698 250.063,158.703 256.485,154.751 C 262.907,150.799 264.912,142.379 260.96,135.957 C 257.007,129.535 248.588,127.53 242.166,131.482 C 235.744,135.435 233.739,143.854 237.691,150.276 Z" stroke="none" fill="#007f7f" stroke-width="0.563" stroke-linecap="round" stroke-linejoin="round" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+    <path d="M 45.28,189.339 L 56.513,178.337 L 53.817,162.846 L 67.753,170.129 L 81.651,162.779 L 79.031,178.283 L 90.317,189.23 L 74.763,191.529 L 67.838,205.645 L 60.846,191.563 L 45.28,189.339 Z" stroke="none" fill="#d4c100" stroke-linecap="round" stroke-width="0.592" stroke-linejoin="miter" marker-start="none" marker-end="none" stroke-miterlimit="79.8403193612775"/>
+   </g>
+  </g>
+ </g>
+</svg>

@@ -1089,19 +1089,22 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		*(stackPtr - 1) = Epoch::epochSecondNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_second:
-		*(stackPtr - 1) = Epoch::epochSecondDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochSecondDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_minute:
 		*(stackPtr - 1) = Epoch::epochMinuteNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_minute:
-		*(stackPtr - 1) = Epoch::epochMinuteDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochMinuteDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_hour:
 		*(stackPtr - 1) = Epoch::epochHourNumber(*(stackPtr - 1));
 		break;
+	case marshals_e::marshal_round_hour:
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochHourDate(*(stackPtr - 1)));
+		break;
 	case marshals_e::marshal_round_day:
-		*(stackPtr - 1) = Epoch::epochDayDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochDayDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_day_of_week:
 		*(stackPtr - 1) = Epoch::epochDayOfWeek(*(stackPtr - 1));
@@ -1113,25 +1116,25 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		*(stackPtr - 1) = Epoch::epochDayOfYear(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_week:
-		*(stackPtr - 1) = Epoch::epochWeekDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochWeekDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_month:
 		*(stackPtr - 1) = Epoch::epochMonthNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_month:
-		*(stackPtr - 1) = Epoch::epochMonthDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochMonthDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_quarter:
 		*(stackPtr - 1) = Epoch::epochQuarterNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_quarter:
-		*(stackPtr - 1) = Epoch::epochQuarterDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochQuarterDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_get_year:
 		*(stackPtr - 1) = Epoch::epochYearNumber(*(stackPtr - 1));
 		break;
 	case marshals_e::marshal_round_year:
-		*(stackPtr - 1) = Epoch::epochYearDate(*(stackPtr - 1));
+		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
 		break;
 	case marshals_e::marshal_iter_get:
 		*stackPtr = currentRow;
