@@ -1,9 +1,5 @@
-![OpenSet](docs/img/openset.svg)
+![OpenSet](docs/img/openset_compact.svg)
 
-| Platform    | Info                             | Status                                                                                                                                                                     |
-| :-----------| :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
-| Windows x64 | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
 OpenSet is a MIT licensed programmable engine for rapidly extracting behavior from user event data. 
 
@@ -11,8 +7,12 @@ If you have apps, websites, or IoT devices that generate user event data, you mi
 
 OpenSet is a streaming solution and can ingest data at up to 35,000 lines per second per node (fully indexed and replicated). OpenSet has been tested on datasets with millions of users and billions of rows.
 
-> :coffee: Please note that OpenSet is currently pre-release, pre-beta, pre-alpha etc.  
+| Platform    | Info                             | Status                                                                                                                                                                     |
+| :-----------| :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux x64   | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
+| Windows x64 | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
+:coffee: **OpenSet is currently pre-release, pre-beta, pre-alpha etc.**
 
 ## Links
 *  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
