@@ -3,12 +3,12 @@
 
 | Platform    | Info                             | Status                                                                                                                                                                     |
 | :-----------| :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/perple-io/openset.svg?branch=master)](https://travis-ci.org/perple-io/openset)                                                      | 
+| Linux x64   | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
 | Windows x64 | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
 OpenSet is a MIT licensed programmable engine for rapidly extracting behavior from user event data. 
 
-If you have apps, websites, or IoT devices that generate user data, you might find OpenSet really useful.
+If you have apps, websites, or IoT devices that generate user event data, you might find OpenSet really useful.
 
 OpenSet is a streaming solution and can ingest data at up to 35,000 lines per second per node (fully indexed and replicated). OpenSet has been tested on datasets with millions of users and billions of rows.
 
@@ -21,9 +21,7 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 *  [Sample Code](https://github.com/perple-io/openset/tree/master/samples)
 *  [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
-## 4 Strengths
-
-
+## Strong Points
 
 1. Re-evening
 2. Sequence Extraction
@@ -43,7 +41,7 @@ Translate live event streams into behavioral event streams. For example, transla
 - people who spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
 - people who were in Spain visited Spain but did not visit another European destination within 180 days.
 
-The event emitted will contain a time, an event name and the persons ID that triggered the event. Events are emitted within milliseconds of their due time, where they are queued for consumption. Queues listeners can be configured to receive complete subscriptions, or share a subscription to allow for round robin message distribution.
+The event emitted will contain a time, an event name and the user ID that triggered the event. Events are emitted within milliseconds of their due time, where they are queued for consumption. Queues listeners can be configured to receive complete subscriptions, or share a subscription to allow for round robin message distribution.
 
 ### 2. Sequence Extraction
 
@@ -68,20 +66,20 @@ Extract sequences or chains of events between a source and target behavior:
 
 ### 3. Analytics & Segmentation
 
-OpenSet can generate multi-level population counted aggregates at  to 16 pivot depths, on nearly any combination of event property, count, time value, or date value.
+OpenSet can generate multi-level pivots with custom aggregations and population counts at parent and child nodes branches. You can specify up to 16 pivot depths, with combinations of event properties, counts, duration values, or date values.
 
 ![Pivots](docs/img/pivots.svg)
 
-OpenSet brings behavior to segmentation. OpenSet can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. 
+OpenSet brings behavior to segmentation. With OpenSet you can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. Segments can even be compared to extract differences between their respective populations. 
+
 ![Segments](docs/img/segment_circles.svg)
 
-Segments can be compared to extract differences between their events and attributes.
-
-Segments can be used to extract analytics for a given group of people.
 
 ### 4. Person Extraction
 
 Load or stream events (app, web, IoT, etc) into OpenSet and extract the history and attributes for single users in milliseconds. It doesn't matter if you have millions of events, or you are inserting thousand of events per second, OpenSet extract users by ID in real-time.
+
+![Segments](docs/img/one-person.svg)
 
 # Examples
 
@@ -240,7 +238,7 @@ My first product was released in 1992  ---  a graphical BBS product called RoboB
 
 However, in 2015 I found myself writing my first resume and came to a realization. Despite writing millions of LOC, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point in time. 
 
-I love programming, I've been doing it since I was kid, and I especially love C++, and extra love messing with data. So, thought this unique data solution written in C++ might be a good project to give back to the community.
+I love programming, I've been doing it since I was kid, and I especially love C++, and extra love messing with data. So, I thought this unique data solution written in C++ might be a good project to give back to the community.
 
 #### Origin of the idea...
 
