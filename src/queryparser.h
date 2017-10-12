@@ -159,7 +159,7 @@ namespace openset
 					isString(false),
 					lambda(-1),
 					deferredInt(0)
-				{ }
+				{}
 
 				MiddleOp_s(opCode_e op, int64_t value, Debug_s& debugCopy, int64_t lambda = -1) :
 					op(op),
@@ -205,14 +205,11 @@ namespace openset
 				{}
 			};
 
-			using MiddleBlockList = vector<MiddleBlock_s>;
-
-			using VarMap = unordered_map<string, variable_s>;
-
-			using LiteralsMap = unordered_map<string, int>;
-
+			using MiddleBlockList = vector<MiddleBlock_s>;	
+			using VarMap = unordered_map<std::string, variable_s>;
+			using LiteralsMap = unordered_map<std::string, int>;
 			using HintList = std::vector<std::string>; // this will probably get fancier 
-			using HintMap = unordered_map<string, LineParts>;
+			using HintMap = unordered_map<std::string, LineParts>;
 
 			// structure for variables
 			struct middleVariables_s
@@ -222,6 +219,7 @@ namespace openset
 				VarMap columnVars;
 				VarMap groupVars;
 				SortList sortOrder;
+				SegmentList segmentNames;
 				LiteralsMap literals;
 			};
 
@@ -230,7 +228,7 @@ namespace openset
 			int blockCounter;
 
 			HintList hintNames;
-			HintMap hintMap;
+			HintMap hintMap;			
 
 			Columns* tableColumns;
 

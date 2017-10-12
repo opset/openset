@@ -47,9 +47,9 @@ OpenLoopCount::~OpenLoopCount()
 
 void OpenLoopCount::storeResult(std::string name, int64_t count) const
 {
-	auto nameHash = MakeHash(name);
+	const auto nameHash = MakeHash(name);
 
-	auto set_cb = [count](openset::result::Accumulator* resultColumns)
+	const auto set_cb = [count](openset::result::Accumulator* resultColumns)
 	{
 		if (resultColumns->columns[0].value == NULLCELL)
 			resultColumns->columns[0].value = count;
@@ -90,7 +90,7 @@ void OpenLoopCount::storeSegments()
 		if (macro.second.segmentTTL != -1 && 
 			segmentWasCached.count(segmentName) == 0)
 		{
-			auto bits = resultBits[segmentName];
+			const auto bits = resultBits[segmentName];
 
 			if (!bits) continue;
 
@@ -101,8 +101,7 @@ void OpenLoopCount::storeSegments()
 			parts->attributes.swap(COL_SEGMENT, MakeHash(segmentName), bits);
 			delete bits; // we are done with the bits
 			resultBits[segmentName] = nullptr; // remove it from the map so it doesn't get deleted in ~OpenLoopCount
-
-
+			
 			parts->setSegmentTTL(segmentName, macro.second.segmentTTL);
 			parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
 		}

@@ -910,6 +910,7 @@ namespace openset
 		using HintPair = pair<string, HintOpList>;
 		using HintPairs = vector<HintPair>;
 		using ParamVars = unordered_map<string, cvar>;
+		using SegmentList = vector<std::string>;
 
 		// struct containing compiled macro
 		struct macro_s
@@ -921,6 +922,7 @@ namespace openset
 			string segmentName;
 			int64_t segmentTTL;
 			int64_t segmentRefresh;
+			SegmentList segments;
 
 			bool useGlobals; // uses global for table
 			bool useCached; // for segments allow use of cached values within TTL

@@ -21,23 +21,24 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 {
 
 #ifdef _MSC_VER
-
 	// Goofy windows socket subsystem init. 
 	// We shouldn't have to call this nowadays Microsoft
 	WSADATA wsaData;
 	const auto wVersionRequested = MAKEWORD(2, 0);
 	const auto err = WSAStartup(wVersionRequested, &wsaData);
+
 	if (err != 0) {
 		cout << "! could not initialize sockets." << endl;
 		exit(1);
 	}
 
+	// Set colors windows style
 	SetConsoleCP(CP_UTF8);
 	SetConsoleOutputCP(CP_UTF8);
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 12);
 #endif		
 
-auto banner = R"banner(
+	const auto banner = R"banner(
   _______  _______  _______  __    _  _______  _______  _______ 
  |       ||       ||       ||  \  | ||       ||       ||       |
  |   _   ||    _  ||    ___||   \ | ||  _____||    ___||_     _|
@@ -75,7 +76,6 @@ auto banner = R"banner(
 	service->start();
 
 }
-
 
 int main(int argc, char* argv[])
 {
