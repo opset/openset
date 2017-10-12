@@ -45,7 +45,8 @@ void openset::query::Interpreter::configure()
 
 	for (auto& cvar : macros.vars.tableVars)
 	{
-		auto index = schema->getColumn(cvar.actual);
+		const auto index = schema->getColumn(cvar.actual);
+
 		if (index)
 		{
 			if (grid->isFullSchema())
@@ -106,6 +107,7 @@ void openset::query::Interpreter::mount(Person* person)
 	blob = grid->getAttributeBlob();
 	rows = grid->getRows(); // const
 	rowCount = rows->size();
+
 	if (person->getMeta())
 	{
 		uuid = person->getUUID();
@@ -113,10 +115,14 @@ void openset::query::Interpreter::mount(Person* person)
 	}
 
 	stackPtr = stack;
-	//stack.clear();
 
 	if (!isConfigured && rows->size())
 		configure();
+}
+
+openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
+{
+	return &macros.segments;
 }
 
 void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, int currentRow)
@@ -197,62 +203,68 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 					continue; // we already tabulated this for this key
 			}
 
+			auto resultIndex = resCol.index + segmentColumnShift;
+
 			switch (resCol.modifier)
 			{
 				case modifiers_e::sum:
 					if (columns->cols[resCol.column] != NULLCELL)
 					{
-						if (resultColumns->columns[resCol.index].value == NULLCELL)
-							resultColumns->columns[resCol.index].value = columns->cols[resCol.column];
+						if (resultColumns->columns[resultIndex].value == NULLCELL)
+							resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 						else
-							resultColumns->columns[resCol.index].value += columns->cols[resCol.column];
+							resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
 					}
 					break;
 
 				case modifiers_e::min:
 					if (columns->cols[resCol.column] != NULLCELL &&
-							(resultColumns->columns[resCol.index].value == NULLCELL ||
-							 resultColumns->columns[resCol.index].value > columns->cols[resCol.column]))
-						resultColumns->columns[resCol.index].value = columns->cols[resCol.column];
+							(resultColumns->columns[resultIndex].value == NULLCELL ||
+							 resultColumns->columns[resultIndex].value > columns->cols[resCol.column]))
+						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
 				case modifiers_e::max:
 					if (columns->cols[resCol.column] != NULLCELL &&
-							(resultColumns->columns[resCol.index].value == NULLCELL ||
-							 resultColumns->columns[resCol.index].value < columns->cols[resCol.column]))
-						resultColumns->columns[resCol.index].value = columns->cols[resCol.column];
+							(resultColumns->columns[resultIndex].value == NULLCELL ||
+							 resultColumns->columns[resultIndex].value < columns->cols[resCol.column]))
+						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
 				case modifiers_e::avg:
 					if (columns->cols[resCol.column] != NULLCELL)
 					{
-							if (resultColumns->columns[resCol.index].value == NULLCELL)
-								resultColumns->columns[resCol.index].value = columns->cols[resCol.column];
-							else
-								resultColumns->columns[resCol.index].value += columns->cols[resCol.column];
-
-							resultColumns->columns[resCol.index].count++;
+						if (resultColumns->columns[resultIndex].value == NULLCELL)
+						{
+							resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+							resultColumns->columns[resultIndex].count = 1;
+						}
+						else
+						{
+							resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
+							resultColumns->columns[resultIndex].count++;
+						}
 					}
 					break;
 				case modifiers_e::count:
 					if (columns->cols[resCol.column] != NULLCELL)
 					{
-						if (resultColumns->columns[resCol.index].value == NULLCELL)
-							resultColumns->columns[resCol.index].value = 1;
+						if (resultColumns->columns[resultIndex].value == NULLCELL)
+							resultColumns->columns[resultIndex].value = 1;
 						else
-							resultColumns->columns[resCol.index].value++;
+							resultColumns->columns[resultIndex].value++;
 					}
 					break;
 
 				case modifiers_e::value:
-					resultColumns->columns[resCol.index].value = columns->cols[resCol.column];
+					resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
 				case modifiers_e::var:
-					if (resultColumns->columns[resCol.index].value == NULLCELL)
-						resultColumns->columns[resCol.index].value = fixToInt(resCol.value);
+					if (resultColumns->columns[resultIndex].value == NULLCELL)
+						resultColumns->columns[resultIndex].value = fixToInt(resCol.value);
 					else
-						resultColumns->columns[resCol.index].value += fixToInt(resCol.value);
+						resultColumns->columns[resultIndex].value += fixToInt(resCol.value);
 					break;
 				default: break;
 			}
@@ -309,7 +321,7 @@ void openset::query::Interpreter::marshal_schedule(int paramCount)
 	}
 
 	--stackPtr;
-	auto functionHash = MakeHash(*stackPtr); // pop
+	const auto functionHash = MakeHash(*stackPtr); // pop
 
 	--stackPtr;
 	auto scheduleAt = *stackPtr; // pop
@@ -615,7 +627,7 @@ void openset::query::Interpreter::marshal_round(int paramCount)
 		places = *stackPtr;
 	}
 
-	double power = pow(10.0, places);
+	const double power = pow(10.0, places);
 	*(stackPtr - 1) = round((stackPtr - 1)->getDouble() * power) / power;
 }
 
@@ -633,16 +645,16 @@ void openset::query::Interpreter::marshal_fix(int paramCount)
 	}
 
 	--stackPtr;
-	int64_t places = *stackPtr;
+	const int64_t places = *stackPtr;
 	double value = *(stackPtr - 1);
 
-	auto negative = value < 0;
+	const auto negative = value < 0;
 
 	if (negative)
 		value = std::abs(value);
-	
-	auto power = places ? pow(10.0, places) : 1;
-	int64_t rounded = round(value * power);
+
+	const auto power = places ? pow(10.0, places) : 1;
+	const int64_t rounded = round(value * power);
 
 	auto str = to_string(rounded);
 
@@ -1374,7 +1386,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			throw std::runtime_error("pop requires reference parameter");
 		{
 			auto var = (stackPtr - 1)->getReference();
-			auto res = (stackPtr - 1);
+			const auto res = (stackPtr - 1);
 			if (var->typeof() == cvar::valueType::LIST)
 			{
 				if (!var->getList() || var->getList()->size() == 0)
@@ -1382,9 +1394,8 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 					*res = NULLCELL;
 					break;
 				}
-				auto value = var->getList()->back();
+				*res = std::move(var->getList()->back());
 				var->getList()->pop_back();
-				*res = value;
 			}
 			else if (var->typeof() == cvar::valueType::DICT)
 			{
@@ -1396,7 +1407,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 				auto value = var->getDict()->begin();
 				var->getDict()->erase(value);
 				var->dict(); // result is a Dict
-				(*res) = cvar::o{ value->first, value->second };
+				(*res) = std::move(cvar::o{ value->first, value->second });
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
@@ -1407,7 +1418,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 				}
 				auto value = *var->getSet()->begin();
 				var->getSet()->erase(value);
-				*res = value;
+				*res = std::move(value);
 			}
 			else
 				throw std::runtime_error("pop can only be performed on set or list types");
@@ -1417,19 +1428,19 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		if (inst->extra != 1)
 			throw std::runtime_error("pop requires reference parameter");
 		{
-			auto var = (stackPtr - 1)->getReference();
-			auto res = (stackPtr - 1);
+			const auto var = (stackPtr - 1)->getReference();
+			const auto res = (stackPtr - 1);
 			if (var->typeof() == cvar::valueType::LIST)
 			{
 				auto value = var->getList()->front();
 				var->getList()->erase(var->getList()->begin());
-				*res = value;
+				*res = std::move(value);
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
 				auto value = *var->getSet()->begin();
 				var->getSet()->erase(value);
-				*res = value;
+				*res = std::move(value);
 			}
 			else
 				throw std::runtime_error("pop can only be performed on set or list types");
@@ -1439,12 +1450,12 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		if (inst->extra != 1)
 			throw std::runtime_error("keys requires reference parameter");
 		{
-			auto var = (stackPtr - 1)->getReference();
+			const auto var = (stackPtr - 1)->getReference();
 			auto res = (stackPtr - 1);
 			if (var->typeof() == cvar::valueType::DICT)
 			{
 				res->list(); // result is a Dict
-				for (auto v : *var->getDict())
+				for (const auto v : *var->getDict())
 					(*res->getList()).push_back(v.first);
 			}
 			else
@@ -1545,14 +1556,9 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 						break;
 					case columnTypes_e::textColumn:
 						{
-							auto temp = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
-
-							auto attr = grid->getAttributes()->get(
+							const auto attr = grid->getAttributes()->get(
 								macros.vars.tableVars[inst->index].schemaColumn,
 								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
-
-							if (!attr)
-								cout << "what" << temp << endl;
 
 							if (attr && attr->text)
 								*stackPtr = attr->text;
@@ -1575,11 +1581,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				// and assign these to a new Dictionary (a dictionary with one pair)
 				{
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 					--stackPtr;
-					auto value = *stackPtr;
+					const auto value = std::move(*stackPtr);
 					(*stackPtr).dict();
-					(*stackPtr)[key] = value;
+					(*stackPtr)[key] = std::move(value);
 					++stackPtr;
 				}
 				break;
@@ -1607,12 +1613,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					// this is the value
-					*stackPtr = tcvar ? *tcvar : cvar{NULLCELL};
+					*stackPtr = std::move(tcvar ? *tcvar : cvar{NULLCELL});
 					++stackPtr;
 				}
 				break;
@@ -1623,8 +1628,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				for (auto x = 0; x < inst->extra; ++x)
 				{
 					--stackPtr;
-					auto key = *stackPtr;
-					tcvar = tcvar->getMemberPtr(key);
+					tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 				}
 
 				// this is the value
@@ -1680,12 +1684,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra - 1; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 
 					// this is the value
 					--stackPtr;
@@ -1786,7 +1789,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 			case opCode_e::ITFOR:
 				{
 					--stackPtr;
-					int64_t keyIdx = *stackPtr;
+					const int64_t keyIdx = *stackPtr;
 
 					int64_t valueIdx = 0;
 					if (inst->value == 2)
@@ -1803,7 +1806,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 						// enter loop, increment nest 
 						++nestDepth;
 
-						auto from = source.getDict();
+						const auto from = source.getDict();
 
 						for (auto& x : *from)
 						{
@@ -1858,7 +1861,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					}
 					else if (source.typeof() == cvar::valueType::LIST)
 					{
-						auto from = source.getList();
+						const auto from = source.getList();
 
 						for (auto& x: *from)
 						{
@@ -1907,7 +1910,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					}
 					else if (source.typeof() == cvar::valueType::SET)
 					{
-						auto from = source.getSet();
+						const auto from = source.getSet();
 
 						for (auto& x : *from)
 						{
@@ -1980,7 +1983,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					matchStampPrev.push_back((*rows)[currentRow]->cols[0]);
 
 					// user right for count
-					for (auto rowCount = rows->size();
+					for (const auto rowCount = rows->size();
 					     iterCount < inst->value && currentRow < rowCount;
 					     ++currentRow)
 					{
@@ -2132,12 +2135,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra - 1; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 
 					// this is the value
 					--stackPtr;
@@ -2159,12 +2161,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra - 1; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 
 					// this is the value
 					--stackPtr;
@@ -2186,12 +2187,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra - 1; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 
 					// this is the value
 					--stackPtr;
@@ -2213,12 +2213,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					for (auto x = 0; x < inst->extra - 1; ++x)
 					{
 						--stackPtr;
-						auto key = *stackPtr;
-						tcvar = tcvar->getMemberPtr(key);
+						tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
 					}
 
 					--stackPtr;
-					auto key = *stackPtr;
+					const auto key = std::move(*stackPtr);
 
 					// this is the value
 					--stackPtr;
@@ -2366,6 +2365,23 @@ void openset::query::Interpreter::setBits(IndexBits* indexBits, int maxPopulatio
 	bits->lastBit(maxBitPop);
 }
 
+void openset::query::Interpreter::setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments)
+{
+	// first AND the bits calculated by the query code to the segments provided to this function
+	// to leave us segments that just contain people that match the query and the segment
+	for (auto segment : segments)
+	{
+		segment->opAnd(*querySegment); // segmentBits will contain the result of the AND
+		segmentIndexes.push_back(segment);
+	}
+		
+	querySegment->reset(); // clean querySegment for this query
+
+	// now we replace querySegment with the union of all the segmentBits. 
+	for (auto segmentBits : segments)
+		querySegment->opOr(*segmentBits);
+}
+
 void openset::query::Interpreter::execReset()
 {
 	// clear the flags
@@ -2410,12 +2426,30 @@ void openset::query::Interpreter::exec()
 {
 	execReset();
 
-	auto inst = &macros.code.front();
+	const auto inst = &macros.code.front();
 
 	//opRunner(inst, 0);
 	try
 	{
-		opRunner(inst, 0);
+		// if we have segment constraints
+		if (segmentIndexes.size())
+		{
+			segmentColumnShift = 0;
+			for (auto seg : segmentIndexes)
+			{
+				if (seg->bitState(linid)) // if the person is in this segment run the ops
+					opRunner(inst, 0);
+
+				// for each segment we offset the results by the number of columns
+				segmentColumnShift += macros.vars.columnVars.size();
+				execReset();
+			}
+		}
+		else
+		{
+			segmentColumnShift = 0;
+			opRunner(inst, 0);
+		}
 	}
 	/*catch (const std::exception& ex)
 	{
@@ -2466,11 +2500,29 @@ void openset::query::Interpreter::exec(string functionName)
 	{
 		if (f.name == functionName)
 		{
-			auto inst = &macros.code.front() + f.execPtr;
+			const auto inst = &macros.code.front() + f.execPtr;
 
 			try
 			{
-				opRunner(inst, 0);
+				// if we have segment constraints
+				if (segmentIndexes.size())
+				{
+					segmentColumnShift = 0;
+					for (auto seg : segmentIndexes)
+					{
+						if (seg->bitState(linid)) // if the person is in this segment run the ops
+							opRunner(inst, 0);
+
+						// for each segment we offset the results by the number of columns
+						segmentColumnShift += macros.vars.columnVars.size();
+						execReset();
+					}
+				}
+				else
+				{
+					segmentColumnShift = 0;
+					opRunner(inst, 0);
+				}
 			}
 			/*catch (const std::exception& ex)
 			{
@@ -2530,10 +2582,29 @@ void openset::query::Interpreter::exec(int64_t functionHash)
 	{
 		if (f.nameHash == functionHash)
 		{
-			auto inst = &macros.code.front() + f.execPtr;
+			const auto inst = &macros.code.front() + f.execPtr;
+
 			try
 			{
-				opRunner(inst, 0);
+				// if we have segment constraints
+				if (segmentIndexes.size())
+				{
+					segmentColumnShift = 0;
+					for (auto seg : segmentIndexes)
+					{
+						if (seg->bitState(linid)) // if the person is in this segment run the ops
+							opRunner(inst, 0);
+
+						// for each segment we offset the results by the number of columns
+						segmentColumnShift += macros.vars.columnVars.size();
+						execReset();
+					}
+				}
+				else
+				{
+					segmentColumnShift = 0;
+					opRunner(inst, 0);
+				}
 			}
 			/*catch (const std::exception& ex)
 			{
@@ -2574,6 +2645,7 @@ void openset::query::Interpreter::exec(int64_t functionHash)
 					additional
 				);
 			}
+
 			return;
 		}
 	}
@@ -2583,5 +2655,4 @@ void openset::query::Interpreter::exec(int64_t functionHash)
 		errors::errorCode_e::missing_function_entry_point,
 		"function_id: " + to_string(functionHash));
 }
-
 

@@ -570,6 +570,17 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 				}
 				blocks.pop_back();
 			}
+			else if (line.parts[0] == "segments")
+			{
+				for (auto& c : capture)
+				{
+					if (!c.parts.size())
+						continue;
+
+					vars.segmentNames.emplace_back(c.parts[0]);
+				}
+				blocks.pop_back();
+			}
 			else if (line.parts[0] == "def")
 			{
 				++blockCounter;
@@ -3740,6 +3751,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, macro_s& 
 			macros.indexes.emplace_back(hintPair);
 		}
 
+		macros.segments = std::move(vars.segmentNames); // move these over, these are evaluated at run-time
 		macros.segmentTTL = segmentTTL;
 		macros.segmentRefresh = segmentRefresh;
 		macros.useCached = segmentUseCached;

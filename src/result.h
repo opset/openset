@@ -121,7 +121,6 @@ namespace std
 				hash = (hash << count) + key.key[1];
 			}
 			return hash;
-			//return MakeHash(recast<const char*>(key.key), sizeof(int64_t) * OpenSet::result::RowKey::keyDepth);
 		}
 	};
 }
@@ -134,15 +133,14 @@ namespace openset
 		struct accumulation_s
 		{
 			int64_t value;
-			//int64_t distinctId;
-			int count;
+			int32_t count;
 		};
 
-		const int accDepth = 16;
+		const int ACCUMULATOR_DEPTH = 16;
 
 		struct Accumulator
 		{
-			accumulation_s columns[accDepth];
+			accumulation_s columns[ACCUMULATOR_DEPTH];
 
 			Accumulator()
 			{
@@ -190,11 +188,11 @@ namespace openset
 			// a lock, whereas this does not, we will merge them after.
 			void addLocalText(int64_t hashId, cvar &value)
 			{
-				auto textPair = localText.get(hashId);
+				const auto textPair = localText.get(hashId);
 
 				if (!textPair)
 				{
-					auto textPtr = mem.newPtr(value.getString().length() + 1);
+					const auto textPtr = mem.newPtr(value.getString().length() + 1);
 					strcpy(textPtr, value.getString().c_str());
 					localText.set(hashId, textPtr);
 				}
@@ -202,11 +200,11 @@ namespace openset
 
 			void addLocalText(int64_t hashId, const std::string &value)
 			{
-				auto textPair = localText.get(hashId);
+				const auto textPair = localText.get(hashId);
 
 				if (!textPair)
 				{
-					auto textPtr = mem.newPtr(value.length() + 1);
+					const auto textPtr = mem.newPtr(value.length() + 1);
 					strcpy(textPtr, value.c_str());
 					localText.set(hashId, textPtr);
 				}
@@ -214,11 +212,11 @@ namespace openset
 
 			void addLocalText(int64_t hashId, char* value, int32_t length)
 			{
-				auto textPair = localText.get(hashId);
+				const auto textPair = localText.get(hashId);
 
 				if (!textPair)
 				{
-					auto textPtr = mem.newPtr(length + 1);
+					const auto textPtr = mem.newPtr(length + 1);
 					memcpy(textPtr, value, length);
 					textPtr[length] = 0;
 					localText.set(hashId, textPtr);

@@ -861,6 +861,8 @@ bool cjson::isNull() const
 
 int64_t cjson::getInt() const
 {
+	if (!nodeData)
+		return 0;
 	return nodeData->asInt;
 }
 

@@ -77,7 +77,7 @@ void IndexBits::makeBits(int64_t index, int state)
 {
 	reset();
 
-	auto pos = index >> 6ULL; // divide by 8
+	const auto pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -89,7 +89,7 @@ void IndexBits::makeBits(int64_t index, int state)
 	if (state)
 	{
 		// zero the rest of the bits in the last int64
-		auto lastBit = (pos + 1) * 64LL;
+		const auto lastBit = (pos + 1) * 64LL;
 		for (auto i = index; i < lastBit; i++)
 			this->bitClear(i);
 	}
@@ -102,8 +102,8 @@ void IndexBits::mount(char* compressedData, int32_t Ints)
 	if (!Ints) // if this is empty then make a buffer
 	{
 		ints = 1; // LZ4 compressor uses 9 bytes with a bit set with one INT
-		auto bytes = ints * sizeof(int64_t);
-		auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
+		const auto bytes = ints * sizeof(int64_t);
+		const auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
 
 		// empty these bits otherwise we will get false data
 		memset(output, 0, bytes);
@@ -112,23 +112,18 @@ void IndexBits::mount(char* compressedData, int32_t Ints)
 		return;
 	}
 
-	auto bytes = Ints * sizeof(int64_t);
-	auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
+	const auto bytes = Ints * sizeof(int64_t);
+	const auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
 	memset(output, 0, bytes);
 
 	assert(bytes);
-	//auto testSize = POOL->getSize(output);
-	//assert(testSize == -1 || testSize >= bytes);
 
-	auto code = LZ4_decompress_fast(compressedData, output, bytes);
+	const auto code = LZ4_decompress_fast(compressedData, output, bytes);
 
 	assert(code > 0);
 
 	ints = Ints;
 	bits = recast<uint64_t*>(output);
-
-	// cout << "  mount: ";
-	// cout << debugBits(*this, 64) << endl;
 }
 
 int64_t IndexBits::getSizeBytes() const
@@ -141,9 +136,9 @@ char* IndexBits::store(int64_t& compressedBytes)
 	if (!ints)
 		grow(1);
 
-	auto maxBytes = LZ4_compressBound(ints * sizeof(int64_t));
+	const auto maxBytes = LZ4_compressBound(ints * sizeof(int64_t));
+	const auto compressionBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
-	auto compressionBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 	memset(compressionBuffer, 0, maxBytes);
 
 	compressedBytes = LZ4_compress_fast(
@@ -163,13 +158,14 @@ void IndexBits::grow(int32_t required)
 	if (ints >= required)
 		return;
 
-	auto bytes = required * sizeof(uint64_t);
-	auto write = cast<char*>(PoolMem::getPool().getPtr(bytes));
+	const auto bytes = required * sizeof(uint64_t);
+	const auto write = cast<char*>(PoolMem::getPool().getPtr(bytes));
+
 	memset(write, 0, bytes);
 
 	if (bits)
 	{
-		auto read = recast<char*>(bits);
+		const auto read = recast<char*>(bits);
 
 		// copy the old bytes over
 		memcpy(write, read, ints * sizeof(uint64_t));	
@@ -185,7 +181,7 @@ void IndexBits::grow(int32_t required)
 
 void IndexBits::bitSet(int64_t index)
 {
-	auto pos = index >> 6ULL; // divide by 8
+	const auto pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -195,7 +191,7 @@ void IndexBits::bitSet(int64_t index)
 
 void IndexBits::lastBit(int64_t index)
 {
-	auto pos = index >> 6ULL; // divide by 8
+	const auto pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -203,7 +199,7 @@ void IndexBits::lastBit(int64_t index)
 
 void IndexBits::bitClear(int64_t index)
 {
-	auto pos = index >> 6ULL; // divide by 8
+	const auto pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -213,7 +209,7 @@ void IndexBits::bitClear(int64_t index)
 
 bool IndexBits::bitState(int64_t index) const
 {
-	auto pos = index >> 6ULL; // divide by 8
+	const auto pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		return false;
@@ -258,7 +254,7 @@ int64_t IndexBits::population(int stopBit) const
 		stopBit = lastInt * 64;
 	}
 
-	auto pEnd = pSource + lastInt;
+	const auto pEnd = pSource + lastInt;
 
 	while (pSource < pEnd)
 	{
@@ -269,12 +265,10 @@ int64_t IndexBits::population(int stopBit) const
 #endif 
 		++pSource;
 	}
-
 	
 	// count any dangling single bits
 	for (auto idx = lastInt * 64; idx < stopBit; ++idx)
 		count += bitState(idx) ? 1 : 0;
-	
 
 	return count;
 }
@@ -309,14 +303,9 @@ void IndexBits::opAnd(IndexBits& source)
 	else if (source.ints < ints)
 		source.grow(ints);
 
-    //auto sizeSource = POOL->getSize(source.bits);
-    //auto sizeDest = POOL->getSize(bits);
-
-    //assert(sizeSource == sizeDest);
-
 	volatile auto pSource = source.bits;
 	volatile auto pDest = bits;
-	volatile auto pEnd = source.bits + source.ints;
+	const volatile auto pEnd = source.bits + source.ints;
 
 	while (pSource < pEnd)
 	{
@@ -340,14 +329,9 @@ void IndexBits::opOr(IndexBits& source)
 	else if (source.ints < ints)
 		source.grow(ints);
 
-    //auto sizeSource = POOL->getSize(source.bits);
-    //auto sizeDest = POOL->getSize(bits);
-
-    //assert(sizeSource == sizeDest);
-
 	volatile auto pSource = source.bits;
 	volatile auto pDest = bits;
-	volatile auto pEnd = source.bits + source.ints;
+	const volatile auto pEnd = source.bits + source.ints;
 
 	while (pSource < pEnd)
 	{
@@ -372,7 +356,7 @@ void IndexBits::opAndNot(IndexBits& source)
 
 	volatile auto pSource = source.bits;
 	volatile auto pDest = bits;
-	volatile auto pEnd = source.bits + source.ints;
+	const volatile auto pEnd = source.bits + source.ints;
 
 	while (pSource < pEnd)
 	{
@@ -391,7 +375,7 @@ void IndexBits::opNot() const
 		return;
 
 	volatile auto pSource = bits;
-	volatile auto pEnd = bits + ints;
+	const volatile auto pEnd = bits + ints;
 
 	while (pSource < pEnd)
 	{
@@ -403,7 +387,7 @@ void IndexBits::opNot() const
 string IndexBits::debugBits(const IndexBits& bits, int limit)
 {
 	string result;
-	int counter = 0;
+	auto counter = 0;
 	for (auto i = 0; i < bits.ints; i++)
 	{
 		auto i64 = bits.bits[i];
@@ -451,8 +435,7 @@ bool IndexBits::linearIter(int64_t& linId, int stopBit) const
 	{
 		if (bits[currentInt])
 		{
-
-			int64_t bitNumber = linId % 64;
+			const int64_t bitNumber = linId % 64;
 
 			//if (bitIndex >= stopBit)
 			if (linId >= stopBit)

@@ -105,6 +105,10 @@ namespace openset
 			int nestDepth{ 0 }; // how many nested loops are we in
 			int breakDepth{ 0 }; // how many nested loops do we want to break
 
+			// column offsets and indexes used for queries with segments
+			int segmentColumnShift{ 0 };
+			std::vector<IndexBits*> segmentIndexes;
+
 			// row match values
 			int64_t matchStampTop{ 0 };
 			vector<int64_t> matchStampPrev{ 0 };
@@ -158,6 +162,8 @@ namespace openset
 					rowStamp <= compStamp + milliseconds);
 			}
 
+			SegmentList* getSegmentList() const;
+
 			void marshal_tally(int paramCount, col_s* columns, int currentRow);
 
 			void marshal_schedule(int paramCount);
@@ -191,6 +197,7 @@ namespace openset
 			void setGetSegmentCB(function<IndexBits*(string, bool& deleteAfterUsing)> cb);
 			// where our result bits are going to end up
 			void setBits(IndexBits* indexBits, int maxPopulation);
+			void setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments);
 
 			// reset class cvariables before running
 			// check for firstrun, check for globals.

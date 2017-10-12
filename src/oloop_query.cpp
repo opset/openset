@@ -36,7 +36,13 @@ OpenLoopQuery::OpenLoopQuery(
 OpenLoopQuery::~OpenLoopQuery()
 {
 	if (interpreter)
+	{
+		// free up any segment bits we may have made
+		for (auto bits : interpreter->segmentIndexes)
+			delete bits;
+
 		delete interpreter;
+	}
 }
 
 void OpenLoopQuery::prepare()
@@ -56,6 +62,24 @@ void OpenLoopQuery::prepare()
 
 	interpreter = new Interpreter(macros);
 	interpreter->setResultObject(result);
+
+	// if we are in segment compare mode:
+	if (macros.segments.size())
+	{
+		std::vector<IndexBits*> segments;
+
+		for (const auto segmentName : macros.segments)
+		{
+			auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
+			if (attr)
+				segments.push_back(attr->getBits());
+			else
+				segments.push_back(new IndexBits());
+		}
+
+		interpreter->setCompareSegments(index, segments);
+	}
+
 
 	auto mappedColumns = interpreter->getReferencedColumns();
 
