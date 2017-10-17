@@ -323,12 +323,12 @@ public:
 	// makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
 	void none()
 	{
-		*this = LLONG_MIN;
+		*this = static_cast<int64_t>(LLONG_MIN);
 	}
 
 	bool isNone()
 	{
-		return *this == LLONG_MIN;
+		return *this == static_cast<int64_t>(LLONG_MIN);
 	}
 
 	// does this evaulate to false?
