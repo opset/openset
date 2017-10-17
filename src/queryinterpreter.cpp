@@ -2429,8 +2429,7 @@ void openset::query::Interpreter::exec()
 
 	const auto inst = &macros.code.front();
 
-	//opRunner(inst, 0);
-	//try
+	try
 	{
 		// if we have segment constraints
 		if (segmentIndexes.size())
@@ -2452,7 +2451,6 @@ void openset::query::Interpreter::exec()
 			opRunner(inst, 0);
 		}
 	}
-	/*catch (const std::exception& ex)
 	catch (const std::runtime_error& ex)
 	{
 		std::string additional = "";
@@ -2479,7 +2477,7 @@ void openset::query::Interpreter::exec()
 			additional
 		);
 	}
-	*/
+
 }
 
 void openset::query::Interpreter::exec(string functionName)
