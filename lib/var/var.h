@@ -89,6 +89,7 @@ THE SOFTWARE.
 #include <unordered_map>
 #include <unordered_set>
 #include <cstring>
+#include <climits>
 
 class cvar;
 
@@ -319,6 +320,48 @@ public:
 			delete setValue;
 	}		
 
+	// makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
+	void none()
+	{
+		*this = LLONG_MIN;
+	}
+
+	bool isNone()
+	{
+		return *this == LLONG_MIN;
+	}
+
+	// does this evaulate to false?
+	bool isEvalFalse() const
+	{
+		switch (type)
+		{
+		case valueType::INT32:
+		case valueType::INT64:
+			return this->getInt64() == 0;
+		case valueType::BOOL:
+			return this->getBool() == false;
+		case valueType::FLT:
+		case valueType::DBL:
+			return this->getDouble() == 0;
+		case valueType::STR:
+			return this->valueString.length() == 0;
+		case valueType::LIST:
+			return this->listValue->size() == 0;
+		case valueType::DICT:
+			return this->dictValue->size() == 0;
+		case valueType::SET:
+			return this->setValue->size() == 0;
+		default:
+			return true;
+		}
+	}
+
+	bool isEvalTrue() const
+	{
+		return !isEvalFalse();
+	}
+
 	// turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
 	void dict()
 	{
@@ -418,7 +461,13 @@ public:
 	bool contains(cvar key) const
 	{
 		if (type == valueType::LIST)
-			return (listValue && key.getInt32() < listValue->size()) ? true : false;
+			//return (listValue && key.getInt32() < listValue->size()) ? true : false;
+		{
+			for (auto&& item : *listValue)
+				if (item == key)
+					return true;
+			return false;
+		}
 		if (type == valueType::DICT)
 			return dictValue ? (*dictValue).count(key) != 0 : false;
 		if (type == valueType::SET)

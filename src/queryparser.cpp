@@ -1,6 +1,7 @@
 #include "queryparser.h"
 #include <unordered_set>
 #include "str/strtools.h"
+#include "errors.h"
 
 #include <limits>
 #include <sstream>
@@ -1906,6 +1907,19 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
+				// TRANSLATE NOTIN: convert 'not in' into 'notin'
+				if (conditions[index] == "not" &&
+					index + 1 < conditions.size() &&
+					conditions[index + 1] == "in")
+				{
+					conditions.erase(conditions.begin() + index + 1);
+					conditions[index] = "notin";
+					changes = true; // loop again
+					break;
+				}
+
+
+
 				/* Convert aggregators into function calls
 				 * containing standard pyql "match" iterators.
 				 *
@@ -2634,16 +2648,13 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
-				// TRANSLATE NOTIN: convert 'not in' into 'notin'
-				if (conditions[index] == "not" &&
-					index + 1 < conditions.size() &&
-					conditions[index + 1] == "in")
-				{
-					conditions.erase(conditions.begin() + index + 1);
-					conditions[index] = "notin";
-					changes = true; // loop again
-					break;
-				}
+				if (conditions[index] == "not")
+					throw ParseFail_s{
+					errors::errorClass_e::parse,
+					errors::errorCode_e::syntax_error,
+					"expecting 'is not' or 'not in'",
+					line.debug
+				};
 
 				// TRANSLATE ISNOT: convert 'break all' or 'break top' into 'break "all"' or 'break "top"'
 				if (conditions[index] == "break" &&

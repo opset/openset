@@ -1330,7 +1330,7 @@ inline Tests test_pyql_language()
 					p.compileQuery(test14_pyql.c_str(), table->getColumns(), queryMacros);
 					ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
 
-					//cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+					//cout << openset::query::MacroDbg(queryMacros) << endl;
 
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);

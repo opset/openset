@@ -1,6 +1,7 @@
 // main.cpp : Entry point for OpenSetDB
 //
 #include "common.h"
+#include "ver.h"
 #include "service.h"
 #include "config.h"
 #include "logger.h"
@@ -56,7 +57,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 #ifdef _MSC_VER
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
 #endif
-	cout << "             Copyright(c) 2015 - 2017, Perple Corp." << endl;
+	cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2017, Perple Corp." << endl;
 	cout << "\x1b[0m\b\b\b\b        " << endl;
 
 #ifdef _MSC_VER
