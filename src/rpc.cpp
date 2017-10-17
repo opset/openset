@@ -386,6 +386,9 @@ forwardStatus_e forwardRequest(
 	cjson* request,
 	cjson* response)
 {
+	if (!openset::globals::mapper->routes.size())
+		return forwardStatus_e::error;
+	
 	if (request->xPathBool("/forwarded", false))
 		return forwardStatus_e::isForwarded;
 

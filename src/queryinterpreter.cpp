@@ -1378,7 +1378,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 	case marshals_e::marshal_not_contains:
 		if (inst->extra != 2)
 			throw std::runtime_error("not_contains requires parameters (malformed not in clause)");
-		*(stackPtr - 2) = !(stackPtr - 1)->contains(*(stackPtr - 2));
+		*(stackPtr - 2) = !((stackPtr - 1)->contains(*(stackPtr - 2)));
 		--stackPtr;
 		break;
 	case marshals_e::marshal_pop:
@@ -1692,13 +1692,13 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 					// this is the value
 					--stackPtr;
-					(*tcvar)[key] = *stackPtr;
+					(*tcvar)[key] = std::move(*stackPtr);
 				}
 				break;
 			case opCode_e::POPUSRVAR:
 				// pop stack into cvar
 				--stackPtr;
-				macros.vars.userVars[inst->index].value = *stackPtr;
+				macros.vars.userVars[inst->index].value = std::move(*stackPtr);
 				break;
 			case opCode_e::POPTBLCOL:
 				// pop stack into column value
@@ -1729,7 +1729,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 				--stackPtr;
 
-				if (stackPtr->getInt64() != NULLCELL && *stackPtr)
+				if (stackPtr->isEvalTrue())
 				{
 					// PASSED - run the code block (recursive)
 					opRunner(
@@ -1759,7 +1759,8 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 				--stackPtr;
 
-				if (stackPtr->getInt64() != NULLCELL && *stackPtr)
+				//if (stackPtr->getInt64() != NULLCELL && *stackPtr)
+				if (stackPtr->isEvalTrue())
 				{
 					// PASSED - run the code block (recursive)
 					opRunner(
@@ -1973,7 +1974,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				// fancy and strange stuff happens here					
 				{
 					auto iterCount = 0;
-					int64_t lambda;
+					cvar lambda;
 					auto rowGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
 
 					// enter loop, increment nest 
@@ -2018,7 +2019,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 						}
 
 						// call lambda to see if this row passes the test
-						if (lambda) // cool, we have row that matches
+						if (lambda.isEvalTrue()) // cool, we have row that matches
 						{
 							matchStampPrev.back() = (*rows)[currentRow]->cols[0];
 
@@ -2428,7 +2429,6 @@ void openset::query::Interpreter::exec()
 
 	const auto inst = &macros.code.front();
 
-	//opRunner(inst, 0);
 	try
 	{
 		// if we have segment constraints
@@ -2451,19 +2451,6 @@ void openset::query::Interpreter::exec()
 			opRunner(inst, 0);
 		}
 	}
-	/*catch (const std::exception& ex)
-	{
-		std::string additional = "";
-		if (lastDebug)
-			additional = lastDebug->toStrShort();
-
-		error.set(
-			OpenSet::errors::errorClass_e::run_time,
-			OpenSet::errors::errorCode_e::run_time_exception_triggered,
-			std::string{ex.what()} + " (1)",
-			additional
-		);
-	}*/
 	catch (const std::runtime_error& ex)
 	{
 		std::string additional = "";
@@ -2490,6 +2477,7 @@ void openset::query::Interpreter::exec()
 			additional
 		);
 	}
+
 }
 
 void openset::query::Interpreter::exec(string functionName)
@@ -2606,19 +2594,6 @@ void openset::query::Interpreter::exec(int64_t functionHash)
 					opRunner(inst, 0);
 				}
 			}
-			/*catch (const std::exception& ex)
-			{
-				std::string additional = "";
-				if (lastDebug)
-					additional = lastDebug->toStrShort();
-
-				error.set(
-					OpenSet::errors::errorClass_e::run_time,
-					OpenSet::errors::errorCode_e::run_time_exception_triggered,
-					std::string{ ex.what() } +" (1)",
-					additional
-				);
-			}*/
 			catch (const std::runtime_error& ex)
 			{
 				std::string additional = "";
@@ -2648,6 +2623,7 @@ void openset::query::Interpreter::exec(int64_t functionHash)
 
 			return;
 		}
+			
 	}
 
 	error.set(

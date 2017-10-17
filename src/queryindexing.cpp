@@ -229,6 +229,8 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 				}
 				break;
 			default:
+				s.push(IndexBits{});
+				s.top().placeHolder = true;
 				// TODO some error handling here
 				break;
 
