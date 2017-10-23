@@ -33,7 +33,6 @@ inline void incrFailed()
 	++testsFailed;
 }
 
-
 struct TestFail_s
 {
 	std::string expression;

@@ -3,7 +3,6 @@
 #include "querycommon.h"
 #include "columns.h"
 #include "errors.h"
-#include "var/var.h"
 
 using namespace openset::db;
 
@@ -25,19 +24,19 @@ namespace openset
 				Debug_s debug;
 
 				ParseFail_s(
-					errors::errorClass_e eClass,
-					errors::errorCode_e eCode,
-					string message) :
+					const errors::errorClass_e eClass,
+					const errors::errorCode_e eCode,
+					const string message) :
 					eClass(eClass),
 					eCode(eCode),
 					message(std::string{ message })
 				{}
 
 				ParseFail_s(
-					errors::errorClass_e eClass,
-					errors::errorCode_e eCode,
-					string message,
-					Debug_s debug) :
+					const errors::errorClass_e eClass,
+					const errors::errorCode_e eCode,
+					const string message,
+					const Debug_s debug) :
 					eClass(eClass),
 					eCode(eCode),
 					message(std::string{ message }),
@@ -86,7 +85,9 @@ namespace openset
 					isConditional(false)
 				{}
 
-				FirstPass_s(LineParts parts, Debug_s debug, int indent):
+				FirstPass_s(const LineParts parts, 
+					        const Debug_s debug, 
+					        const int indent):
 					FirstPass_s()
 				{
 					this->parts = parts;
@@ -120,7 +121,7 @@ namespace openset
 				FirstPass code;
 				bool isFunction;
 
-				BlockList_s(int blockId, FirstPass code) :
+				BlockList_s(const int blockId, const FirstPass code) :
 					blockId(blockId),
 					code(code),
 					isFunction(false)
@@ -131,57 +132,41 @@ namespace openset
 
 			struct MiddleOp_s
 			{
-				opCode_e op;
-				int64_t params;
-				int64_t value;
+				opCode_e op{opCode_e::NOP};
+				int64_t params{ 0 };
+				int64_t value{ 0 };
 				string valueString;
 				string nameSpace;
-				bool isString;
+				bool isString{ false };
 				Debug_s debug;
-				int64_t lambda;
+				int64_t lambda{ -1 };
 				string deferredStr; // value stored for final pass processing
-				int64_t deferredInt; // dito
+				int64_t deferredInt{ 0 }; // dito
 
 				// constructors for emplace_back
-				MiddleOp_s():
-					op(opCode_e::NOP),
-					params(0),
-					value(0),
-					isString(false),
-					lambda(-1),
-					deferredInt(0)
+				MiddleOp_s()
 				{}
 
-				MiddleOp_s(opCode_e op, int64_t value) :
+				MiddleOp_s(const opCode_e op, const int64_t value) :
 					op(op),
-					params(0),
-					value(value),
-					isString(false),
-					lambda(-1),
-					deferredInt(0)
+					value(value)
 				{}
 
-				MiddleOp_s(opCode_e op, int64_t value, Debug_s& debugCopy, int64_t lambda = -1) :
+				MiddleOp_s(const opCode_e op, const int64_t value, Debug_s& debugCopy, const int64_t lambda = -1) :
 					op(op),
-					params(0),
 					value(value),
-					isString(false),
-					lambda(lambda),
-					deferredInt(0)
+					lambda(lambda)
 				{
 					debug.number = debugCopy.number;
 					debug.text = debugCopy.text;
 					debug.translation = debugCopy.translation;
 				}
 
-				MiddleOp_s(opCode_e op, string valueString, Debug_s& debugCopy, int64_t lambda = -1) :
+				MiddleOp_s(const opCode_e op, const string valueString, Debug_s& debugCopy, const int64_t lambda = -1) :
 					op(op),
-					params(0),
-					value(0),
 					valueString(valueString),
 					isString(true),
-					lambda(lambda),
-					deferredInt(0)
+					lambda(lambda)
 				{
 					debug.number = debugCopy.number;
 					debug.text = debugCopy.text;
@@ -206,7 +191,7 @@ namespace openset
 			};
 
 			using MiddleBlockList = vector<MiddleBlock_s>;	
-			using VarMap = unordered_map<std::string, variable_s>;
+			using VarMap = unordered_map<std::string, Variable_s>;
 			using LiteralsMap = unordered_map<std::string, int>;
 			using HintList = std::vector<std::string>; // this will probably get fancier 
 			using HintMap = unordered_map<std::string, LineParts>;
@@ -251,12 +236,12 @@ namespace openset
 			explicit QueryParser(parseMode_e parseMode = parseMode_e::query);
 			~QueryParser();
 
-			static bool isVar(VarMap& vars, string name)
+			static bool isVar(VarMap& vars, const string name)
 			{
 				return (vars.find(name) != vars.end());
 			}
 
-			static variable_s& getVar(VarMap& vars, string name)
+			static Variable_s& getVar(VarMap& vars, const string name)
 			{
 				return vars.find(name)->second;
 			}
@@ -278,35 +263,35 @@ namespace openset
 				return (vars.tableVars.find(name) != vars.tableVars.end());
 			}
 
-			bool isColumnVar(string name)
+			bool isColumnVar(const string name)
 			{
 				return (vars.columnVars.find(name) != vars.columnVars.end());
 			}
 
-			bool isUserVar(string name)
+			bool isUserVar(const string name)
 			{
 				return (vars.userVars.find(name) != vars.userVars.end());
 			}
 
-			bool isGroupVar(string name)
+			bool isGroupVar(const string name)
 			{
 				return (vars.groupVars.find(name) != vars.groupVars.end());
 			}
 
-			bool isNonuserVar(string name)
+			bool isNonuserVar(const string name)
 			{
 				if (isTableColumn(name))
 					return true;
 
 				if (isColumnVar(name))
 				{
-					auto var = vars.columnVars.find(name);
+					const auto var = vars.columnVars.find(name);
 					return (var->second.modifier != modifiers_e::var);
 				}
 
 				if (isGroupVar(name))
 				{
-					auto var = vars.groupVars.find(name);
+					const auto var = vars.groupVars.find(name);
 					return (var->second.modifier != modifiers_e::var);
 				}
 
@@ -321,13 +306,21 @@ namespace openset
 			}
 
 			static bool isDigit(char value);
-			static bool isNumeric(string value);
-			static bool isFloat(string value);
-			static bool isString(string value);
-			static bool isTextual(string value);
-			static bool isValue(string value);
+			static bool isNumeric(const string value);
+			static bool isFloat(const string value);
+			static bool isString(const string value);
+			static bool isTextual(const string value);
+			static bool isValue(const string value);
 
 			static bool checkBrackets(LineParts& conditions);
+
+			// will return the matching bracket for whatever opening bracket is in the initial index position
+			static int getMatching(LineParts& conditions, const int index);
+
+			// python uses [] and : in a few ways, this to see if this is an arrray/string slice
+			static bool isSplice(LineParts& conditions, const int index); 
+
+
 			static LineParts extractVariable(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static LineParts extractVariableReverse(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static void extractFunction(LineParts& conditions, int startIdx, int& endIdx);
@@ -366,16 +359,16 @@ namespace openset
 				Columns* columnsPtr,
 				MiddleBlockList& input,
 				InstructionList& finCode,
-				variables_s& finVars);
+				Variables_S& finVars);
 
 		public:
 
 			// compile a query into a macro_s block
-			bool compileQuery(const char* query, Columns* columnsPtr, macro_s& macros, ParamVars* templateVars = nullptr);
+			bool compileQuery(const char* query, Columns* columnsPtr, Macro_S& macros, ParamVars* templateVars = nullptr);
 
 			static std::vector<std::pair<std::string, std::string>> extractCountQueries(const char* query);
 		};
 
-		string MacroDbg(macro_s& macro);
+		string MacroDbg(Macro_S& macro);
 	};
 };

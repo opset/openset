@@ -1512,6 +1512,9 @@ cjson* cjson::ParseBranch(cjson* N, char* & readPtr, bool embedding)
 						case 'v':
 							accumulator += '\v';
 							break;
+						case '/':
+							accumulator += '/';
+							break;
 						case '\\':
 							accumulator += '\\';
 							break;

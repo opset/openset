@@ -1745,7 +1745,7 @@ void forkQuery(
 	Table* table,
 	AsyncPool* partitions,
 	cjson* request,
-	openset::query::macro_s queryMacros,
+	openset::query::Macro_S queryMacros,
 	openset::comms::Message* message) // errorHandled will be true if an error was happend during the fork
 {
 
@@ -1967,7 +1967,7 @@ void Query::onQuery(
 			{
 				case cjsonType::VOIDED: 
 				case cjsonType::NUL:
-					paramVar = NULLCELL;
+					paramVar = NONE;
 				break;
 				case cjsonType::OBJECT: 
 				case cjsonType::ARRAY: 
@@ -1990,7 +1990,7 @@ void Query::onQuery(
 		}
 	}
 
-	openset::query::macro_s queryMacros; // this is our compiled code block
+	openset::query::Macro_S queryMacros; // this is our compiled code block
 	openset::query::QueryParser p;
 
 	try
@@ -2254,7 +2254,7 @@ void Query::onCount(
 			{
 			case cjsonType::VOIDED:
 			case cjsonType::NUL:
-				paramVar = NULLCELL;
+				paramVar = NONE;
 				break;
 			case cjsonType::OBJECT:
 			case cjsonType::ARRAY:
@@ -2286,7 +2286,7 @@ void Query::onCount(
 	for (auto r: subQueries)
 	{
 
-		openset::query::macro_s queryMacros; // this is our compiled code block
+		openset::query::Macro_S queryMacros; // this is our compiled code block
 		openset::query::QueryParser p;
 		p.compileQuery(r.second.c_str(), table->getColumns(), queryMacros, &paramVars);
 
@@ -2306,7 +2306,7 @@ void Query::onCount(
 
 		queryMacros.isSegment = true;
 
-		queries.emplace_back(std::pair<std::string, openset::query::macro_s>{r.first, queryMacros});
+		queries.emplace_back(std::pair<std::string, openset::query::Macro_S>{r.first, queryMacros});
 	}
 
 	// Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)

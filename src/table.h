@@ -40,11 +40,11 @@ namespace openset
 		{
 			string segmentName;
 			int64_t refreshTime;
-			query::macro_s macros;
+			query::Macro_S macros;
 
 			segmentRefresh_s(
 				std::string segmentName, 
-				query::macro_s macros,
+				query::Macro_S macros,
 				int64_t refreshTime) :
 				segmentName(segmentName),
 				refreshTime(refreshTime),
@@ -196,7 +196,7 @@ namespace openset
 				return &triggerConf;
 			}
 
-			void setSegmentRefresh(std::string segmentName, query::macro_s macros, int64_t refreshTime)
+			void setSegmentRefresh(std::string segmentName, query::Macro_S macros, int64_t refreshTime)
 			{
 				csLock lock(segmentCS);
 				segmentRefresh.emplace(segmentName, segmentRefresh_s{ segmentName, macros, refreshTime });

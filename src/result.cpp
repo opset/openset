@@ -87,7 +87,7 @@ void ResultSet::setAtDepth(RowKey& key, function<void(Accumulator*)> set_cb)
 */
 
 ResultSet::RowVector ResultMuxDemux::mergeResultSets(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_S macros,
 	openset::db::Table* table,
 	std::vector<openset::result::ResultSet*> resultSets)
 {
@@ -170,9 +170,9 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 						{
 							const auto valueIndex = columnIndex + shiftOffset;
 
-							if (right->columns[valueIndex].value != NULLCELL)
+							if (right->columns[valueIndex].value != NONE)
 							{
-								if (left->columns[valueIndex].value == NULLCELL)
+								if (left->columns[valueIndex].value == NONE)
 								{
 									// if it's the first setting, copy the whole dang thang.
 									left->columns[valueIndex] = right->columns[valueIndex];
@@ -235,7 +235,7 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 }
 
 bigRing<int64_t, const char*> ResultMuxDemux::mergeText(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_S macros,
 	openset::db::Table* table,
 	std::vector<openset::result::ResultSet*> resultSets)
 {
@@ -256,7 +256,7 @@ bigRing<int64_t, const char*> ResultMuxDemux::mergeText(
 }
 
 char* ResultMuxDemux::resultSetToInternode(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_S macros,
 	openset::db::Table* table,
 	ResultSet::RowVector& rows,
 	bigRing<int64_t, const char*>& mergedText,
@@ -396,7 +396,7 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 }
 
 void ResultMuxDemux::resultSetToJSON(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_S macros,
 	openset::db::Table* table,
 	cjson* doc,
 	ResultSet::RowVector& rows,
@@ -420,7 +420,7 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// if no column is found we can't look in the AttributeBlob, so
 		// return NA_TEXT
-		if (column == NULLCELL)
+		if (column == NONE)
 			return NA_TEXT;
 
 		// look in the blob
@@ -486,7 +486,7 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// set group - this could be text... so, lets see if we cached it (all text 
 		// stored by script will be cached)
-		auto text = getText(NULLCELL, currentKey.key[depth]);
+		auto text = getText(NONE, currentKey.key[depth]);
 
 		if (text != NA_TEXT)
 			entry->set("g", text);
@@ -510,7 +510,7 @@ void ResultMuxDemux::resultSetToJSON(
 				// Is this a null, a double, a string or anything else (ints)
 
 				// sorry for all the {} but it makes it easier for me to follow
-				if (r.second->columns[dataIndex].value == NULLCELL)
+				if (r.second->columns[dataIndex].value == NONE)
 				{
 					array->pushNull();
 				}
@@ -547,7 +547,7 @@ void ResultMuxDemux::resultSetToJSON(
 						break;
 					case query::modifiers_e::var:
 					{
-						auto columnText = getText(NULLCELL, r.second->columns[dataIndex].value);
+						auto columnText = getText(NONE, r.second->columns[dataIndex].value);
 
 						// TODO - figure out some smart way to say this was a floating point number
 

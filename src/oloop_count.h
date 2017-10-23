@@ -40,7 +40,7 @@ namespace openset
 			std::unordered_set<std::string> segmentWasCached;
 
 			query::QueryPairs::iterator macroIter;
-			query::macro_s macros;
+			query::Macro_S macros;
 
 			openset::query::BitMap resultBits;
 

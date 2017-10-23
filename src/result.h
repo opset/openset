@@ -27,20 +27,20 @@ namespace openset
 
 			inline void clear()
 			{
-				key[0] = NULLCELL;
-				key[1] = NULLCELL;
-				key[2] = NULLCELL;
-				key[3] = NULLCELL;
-				key[4] = NULLCELL;
-				key[5] = NULLCELL;
-				key[6] = NULLCELL;
-				key[7] = NULLCELL;
+				key[0] = NONE;
+				key[1] = NONE;
+				key[2] = NONE;
+				key[3] = NONE;
+				key[4] = NONE;
+				key[5] = NONE;
+				key[6] = NONE;
+				key[7] = NONE;
 			}
 
 			inline void clearFrom(int index)
 			{
 				for (auto iter = key + index; iter < key + keyDepth; ++iter)
-					*iter = NULLCELL;
+					*iter = NONE;
 			}
 
 			inline RowKey keyFrom(int index) const
@@ -60,7 +60,7 @@ namespace openset
 			{
 				auto count = 0;
 				for (auto iter = key; iter < key + keyDepth; ++iter, ++count)
-					if (*iter == NULLCELL)
+					if (*iter == NONE)
 						break;
 				return count;
 			}
@@ -116,7 +116,7 @@ namespace std
 			auto count = 1;
 			for (auto iter = key.key + 1; iter < key.key + openset::result::keyDepth; ++iter, ++count)
 			{
-				if (*iter == NULLCELL)
+				if (*iter == NONE)
 					return hash;
 				hash = (hash << count) + key.key[1];
 			}
@@ -151,8 +151,8 @@ namespace openset
 			{
 				for (auto &i : columns)
 				{
-					//i.distinctId = NULLCELL;
-					i.value = NULLCELL;
+					//i.distinctId = NONE;
+					i.value = NONE;
 					i.count = 0;
 				}
 			}
@@ -320,18 +320,18 @@ namespace openset
 			// retuns a new result set which can be used to serialize to
 			// JSON
 			static bigRing<int64_t, const char*> mergeText(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_S macros,
 				openset::db::Table* table,
 				std::vector<openset::result::ResultSet*> resultSets);
 
 			static ResultSet::RowVector mergeResultSets(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_S macros,
 				openset::db::Table* table,
 				std::vector<openset::result::ResultSet*> resultSets);
 
 			// generate a result set from JSON
 			static char* resultSetToInternode(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_S macros,
 				openset::db::Table* table,
 				ResultSet::RowVector& rows,
 				bigRing<int64_t, const char*>& mergedText,
@@ -344,7 +344,7 @@ namespace openset
 				int64_t blockLength);
 
 			static void resultSetToJSON(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_S macros,
 				openset::db::Table* table,
 				cjson* doc,
 				ResultSet::RowVector& rows,

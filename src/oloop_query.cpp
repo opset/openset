@@ -13,7 +13,7 @@ using namespace openset::result;
 OpenLoopQuery::OpenLoopQuery(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
 	Table* table, 
-	macro_s macros, 
+	Macro_S macros, 
 	openset::result::ResultSet* result,
 	int instance) :
 

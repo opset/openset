@@ -39,7 +39,7 @@ openset::errors::Error Trigger::compileTrigger(
 	openset::db::Table* table, 
 	std::string name, 
 	std::string script,
-	openset::query::macro_s &targetMacros)
+	openset::query::Macro_S &targetMacros)
 {
 
 /*
@@ -85,7 +85,7 @@ void Trigger::init()
 		delete bits;
 	}
 
-	interpreter = new openset::query::Interpreter(macros, openset::query::interpretMode_e::job);
+	interpreter = new openset::query::Interpreter(macros, openset::query::InterpretMode_e::job);
 
 	// This is the text value for this triggers on_insert event
 	auto valueName = settings->name + "::on_insert";

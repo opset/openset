@@ -15,7 +15,7 @@ openset::query::Indexing::Indexing() :
 Indexing::~Indexing()
 {}
 
-void Indexing::mount(Table* tablePtr, macro_s& queryMacros, int partitionNumber, int stopAtBit)
+void Indexing::mount(Table* tablePtr, Macro_S& queryMacros, int partitionNumber, int stopAtBit)
 {
 	indexes.clear();
 	table = tablePtr;
@@ -144,8 +144,8 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 				// getBits returns EQ, we doing NOT EQUAL, because all users not
 				// having a value is different than all users who had another
 				// value other than this one (which is what a list would
-				// return) we are going to value that equal NULLCELL
-				if (instruction.numeric && instruction.intValue == NULLCELL)
+				// return) we are going to value that equal NONE
+				if (instruction.numeric && instruction.intValue == NONE)
 				{
 					s.push(getBits(instruction, Attributes::listMode_e::EQ));
 				}

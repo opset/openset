@@ -241,7 +241,7 @@ Attributes::AttrList Attributes::getColumnValues(int32_t column, listMode_e mode
 		return result;
 		break;
 	case listMode_e::PRESENT:
-		attr = get(column, NULLCELL);
+		attr = get(column, NONE);
 		if (attr)
 			result.push_back(attr);
 		return result;

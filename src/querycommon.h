@@ -68,7 +68,7 @@ namespace openset
 			PSHLITSTR, // push string
 			PSHLITINT, // push integer
 			PSHLITFLT, // push double
-			PSHLITNUL, // push None value (NULLCELL)
+			PSHLITNUL, // push None value (NONE)
 
 			POPUSROBJ, // pop object with deref
 			POPUSRVAR, // pop variable
@@ -198,6 +198,10 @@ namespace openset
 			marshal_clear,
 			marshal_keys,
 			marshal_range, // not implemented
+			marshal_str_split,
+			marshal_str_find,
+			marshal_str_replace,
+			marshal_slice,
 		};
 
 		// enum used for query index optimizer
@@ -545,6 +549,9 @@ namespace openset
 					{ "__pop", marshals_e::marshal_pop },
 					{ "__clear", marshals_e::marshal_clear },
 					{ "__keys", marshals_e::marshal_keys },
+					{ "__split", marshals_e::marshal_str_split },
+					{ "__find", marshals_e::marshal_str_find },
+					{ "__slice", marshals_e::marshal_slice },
 					{ "range", marshals_e::marshal_range }
 			};
 
@@ -676,23 +683,26 @@ namespace openset
 			string textValue;
 			bool numeric;
 
-			hintOp_s(hintOp_e op, string column, int64_t intValue) :
+			hintOp_s(const hintOp_e op, 
+				     const string column, 
+				     const int64_t intValue) :
 				op(op),
 				column(column),
 				intValue(intValue),
 				numeric(true)
 			{}
 
-			hintOp_s(hintOp_e op, string column, string text) :
+			hintOp_s(const hintOp_e op, 
+				     const string column, 
+				     const string text) :
 				op(op),
 				column(column),
-
 				intValue(0),
 				numeric(false)
 			{
 				if (text == "None") // special case
 				{
-					intValue = NULLCELL;
+					intValue = NONE;
 					numeric = true;
 				}
 				else
@@ -702,7 +712,7 @@ namespace openset
 				}
 			}
 
-			explicit hintOp_s(hintOp_e op) :
+			explicit hintOp_s(const hintOp_e op) :
 				op(op),
 				intValue(0),
 				numeric(false)
@@ -711,7 +721,7 @@ namespace openset
 
 		using HintOpList = vector<hintOp_s>;
 
-		struct variable_s
+		struct Variable_s
 		{
 			string actual; // actual name
 			string alias; // alias
@@ -729,23 +739,26 @@ namespace openset
 			int lambdaIndex{-1}; // used for variable assignment by lambada
 			bool nonDistinct{ false };
 
-			cvar value{NULLCELL};
-			cvar startingValue{NULLCELL};
+			cvar value{NONE};
+			cvar startingValue{NONE};
 
-			variable_s()
+			Variable_s()
 			{}
 
-			variable_s(string actual, string space, int sortOrder = -1) :
+			Variable_s(const string actual, 
+					   const string space, 
+				       const int sortOrder = -1):
 				actual(actual),
 				alias(actual),
 				space(space),
 				sortOrder(sortOrder)
 			{}
 
-			variable_s(string actual, string alias,
-			           string space,
-			           modifiers_e modifier = modifiers_e::value,
-			           int sortOrder = -1) :
+			Variable_s(const string actual, 
+					   const string alias,
+			           const string space,
+			           const modifiers_e modifier = modifiers_e::value,
+			           const int sortOrder = -1):
 				actual(actual),
 				alias(alias),
 				space(space),
@@ -753,7 +766,7 @@ namespace openset
 				sortOrder(sortOrder)
 			{}
 
-			variable_s(const variable_s& source)
+			Variable_s(const Variable_s& source)
 			{
 				actual = source.actual;
 				alias = source.alias;
@@ -797,11 +810,10 @@ namespace openset
 			{
 				return "@" + to_string(number) + " " + trim(text, " \t");
 			}
-
 		};
 
 		// structure fo final build
-		struct instruction_s
+		struct Instruction_s
 		{
 			opCode_e op;
 			int64_t index;
@@ -809,11 +821,11 @@ namespace openset
 			int64_t extra;
 			Debug_s debug;
 
-			instruction_s(
-				opCode_e op,
-				int64_t index,
-				int64_t value,
-				int64_t extra,
+			Instruction_s(
+				const opCode_e op,
+				const int64_t index,
+				const int64_t value,
+				const int64_t extra,
 				Debug_s& dbg) :
 				op(op),
 				index(index),
@@ -822,11 +834,11 @@ namespace openset
 				debug(dbg)
 			{}
 
-			instruction_s(
-				opCode_e op,
-				int64_t index,
-				int64_t value,
-				int64_t extra) :
+			Instruction_s(
+				const opCode_e op,
+				const int64_t index,
+				const int64_t value,
+				const int64_t extra) :
 				op(op),
 				index(index),
 				value(value),
@@ -835,18 +847,18 @@ namespace openset
 			{}
 		};
 
-		using InstructionList = vector<instruction_s>;
+		using InstructionList = vector<Instruction_s>;
 
-		struct textLiteral_s
+		struct TextLiteral_s
 		{
 			int64_t hashValue; // xxhash of string
 			int64_t index;
 			string value;
 		};
 
-		using LiteralsList = vector<textLiteral_s>;
-		using VarList = vector<variable_s>;
-		using VarMap = unordered_map<string, variable_s>;
+		using LiteralsList = vector<TextLiteral_s>;
+		using VarList = vector<Variable_s>;
+		using VarMap = unordered_map<string, Variable_s>;
 
 		enum class sortOrder_e : int
 		{
@@ -854,48 +866,48 @@ namespace openset
 			descending
 		};
 
-		struct sort_s
+		struct Sort_s
 		{
 			string name;
 			sortOrder_e order;
 			int64_t column;
 
-			sort_s(string columnName, sortOrder_e sortOrder):
+			Sort_s(const string columnName, const sortOrder_e sortOrder):
 				name(columnName),
 				order(sortOrder),
 				column(-1)
 			{}
 		};
 
-		using SortList = vector<sort_s>;
+		using SortList = vector<Sort_s>;
 
-		struct function_s
+		struct Function_s
 		{
 			string name;
 			int64_t nameHash;
 			int64_t execPtr;
 
-			function_s(string functionName, int64_t codePtr):
+			Function_s(const string functionName, const int64_t codePtr):
 				name(functionName),
 				nameHash(MakeHash(functionName)),
 				execPtr(codePtr)
 			{}
 		};
 
-		using FunctionList = vector<function_s>;
+		using FunctionList = vector<Function_s>;
 
 		using ColumnLambdas = vector<int64_t>;
 
-		struct count_s
+		struct Count_S
 		{
 			string name;
 			int64_t functionHash;
 		};
 
-		using CountList = vector<count_s>;
+		using CountList = vector<Count_S>;
 
 		// structure for variables
-		struct variables_s
+		struct Variables_S
 		{
 			VarList userVars;
 			VarList tableVars;
@@ -913,9 +925,9 @@ namespace openset
 		using SegmentList = vector<std::string>;
 
 		// struct containing compiled macro
-		struct macro_s
+		struct Macro_S
 		{
-			variables_s vars;
+			Variables_S vars;
 			InstructionList code;
 			HintPairs indexes;
 			bool isSegment;
@@ -929,7 +941,7 @@ namespace openset
 			bool isSegmentMath; // for segments, the index has the value, script execution not required
 			bool useSessions; // uses session functions, we can cache these
 
-			macro_s() :
+			Macro_S() :
 				isSegment(false),
 				segmentTTL(-1),
 				segmentRefresh(-1),
@@ -940,6 +952,6 @@ namespace openset
 			{};
 		};
 
-		using QueryPairs = vector<pair<string, macro_s>>;
+		using QueryPairs = vector<pair<string, Macro_S>>;
 	}
 }

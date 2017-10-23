@@ -10,7 +10,7 @@
 
 using namespace openset::query;
 
-QueryParser::QueryParser(parseMode_e parseMode) :
+QueryParser::QueryParser(const parseMode_e parseMode) :
 	blockCounter(1),
 	tableColumns(nullptr),
 	parseMode(parseMode),
@@ -22,37 +22,37 @@ QueryParser::QueryParser(parseMode_e parseMode) :
 QueryParser::~QueryParser()
 {}
 
-bool QueryParser::isDigit(char value)
+bool QueryParser::isDigit(const char value)
 {
 	return (value >= '0' && value <= '9');
 }
 
-bool QueryParser::isNumeric(string value)
+bool QueryParser::isNumeric(const string value)
 {
 	return ((value[0] >= '0' && value[0] <= '9') ||
 		(value[0] == '-' && value[1] >= '0' && value[1] <= '9'));
 }
 
-bool QueryParser::isFloat(string value)
+bool QueryParser::isFloat(const string value)
 {
 	return ((value[0] >= '0' && value[0] <= '9' ||
 		(value[0] == '-' && value[1] >= '0' && value[1] <= '9')) &&
 		value.find('.') != string::npos);
 }
 
-bool QueryParser::isString(string value)
+bool QueryParser::isString(const string value)
 {
 	return (value[0] == '"' || value[0] == '\'');
 }
 
-bool QueryParser::isTextual(string value)
+bool QueryParser::isTextual(const string value)
 {
 	return ((value[0] >= 'a' && value[0] <= 'z') ||
 		(value[0] >= 'A' && value[0] <= 'Z') ||
 		value[0] == '_');
 }
 
-bool QueryParser::isValue(string value)
+bool QueryParser::isValue(const string value)
 {
 	return (isString(value) || isNumeric(value));
 }
@@ -207,6 +207,8 @@ QueryParser::LineParts QueryParser::breakLine(const string &text)
 						part += '"';
 					case '\\':
 						part += '\\';
+					case '/':
+						part += '/';
 					break;
 					default:
 						// TODO - throw
@@ -371,7 +373,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query) const
 	return result;
 }
 
-int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& blockList)
+int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList& blockList)
 {
 	auto blockId = blockCounter;
 
@@ -521,7 +523,7 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 					// add this to the select variables
 					vars.columnVars.emplace(
 						alias, 
-						variable_s{
+						Variable_s{
 							c.parts[1],
 							alias,
 							"column",
@@ -542,7 +544,7 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 					if (isTableColumn(distinct))
 						vars.tableVars.emplace(
 							distinct,
-							variable_s{ distinct, "grid" });
+							Variable_s{ distinct, "grid" });
 
 					vars.columnVars[alias].distinctColumnName = distinct;
 					vars.columnVars[alias].lambdaIndex = lambdaId;
@@ -605,7 +607,6 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 				line.isFunction = true;
 
 				blocks.pop_back();
-				//blockList.front().code.pop_back();
 			}
 			else // just push back our block
 			{
@@ -641,7 +642,7 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 	{
 		vars.columnVars.emplace(
 			"person", 
-			variable_s{
+			Variable_s{
 				"__uuid",
 				"person",
 				"column",
@@ -657,7 +658,7 @@ int64_t QueryParser::extractBlocks(int indent, FirstPass& lines, BlockList& bloc
 	return blockId;
 }
 
-QueryParser::BlockList_s* QueryParser::getBlockByID(int64_t blockId, BlockList& blockList)
+QueryParser::BlockList_s* QueryParser::getBlockByID(const int64_t blockId, BlockList& blockList)
 {
 	for (auto& b : blockList)
 		if (b.blockId == blockId)
@@ -666,7 +667,7 @@ QueryParser::BlockList_s* QueryParser::getBlockByID(int64_t blockId, BlockList& 
 	return nullptr;
 }
 
-int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug, bool stopOnConditions, string stackOp)
+int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug, const bool stopOnConditions, const string stackOp)
 {
 	while (index < conditions.size())
 	{
@@ -780,6 +781,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				{
 					if (value.find("column.") == 0)
 						value = value.substr(value.find('.') + 1);
+
 					opList.emplace_back(
 						opCode_e::PSHTBLCOL,
 						value,
@@ -789,7 +791,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 					{
 						vars.tableVars.emplace(
 							value,
-							variable_s{value, "grid"});
+							Variable_s{value, "grid"});
 					}
 				}
 				else if (isVar(vars.columnVars, value))
@@ -799,13 +801,6 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 						value,
 						debug);
 				}
-				/*else if (isVar(vars.groupVars, value))
-				{
-					opList.emplace_back(
-						opCode_e::PSHRESGRP,
-						value,
-						debug);
-				}*/
 				else if (isString(value))
 				{
 					opList.emplace_back(
@@ -928,7 +923,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 						index = derefEndIdx;
 
 						if (!isVar(vars.userVars, value))
-							vars.userVars.emplace(value, variable_s{value,""});
+							vars.userVars.emplace(value, Variable_s{value,""});
 					}
 					else
 					{ // simple variable no deref brackets var[deref]
@@ -954,7 +949,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 								debug);
 
 							if (!isVar(vars.userVars, value))
-								vars.userVars.emplace(value, variable_s{ value,"" });
+								vars.userVars.emplace(value, Variable_s{ value,"" });
 						}
 					}
 				}
@@ -980,8 +975,6 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 	auto functionName = conditions[index];
 	auto params = 0;
 	index++;
-
-	auto marshal = marshals.find(functionName);
 
 	// these are function calls that appear like variables, they are read-only
 	if (macroMarshals.count(functionName))
@@ -1032,11 +1025,7 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 			{
 				--brackets;
 				if (brackets <= 0)
-				{
-					//if (brackets == 0)
-						//++index;
 					break;
-				}
 			}
 
 			++index;
@@ -1164,7 +1153,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 				block.back().nameSpace = functionName;
 
 				if (!isVar(vars.userVars, *v))
-					vars.userVars.emplace(*v, variable_s{*v, *v, functionName});
+					vars.userVars.emplace(*v, Variable_s{*v, *v, functionName});
 			}
 
 			currentBlockType = blockType_e::function;
@@ -1266,7 +1255,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			for_each(left.rbegin(), left.rend(), [&](auto item)
 		         {
-			         vars.userVars.emplace(lines[i].parts[0], variable_s{lines[i].parts[0], ""});
+			         vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 
 			         block.emplace_back(
 				         opCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
@@ -1452,7 +1441,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			// POPUSROBJ uses params to store the depth of the dereferencing 
 			block.back().params = derefCaptures.size();
 
-			vars.userVars.emplace(lines[i].parts[0], variable_s{lines[i].parts[0], ""});
+			vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 		}
 		else if (lines[i].parts.size() >= 2 &&
 			mathAssignmentOperators.count(lines[i].parts[1]))
@@ -1474,7 +1463,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			auto leftSide = lines[i].parts[0]; // clean off the reference marker
 
 			if (!isVar(vars.userVars, leftSide))
-				vars.userVars.emplace(leftSide, variable_s{ leftSide,"" });
+				vars.userVars.emplace(leftSide, Variable_s{ leftSide,"" });
 
 			block.emplace_back(
 				mathAssignmentOperators.find(lines[i].parts[1])->second,
@@ -1514,7 +1503,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 					lines[i].parts[0],
 					lines[i].debug);
 
-				vars.userVars.emplace(lines[i].parts[0], variable_s{lines[i].parts[0], ""});
+				vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 			}
 		}
 		else if (marshals.find(lines[i].parts[0]) != marshals.end())
@@ -1616,7 +1605,111 @@ bool QueryParser::checkBrackets(QueryParser::LineParts& conditions)
 	return (curly == 0 && square == 0 && round == 0);
 }
 
-QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, int startIdx, int& reinsertIdx)
+int QueryParser::getMatching(LineParts& conditions, const int index)
+{
+	auto curly = 0;
+	auto square = 0;
+	auto round = 0;
+
+	const auto matching = conditions[index];
+	auto endIndex = index;
+
+	for (auto c = conditions.begin() + index; c < conditions.end(); ++c, ++endIndex)
+	{
+		if (*c == "{")
+		{
+			++curly;
+			continue;
+		}
+		if (*c == "}")
+		{
+			--curly;
+
+			if (!curly && matching == "{")
+				return endIndex;
+
+			continue;
+		}
+		if (*c == "[")
+		{
+			++square;
+			continue;
+		}
+		if (*c == "]")
+		{
+			--square;
+
+			if (!square && matching == "[")
+				return endIndex;
+
+			continue;
+		}
+		if (*c == "(")
+		{
+			++round;
+			continue;
+		}
+		if (*c == ")")
+		{
+			--round;
+			
+			if (!round && matching == "(")
+				return endIndex;
+			continue;
+		}
+	}
+
+	return -1;
+}
+
+bool QueryParser::isSplice(LineParts& conditions, const int index)
+{
+	auto curly = 0;
+	auto square = 0;
+	auto round = 0;
+
+	for (auto c = conditions.begin() + index; c < conditions.end(); ++c)
+	{
+		if (*c == "{")
+		{
+			++curly;
+			continue;
+		}
+		if (*c == "}")
+		{
+			--curly;
+			continue;
+		}
+		if (*c == "[")
+		{
+			++square;
+			continue;
+		}
+		if (*c == "]")
+		{
+			--square;
+			if (!square)
+				return false;
+			continue;
+		}
+		if (*c == "(")
+		{
+			++round;
+			continue;
+		}
+		if (*c == ")")
+		{
+			--round;
+			continue;
+		}
+		if (*c == "__MARKER__" && square == 1 && round == 0 && curly == 0)
+			return true;
+	}
+
+	return false;
+}
+
+QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, const int startIdx, int& reinsertIdx)
 {
 	LineParts result;
 
@@ -1676,7 +1769,7 @@ QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, int s
 	return result;
 }
 
-QueryParser::LineParts QueryParser::extractVariableReverse(LineParts& conditions, int startIdx, int& reinsertIdx)
+QueryParser::LineParts QueryParser::extractVariableReverse(LineParts& conditions, const int startIdx, int& reinsertIdx)
 {
 	LineParts result;
 
@@ -1734,7 +1827,7 @@ QueryParser::LineParts QueryParser::extractVariableReverse(LineParts& conditions
 	return result;
 }
 
-void QueryParser::extractFunction(LineParts& conditions, int startIdx, int& endIdx)
+void QueryParser::extractFunction(LineParts& conditions, const int startIdx, int& endIdx)
 {
 	auto bracketComplete = false;
 	auto index = startIdx;
@@ -1777,7 +1870,7 @@ void QueryParser::extractFunction(LineParts& conditions, int startIdx, int& endI
 	endIdx = index;
 }
 
-void QueryParser::extractParam(LineParts& conditions, int startIdx, int& endIdx)
+void QueryParser::extractParam(LineParts& conditions, const int startIdx, int& endIdx)
 {
 	auto index = startIdx;
 	auto brackets = 0;
@@ -1857,7 +1950,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 
 				if (conditions.size() > index + 1 &&
 					conditions[index] == "[" &&
-					conditions[0] != "next" && // not next/where
+					conditions[0] != "match" && // not next/where
 					index > 1 &&
 					(conditions[index - 1] == "," ||
 						conditions[index - 1] == "=" ||
@@ -1865,7 +1958,8 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 						conditions[index - 1] == "in" ||
 						conditions[index - 1] == "notin" ||
 						conditions[index - 1] == "-" ||
-						conditions[index - 1] == "__MARKER__"))
+						conditions[index - 1] == "(" ||
+						conditions[index - 1] == "__MARKER__")) 
 				{
 					auto brackets = 0;
 					auto allCounted = false;
@@ -2357,11 +2451,11 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				if (conditions.size() > index + 2 &&
 					(conditions[index + 1] == "in" ||
 					 conditions[index + 1] == "notin") &&
-					conditions[index + 2] != "[" && // this force the make_dict to run first
-					conditions[0] != "next" &&
+					conditions[index + 2] != "[" && // this forces make_dict to be parsed first
+					conditions[0] != "match" &&
 					conditions[0] != "for")
 				{
-					// there a three kinds of in we care about
+					// there a three kinds of "in" we care about
 					// 1. for x in y
 					// 2. x in [y0,y1,y2,y3] # when used in where clause
 					// 3. x in y # as in:  if x in y
@@ -2508,70 +2602,98 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
-				// lets convert container class members with a parameter into
-				// good old functional code... 
-				// i.e.
-				//      some_dict.append({"this":"that"})
-				// becomes:
-				//      append(@some_dict, {"this":"that"})
 
-				// 
-				if (basic_string<char>::size_type pos; 
-				    (pos = conditions[index].find(".pop")) != std::string::npos ||
-					(pos = conditions[index].find(".clear")) != std::string::npos ||
-					(pos = conditions[index].find(".keys")) != std::string::npos)
+				/*
+				 *  convert Python style array/string slicing into function calls. i.e.
+				 *  
+				 *      some_string[4:10]
+				 *  
+				 *  becomes:
+				 *  
+				 *      __slice(@some_array, start, end)
+				 *      
+				 */
+
+				if (conditions[index] == "[" &&
+					isSplice(conditions, index))
 				{
-					const auto command = "__" + conditions[index].substr(pos + 1);
-					const auto containerRef = "@" + conditions[index].substr(0, pos);
+
+					const auto command = "__slice"s;
+					const auto containerRef = "@"s + conditions[index - 1];
+										
+					const auto startIdx = index;
+
+					const auto closingIdx = getMatching(conditions, index);
 
 					LineParts inParts;
+					inParts.insert(inParts.begin(), conditions.begin() + (index + 1), conditions.begin() + closingIdx);
 
-					const auto startIdx = index;
-					index += 2;
-					auto closingIdx = index;
-					auto brackets = 1;
+					if (!inParts.size())
+						throw ParseFail_s{
+						errors::errorClass_e::parse,
+						errors::errorCode_e::syntax_error,
+						"error in slice index",
+						line.debug
+					};
 
-					for (auto idx = index; idx < conditions.size(); idx++)
-					{
-						if (conditions[idx] == "(")
-							++brackets;
+					if (inParts[0] == "__MARKER__")
+						inParts.insert(inParts.begin(), "None");
+					if (inParts.back() == "__MARKER__")
+						inParts.push_back("None");
 
-						if (conditions[idx] == ")")
-						{
-							--brackets;
-							if (!brackets) // closing bracket
-							{
-								closingIdx = idx + 1;
-								break;
-							}
-						}
-
-						inParts.push_back(conditions[idx]);
-					}
+					// replace the marker with a comma
+					inParts[1] = ",";
 
 					LineParts newSection;
 					newSection.push_back(command);
 					newSection.push_back("(");
 					newSection.push_back(containerRef);
+
+					// if the original member had parameters 
+					if (inParts.size())
+					{
+						newSection.push_back(",");
+						newSection.insert(newSection.end(), inParts.begin(), inParts.end());
+					}
+
 					newSection.push_back(")");
 
-					conditions.erase(conditions.begin() + startIdx, conditions.begin() + closingIdx);
+					conditions.erase(conditions.begin() + startIdx, conditions.begin() + (closingIdx + 1));
 					conditions.insert(conditions.begin() + startIdx, newSection.begin(), newSection.end());
 
-					// start over
 					changes = true; // loop again
 					break;
-
 				}
 
+			 
+				/*
+				 *  Member-to-function translantion 
+				 *
+				 *  We convert member functions into regular function calls, where the first
+				 *  param is a reference type (using @) and the params in the member function
+				 *  are placed as subsequent members in the function call. 
+				 *  
+				 *  The function is marshaled to an internal function using the name of the 
+				 *  member prepended with "__".
+				 *  
+				 *  i.e.
+				 *  
+				 *  some_array.append("a value") becomes __append( @some_array, "a value" )
+				 *
+				 */
 				if (basic_string<char>::size_type pos; 
-				    (pos = conditions[index].find(".append")) != std::string::npos ||
+					(pos = conditions[index].find(".find")) != std::string::npos ||
+					(pos = conditions[index].find(".split")) != std::string::npos ||
+					(pos = conditions[index].find(".append")) != std::string::npos ||
+					(pos = conditions[index].find(".pop")) != std::string::npos ||
+					(pos = conditions[index].find(".clear")) != std::string::npos ||
+					(pos = conditions[index].find(".keys")) != std::string::npos ||
 					(pos = conditions[index].find(".add")) != std::string::npos ||
 					(pos = conditions[index].find(".remove")) != std::string::npos ||
 					(pos = conditions[index].find(".update")) != std::string::npos)
 				{
-					const auto command = "__" + conditions[index].substr(pos+1);
-					const auto containerRef = "@" + conditions[index].substr(0, pos);
+					const auto command = "__"s + conditions[index].substr(pos+1);
+					const auto containerRef = "@"s + conditions[index].substr(0, pos);
 					
 					const auto startIdx = index;
 
@@ -2604,8 +2726,14 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					newSection.push_back(command);
 					newSection.push_back("(");
 					newSection.push_back(containerRef);
-					newSection.push_back(",");
-					newSection.insert(newSection.end(), inParts.begin(), inParts.end());
+
+					// if the original member had parameters 
+					if (inParts.size())
+					{
+						newSection.push_back(",");
+						newSection.insert(newSection.end(), inParts.begin(), inParts.end());
+					}
+					
 					newSection.push_back(")");
 
 					conditions.erase(conditions.begin() + startIdx, conditions.begin() + closingIdx);
@@ -2903,7 +3031,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 	return result;
 }
 
-int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opList, int64_t index, bool stopOnConditions)
+int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opList, int64_t index, const bool stopOnConditions)
 {
 	LineParts accumulation;
 
@@ -3159,7 +3287,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	return index;
 }
 
-void QueryParser::evaluateHints(string hintName, HintOpList& hintOps)
+void QueryParser::evaluateHints(const string hintName, HintOpList& hintOps)
 {
 	const auto hint = hintMap.find(hintName);
 
@@ -3177,7 +3305,7 @@ void QueryParser::build(
 	Columns* columns,
 	MiddleBlockList& input,
 	InstructionList& finCode,
-	variables_s& finVars)
+	Variables_S& finVars)
 {
 	/*
 	We are converting our maps to lists. We used maps to eliminate
@@ -3223,7 +3351,7 @@ void QueryParser::build(
 	}
 
 	std::sort(finVars.columnVars.begin(), finVars.columnVars.end(),
-	     [](const variable_s a, const variable_s b)
+	     [](const Variable_s a, const Variable_s b)
      {
 	     return a.sortOrder < b.sortOrder;
      });
@@ -3250,7 +3378,7 @@ void QueryParser::build(
 	}
 
 	std::sort(finVars.tableVars.begin(), finVars.tableVars.end(),
-	     [](const variable_s a, const variable_s b)
+	     [](const Variable_s a, const Variable_s b)
      {
 	     return a.sortOrder < b.sortOrder;
      });
@@ -3277,7 +3405,7 @@ void QueryParser::build(
 	{
 		const auto trimmed = stripQuotes(t.first);
 		t.second = finVars.literals.size(); // index - set to current length 
-		textLiteral_s literal;
+		TextLiteral_s literal;
 		literal.hashValue = MakeHash(trimmed);
 		literal.value = trimmed;
 		literal.index = t.second; // index from above
@@ -3687,14 +3815,14 @@ void QueryParser::build(
 	for (auto& f : functionMap)
 	{
 		finVars.functions.emplace_back(
-			function_s{
+			Function_s{
 					f.first,
 					f.second
 				});
 	}
 }
 
-bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, macro_s& macros, ParamVars* templateVars)
+bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& macros, ParamVars* templateVars)
 {
 
 	try
@@ -3707,10 +3835,10 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, macro_s& 
 
 		vars.tableVars.emplace(
 			"__stamp",
-			variable_s{ "__stamp", "grid" });
+			Variable_s{ "__stamp", "grid" });
 		vars.tableVars.emplace(
 			"__action",
-			variable_s{ "__action", "grid" });
+			Variable_s{ "__action", "grid" });
 
 		// breaks it out into lines
 		auto firstPass = extractLines(query);
@@ -3942,19 +4070,19 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 	return result;
 }
 
-string padding(string text, int length, bool left = true, char filler = ' ')
+string padding(string text, const int length, const bool left = true, const char filler = ' ')
 {
 	while (text.length() < length)
 		text = (left) ? filler + text : text + filler;
 	return text;
 }
 
-string padding(int64_t number, int length, bool left = true, char filler = ' ')
+string padding(const int64_t number, const int length, const bool left = true, const char filler = ' ')
 {
 	return padding(to_string(number), length, left, filler);
 }
 
-string openset::query::MacroDbg(macro_s& macro)
+string openset::query::MacroDbg(Macro_S& macro)
 {
 	stringstream ss;
 
@@ -3981,7 +4109,7 @@ string openset::query::MacroDbg(macro_s& macro)
 	for (auto& v : macro.vars.userVars)
 	{
 		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << padding(v.actual, 20, false, ' ') << "  " << (v.startingValue == NULLCELL ? "null" : v.startingValue);
+		ss << padding(v.actual, 20, false, ' ') << "  " << (v.startingValue == NONE ? "null" : v.startingValue);
 		ss << endl;
 	}
 

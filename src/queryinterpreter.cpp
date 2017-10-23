@@ -9,7 +9,7 @@
 const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
 
-openset::query::Interpreter::Interpreter(macro_s& macros, interpretMode_e interpretMode):
+openset::query::Interpreter::Interpreter(Macro_S& macros, const InterpretMode_e interpretMode):
 	macros(macros),
 	interpretMode(interpretMode)
 {
@@ -125,7 +125,7 @@ openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
 	return &macros.segments;
 }
 
-void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, int currentRow)
+void openset::query::Interpreter::marshal_tally(const int paramCount, const col_s* columns, const int currentRow)
 {
 
 	if (paramCount <= 0)
@@ -139,8 +139,8 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 
 		// if any of these params are undefined, exit
 		if (stackPtr->typeof() != cvar::valueType::STR &&
-			*stackPtr == NULLCELL)
-			params[i] = NULLCELL;
+			*stackPtr == NONE)
+			params[i] = NONE;
 		else
 			params[i] = std::move(*stackPtr);
 	}
@@ -173,7 +173,7 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 			case cvar::valueType::BOOL:
 				return value.getBool() ? 1 : 0;
 			default:
-				return NULLCELL;
+				return NONE;
 		}
 	};
 	
@@ -208,9 +208,9 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 			switch (resCol.modifier)
 			{
 				case modifiers_e::sum:
-					if (columns->cols[resCol.column] != NULLCELL)
+					if (columns->cols[resCol.column] != NONE)
 					{
-						if (resultColumns->columns[resultIndex].value == NULLCELL)
+						if (resultColumns->columns[resultIndex].value == NONE)
 							resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 						else
 							resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
@@ -218,23 +218,23 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 					break;
 
 				case modifiers_e::min:
-					if (columns->cols[resCol.column] != NULLCELL &&
-							(resultColumns->columns[resultIndex].value == NULLCELL ||
+					if (columns->cols[resCol.column] != NONE &&
+							(resultColumns->columns[resultIndex].value == NONE ||
 							 resultColumns->columns[resultIndex].value > columns->cols[resCol.column]))
 						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
 				case modifiers_e::max:
-					if (columns->cols[resCol.column] != NULLCELL &&
-							(resultColumns->columns[resultIndex].value == NULLCELL ||
+					if (columns->cols[resCol.column] != NONE &&
+							(resultColumns->columns[resultIndex].value == NONE ||
 							 resultColumns->columns[resultIndex].value < columns->cols[resCol.column]))
 						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
 				case modifiers_e::avg:
-					if (columns->cols[resCol.column] != NULLCELL)
+					if (columns->cols[resCol.column] != NONE)
 					{
-						if (resultColumns->columns[resultIndex].value == NULLCELL)
+						if (resultColumns->columns[resultIndex].value == NONE)
 						{
 							resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 							resultColumns->columns[resultIndex].count = 1;
@@ -247,9 +247,9 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 					}
 					break;
 				case modifiers_e::count:
-					if (columns->cols[resCol.column] != NULLCELL)
+					if (columns->cols[resCol.column] != NONE)
 					{
-						if (resultColumns->columns[resultIndex].value == NULLCELL)
+						if (resultColumns->columns[resultIndex].value == NONE)
 							resultColumns->columns[resultIndex].value = 1;
 						else
 							resultColumns->columns[resultIndex].value++;
@@ -261,7 +261,7 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 					break;
 
 				case modifiers_e::var:
-					if (resultColumns->columns[resultIndex].value == NULLCELL)
+					if (resultColumns->columns[resultIndex].value == NONE)
 						resultColumns->columns[resultIndex].value = fixToInt(resCol.value);
 					else
 						resultColumns->columns[resultIndex].value += fixToInt(resCol.value);
@@ -286,7 +286,7 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
     {
 
 		if (item.typeof() != cvar::valueType::STR &&
-			item == NULLCELL)
+			item == NONE)
 			break;
 
 	    rowKey.key[depth] = fixToInt(item);
@@ -307,7 +307,7 @@ void openset::query::Interpreter::marshal_tally(int paramCount, col_s* columns, 
 
 }
 
-void openset::query::Interpreter::marshal_schedule(int paramCount)
+void openset::query::Interpreter::marshal_schedule(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -315,7 +315,7 @@ void openset::query::Interpreter::marshal_schedule(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"schedule doesn't have the correct number of parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -329,11 +329,11 @@ void openset::query::Interpreter::marshal_schedule(int paramCount)
 	if (schedule_cb)
 		schedule_cb(functionHash, scheduleAt);
 
-	*stackPtr = NULLCELL; // push
+	*stackPtr = NONE; // push
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_emit(int paramCount)
+void openset::query::Interpreter::marshal_emit(const int paramCount)
 {
 	if (paramCount != 1)
 	{
@@ -341,13 +341,13 @@ void openset::query::Interpreter::marshal_emit(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"emit doesn't have the correct number of parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
 
 	jobState = true;
-	loopState = loopState_e::in_exit;
+	loopState = LoopState_e::in_exit;
 
 	--stackPtr;
 	auto emitMessage = *stackPtr; // pop
@@ -355,7 +355,7 @@ void openset::query::Interpreter::marshal_emit(int paramCount)
 	if (emit_cb)
 		emit_cb(emitMessage);
 
-	*stackPtr = NULLCELL; // push
+	*stackPtr = NONE; // push
 	++stackPtr;
 }
 
@@ -418,7 +418,7 @@ void __nestItercvar(const cvar* cvariable, string& result)
 	}
 }
 
-void openset::query::Interpreter::marshal_log(int paramCount)
+void openset::query::Interpreter::marshal_log(const int paramCount)
 {
 	vector<cvar> params;
 	for (auto i = 0; i < paramCount; ++i)
@@ -444,11 +444,11 @@ void openset::query::Interpreter::marshal_log(int paramCount)
 
 	cout << endl;
 
-	*stackPtr = NULLCELL;
+	*stackPtr = NONE;
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_break(int paramCount)
+void openset::query::Interpreter::marshal_break(const int paramCount)
 {
 	if (paramCount > 1)
 	{
@@ -456,7 +456,7 @@ void openset::query::Interpreter::marshal_break(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"break requires: no params, #, 'top' or 'all'");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -469,12 +469,12 @@ void openset::query::Interpreter::marshal_break(int paramCount)
 		if (param == "all"s)
 		{
 			breakDepth = nestDepth;
-			loopState = loopState_e::in_break;
+			loopState = LoopState_e::in_break;
 		}
 		else if (param == "top"s)
 		{
 			breakDepth = nestDepth - 1;
-			loopState = loopState_e::in_break;
+			loopState = LoopState_e::in_break;
 		}
 		else
 		{
@@ -488,20 +488,20 @@ void openset::query::Interpreter::marshal_break(int paramCount)
 				return;
 			}
 
-			loopState = loopState_e::in_break;
+			loopState = LoopState_e::in_break;
 		}
 	}
 	else
 	{
 		breakDepth = 1;
-		loopState = loopState_e::in_break;
+		loopState = LoopState_e::in_break;
 	}
 
-	*stackPtr = NULLCELL;
+	*stackPtr = NONE;
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_dt_within(int paramCount, int64_t rowStamp)
+void openset::query::Interpreter::marshal_dt_within(const int paramCount, const int64_t rowStamp)
 {
 	if (paramCount != 2)
 	{
@@ -509,7 +509,7 @@ void openset::query::Interpreter::marshal_dt_within(int paramCount, int64_t rowS
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"date within bad parameter count");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -525,7 +525,7 @@ void openset::query::Interpreter::marshal_dt_within(int paramCount, int64_t rowS
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_dt_between(int paramCount, int64_t rowStamp)
+void openset::query::Interpreter::marshal_dt_between(const int paramCount, const int64_t rowStamp)
 {
 	if (paramCount != 2)
 	{
@@ -533,7 +533,7 @@ void openset::query::Interpreter::marshal_dt_between(int paramCount, int64_t row
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"between clause requires two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -558,7 +558,7 @@ void openset::query::Interpreter::marshal_dt_between(int paramCount, int64_t row
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"date error in between statement");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -573,7 +573,7 @@ void openset::query::Interpreter::marshal_dt_between(int paramCount, int64_t row
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_bucket(int paramCount)
+void openset::query::Interpreter::marshal_bucket(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -581,7 +581,7 @@ void openset::query::Interpreter::marshal_bucket(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"bucket takes two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -606,7 +606,7 @@ void openset::query::Interpreter::marshal_bucket(int paramCount)
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_round(int paramCount)
+void openset::query::Interpreter::marshal_round(const int paramCount)
 {
 	if (paramCount != 1 && paramCount != 2)
 	{
@@ -614,7 +614,7 @@ void openset::query::Interpreter::marshal_round(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"round takes one or two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -631,7 +631,7 @@ void openset::query::Interpreter::marshal_round(int paramCount)
 	*(stackPtr - 1) = round((stackPtr - 1)->getDouble() * power) / power;
 }
 
-void openset::query::Interpreter::marshal_fix(int paramCount)
+void openset::query::Interpreter::marshal_fix(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -639,7 +639,7 @@ void openset::query::Interpreter::marshal_fix(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"fix takes two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -671,7 +671,7 @@ void openset::query::Interpreter::marshal_fix(int paramCount)
 }
 
 
-void openset::query::Interpreter::marshal_makeDict(int paramCount)
+void openset::query::Interpreter::marshal_makeDict(const int paramCount)
 {
 	cvar output;
 	output.dict();
@@ -695,7 +695,7 @@ void openset::query::Interpreter::marshal_makeDict(int paramCount)
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_makeList(int paramCount)
+void openset::query::Interpreter::marshal_makeList(const int paramCount)
 {
 	cvar output;
 	output.list();
@@ -711,7 +711,7 @@ void openset::query::Interpreter::marshal_makeList(int paramCount)
 	++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_makeSet(int paramCount)
+void openset::query::Interpreter::marshal_makeSet(const int paramCount)
 {
 	cvar output;
 	output.set();
@@ -728,7 +728,7 @@ void openset::query::Interpreter::marshal_makeSet(int paramCount)
 }
 
 
-void openset::query::Interpreter::marshal_population(int paramCount)
+void openset::query::Interpreter::marshal_population(const int paramCount)
 {
 	if (paramCount != 1)
 	{
@@ -736,7 +736,7 @@ void openset::query::Interpreter::marshal_population(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"compliment takes one parameter");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -759,7 +759,7 @@ void openset::query::Interpreter::marshal_population(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -771,7 +771,7 @@ void openset::query::Interpreter::marshal_population(int paramCount)
 		delete aBits;
 }
 
-void openset::query::Interpreter::marshal_intersection(int paramCount)
+void openset::query::Interpreter::marshal_intersection(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -779,7 +779,7 @@ void openset::query::Interpreter::marshal_intersection(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"intersection takes two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -806,7 +806,7 @@ void openset::query::Interpreter::marshal_intersection(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"intersection - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -824,7 +824,7 @@ void openset::query::Interpreter::marshal_intersection(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"intersection - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -834,7 +834,7 @@ void openset::query::Interpreter::marshal_intersection(int paramCount)
 	bits->opAnd(*bBits);
 }
 
-void openset::query::Interpreter::marshal_union(int paramCount)
+void openset::query::Interpreter::marshal_union(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -842,7 +842,7 @@ void openset::query::Interpreter::marshal_union(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"union takes two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -869,7 +869,7 @@ void openset::query::Interpreter::marshal_union(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -888,7 +888,7 @@ void openset::query::Interpreter::marshal_union(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -903,7 +903,7 @@ void openset::query::Interpreter::marshal_union(int paramCount)
 		delete bBits;
 }
 
-void openset::query::Interpreter::marshal_compliment(int paramCount)
+void openset::query::Interpreter::marshal_compliment(const int paramCount)
 {
 	if (paramCount != 1)
 	{
@@ -911,7 +911,7 @@ void openset::query::Interpreter::marshal_compliment(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"compliment takes one parameter");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -934,7 +934,7 @@ void openset::query::Interpreter::marshal_compliment(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -947,7 +947,7 @@ void openset::query::Interpreter::marshal_compliment(int paramCount)
 		delete aBits;
 }
 
-void openset::query::Interpreter::marshal_difference(int paramCount)
+void openset::query::Interpreter::marshal_difference(const int paramCount)
 {
 	if (paramCount != 2)
 	{
@@ -955,7 +955,7 @@ void openset::query::Interpreter::marshal_difference(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::sdk_param_count,
 			"difference takes two parameters");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -982,7 +982,7 @@ void openset::query::Interpreter::marshal_difference(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -1001,7 +1001,7 @@ void openset::query::Interpreter::marshal_difference(int paramCount)
 			errors::errorClass_e::run_time,
 			errors::errorCode_e::set_math_param_invalid,
 			"compliment - set could not be found");
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -1016,7 +1016,125 @@ void openset::query::Interpreter::marshal_difference(int paramCount)
 		delete bBits;
 }
 
-string openset::query::Interpreter::getLiteral(int64_t id) const
+void openset::query::Interpreter::marshal_slice(const int paramCount)
+{
+	if (paramCount != 3)
+		throw std::runtime_error("slice [:] malformed");
+	if ((stackPtr - 3)->typeof() != cvar::valueType::REF)
+		throw std::runtime_error("slice [:] first parameter must be reference type");
+
+	const auto reference = stackPtr - 3;
+	auto startIndex = (stackPtr - 2)->getInt64();
+	auto endIndex = (stackPtr - 1)->getInt64();
+
+	stackPtr -= 2; // we will return our result at this position
+
+	// local function to sort our missing, negative, or out of range indexes
+	const auto fixIndexes = [](size_t valueLength, int64_t& startIndex, int64_t& endIndex)
+	{
+		if (startIndex == NONE)
+			startIndex = 0;
+		else if (startIndex < 0)
+			startIndex = valueLength + startIndex;
+
+		if (endIndex == NONE)
+			endIndex = valueLength;
+		else if (endIndex < 0)
+			endIndex = valueLength + endIndex;
+
+		if (endIndex < 0)
+			endIndex = 0;
+		if (endIndex > valueLength)
+			endIndex = valueLength;
+		if (startIndex < 0)
+			startIndex = 0;
+		if (startIndex > valueLength)
+			startIndex = valueLength;
+
+		// we will swap for a valid range if they are reversed for whatever reason
+		if (endIndex < startIndex)
+			std::swap(startIndex, endIndex);
+
+	};
+
+	const auto refType = reference->getReference()->typeof();
+
+	if (refType == cvar::valueType::DICT || refType == cvar::valueType::SET)
+		throw std::runtime_error("slice [:] expecting list, string or convertable type");
+
+	// SET and DICT will merge, LIST will append, so you can append objects
+	if (refType == cvar::valueType::LIST)
+	{
+		const auto value = reference->getReference()->getList();
+		const auto valueLength = value->size();
+		
+		fixIndexes(valueLength, startIndex, endIndex);
+
+		cvar result(cvar::valueType::LIST);
+		auto resultList = result.getList();
+
+		resultList->insert(resultList->begin(), value->begin() + startIndex, value->begin() + endIndex);
+		*(stackPtr - 1) = std::move(result);
+	}
+	else
+	{
+		auto value = reference->getReference()->getString(); // convert type of needed
+		const auto valueLength = value.length();
+
+		fixIndexes(valueLength, startIndex, endIndex);
+
+		cvar result(cvar::valueType::STR);
+		const auto resultString = result.getStringPtr(); // grab the actual pointer to the string in the cvar
+
+		*resultString = value.substr(startIndex, endIndex - startIndex);
+		*(stackPtr - 1) = std::move(result);
+	}
+		
+}
+
+void openset::query::Interpreter::marshal_find(const int paramCount)
+{
+	if (paramCount < 2)
+		throw std::runtime_error("find malformed");
+	if ((stackPtr - paramCount)->typeof() != cvar::valueType::REF)
+		throw std::runtime_error(".find first parameter must be reference type");
+
+	auto count = paramCount;
+
+	size_t length = 0;
+	if (count == 4)
+	{
+		length = (stackPtr - 1)->getInt32();
+		--stackPtr;
+		--count;
+	}
+
+	size_t firstPos = 0;
+	if (count == 3)
+	{
+		firstPos = (stackPtr - 1)->getInt32();
+		--stackPtr;
+	}
+	
+	const auto reference = stackPtr - 2;
+	const auto lookFor = stackPtr - 1;
+	const auto refType = reference->getReference()->typeof();
+
+	auto str = reference->getReference()->getString();
+
+	// python allows a second index, C++ takes a length, lets convert
+	if (length)
+		str = str.substr(0, length);
+	
+	if (refType == cvar::valueType::DICT || refType == cvar::valueType::SET || refType == cvar::valueType::LIST)
+		throw std::runtime_error(".find expecting string or convertable type");
+
+	const auto pos = str.find(lookFor->getString().c_str(), firstPos);
+	
+	*(stackPtr - 1) = (pos == std::string::npos) ? -1 : static_cast<int32_t>(pos);
+}
+
+string openset::query::Interpreter::getLiteral(const int64_t id) const
 {
 	for (auto& i: macros.vars.literals)
 	{
@@ -1026,7 +1144,7 @@ string openset::query::Interpreter::getLiteral(int64_t id) const
 	return "";
 }
 
-bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
+bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 {
 	// index maps to function in the enumerator marshals_e
 	// extra maps to the param count (items on stack)
@@ -1037,11 +1155,11 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 	{
 	case marshals_e::marshal_tally:
 	{
-		if (interpretMode == interpretMode_e::count)
+		if (interpretMode == InterpretMode_e::count)
 		{
 			if (bits)
 				bits->bitSet(linid);
-			loopState = loopState_e::in_exit;
+			loopState = LoopState_e::in_exit;
 			*stackPtr = 0;
 			++stackPtr;
 			return true;
@@ -1194,13 +1312,13 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			if (nestDepth)
 			{
 				breakDepth = 1;
-				loopState = loopState_e::in_break;
+				loopState = LoopState_e::in_break;
 				*stackPtr = 0;
 				++stackPtr;
 			}
 			else
 			{
-				loopState = loopState_e::in_exit;
+				loopState = LoopState_e::in_exit;
 				*stackPtr = 0;
 				++stackPtr;
 			}
@@ -1263,7 +1381,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		marshal_break(inst->extra);
 		break;
 	case marshals_e::marshal_continue:
-		loopState = loopState_e::in_continue;
+		loopState = LoopState_e::in_continue;
 		*stackPtr = 0;
 		++stackPtr;
 		break;
@@ -1281,7 +1399,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 		debugLog.push_back(*stackPtr);
 		break;
 	case marshals_e::marshal_exit:
-		loopState = loopState_e::in_exit;
+		loopState = LoopState_e::in_exit;
 		*stackPtr = 0;
 		++stackPtr;
 		--recursion;
@@ -1391,7 +1509,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			{
 				if (!var->getList() || var->getList()->size() == 0)
 				{
-					*res = NULLCELL;
+					*res = NONE;
 					break;
 				}
 				*res = std::move(var->getList()->back());
@@ -1401,7 +1519,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			{
 				if (!var->getDict() || var->getDict()->size() == 0)
 				{
-					*res = NULLCELL;
+					*res = NONE;
 					break;
 				}
 				auto value = var->getDict()->begin();
@@ -1413,7 +1531,7 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 			{
 				if (!var->getSet() || var->getSet()->size() == 0)
 				{
-					*res = NULLCELL;
+					*res = NONE;
 					break;
 				}
 				auto value = *var->getSet()->begin();
@@ -1468,6 +1586,18 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 
 		break;
 
+	case marshals_e::marshal_to_second_date: break;
+	case marshals_e::marshal_iter_event: break;
+	case marshals_e::marshal_session: break;
+	case marshals_e::marshal_session_count: break;
+	case marshals_e::marshal_str_split: break;
+	case marshals_e::marshal_str_find: 
+		marshal_find(inst->extra);
+		break;
+	case marshals_e::marshal_slice:
+		marshal_slice(inst->extra);
+		break;
+
 	default:
 		error.set(
 			errors::errorClass_e::run_time,
@@ -1480,13 +1610,13 @@ bool openset::query::Interpreter::marshal(instruction_s* inst, int& currentRow)
 	return false; 
 }
 
-void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
+void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 {
 	// count allows for now row pointer, and no mounted person
-	if ((!rows || rows->empty()) && interpretMode != interpretMode_e::count)
+	if ((!rows || rows->empty()) && interpretMode != InterpretMode_e::count)
 	{
-		loopState = loopState_e::in_exit;
-		*stackPtr = NULLCELL;
+		loopState = LoopState_e::in_exit;
+		*stackPtr = NONE;
 		++stackPtr;
 		return;
 	}
@@ -1500,16 +1630,16 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 			errors::errorCode_e::recursion,
 			"nesting depth was: " + to_string(recursion),
 			lastDebug->toStrShort());
-		loopState = loopState_e::in_exit;
+		loopState = LoopState_e::in_exit;
 
-		*stackPtr = NULLCELL;
+		*stackPtr = NONE;
 		++stackPtr;
 
 		--recursion;
 		return;
 	}
 
-	while (loopState == loopState_e::run && !error.inError())
+	while (loopState == LoopState_e::run && !error.inError())
 	{
 		// tracks the last known script line number
 		if (inst->debug.number)
@@ -1525,7 +1655,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				lastDebug->toStrShort());
 			loopState = loopState_e::in_exit;
 
-			*stackPtr = NULLCELL;
+			*stackPtr = NONE;
 			++stackPtr;
 
 			--recursion;
@@ -1543,7 +1673,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				switch (macros.vars.tableVars[inst->index].schemaType)
 				{
 					case columnTypes_e::freeColumn:
-						*stackPtr = NULLCELL;
+						*stackPtr = NONE;
 						break;
 					case columnTypes_e::intColumn:
 						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
@@ -1617,7 +1747,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					}
 
 					// this is the value
-					*stackPtr = std::move(tcvar ? *tcvar : cvar{NULLCELL});
+					*stackPtr = std::move(tcvar ? *tcvar : cvar{NONE});
 					++stackPtr;
 				}
 				break;
@@ -1674,7 +1804,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				break;
 			case opCode_e::PSHLITNUL:
 				// push a floating point value
-				*stackPtr = NULLCELL;
+				*stackPtr = NONE;
 				++stackPtr;
 				break;
 			case opCode_e::POPUSROBJ:
@@ -1759,7 +1889,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 				--stackPtr;
 
-				//if (stackPtr->getInt64() != NULLCELL && *stackPtr)
+				//if (stackPtr->getInt64() != NONE && *stackPtr)
 				if (stackPtr->isEvalTrue())
 				{
 					// PASSED - run the code block (recursive)
@@ -1811,7 +1941,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 						for (auto& x : *from)
 						{
-							if (loopState == loopState_e::in_exit || error.inError())
+							if (loopState == LoopState_e::in_exit || error.inError())
 							{
 								*stackPtr = 0;
 								++stackPtr;
@@ -1832,11 +1962,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == loopState_e::in_break)
+							if (loopState == LoopState_e::in_break)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
-									loopState = loopState_e::run;
+									loopState = LoopState_e::run;
 								}
 								else
 								{
@@ -1853,8 +1983,8 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								return;
 							}
 
-							if (loopState == loopState_e::in_continue)
-								loopState = loopState_e::run; // no actual action, we are going to loop anyways
+							if (loopState == LoopState_e::in_continue)
+								loopState = LoopState_e::run; // no actual action, we are going to loop anyways
 						}
 
 						// out of loop, decrement nest 
@@ -1866,7 +1996,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 						for (auto& x: *from)
 						{
-							if (loopState == loopState_e::in_exit || error.inError())
+							if (loopState == LoopState_e::in_exit || error.inError())
 							{
 								*stackPtr = 0;
 								++stackPtr;
@@ -1884,11 +2014,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == loopState_e::in_break)
+							if (loopState == LoopState_e::in_break)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
-									loopState = loopState_e::run;
+									loopState = LoopState_e::run;
 								}
 								else
 								{
@@ -1905,8 +2035,8 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								return;
 							}
 
-							if (loopState == loopState_e::in_continue)
-								loopState = loopState_e::run; // no actual action, we are going to loop anyways
+							if (loopState == LoopState_e::in_continue)
+								loopState = LoopState_e::run; // no actual action, we are going to loop anyways
 						}
 					}
 					else if (source.typeof() == cvar::valueType::SET)
@@ -1915,7 +2045,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 
 						for (auto& x : *from)
 						{
-							if (loopState == loopState_e::in_exit || error.inError())
+							if (loopState == LoopState_e::in_exit || error.inError())
 							{
 								*stackPtr = 0;
 								++stackPtr;
@@ -1933,11 +2063,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == loopState_e::in_break)
+							if (loopState == LoopState_e::in_break)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
-									loopState = loopState_e::run;
+									loopState = LoopState_e::run;
 								}
 								else
 								{
@@ -1954,8 +2084,8 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 								return;
 							}
 
-							if (loopState == loopState_e::in_continue)
-								loopState = loopState_e::run; // no actual action, we are going to loop anyways
+							if (loopState == LoopState_e::in_continue)
+								loopState = LoopState_e::run; // no actual action, we are going to loop anyways
 						}
 					}
 					else
@@ -1964,7 +2094,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 							errors::errorClass_e::run_time,
 							errors::errorCode_e::iteration_error,
 							inst->debug.toStr());
-						loopState = loopState_e::in_exit;
+						loopState = LoopState_e::in_exit;
 						--recursion;
 						return;
 					}
@@ -1990,7 +2120,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 					{
 						//++loopCount;
 
-						if (loopState == loopState_e::in_exit || error.inError())
+						if (loopState == LoopState_e::in_exit || error.inError())
 						{
 							*stackPtr = 0;
 							++stackPtr;
@@ -2030,7 +2160,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 									errors::errorClass_e::run_time,
 									errors::errorCode_e::iteration_error,
 									inst->debug.toStr());
-								loopState = loopState_e::in_exit;
+								loopState = LoopState_e::in_exit;
 								--recursion;
 								return;
 							}
@@ -2048,11 +2178,11 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 									currentRow);
 						}
 
-						if (loopState == loopState_e::in_break)
+						if (loopState == LoopState_e::in_break)
 						{
 							if (breakDepth == 1 || nestDepth == 1)
 							{
-								loopState = loopState_e::run;
+								loopState = LoopState_e::run;
 							}
 							else
 							{
@@ -2070,8 +2200,8 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 						}
 
 						// no actual action, we are going to loop anyways
-						if (loopState == loopState_e::in_continue)
-							loopState = loopState_e::run;
+						if (loopState == LoopState_e::in_continue)
+							loopState = LoopState_e::run;
 					}
 
 					matchStampPrev.pop_back();
@@ -2280,17 +2410,17 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				break;
 			case opCode_e::OPNOT:
 				--stackPtr;
-				*stackPtr = ((*stackPtr).typeof() == cvar::valueType::BOOL && *stackPtr && *stackPtr != NULLCELL) ? false : true;
+				*stackPtr = ((*stackPtr).typeof() == cvar::valueType::BOOL && *stackPtr && *stackPtr != NONE) ? false : true;
 				++stackPtr;
 				break;
 			case opCode_e::LGCAND:
 				// AND last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
-				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NULLCELL)
+				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 				--stackPtr;
-				if ((*stackPtr).typeof() != cvar::valueType::BOOL && *stackPtr == NULLCELL)
+				if ((*stackPtr).typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 				*stackPtr = (*stackPtr && *(stackPtr + 1));
 				++stackPtr;
@@ -2299,10 +2429,10 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 				// AND last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
-				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NULLCELL)
+				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 				--stackPtr;
-				if ((*stackPtr).typeof() != cvar::valueType::BOOL && *stackPtr == NULLCELL)
+				if ((*stackPtr).typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 
 				*stackPtr = (*stackPtr || *(stackPtr + 1));
@@ -2329,7 +2459,7 @@ void openset::query::Interpreter::opRunner(instruction_s* inst, int currentRow)
 			case opCode_e::TERM:
 				// script is complete, exit all nested
 				// loops
-				loopState = loopState_e::in_exit;
+				loopState = LoopState_e::in_exit;
 				*stackPtr = 0;
 				++stackPtr;
 				--recursion;
@@ -2390,7 +2520,7 @@ void openset::query::Interpreter::execReset()
 	recursion = 0;
 	eventCount = -1;
 	jobState = false;
-	loopState = loopState_e::run;
+	loopState = LoopState_e::run;
 	stackPtr = stack;
 	matchStampPrev.clear();
 	eventDistinct.clear();

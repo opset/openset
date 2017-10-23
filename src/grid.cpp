@@ -188,7 +188,7 @@ cjson Grid::toJSON(bool condensed) const
 
 					auto value = accumulator[0]->cols[c];
 
-					if (value == NULLCELL)
+					if (value == NONE)
 						continue;
 
 					switch (colInfo->type)
@@ -238,7 +238,7 @@ cjson Grid::toJSON(bool condensed) const
 
 				for (auto r : accumulator)
 					for (auto c = 0; c < columnCount; ++c)
-						if (r->cols[c] != NULLCELL)
+						if (r->cols[c] != NONE)
 						{
 							auto key = make_pair(c, r->cols[c]);
 							if (!counts.count(key))
@@ -264,7 +264,7 @@ cjson Grid::toJSON(bool condensed) const
 
 						auto value = accumulator[0]->cols[c];
 
-						if (value == NULLCELL)
+						if (value == NONE)
 							continue;
 
 						// are these all the same on every row in the group? If not, skip
@@ -318,7 +318,7 @@ cjson Grid::toJSON(bool condensed) const
 
 						auto value = r->cols[c];
 
-						if (value == NULLCELL)
+						if (value == NONE)
 							continue;
 
 						// are these all the same on every row in the group? If not, skip
@@ -369,7 +369,7 @@ col_s* Grid::newRow()
 	volatile auto row = recast<int64_t*>(mem.newPtr(rowBytes));
 
 	for (auto iter = row; iter < row + columnCount; ++iter)
-        *iter = NULLCELL;
+        *iter = NONE;
 
 	if (uuidColumn != -1)
 		*(row + uuidColumn) = rawData->id;
@@ -576,7 +576,7 @@ personData_s* Grid::commit()
 	{
 		for (auto c = 0; c < columnCount; ++c)
 		{
-			if (r->cols[c] == NULLCELL ||
+			if (r->cols[c] == NONE ||
 				(reverseMap[c] >= COL_OMIT_FIRST && reverseMap[c] <= COL_OMIT_LAST))
 				continue;
 			bytesNeeded += sizeOfCast;
@@ -598,7 +598,7 @@ personData_s* Grid::commit()
 		{
 			cursor = recast<cast_s*>(write);
 
-			if (r->cols[c] == NULLCELL ||
+			if (r->cols[c] == NONE ||
 				(columnMap[c] >= COL_OMIT_FIRST && columnMap[c] <= COL_OMIT_LAST))
 				continue;
 
@@ -945,10 +945,10 @@ void Grid::insert(cjson* rowData)
 
 				fillCount++;
 
-				auto attrInfo = attributes->getMake(schemaCol, NULLCELL);
-				attributes->setDirty(this->rawData->linId, schemaCol, NULLCELL, attrInfo);
+				auto attrInfo = attributes->getMake(schemaCol, NONE);
+				attributes->setDirty(this->rawData->linId, schemaCol, NONE, attrInfo);
 				
-				auto val = NULLCELL;
+				auto val = NONE;
 
 				switch (c->type())
 				{
@@ -1059,7 +1059,7 @@ void Grid::insert(cjson* rowData)
 					break;
 
 				default:
-					val = NULLCELL;
+					val = NONE;
 					break;
 				}
 

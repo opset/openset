@@ -20,14 +20,14 @@ namespace openset
 {
 	namespace query
 	{
-		enum class interpretMode_e: int
+		enum class InterpretMode_e: int
 		{
 			query,
 			job,
 			count
 		};
 
-		enum class loopState_e : int
+		enum class LoopState_e : int
 		{
 			run,
 			in_break,
@@ -40,15 +40,15 @@ namespace openset
 		using DebugLog = vector<cvar>;
 		using BitMap = unordered_map<string, IndexBits*>;
 
-		struct stackFrame_s
+		struct StackFrame_s
 		{
 			// data
 			int64_t currentRow;
 			int64_t iterCount;
 
-			explicit stackFrame_s(
+			explicit StackFrame_s(
 				//instruction_s* executionPtr,
-				stackFrame_s* lastFrame):
+				StackFrame_s* lastFrame):
 				//execPtr(executionPtr),
 				currentRow(0),
 				iterCount(0)
@@ -61,7 +61,7 @@ namespace openset
 				}
 			}
 
-			stackFrame_s(stackFrame_s&& other) noexcept
+			StackFrame_s(StackFrame_s&& other) noexcept
 			{
 				currentRow = other.currentRow;
 				iterCount = other.iterCount;
@@ -77,7 +77,7 @@ namespace openset
 			const int64_t breakTopHash = MakeHash("top");
 
 			// execution
-			macro_s& macros;
+			Macro_S& macros;
 			cvar* stack;
 			cvar* stackPtr;
 
@@ -114,8 +114,8 @@ namespace openset
 			vector<int64_t> matchStampPrev{ 0 };
 
 			// switches
-			interpretMode_e interpretMode{ interpretMode_e::query };
-			loopState_e loopState{ loopState_e::run }; // run, continue, break, exit
+			InterpretMode_e interpretMode{ InterpretMode_e::query };
+			LoopState_e loopState{ LoopState_e::run }; // run, continue, break, exit
 			bool isConfigured{ false };
 			bool jobState{ false };
 
@@ -144,8 +144,8 @@ namespace openset
 			Debug_s* lastDebug{ nullptr };
 
 			explicit Interpreter(
-				macro_s& macros,
-				interpretMode_e interpretMode = interpretMode_e::query);
+				Macro_S& macros,
+				const InterpretMode_e interpretMode = InterpretMode_e::query);
 
 			~Interpreter();
 
@@ -156,7 +156,10 @@ namespace openset
 			vector<string> getReferencedColumns() const;
 			void mount(Person* person);
 
-			static constexpr bool within(int64_t compStamp, int64_t rowStamp, int64_t milliseconds)
+			static constexpr bool within(
+				const int64_t compStamp, 
+				const int64_t rowStamp, 
+				const int64_t milliseconds)
 			{
 				return (rowStamp >= compStamp - milliseconds &&
 					rowStamp <= compStamp + milliseconds);
@@ -164,33 +167,36 @@ namespace openset
 
 			SegmentList* getSegmentList() const;
 
-			void marshal_tally(int paramCount, col_s* columns, int currentRow);
+			void marshal_tally(const int paramCount, const col_s* columns, const int currentRow);
 
-			void marshal_schedule(int paramCount);
-			void marshal_emit(int paramCount);
-			void marshal_log(int paramCount);
-			void marshal_break(int paramCount);
-			void marshal_dt_within(int paramCount, int64_t rowStamp);
-			void marshal_dt_between(int paramCount, int64_t rowStamp);
-			void marshal_bucket(int paramCount);
-			void marshal_round(int paramCount);
-			void marshal_fix(int paramCount);
+			void marshal_schedule(const int paramCount);
+			void marshal_emit(const int paramCount);
+			void marshal_log(const int paramCount);
+			void marshal_break(const int paramCount);
+			void marshal_dt_within(const int paramCount, const int64_t rowStamp);
+			void marshal_dt_between(const int paramCount, const int64_t rowStamp);
+			void marshal_bucket(const int paramCount);
+			void marshal_round(const int paramCount);
+			void marshal_fix(const int paramCount);
 
-			void marshal_makeDict(int paramCount);
-			void marshal_makeList(int paramCount);
-			void marshal_makeSet(int paramCount);
+			void marshal_makeDict(const int paramCount);
+			void marshal_makeList(const int paramCount);
+			void marshal_makeSet(const int paramCount);
 
-			void marshal_population(int paramCount);
-			void marshal_intersection(int paramCount);
-			void marshal_union(int paramCount);
-			void marshal_compliment(int paramCount);
-			void marshal_difference(int paramCount);
+			void marshal_population(const int paramCount);
+			void marshal_intersection(const int paramCount);
+			void marshal_union(const int paramCount);
+			void marshal_compliment(const int paramCount);
+			void marshal_difference(const int paramCount);
+
+			void marshal_slice(const int paramCount);
+			void marshal_find(const int paramCount);
 
 			// get a string from the literals script block by ID
-			string getLiteral(int64_t id) const;
+			string getLiteral(const int64_t id) const;
 
-			bool marshal(instruction_s* inst, int& currentRow);
-			void opRunner(instruction_s* inst, int currentRow = 0);
+			bool marshal(Instruction_s* inst, int& currentRow);
+			void opRunner(Instruction_s* inst, int currentRow = 0);
 
 			void setScheduleCB(function<bool(int64_t functionHash, int seconds)> cb);
 			void setEmitCB(function<bool(string emitMessage)> cb);

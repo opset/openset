@@ -730,6 +730,12 @@ public:
 			dictValue = nullptr;
 		}
 
+		if (setValue)
+		{
+			delete setValue;
+			setValue = nullptr;
+		}
+
 		list();
 
 		*listValue = source;
@@ -748,6 +754,18 @@ public:
 	template<typename T>
 	cvar& operator=(const std::unordered_set<T>& source)
 	{
+		if (dictValue)
+		{
+			delete dictValue;
+			dictValue = nullptr;
+		}
+
+		if (listValue)
+		{
+			delete listValue;
+			listValue = nullptr;
+		}
+
 		set();
 		for (auto &item : source)
 			setValue->insert(item);
@@ -962,6 +980,13 @@ public:
 	{
 		this->valueString = getString();
 		return this->valueString;
+	}
+	
+	std::string* getStringPtr()
+	{
+		if (type != valueType::STR)
+			throw std::runtime_error("getStringPtr can only be called when type is valueType::STR");
+		return &valueString;
 	}
 
 	// overloads... endless overloads
@@ -2193,6 +2218,18 @@ public:
 template <typename K, typename V>
 cvar& cvar::operator=(const std::unordered_map<K, V>& source)
 {
+	if (setValue)
+	{
+		delete setValue;
+		setValue = nullptr;
+	}
+
+	if (listValue)
+	{
+		delete listValue;
+		listValue = nullptr;
+	}
+
 	dict();
 	for (const std::pair<const K,V>& item : source)
 		(*dictValue)[cvar{ item.first }] = cvar{ item.second };

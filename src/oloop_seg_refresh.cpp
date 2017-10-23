@@ -161,7 +161,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 			continue;
 		}
 
-		interpreter = new Interpreter(macros, openset::query::interpretMode_e::count);
+		interpreter = new Interpreter(macros, openset::query::InterpretMode_e::count);
 		interpreter->setGetSegmentCB(getSegmentCB);
 		interpreter->setBits(bits, maxLinearId);
 
@@ -177,7 +177,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
-			interpreter->interpretMode = interpretMode_e::count;
+			interpreter->interpretMode = InterpretMode_e::count;
 
 			interpreter->mount(&person);
 			interpreter->exec();
