@@ -159,13 +159,13 @@ inline Tests test_db()
 				ASSERT(columns != nullptr);
 
 				// content (adding to 2000 range, these typically auto enumerated on create)
-				columns->setColumn(2000, "page", openset::db::columnTypes_e::textColumn, false, 0);
+				columns->setColumn(2000, "page", openset::db::columnTypes_e::textColumn, false);
 				// referral (adding to 3000 range)
-				columns->setColumn(3000, "referral_source", openset::db::columnTypes_e::textColumn, false, 0);
-				columns->setColumn(3001, "referral_search", openset::db::columnTypes_e::textColumn, false, 0);
+				columns->setColumn(3000, "referral_source", openset::db::columnTypes_e::textColumn, false);
+				columns->setColumn(3001, "referral_search", openset::db::columnTypes_e::textColumn, false);
 
-				// do we have 9 columns (5 built ins plus 4 we added)
-				ASSERT(table->getColumns()->columnCount == 8);
+				// do we have 10 columns (7 built ins plus 3 we added)
+				ASSERT(table->getColumns()->columnCount == 10);
 			
 				// built-ins
 				ASSERT(table->getColumns()->nameMap.count("__triggers"));

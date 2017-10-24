@@ -99,6 +99,7 @@ namespace openset
 		public:
 			int rowCull{ 5000 }; // remove oldest rows if more than
 			int64_t stampCull{ 86400000LL * 365LL }; // auto cull older than
+			int64_t sessionTime{ 60000LL * 30LL }; // 30 minutes
 
 			explicit Table(string name, openset::db::Database* database);
 

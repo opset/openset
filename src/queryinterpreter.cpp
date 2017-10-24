@@ -125,7 +125,7 @@ openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
 	return &macros.segments;
 }
 
-void openset::query::Interpreter::marshal_tally(const int paramCount, const col_s* columns, const int currentRow)
+void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
 {
 
 	if (paramCount <= 0)
@@ -1016,7 +1016,7 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
 		delete bBits;
 }
 
-void openset::query::Interpreter::marshal_slice(const int paramCount)
+void openset::query::Interpreter::marshal_slice(const int paramCount) 
 {
 	if (paramCount != 3)
 		throw std::runtime_error("slice [:] malformed");
@@ -1092,7 +1092,7 @@ void openset::query::Interpreter::marshal_slice(const int paramCount)
 		
 }
 
-void openset::query::Interpreter::marshal_find(const int paramCount)
+void openset::query::Interpreter::marshal_find(const int paramCount, const bool reverse) 
 {
 	if (paramCount < 2)
 		throw std::runtime_error("find malformed");
@@ -1123,15 +1123,166 @@ void openset::query::Interpreter::marshal_find(const int paramCount)
 	auto str = reference->getReference()->getString();
 
 	// python allows a second index, C++ takes a length, lets convert
-	if (length)
+	if (length && !reverse)
 		str = str.substr(0, length);
 	
 	if (refType == cvar::valueType::DICT || refType == cvar::valueType::SET || refType == cvar::valueType::LIST)
 		throw std::runtime_error(".find expecting string or convertable type");
 
-	const auto pos = str.find(lookFor->getString().c_str(), firstPos);
+	const auto pos = (reverse) ? 
+		str.rfind(lookFor->getString()) : 
+	    str.find(lookFor->getString(), firstPos);
 	
 	*(stackPtr - 1) = (pos == std::string::npos) ? -1 : static_cast<int32_t>(pos);
+}
+
+void openset::query::Interpreter::marshal_split(const int paramCount) const
+{
+	if (paramCount != 2)
+		throw std::runtime_error("split malformed");
+	if ((stackPtr - paramCount)->typeof() != cvar::valueType::REF)
+		throw std::runtime_error(".split first parameter must be reference type");
+
+	const auto reference = stackPtr - 2;
+	const auto lookFor = stackPtr - 1;
+	const auto refType = reference->getReference()->typeof();
+
+	if (refType == cvar::valueType::DICT || refType == cvar::valueType::SET || refType == cvar::valueType::LIST)
+		throw std::runtime_error(".find expecting string or convertable type");
+
+	const auto source = reference->getReference()->getString();
+	const auto search = lookFor->getString();
+	const auto searchLen = search.length();
+
+	// make a result list
+	cvar result(cvar::valueType::LIST);
+
+	size_t startIdx = 0;
+	
+	while (true)
+	{
+		const auto pos = source.find(search, startIdx);
+
+		if (pos == std::string::npos)
+			break;		
+
+		result += source.substr(startIdx, pos - startIdx);
+		startIdx = pos + searchLen;
+	}
+
+	auto cleanup = source.substr(startIdx);
+	if (cleanup.length())
+		result += cleanup;
+
+	// leave the List on the stack
+	*(stackPtr - 1) = std::move(result);
+}
+
+void openset::query::Interpreter::marshal_strip(const int paramCount) const
+{
+	if (paramCount != 1)
+		throw std::runtime_error("strip malformed");
+	if ((stackPtr - paramCount)->typeof() != cvar::valueType::REF)
+		throw std::runtime_error(".strip first parameter must be reference type");
+
+	const auto reference = stackPtr - 1;
+	const auto refType = reference->getReference()->typeof();
+
+	if (refType == cvar::valueType::DICT || refType == cvar::valueType::SET || refType == cvar::valueType::LIST)
+		throw std::runtime_error(".strip expecting string or convertable type");
+
+	auto text = reference->getReference()->getString();
+
+	const auto whiteSpace = " \t\n\r"s;
+
+	if (const auto start = text.find_first_not_of(whiteSpace);  
+	    start == text.find_last_not_of(whiteSpace) && start == std::string::npos)
+		text.clear();
+	else
+	{
+		if (const auto end = text.find_last_not_of(whiteSpace); end != std::string::npos)
+			text.resize(end + 1);
+
+		if (start != std::string::npos)
+			text = text.substr(start);
+	}
+
+	// leave the List on the stack
+	*(stackPtr - 1) = text;
+}
+
+void openset::query::Interpreter::marshal_url_decode(const int paramCount)
+{
+	if (paramCount != 1)
+		throw std::runtime_error("url_decode malformed");
+
+	const auto paramType = (stackPtr - 1)->typeof();
+
+	if (paramType == cvar::valueType::DICT || paramType == cvar::valueType::SET || paramType == cvar::valueType::LIST)
+		throw std::runtime_error(".url_decode expecting string or convertable type");
+
+	const auto url = (stackPtr - 1)->getString();
+
+	auto& result = *(stackPtr - 1);
+	result.dict();
+
+	result["host"] = NONE;
+	result["path"] = NONE;
+	result["query"] = NONE;
+	result["params"] = cvar::Dict{};
+
+	size_t start = 0;
+
+	// look for the // after the protocal, if its here we have a host
+	if (auto slashSlash = url.find("//"); slashSlash != std::string::npos)
+	{
+		slashSlash += 2;
+		const auto endPos = url.find("/", slashSlash);
+		if (endPos == std::string::npos) // something is ugly
+			return;
+		result["host"] = url.substr(slashSlash, endPos - (slashSlash));
+
+		start = endPos;
+	}
+
+	// we have a question mark
+	if (auto qpos = url.find("?", start); qpos != std::string::npos)
+	{
+		result["path"] = url.substr(start, qpos - start);
+		++qpos;
+		auto query = url.substr(qpos);
+		result["query"] = query;
+		
+		start = 0;
+
+		while (true)
+		{
+			auto pos = query.find("&", start);
+
+			if (pos == std::string::npos)
+				pos = query.size();
+
+			auto param = query.substr(start, pos - start);
+
+			if (const auto ePos = param.find("="); ePos != std::string::npos)
+			{
+				const auto key = param.substr(0, ePos);
+				const auto value = param.substr(ePos + 1);
+				result["params"][key] = value;
+			}
+			else
+				result["params"][param] = true;
+
+			start = pos + 1;  // move past the '&'
+
+			if (start >= query.length()) break;
+		}
+	}
+	else
+		result["path"] = url.substr(start);
+
+	*(stackPtr - 1) == std::move(result);
+	
 }
 
 string openset::query::Interpreter::getLiteral(const int64_t id) const
@@ -1580,22 +1731,32 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				throw std::runtime_error("keys can only be performed on dict types");
 		}
 		break;
-	case marshals_e::marshal_range:
-		if (inst->extra != 1)
-			throw std::runtime_error("range requires reference parameter");
-
+	case marshals_e::marshal_session: 
+		throw std::runtime_error("session is not implemented");
 		break;
-
-	case marshals_e::marshal_to_second_date: break;
-	case marshals_e::marshal_iter_event: break;
-	case marshals_e::marshal_session: break;
-	case marshals_e::marshal_session_count: break;
-	case marshals_e::marshal_str_split: break;
+	case marshals_e::marshal_session_count: 
+		throw std::runtime_error("session_count is not implemented");
+		break;
+	case marshals_e::marshal_str_split: 
+		marshal_split(inst->extra);
+		break;
 	case marshals_e::marshal_str_find: 
 		marshal_find(inst->extra);
 		break;
-	case marshals_e::marshal_slice:
+	case marshals_e::marshal_str_rfind:
+		marshal_find(inst->extra, true);
+		break;
+	case marshals_e::marshal_str_slice:
 		marshal_slice(inst->extra);
+		break;
+	case marshals_e::marshal_str_strip:
+		marshal_strip(inst->extra);
+		break;
+	case marshals_e::marshal_range:
+		throw std::runtime_error("range is not implemented");
+		break;
+	case marshals_e::marshal_url_decode:
+		marshal_url_decode(inst->extra);
 		break;
 
 	default:

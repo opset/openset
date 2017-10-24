@@ -282,7 +282,7 @@ void OpenLoopCount::prepare()
 
 void OpenLoopCount::run()
 {
-	openset::db::personData_s* personData;
+	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())

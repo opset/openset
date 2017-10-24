@@ -210,20 +210,20 @@ namespace openset
 
 			middleVariables_s vars;
 
-			int blockCounter;
+			int blockCounter{ 1 };
 
 			HintList hintNames;
 			HintMap hintMap;			
 
-			Columns* tableColumns;
+			Columns* tableColumns{ nullptr };
 
-			parseMode_e parseMode;
+			parseMode_e parseMode{ parseMode_e::query };
 
-			ParamVars* templating;
+			ParamVars* templating{ nullptr };
 
 			bool isSegment{ false };
-			bool isSegmentMath;
-			bool useSessions;
+			bool isSegmentMath{ false };
+			bool useSessions{ false };
 
 			bool useGlobals{ false };
 
@@ -233,7 +233,7 @@ namespace openset
 			mutable int autoCounter{ 0 };
 			bool segmentUseCached{ false };
 
-			explicit QueryParser(parseMode_e parseMode = parseMode_e::query);
+			explicit QueryParser(const parseMode_e parseMode = parseMode_e::query);
 			~QueryParser();
 
 			static bool isVar(VarMap& vars, const string name)

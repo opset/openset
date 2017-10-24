@@ -881,11 +881,13 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 	auto columns = table->getColumns();
 
 	// set the default required columns
-	columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false, 0);
-	columns->setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false, 0);
-	columns->setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false, 0);
-	columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false, 0);
-	columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false, 0);
+	columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
+	columns->setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 
 	int64_t columnEnum = 1000;
 

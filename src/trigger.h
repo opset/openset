@@ -31,7 +31,7 @@ namespace openset
 		class TablePartitioned;
 		class Attributes;
 		class IndexBits;
-		struct attr_s;
+		struct Attr_s;
 	};
 
 };
@@ -149,7 +149,7 @@ namespace openset
 
 			openset::db::Person* person;
 
-			openset::db::attr_s* attr;
+			openset::db::Attr_s* attr;
 			openset::db::IndexBits* bits;
 
 			int64_t currentFunctionHash;

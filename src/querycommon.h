@@ -135,7 +135,6 @@ namespace openset
 			marshal_to_days,
 			marshal_get_second,
 			marshal_round_second,
-			marshal_to_second_date,
 			marshal_get_minute,
 			marshal_round_minute,
 			marshal_get_hour,
@@ -157,7 +156,6 @@ namespace openset
 			marshal_iter_move_last,
 			marshal_iter_next,
 			marshal_iter_prev,
-			marshal_iter_event, // not implemented yet
 			marshal_event_count,
 			marshal_iter_within,
 			marshal_iter_between,
@@ -200,8 +198,11 @@ namespace openset
 			marshal_range, // not implemented
 			marshal_str_split,
 			marshal_str_find,
+			marshal_str_rfind,
 			marshal_str_replace,
-			marshal_slice,
+			marshal_str_slice,
+			marshal_str_strip,
+			marshal_url_decode
 		};
 
 		// enum used for query index optimizer
@@ -551,8 +552,11 @@ namespace openset
 					{ "__keys", marshals_e::marshal_keys },
 					{ "__split", marshals_e::marshal_str_split },
 					{ "__find", marshals_e::marshal_str_find },
-					{ "__slice", marshals_e::marshal_slice },
-					{ "range", marshals_e::marshal_range }
+					{ "__rfind", marshals_e::marshal_str_rfind },
+					{ "__slice", marshals_e::marshal_str_slice },
+					{ "__strip", marshals_e::marshal_str_strip},
+					{ "range", marshals_e::marshal_range },
+					{ "url_decode", marshals_e::marshal_url_decode }
 			};
 
 		static const unordered_set<marshals_e> segmentMathMarshals =

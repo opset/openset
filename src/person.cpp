@@ -77,7 +77,7 @@ bool Person::mapSchemaList(const vector<string>& columnNames)
 	return grid.mapSchema(table, attributes, columnNames);
 }
 
-void Person::mount(personData_s* personData)
+void Person::mount(PersonData_s* personData)
 {
 #if defined(_DEBUG) || defined(NDEBUG)
 	Logger::get().fatal((table), "mapTable must be called before mount");
@@ -96,7 +96,7 @@ void Person::insert(cjson* rowData)
 	grid.insert(rowData);
 }
 
-personData_s* Person::commit()
+PersonData_s* Person::commit()
 {
 	data = grid.commit();
 	people->replacePersonRecord(data);

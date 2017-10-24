@@ -78,7 +78,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 }
 
-int main(int argc, char* argv[])
+int main(const int argc, char* argv[])
 {
 	openset::config::CommandlineArgs args;
 

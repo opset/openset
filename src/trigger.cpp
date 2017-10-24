@@ -178,11 +178,11 @@ void Trigger::flushDirty()
 
 	auto oldAttr = attrPair->second; // keep it so we can delete it.
 
-	auto newAttr = recast<attr_s*>(
-		PoolMem::getPool().getPtr(sizeof(attr_s) + compBytes));
+	auto newAttr = recast<Attr_s*>(
+		PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
-	std::memcpy(newAttr, oldAttr, sizeof(attr_s));
+	std::memcpy(newAttr, oldAttr, sizeof(Attr_s));
 	std::memcpy(newAttr->index, compData, compBytes);
 
 	// swap old index

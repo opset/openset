@@ -122,6 +122,10 @@ public:
 		REF
 	};
 
+	using List = std::vector<cvar>;
+	using Dict = std::unordered_map<cvar, cvar>;
+	using Set = std::unordered_set<cvar>;
+
 private:
 
 	union dataUnion
@@ -138,10 +142,6 @@ private:
 	dataUnion lastValue = {0}; // used as temporary buffer during conversion so we don't overwrite originals
 
 	std::string valueString;
-
-	using List = std::vector<cvar>;
-	using Dict = std::unordered_map<cvar, cvar>;
-	using Set = std::unordered_set<cvar>;
 
 	mutable List* listValue = nullptr;
 	mutable Dict* dictValue = nullptr;
@@ -217,7 +217,7 @@ public:
 	// so you can go:
 	// cvar mycvar = 5;
 
-	cvar(valueType type):
+	cvar(const valueType type):
 		type(type)
 	{
 		switch (type)
@@ -235,27 +235,25 @@ public:
 		}
 	}
 
-	cvar(int val) :
+	cvar(const int val) :
 		type(valueType::INT32)
 	{
-		value.asInt64 = 0;
 		value.asInt32 = val;
 	}
 
-	cvar(int64_t val) :
+	cvar(const int64_t val) :
 		type(valueType::INT64)
 	{
 		value.asInt64 = val;
 	}
 
-	cvar(float val) :
+	cvar(const float val) :
 		type(valueType::FLT)
 	{
-		value.asInt64 = 0;
 		value.asFloat = val;
 	}
 
-	cvar(double val) :
+	cvar(const double val) :
 		type(valueType::DBL)
 	{
 		value.asDouble = val;
@@ -267,21 +265,20 @@ public:
 		valueString.assign(val);
 	}
 
-	cvar(std::string val) :
+	cvar(const std::string val) :
 		type(valueType::STR)
 	{
 		value.asInt64 = -1;
 		valueString = val;
 	}
 
-	cvar(bool val) :
+	cvar(const bool val) :
 		type(valueType::BOOL)
 	{
-		value.asInt64 = 0;
 		value.asBool = val;
 	}
 			
-	cvar(std::vector<cvar> val) :
+	cvar(const std::vector<cvar> val) :
 		type(valueType::LIST)
 	{
 		listValue = new List();
@@ -306,7 +303,7 @@ public:
 	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source)
 	{
 		dict();
-		for (auto item : source)
+		for (const auto item : source)
 			(*dictValue)[cvar{ item.first }] = cvar{ item.second };
 	}
 
@@ -326,7 +323,7 @@ public:
 		*this = static_cast<int64_t>(LLONG_MIN);
 	}
 
-	bool isNone()
+	bool isNone() const
 	{
 		return *this == static_cast<int64_t>(LLONG_MIN);
 	}
@@ -458,7 +455,7 @@ public:
 		return setValue;
 	}
 
-	bool contains(cvar key) const
+	bool contains(const cvar key) const
 	{
 		if (type == valueType::LIST)
 			//return (listValue && key.getInt32() < listValue->size()) ? true : false;
@@ -504,7 +501,7 @@ private:
 	// remove all occurrences of right from left if any
 	static std::string subStrings(std::string left, const std::string& right)
 	{
-		auto len = right.length();
+		const auto len = right.length();
 		size_t idx;
 		while ((idx = left.find(right)) != -1)
 			left.erase(idx, len);
@@ -551,7 +548,7 @@ public:
 	{
 		if (this->type == valueType::LIST && listValue)
 		{
-			auto index = std::stoi(idx);
+			const auto index = std::stoi(idx);
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
@@ -573,7 +570,7 @@ public:
 	{
 		if (this->type == valueType::LIST && listValue)
 		{
-			auto index = std::stoi(idx);
+			const auto index = std::stoi(idx);
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
@@ -1703,27 +1700,27 @@ public:
 		case valueType::INT64:
 			if (right.type == valueType::DBL || right.type == valueType::FLT)
 			{
-				auto tmp = right.getDouble();
+				const auto tmp = right.getDouble();
 				if (tmp == 0)
 					throw std::runtime_error("divide by zero");
 				return cvar{ this->getDouble() / tmp };
 			}
 			{
-				auto tmp = right.getInt64();
+				const auto tmp = right.getInt64();
 				if (tmp == 0)
 					throw std::runtime_error("divide by zero");
 				return cvar{ *this / tmp };
 			}
 		case valueType::FLT:
 			{
-				auto tmp = right.getFloat();
+				const auto tmp = right.getFloat();
 				if (tmp == 0)
 					throw std::runtime_error("divide by zero");
 				return cvar{ *this / tmp };
 			}
 		case valueType::DBL:
 			{
-				auto tmp = right.getDouble();
+				const auto tmp = right.getDouble();
 				if (tmp == 0)
 					throw std::runtime_error("divide by zero");
 				return cvar{ *this / tmp };
@@ -2103,7 +2100,7 @@ public:
 	// << overload for std::ostream 
 	friend std::ostream& operator<<(std::ostream& os, const cvar& source)
 	{
-		auto result = source.getString();
+		const auto result = source.getString();
 		os << result;
 		return os;
 	}
@@ -2422,7 +2419,7 @@ inline bool operator ==(const cvar& left, const std::string& right)
 
 inline bool operator ==(const cvar& left, const char* right)
 {
-	auto state =
+	const auto state =
 		(strcmp(right, "0") == 0 ||
 			strcmp(right, "false") == 0 ||
 			strlen(right) == 0) ? false : true;
@@ -2431,7 +2428,7 @@ inline bool operator ==(const cvar& left, const char* right)
 
 inline bool operator ==(const char* left, const cvar& right)
 {
-	auto state =
+	const auto state =
 		(strcmp(left, "0") == 0 ||
 			strcmp(left, "false") == 0 ||
 			strlen(left) == 0) ? false : true;
@@ -3050,12 +3047,12 @@ inline cvar operator-(const char* left, const cvar& right)
 	return cvar{ right.subStrings(std::string{left}, right.getString()) };
 }
 
-inline cvar operator""_cvar(unsigned long long val)
+inline cvar operator""_cvar(const unsigned long long val)
 {
 	return cvar{ static_cast<int64_t>(val) };
 }
 
-inline cvar operator""_cvar(long double val)
+inline cvar operator""_cvar(const long double val)
 {
 	return cvar{ static_cast<double>(val) };
 }

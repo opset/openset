@@ -14,27 +14,27 @@ namespace openset
 {
 	namespace db
 	{
-		struct personData_s;
+		struct PersonData_s;
 
 		class People
 		{
 		public:
 			bigRing<int64_t, int32_t> peopleMap; // probably delete this!
-			vector<personData_s*> peopleLinear;
+			vector<PersonData_s*> peopleLinear;
 			int partition;
 		public:
 			explicit People(int partition);
 			~People();
 
-			personData_s* getPersonByID(int64_t userId);
-			personData_s* getPersonByID(string userIdString);
-			personData_s* getPersonByLIN(int32_t linId);
+			PersonData_s* getPersonByID(int64_t userId);
+			PersonData_s* getPersonByID(string userIdString);
+			PersonData_s* getPersonByLIN(int32_t linId);
 
 			// will return a "found" person if one exists
 			// or create a new one
-			personData_s* getmakePerson(string userIdString);
+			PersonData_s* getmakePerson(string userIdString);
 
-			void replacePersonRecord(personData_s* newRecord)
+			void replacePersonRecord(PersonData_s* newRecord)
 			{
 				if (newRecord)
 					peopleLinear[newRecord->linId] = newRecord;

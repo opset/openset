@@ -167,7 +167,7 @@ namespace openset
 
 			SegmentList* getSegmentList() const;
 
-			void marshal_tally(const int paramCount, const col_s* columns, const int currentRow);
+			void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
 
 			void marshal_schedule(const int paramCount);
 			void marshal_emit(const int paramCount);
@@ -190,7 +190,11 @@ namespace openset
 			void marshal_difference(const int paramCount);
 
 			void marshal_slice(const int paramCount);
-			void marshal_find(const int paramCount);
+			void marshal_find(const int paramCount, const bool reverse = false);
+			void marshal_split(const int paramCount) const;
+			void marshal_strip(const int paramCount) const;
+
+			void marshal_url_decode(const int paramCount);
 
 			// get a string from the literals script block by ID
 			string getLiteral(const int64_t id) const;

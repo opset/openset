@@ -77,6 +77,8 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr)
 		{
 			if (s.idx == COL_UUID)
 				uuidColumn = columnCount;
+			else if (s.idx == COL_SESSION)
+				sessionColumn = columnCount;
 
 			columnMap[columnCount] = static_cast<int16_t>(s.idx); // maps local column to schema
 			reverseMap[s.idx] = static_cast<int16_t>(columnCount); // maps schema to local column
@@ -119,15 +121,17 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 
 	auto schema = table->getColumns();
 
-	for (auto colName: columnNames)
+	for (const auto colName: columnNames)
 	{
-		auto s = schema->getColumn(colName);
+		const auto s = schema->getColumn(colName);
 
 		if (!s)
 			return false;
 
 		if (s->idx == COL_UUID)
 			uuidColumn = columnCount;
+		else if (s->idx == COL_SESSION)
+			sessionColumn = columnCount;
 
 		columnMap[columnCount] = static_cast<int16_t>(s->idx); // maps local column to schema
 		reverseMap[s->idx] = static_cast<int16_t>(columnCount); // maps schema to local column
@@ -145,7 +149,7 @@ AttributeBlob* Grid::getAttributeBlob() const
 	return attributes->blob;
 }
 
-cjson Grid::toJSON(bool condensed) const
+cjson Grid::toJSON(const bool condensed) const
 {
 	cjson doc;
 
@@ -157,7 +161,7 @@ cjson Grid::toJSON(bool condensed) const
 	auto columns = table->getColumns();
 	cjson* rowObj;
 
-	std::vector<openset::db::col_s*> accumulator;
+	std::vector<openset::db::Col_s*> accumulator;
 
 	for (auto iter = rows.begin(); iter != rows.end(); ++iter)
 	{
@@ -181,12 +185,12 @@ cjson Grid::toJSON(bool condensed) const
 				for (auto c = 0; c < columnCount; ++c)
 				{
 					// get the column information
-					auto colInfo = columns->getColumn(columnMap[c]);
+					const auto colInfo = columns->getColumn(columnMap[c]);
 
 					if (colInfo->idx < 1000) // first 1000 are reserved
 						continue;
 
-					auto value = accumulator[0]->cols[c];
+					const auto value = accumulator[0]->cols[c];
 
 					if (value == NONE)
 						continue;
@@ -205,9 +209,8 @@ cjson Grid::toJSON(bool condensed) const
 						rowObj->set(colInfo->name, value ? true : false);
 						break;
 					case columnTypes_e::textColumn:
-					{
-						auto text = attributes->blob->getValue(colInfo->idx, value);
-						if (text)
+					{						
+						if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
 							rowObj->set(colInfo->name, text);
 					}
 					break;
@@ -240,7 +243,7 @@ cjson Grid::toJSON(bool condensed) const
 					for (auto c = 0; c < columnCount; ++c)
 						if (r->cols[c] != NONE)
 						{
-							auto key = make_pair(c, r->cols[c]);
+							const auto key = make_pair(c, r->cols[c]);
 							if (!counts.count(key))
 								counts[key] = 1;
 							else
@@ -257,7 +260,7 @@ cjson Grid::toJSON(bool condensed) const
 					for (auto c = 0; c < columnCount; ++c)
 					{
 						// get the column information
-						auto colInfo = columns->getColumn(columnMap[c]);
+						const auto colInfo = columns->getColumn(columnMap[c]);
 
 						if (colInfo->idx < 1000) // first 1000 are reserved
 							continue;
@@ -286,9 +289,8 @@ cjson Grid::toJSON(bool condensed) const
 							break;
 						case columnTypes_e::textColumn:
 						{
-							// value here is the hashed value
-							auto attr = attributes->get(colInfo->idx, value);
-							if (attr->text)
+							// value here is the hashed value							
+							if (const auto attr = attributes->get(colInfo->idx, value); attr->text)
 								rowObj->set(colInfo->name, attr->text);
 						}
 						break;
@@ -311,7 +313,7 @@ cjson Grid::toJSON(bool condensed) const
 					for (auto c = 0; c < columnCount; ++c)
 					{
 						// get the column information
-						auto colInfo = columns->getColumn(columnMap[c]);
+						const auto colInfo = columns->getColumn(columnMap[c]);
 
 						if (colInfo->idx < 1000) // first 1000 are reserved
 							continue;
@@ -340,9 +342,8 @@ cjson Grid::toJSON(bool condensed) const
 							rowObj->set(colInfo->name, value != 0);
 							break;
 						case columnTypes_e::textColumn:
-						{
-							auto attr = attributes->get(colInfo->idx, value);
-							if (attr && attr->text)
+						{							
+							if (const auto attr = attributes->get(colInfo->idx, value); attr && attr->text)
 								rowObj->set(colInfo->name, attr->text);
 						}
 						break;
@@ -359,14 +360,14 @@ cjson Grid::toJSON(bool condensed) const
 	return doc;
 }
 
-col_s* Grid::newRow()
+Col_s* Grid::newRow()
 {
 	// NOTE: gcc seems to find the for loop below some sort of undefined
 	// behavior, and with -o# it compiles incorrectly, it will segfault while
 	// assigning *iter.
 	// adding volatile makes it happy. I've had gcc do similar things with
 	// for loops using pointers and *value = something
-	volatile auto row = recast<int64_t*>(mem.newPtr(rowBytes));
+	const volatile auto row = recast<int64_t*>(mem.newPtr(rowBytes));
 
 	for (auto iter = row; iter < row + columnCount; ++iter)
         *iter = NONE;
@@ -374,10 +375,10 @@ col_s* Grid::newRow()
 	if (uuidColumn != -1)
 		*(row + uuidColumn) = rawData->id;
 
-	return reinterpret_cast<col_s*>(row);
+	return reinterpret_cast<Col_s*>(row);
 }
 
-void Grid::mount(personData_s* personData)
+void Grid::mount(PersonData_s* personData)
 {
 #ifdef DEBUG
 	Logger::get().fatal((table), "mapSchema must be called before mount");
@@ -391,7 +392,7 @@ void Grid::prepare()
 	if (!rawData || !rawData->bytes || !columnCount)
 		return;
 
-	auto output = cast<char*>(PoolMem::getPool().getPtr(rawData->bytes));
+	const auto output = cast<char*>(PoolMem::getPool().getPtr(rawData->bytes));
 	LZ4_decompress_fast(rawData->getComp(), output, rawData->bytes);
 
 	// make a blank row
@@ -400,14 +401,14 @@ void Grid::prepare()
 	// read pointer - will increment through the compacted set
 	auto read = output;
 	// end pointer - when we get here we are done
-	auto end = read + rawData->bytes;
+	const auto end = read + rawData->bytes;
 
-	cast_s* cursor;
-	int32_t gridColumn;
+	auto session = 0;
+	int64_t lastSessionTime = 0;
 
 	while (read < end)
 	{
-		cursor = reinterpret_cast<cast_s*>(read);
+		const auto cursor = reinterpret_cast<Cast_s*>(read);
 				
 		/**
 		* when we are querying we only need the columns
@@ -419,13 +420,22 @@ void Grid::prepare()
 
 		if (cursor->columnNum == -1) // -1 is new row
 		{
+			if (sessionColumn != -1)
+			{
+				if (lastSessionTime && row->cols[0] - lastSessionTime > table->sessionTime)
+					++session;
+				lastSessionTime = row->cols[0];
+				row->cols[sessionColumn] = session;
+			}
+			
 			rows.push_back(row);
 			row = newRow();
 			read += sizeOfCastHeader;
 			continue;
+
 		} // skip non-mapped columns
 
-		gridColumn = reverseMap[cursor->columnNum];
+		const int32_t gridColumn = reverseMap[cursor->columnNum];
 
 		if (gridColumn < 0 || gridColumn >= columnCount)
 		{
@@ -441,22 +451,22 @@ void Grid::prepare()
 	PoolMem::getPool().freePtr(output);
 }
 
-personData_s* Grid::addFlag(flagType_e flagType, int64_t reference, int64_t context, int64_t value)
+PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, const int64_t context, const int64_t value)
 {
 	int idx;
-	flags_s* newFlags;
+	Flags_s* newFlags;
 
 	if (!rawData->flagRecords)
 	{
-		newFlags = recast<flags_s*>(PoolMem::getPool().getPtr(sizeof(flags_s)));
+		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s)));
 		idx = 0;
 	}
 	else
 	{
-		auto count = rawData->flagRecords;
+		const auto count = rawData->flagRecords;
 		// copy the old flags to the new flags
-		newFlags = recast<flags_s*>(PoolMem::getPool().getPtr(sizeof(flags_s) * (count + 1)));
-		memcpy(newFlags, rawData->getFlags(), sizeof(flags_s) * count);
+		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s) * (count + 1)));
+		memcpy(newFlags, rawData->getFlags(), sizeof(Flags_s) * count);
 
 		// index is count
 		idx = count;
@@ -465,15 +475,15 @@ personData_s* Grid::addFlag(flagType_e flagType, int64_t reference, int64_t cont
 	// insert our new flag
 	newFlags[idx].set(flagType, reference, context, value);
 
-	auto newFlagRecords = rawData->flagRecords + 1;
-	auto oldFlagBytes = rawData->flagBytes();
-	auto newFlagBytes = newFlagRecords * sizeof(flags_s);
+	const auto newFlagRecords = rawData->flagRecords + 1;
+	const auto oldFlagBytes = rawData->flagBytes();
+	const auto newFlagBytes = newFlagRecords * sizeof(Flags_s);
 
-	auto newPersonSize = rawData->size() - oldFlagBytes + newFlagBytes;
-	auto newPerson = recast<personData_s*>(PoolMem::getPool().getPtr(newPersonSize));
+	const auto newPersonSize = rawData->size() - oldFlagBytes + newFlagBytes;
+	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(personData_s));
+	memcpy(newPerson, rawData, sizeof(PersonData_s));
 	newPerson->flagRecords = static_cast<int16_t>(newFlagRecords); // adjust offsets in new person
 
 	// copy old id bytes
@@ -498,7 +508,7 @@ personData_s* Grid::addFlag(flagType_e flagType, int64_t reference, int64_t cont
 	return newPerson;
 }
 
-personData_s* Grid::clearFlag(flagType_e flagType, int64_t reference, int64_t context)
+PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference, const int64_t context)
 {
 	if (!rawData->flagRecords)
 		return rawData;
@@ -516,7 +526,7 @@ personData_s* Grid::clearFlag(flagType_e flagType, int64_t reference, int64_t co
 		return rawData;
 
 	// copy flags over to new structure, skip the one we are omitting
-	auto newFlags = recast<flags_s*>(PoolMem::getPool().getPtr(rawData->flagBytes() - sizeof(flags_s)));
+	const auto newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(rawData->flagBytes() - sizeof(Flags_s)));
 
 	auto writer = newFlags;
 	for (auto iter = rawData->getFlags(); iter->flagType != flagType_e::feature_eof; ++iter)
@@ -529,15 +539,15 @@ personData_s* Grid::clearFlag(flagType_e flagType, int64_t reference, int64_t co
 		++writer;
 	}
 
-	auto newFlagRecords = rawData->flagRecords - 1;
-	auto oldFlagBytes = rawData->flagBytes();
-	auto newFlagBytes = newFlagRecords * sizeof(flags_s);
+	const auto newFlagRecords = rawData->flagRecords - 1;
+	const auto oldFlagBytes = rawData->flagBytes();
+	const auto newFlagBytes = newFlagRecords * sizeof(Flags_s);
 
-	auto newPersonSize = rawData->size() - oldFlagBytes + newFlagBytes;
-	auto newPerson = recast<personData_s*>(PoolMem::getPool().getPtr(newPersonSize));
+	const auto newPersonSize = rawData->size() - oldFlagBytes + newFlagBytes;
+	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(personData_s));
+	memcpy(newPerson, rawData, sizeof(PersonData_s));
 	newPerson->flagRecords = static_cast<int16_t>(newFlagRecords); // adjust offsets in new person
 
 	// copy old id bytes											 
@@ -563,19 +573,20 @@ personData_s* Grid::clearFlag(flagType_e flagType, int64_t reference, int64_t co
 	return newPerson;
 }
 
-personData_s* Grid::commit()
+PersonData_s* Grid::commit()
 {
 	if (!rows.size())
 	{
 		cout << "no rows" << endl;
 	}
 
+	// calculate space needed
 	auto bytesNeeded = 0;
-
 	for (auto r : rows)
 	{
 		for (auto c = 0; c < columnCount; ++c)
 		{
+			// skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
 			if (r->cols[c] == NONE ||
 				(reverseMap[c] >= COL_OMIT_FIRST && reverseMap[c] <= COL_OMIT_LAST))
 				continue;
@@ -584,20 +595,23 @@ personData_s* Grid::commit()
 		bytesNeeded += sizeOfCastHeader; // row end
 	}
 
+	//TODO - technically we can predict the maximum size without iteration and counting... hmmm..
+
 	// make an intermediate buffer that is fully uncompresed
-	auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(bytesNeeded));
+	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(bytesNeeded));
 	// copy over header and ID text
-	memcpy(intermediateBuffer, rawData, sizeof(personData_s) + rawData->idBytes);
+	memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
 
 	auto write = intermediateBuffer;
-	cast_s* cursor;
+	Cast_s* cursor;
 
 	for (auto r : rows)
 	{
 		for (auto c = 0; c < columnCount; ++c)
 		{
-			cursor = recast<cast_s*>(write);
+			cursor = recast<Cast_s*>(write);
 
+			// skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
 			if (r->cols[c] == NONE ||
 				(columnMap[c] >= COL_OMIT_FIRST && columnMap[c] <= COL_OMIT_LAST))
 				continue;
@@ -607,29 +621,29 @@ personData_s* Grid::commit()
 			write += sizeOfCast;
 		}
 
-		cursor = recast<cast_s*>(write);
+		cursor = recast<Cast_s*>(write);
 
 		// END OF ROW - write a "row" marker at the end of the row
 		cursor->columnNum = -1;
 		write += sizeOfCastHeader;
 	}
 
-	auto maxBytes = LZ4_compressBound(bytesNeeded);
-	auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
+	const auto maxBytes = LZ4_compressBound(bytesNeeded);
+	const auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
-	auto oldCompBytes = rawData->comp;
-	auto newCompBytes = LZ4_compress_fast(
+	const auto oldCompBytes = rawData->comp;
+	const auto newCompBytes = LZ4_compress_fast(
 		intermediateBuffer, 
 		compBuffer, 
 		bytesNeeded,
 		maxBytes,
 		2);
 
-	auto newPersonSize = rawData->size() - oldCompBytes + newCompBytes;
-	auto newPerson = recast<personData_s*>(PoolMem::getPool().getPtr(newPersonSize));
+	const auto newPersonSize = rawData->size() - oldCompBytes + newCompBytes;
+	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(personData_s));
+	memcpy(newPerson, rawData, sizeof(PersonData_s));
 	newPerson->comp = newCompBytes; // adjust offsets
 	newPerson->bytes = bytesNeeded;
 									
@@ -659,13 +673,13 @@ personData_s* Grid::commit()
 	return rawData;
 }
 
-Grid::expandedRows Grid::iterate_expand(cjson* json) const
+Grid::ExpandedRows Grid::iterate_expand(cjson* json) const
 {
-	auto goodRows = expandedRows{ json->getNodes() };
+	auto goodRows = ExpandedRows{ json->getNodes() };
 
 	while (true)
 	{
-		expandedRows newRes;
+		ExpandedRows newRes;
 
 		auto arrayCount = 0;
 		auto objectCount = 0;
@@ -673,7 +687,7 @@ Grid::expandedRows Grid::iterate_expand(cjson* json) const
 
 		for (auto row : goodRows)
 		{
-			lineNodes tLine;
+			LineNodes tLine;
 
 			for (auto tNode : row)
 			{
@@ -713,7 +727,7 @@ Grid::expandedRows Grid::iterate_expand(cjson* json) const
 
 		if (arrayCount)
 		{
-			expandedRows unRolled;
+			ExpandedRows unRolled;
 
 			for (auto row : newRes)
 			{
@@ -745,7 +759,7 @@ Grid::expandedRows Grid::iterate_expand(cjson* json) const
 				}
 
 				if (!found)
-					unRolled.push_back(lineNodes(row));
+					unRolled.push_back(LineNodes(row));
 			}
 
 			goodRows = std::move(unRolled);
@@ -767,7 +781,7 @@ Grid::expandedRows Grid::iterate_expand(cjson* json) const
 void Grid::insert(cjson* rowData)
 {
 	// ensure we have ms on the time stamp
-	auto stampNode = rowData->xPath("/stamp");
+	const auto stampNode = rowData->xPath("/stamp");
 
 	if (!stampNode)
 		return;
@@ -792,7 +806,7 @@ void Grid::insert(cjson* rowData)
 	// cull on insert
 	if (rowCount > table->rowCull)
 	{
-		auto numToErase = rowCount - table->rowCull;
+		const auto numToErase = rowCount - table->rowCull;
 		rows.erase(rows.begin(), rows.begin() + numToErase);
 		rowCount = rows.size();
 	}
@@ -804,15 +818,15 @@ void Grid::insert(cjson* rowData)
 
 	auto insertBefore = -1; // where a new row will be inserted if needed
 
-	auto hashedAction = MakeHash(action);
-	auto insertRowGroup = HashPair(stamp, hashedAction); //MakeHash(recast<const char*>(&pkValues.front()), 8 * pkValues.size());
+	const auto hashedAction = MakeHash(action);
+	const auto insertRowGroup = HashPair(stamp, hashedAction); //MakeHash(recast<const char*>(&pkValues.front()), 8 * pkValues.size());
 
-	auto ZOrderInts = table->getZOrderInts();
+	const auto zOrderInts = table->getZOrderInts();
 
-	auto getZOrder = [ZOrderInts](int64_t value) -> int {
-		auto iter = ZOrderInts->find(value);
+	auto getZOrder = [zOrderInts](int64_t value) -> int {
+		auto iter = zOrderInts->find(value);
 
-		if (iter != ZOrderInts->end())
+		if (iter != zOrderInts->end())
 			return (*iter).second;
 
 		return 99;
@@ -912,7 +926,7 @@ void Grid::insert(cjson* rowData)
 	{
 		for (auto iter = rows.begin() + insertBefore; iter != rows.end();)
 		{
-			auto rowGroup =HashPair((*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]);
+			const auto rowGroup =HashPair((*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]);
 
 			// if stamp changes we are done scanning this row group
 			if ((*iter)->cols[0] != stamp)
@@ -934,14 +948,12 @@ void Grid::insert(cjson* rowData)
 		row = newRow();
 
 		for (auto& c: r) // columns in row
-		{
-			auto iter = insertMap.find(MakeHash(c->name()));
-			if (iter != insertMap.end())
+		{			
+			if (const auto iter = insertMap.find(MakeHash(c->name())); iter != insertMap.end())
 			{
-				int32_t schemaCol = columnMap[iter->second];
-				int32_t col = iter->second;
-
-				auto colInfo = columns->getColumn(schemaCol);
+				const auto schemaCol = columnMap[iter->second];
+				const auto col = iter->second;
+				const auto colInfo = columns->getColumn(schemaCol);
 
 				fillCount++;
 
@@ -969,7 +981,7 @@ void Grid::insert(cjson* rowData)
 							break;
 						case columnTypes_e::textColumn: 
 							{
-								auto tstr = to_string(c->getInt());
+								const auto tstr = to_string(c->getInt());
 								val = MakeHash(tstr);
 								attrInfo = attributes->getMake(schemaCol, tstr);
 							}
@@ -996,7 +1008,7 @@ void Grid::insert(cjson* rowData)
 							break;
 						case columnTypes_e::textColumn: 
 							{
-								auto tstr = to_string(c->getDouble());
+								const auto tstr = to_string(c->getDouble());
 								val = MakeHash(tstr);
 								attrInfo = attributes->getMake(schemaCol, tstr);
 							}
@@ -1018,7 +1030,7 @@ void Grid::insert(cjson* rowData)
 						break;
 					case columnTypes_e::textColumn:
 						{
-							auto tstr = c->getString();
+							const auto tstr = c->getString();
 							val = MakeHash(tstr);
 							attrInfo = attributes->getMake(schemaCol, tstr);
 						}
@@ -1045,7 +1057,7 @@ void Grid::insert(cjson* rowData)
 						break;
 					case columnTypes_e::textColumn:
 						{
-							auto tstr = c->getBool() ? "true" : "false";
+							const auto tstr = c->getBool() ? "true" : "false";
 							val = MakeHash(tstr);
 							attrInfo = attributes->getMake(schemaCol, tstr);
 						}

@@ -574,7 +574,7 @@ inline Tests test_pyql_language()
 
     # test slicing strings
 	some_string = 'the rain in spain'
-	
+
 	new_string = some_string[-5:]
 	debug(new_string == 'spain')
 
@@ -584,6 +584,7 @@ inline Tests test_pyql_language()
 	new_string = some_string[4:8]
 	debug(new_string == 'rain')
 
+	# test find and rfind
     index = some_string.find('rain')
 	debug(index == 4)
 
@@ -593,8 +594,64 @@ inline Tests test_pyql_language()
     index = some_string.find('in', 8)
 	debug(index == 9)
 
+    index = some_string.rfind('in', 0)
+	debug(index == 15)
+
+    index = some_string.rfind('the')
+	debug(index == 0)
+
+    index = some_string.rfind('rain', 8)
+	debug(index == 4)
+
     index = some_string.find('rain', 0, 7)
 	debug(index == -1)
+
+	# test split
+	some_string = 'see spot run'
+	parts = some_string.split(' ')
+	debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
+
+	some_string = 'this::is::fun'
+	parts = some_string.split('::')
+	debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
+
+	some_string = "this won't split"
+	parts = some_string.split('|')
+	debug(parts[0] == some_string)
+
+	# test strip
+
+	some_string = '\t  this is a string \r\n'
+	clean = some_string.strip()
+	debug(clean == 'this is a string')
+
+	some_string = "\t \n \r"
+	clean = some_string.strip()
+	debug(clean == '')
+	
+	some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
+	parts = url_decode(some_url)
+
+	debug(parts['host'] == 'somehost.com')
+    debug(parts['path'] == '/this/is/the/path')
+	debug(parts['query'] == 'param1=one&param2=two&param3')
+	debug(len(parts['params']) == 3)
+    debug(parts['params']['param1'] == 'one')
+    debug(parts['params']['param2'] == 'two')
+    debug(parts['params']['param3'] == True)
+
+	some_url = "/this/is/the/path?param1=one"
+	parts = url_decode(some_url)
+	debug(parts['host'] == None)
+    debug(parts['path'] == '/this/is/the/path')
+    debug(len(parts['params']) == 1)
+    debug(parts['params']['param1'] == 'one')
+
+	some_url = "/this/is/the/path"
+	parts = url_decode(some_url)
+	debug(parts['host'] == None)
+    debug(parts['path'] == '/this/is/the/path')
+    debug(len(parts['params']) == 0)
 
 	)pyql");
 

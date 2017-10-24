@@ -212,7 +212,7 @@ void OpenLoopSegmentRefresh::run()
 	if (!interpreter)
 		return;
 
-	openset::db::personData_s* personData;
+	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())

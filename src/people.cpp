@@ -12,7 +12,7 @@ People::People(int partition) :
 People::~People()
 {}
 
-personData_s* People::getPersonByID(int64_t userId)
+PersonData_s* People::getPersonByID(int64_t userId)
 {
 	int32_t linId;
 
@@ -22,7 +22,7 @@ personData_s* People::getPersonByID(int64_t userId)
 	return nullptr;
 }
 
-personData_s* People::getPersonByID(string userIdString)
+PersonData_s* People::getPersonByID(string userIdString)
 {
 	auto hashId = MakeHash(userIdString);
 
@@ -41,7 +41,7 @@ personData_s* People::getPersonByID(string userIdString)
 	}
 }
 
-personData_s* People::getPersonByLIN(int32_t linId)
+PersonData_s* People::getPersonByLIN(int32_t linId)
 {
 	// check ranges
 	if (linId < 0 || linId >= peopleLinear.size())
@@ -50,7 +50,7 @@ personData_s* People::getPersonByLIN(int32_t linId)
 	return peopleLinear[linId];
 }
 
-personData_s* People::getmakePerson(string userIdString)
+PersonData_s* People::getmakePerson(string userIdString)
 {
 	auto hashId = MakeHash(userIdString);
 	auto idLen = userIdString.length();
@@ -61,7 +61,7 @@ personData_s* People::getmakePerson(string userIdString)
 
 		if (!person) // not found, lets create
 		{
-			auto newUser = recast<personData_s*>(PoolMem::getPool().getPtr(sizeof(personData_s) + idLen));
+			auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s) + idLen));
 
 			//newUser->idstr = cast<char*>(PoolMem::getPool().getPtr(idLen + 1));
 			//strcpy(newUser->idstr, idCstr);
@@ -107,7 +107,7 @@ void People::serialize(HeapStack* mem)
 
 	for (auto person : peopleLinear)
 	{
-		auto serializedPerson = recast<personData_s*>(mem->newPtr(person->size()));
+		auto serializedPerson = recast<PersonData_s*>(mem->newPtr(person->size()));
 		memcpy(serializedPerson, person, person->size());
 		*sectionLength += person->size();
 	}
@@ -137,10 +137,10 @@ int64_t People::deserialize(char* mem)
 
 	while (read < end)
 	{
-		auto streamPerson = recast<personData_s*>(read);
+		auto streamPerson = recast<PersonData_s*>(read);
 		auto streamPersonLen = streamPerson->size();
 
-		auto person = recast<personData_s*>(PoolMem::getPool().getPtr(streamPersonLen));
+		auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(streamPersonLen));
 		memcpy(person, streamPerson, streamPersonLen);
 
 		// grow if a record was excluded during serialization 

@@ -11,12 +11,7 @@
 using namespace openset::query;
 
 QueryParser::QueryParser(const parseMode_e parseMode) :
-	blockCounter(1),
-	tableColumns(nullptr),
-	parseMode(parseMode),
-	templating(nullptr),
-	isSegmentMath(false),
-	useSessions(false)
+	parseMode(parseMode)
 {}
 
 QueryParser::~QueryParser()
@@ -2683,7 +2678,9 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				 */
 				if (basic_string<char>::size_type pos; 
 					(pos = conditions[index].find(".find")) != std::string::npos ||
+					(pos = conditions[index].find(".rfind")) != std::string::npos ||
 					(pos = conditions[index].find(".split")) != std::string::npos ||
+					(pos = conditions[index].find(".strip")) != std::string::npos ||
 					(pos = conditions[index].find(".append")) != std::string::npos ||
 					(pos = conditions[index].find(".pop")) != std::string::npos ||
 					(pos = conditions[index].find(".clear")) != std::string::npos ||
@@ -3888,6 +3885,13 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& 
 			auto hintPair = HintPair(n, {});
 			evaluateHints(n, hintPair.second);
 			macros.indexes.emplace_back(hintPair);
+		}
+
+		if (useSessions)
+		{
+			macros.vars.tableVars.push_back({ "__session", "grid" });
+			macros.vars.tableVars.back().column = COL_SESSION;
+			macros.vars.tableVars.back().index = macros.vars.tableVars.size() - 1;
 		}
 
 		macros.segments = std::move(vars.segmentNames); // move these over, these are evaluated at run-time

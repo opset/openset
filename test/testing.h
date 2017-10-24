@@ -40,7 +40,7 @@ struct TestFail_s
 	int line;
 	std::string message;
 
-	TestFail_s(const char* expression, const char* file, int line, std::string message) :
+	TestFail_s(const char* expression, const char* file, const int line, const std::string message) :
 		expression(std::string{ expression }),
 		file(std::string{ file }),
 		line(line),
