@@ -33,7 +33,6 @@ inline void incrFailed()
 	++testsFailed;
 }
 
-
 struct TestFail_s
 {
 	std::string expression;
@@ -41,7 +40,7 @@ struct TestFail_s
 	int line;
 	std::string message;
 
-	TestFail_s(const char* expression, const char* file, int line, std::string message) :
+	TestFail_s(const char* expression, const char* file, const int line, const std::string message) :
 		expression(std::string{ expression }),
 		file(std::string{ file }),
 		line(line),
@@ -59,12 +58,17 @@ inline bool testAllTrue(std::vector<cvar> &debugLog)
 		debugLog.end(), 
 		[](bool test)
 	{
+		if (test)
+			incrPassed();
+		else
+			incrFailed();
 		return test;
 	});
 }
 
 #define ASSERTMSG(condition, message) ((condition) ? incrPassed() : throw TestFail_s({#condition,__FILE__,__LINE__,message}))
 #define ASSERT(condition) ((condition) ? incrPassed() : throw TestFail_s({#condition,__FILE__,__LINE__,""}))
+#define ASSERTDEBUGLOG(conditions) (testAllTrue(conditions) ? true : throw TestFail_s({#conditions,__FILE__,__LINE__,"sub-test failed"}))
 
 using Tests = std::vector<TestItem_s>;
 using Fails = std::vector<TestFail_s>;
@@ -74,7 +78,7 @@ using Fails = std::vector<TestFail_s>;
 // this detects the indent level and pulls it out and returns
 // a new string void of empty lines, tabs expanded and 
 // de-indented so the pyql parser can process it
-inline std::string fixIndent(std::string source)
+inline std::string fixIndent(const std::string source)
 {
 
 	std::vector<string> res;
@@ -153,9 +157,9 @@ inline Fails runTests(Tests &tests)
 	}
 
 	cout << "------------------------------------------------------" << endl;
-	cout << "RAN    " << (testsPassed + testsFailed) << endl;
-	cout << "PASSED " << testsPassed << endl;
-	cout << "FAILED " << testsFailed << endl;
-	
+	cout << "TESTS RAN    " << (testsPassed + testsFailed) << endl;
+	cout << "TESTS PASSED " << testsPassed << endl;
+	cout << "TESTS FAILED " << testsFailed << endl;
+
 	return failed;
 }

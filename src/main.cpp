@@ -78,7 +78,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 }
 
-int main(int argc, char* argv[])
+int main(const int argc, char* argv[])
 {
 	openset::config::CommandlineArgs args;
 
@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (test)
+//	if (test)
 	{
 		const auto testRes = unitTest();
 		exit(testRes ? 0 : 1); // exit with 1 on test fail

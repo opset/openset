@@ -26,11 +26,13 @@ Table::Table(string name, Database* database):
 	//loadConfig();
 
 	// set the default required columns
-	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false, 0);
-	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false, 0);
-	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false, 0);
-	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false, 0);
-	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false, 0);
+	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 
 	createMissingPartitionObjects();
 }
@@ -200,11 +202,13 @@ void Table::deserializeTable(cjson* doc)
 	}
 
 	// set the default required columns
-	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false, 0);
-	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false, 0);
-	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false, 0);
-	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false, 0);
-	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false, 0);
+	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 
 	// load the columns
 	auto columnNode = doc->xPath("/columns");
@@ -254,11 +258,13 @@ void Table::loadConfig()
 	if (globals::running->testMode)
 	{
 		// set default columns for test mode
-		columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false, 0);
-		columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false, 0);
-		columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false, 0);
-		columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false, 0);
-		columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false, 0);
+		columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
+		columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
+		columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+		columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
+		columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
+		columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
+		columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 		return;
 	}
 

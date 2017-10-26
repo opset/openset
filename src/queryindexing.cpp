@@ -15,7 +15,7 @@ openset::query::Indexing::Indexing() :
 Indexing::~Indexing()
 {}
 
-void Indexing::mount(Table* tablePtr, macro_s& queryMacros, int partitionNumber, int stopAtBit)
+void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber, int stopAtBit)
 {
 	indexes.clear();
 	table = tablePtr;
@@ -69,7 +69,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 		- OR all those attributes together and return the 
 		  cumulative result
 	*/
-	auto getBits = [&](hintOp_s& instruction, Attributes::listMode_e mode) -> IndexBits
+	auto getBits = [&](HintOp_s& instruction, Attributes::listMode_e mode) -> IndexBits
 		{
 			auto colInfo = table->getColumns()->getColumn(instruction.column);
 			auto attrList = parts->attributes.getColumnValues(
@@ -108,7 +108,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 
 	// clean up any trailing NOPs
-	while (index.size() && index.back().op == hintOp_e::PUSH_NOP)
+	while (index.size() && index.back().op == HintOp_e::PUSH_NOP)
 		index.pop_back();
 
 	stack<IndexBits> s;
@@ -118,9 +118,9 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 	for (auto& instruction : index)
 	{
-		if (instruction.op == hintOp_e::PUSH_NOP ||
-			instruction.op == hintOp_e::NST_BIT_AND ||
-			instruction.op == hintOp_e::NST_BIT_OR )
+		if (instruction.op == HintOp_e::PUSH_NOP ||
+			instruction.op == HintOp_e::NST_BIT_AND ||
+			instruction.op == HintOp_e::NST_BIT_OR )
 		{
 			countable = false;
 			break;
@@ -134,18 +134,18 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 		switch (instruction.op)
 		{
-			case hintOp_e::UNSUPPORTED:
+			case HintOp_e::UNSUPPORTED:
 				break;
-			case hintOp_e::PUSH_EQ:
+			case HintOp_e::PUSH_EQ:
 				s.push(getBits(instruction, Attributes::listMode_e::EQ));
 				++count;
 				break;
-			case hintOp_e::PUSH_NEQ:
+			case HintOp_e::PUSH_NEQ:
 				// getBits returns EQ, we doing NOT EQUAL, because all users not
 				// having a value is different than all users who had another
 				// value other than this one (which is what a list would
-				// return) we are going to value that equal NULLCELL
-				if (instruction.numeric && instruction.intValue == NULLCELL)
+				// return) we are going to value that equal NONE
+				if (instruction.numeric && instruction.intValue == NONE)
 				{
 					s.push(getBits(instruction, Attributes::listMode_e::EQ));
 				}
@@ -158,34 +158,34 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 				}
 				++count;
 				break;
-			case hintOp_e::PUSH_GT:
+			case HintOp_e::PUSH_GT:
 				s.push(getBits(instruction, Attributes::listMode_e::GT));
 				++count;
 				break;
-			case hintOp_e::PUSH_GTE:
+			case HintOp_e::PUSH_GTE:
 				s.push(getBits(instruction, Attributes::listMode_e::GTE));
 				++count;
 				break;
-			case hintOp_e::PUSH_LT:
+			case HintOp_e::PUSH_LT:
 				s.push(getBits(instruction, Attributes::listMode_e::LT));
 				++count;
 				break;
-			case hintOp_e::PUSH_LTE:
+			case HintOp_e::PUSH_LTE:
 				s.push(getBits(instruction, Attributes::listMode_e::LTE));
 				++count;
 				break;
-			case hintOp_e::PUSH_PRESENT:
+			case HintOp_e::PUSH_PRESENT:
 				s.push(getBits(instruction, Attributes::listMode_e::PRESENT));
 				++count;
 				break;
-			case hintOp_e::PUSH_NOP:
+			case HintOp_e::PUSH_NOP:
 				// these are dummy bits... they simply copy the end of the heap
 				// and push it back onto the heap
 				s.push(IndexBits{});
 				s.top().placeHolder = true;
 				break;
-			case hintOp_e::NST_BIT_OR:
-			case hintOp_e::BIT_OR:
+			case HintOp_e::NST_BIT_OR:
+			case HintOp_e::BIT_OR:
 				// pop two IndexBits objects off the stack
 				right = s.top();
 				s.pop();
@@ -206,8 +206,8 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 					s.push(left);
 				}
 				break;
-			case hintOp_e::NST_BIT_AND:
-			case hintOp_e::BIT_AND:
+			case HintOp_e::NST_BIT_AND:
+			case HintOp_e::BIT_AND:
 				// pop two IndexBits objects off the stack
 				right = s.top();
 				s.pop();

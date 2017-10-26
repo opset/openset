@@ -51,7 +51,7 @@ void OpenLoopCount::storeResult(std::string name, int64_t count) const
 
 	const auto set_cb = [count](openset::result::Accumulator* resultColumns)
 	{
-		if (resultColumns->columns[0].value == NULLCELL)
+		if (resultColumns->columns[0].value == NONE)
 			resultColumns->columns[0].value = count;
 		else
 			resultColumns->columns[0].value += count;
@@ -200,7 +200,7 @@ bool OpenLoopCount::nextMacro()
 		if (interpreter)
 			delete interpreter;
 
-		interpreter = new Interpreter(macros, openset::query::interpretMode_e::count);
+		interpreter = new Interpreter(macros, openset::query::InterpretMode_e::count);
 		interpreter->setGetSegmentCB(getSegmentCB);
 		interpreter->setBits(bits, maxLinearId);
 
@@ -216,7 +216,7 @@ bool OpenLoopCount::nextMacro()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
-			interpreter->interpretMode = interpretMode_e::count;
+			interpreter->interpretMode = InterpretMode_e::count;
 
 			interpreter->mount(&person);
 			interpreter->exec();
@@ -282,7 +282,7 @@ void OpenLoopCount::prepare()
 
 void OpenLoopCount::run()
 {
-	openset::db::personData_s* personData;
+	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())

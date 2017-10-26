@@ -1,6 +1,5 @@
 #pragma once
 
-#include "common.h"
 #include "shuttle.h"
 #include "asyncpool.h"
 #include "database.h"
@@ -170,23 +169,25 @@ namespace openset
 			static void onQuery(
 				Database* database,
 				AsyncPool* partitions, 
-				bool isFork,
+				const bool isFork,
 				cjson* request,
 				comms::Message* message);
 
 			static void onCount(
 				Database* database,
 				AsyncPool* partitions,
-				bool isFork,
+				const bool isFork,
 				cjson* request,
 				comms::Message* message);
 
+			/*			
 			static void onPerson(
 				Database* database,
 				AsyncPool* partitions,
-				bool isFork,
+				const bool isFork,
 				cjson* request,
 				comms::Message* message);
+			*/
 		};
 
 		class Insert

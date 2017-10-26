@@ -34,7 +34,7 @@ namespace openset
 			openset::db::IndexBits* index;
 
 			std::string segmentName;
-			query::macro_s macros;
+			query::Macro_s macros;
 			std::string resultName;
 
 			explicit OpenLoopSegmentRefresh(TablePartitioned* parts);

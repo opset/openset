@@ -33,7 +33,7 @@ void OpenLoopRetrigger::run()
 	auto maxLinearId = parts->people.peopleCount();
 	
 
-	openset::db::personData_s* personData;
+	openset::db::PersonData_s* personData;
 
 	auto now = Now();
 

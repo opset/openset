@@ -211,7 +211,7 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 
 	{ // get a list of tables
 		csLock lock(database->cs);
-		for (auto t : database->tables)
+		for (const auto t : database->tables)
 			tables.push_back(t.second);
 	}
 	
@@ -225,8 +225,8 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 
 		if (part)
 		{
-			char* blockPtr = nullptr;
-			int64_t blockSize = 0;
+			char* blockPtr;
+			int64_t blockSize;
 
 			{
 				HeapStack mem;
@@ -239,11 +239,11 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 				*(recast<int32_t*>(mem.newPtr(sizeof(int32_t)))) = partitionId;
 
 				// grab 4 bytes and set it the length of the table name
-				auto tableNameLength = recast<int32_t*>(mem.newPtr(sizeof(int32_t)));
+				const auto tableNameLength = recast<int32_t*>(mem.newPtr(sizeof(int32_t)));
 				*tableNameLength = t->getName().length() + 1;
 
 				// grab some bytes for the table name, and copy in the table name
-				auto name = mem.newPtr(*tableNameLength);
+				const auto name = mem.newPtr(*tableNameLength);
 				strcpy(name, t->getName().c_str());
 
 				// serialize the attributes
@@ -256,7 +256,7 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 				blockSize = mem.getBytes();
 			}
 
-			auto responseMessage = openset::globals::mapper->dispatchSync(
+			const auto responseMessage = openset::globals::mapper->dispatchSync(
 				targetNode,
 				openset::mapping::rpc_e::inter_node_partition_xfer,
 				blockPtr,
@@ -372,25 +372,25 @@ void Admin::error(openset::errors::Error error, cjson* response)
 	cjson::Parse(error.getErrorJSON(), response);
 }
 
-enum class forwardStatus_e : int
+enum class ForwardStatus_e : int
 {
 	dispatched,
 	isForwarded,
 	error
 };
 
-forwardStatus_e forwardRequest(
-	openset::mapping::rpc_e rpc,
+ForwardStatus_e forwardRequest(
+	const openset::mapping::rpc_e rpc,
 	Database* database,
 	AsyncPool* partitions,
 	cjson* request,
 	cjson* response)
 {
 	if (!openset::globals::mapper->routes.size())
-		return forwardStatus_e::error;
+		return ForwardStatus_e::error;
 	
 	if (request->xPathBool("/forwarded", false))
-		return forwardStatus_e::isForwarded;
+		return ForwardStatus_e::isForwarded;
 
 	request->set("forwarded", true);
 
@@ -412,13 +412,12 @@ forwardStatus_e forwardRequest(
 
 	openset::globals::mapper->releaseResponses(result);
 
-	return (inError) ? forwardStatus_e::error : forwardStatus_e::dispatched;
+	return (inError) ? ForwardStatus_e::error : ForwardStatus_e::dispatched;
 }
 
 void Admin::onMessage(
 	Database* database,
 	AsyncPool* partitions,
-	//uvConnection* connection,
 	openset::comms::Message* message)
 {
 	auto msgText = message->toString();
@@ -467,7 +466,7 @@ void Admin::onMessage(
 		handled = true;
 		if (!openset::globals::sentinel->isSentinel())
 		{
-			auto sentinelRoute = openset::globals::sentinel->getSentinel();
+			const auto sentinelRoute = openset::globals::sentinel->getSentinel();
 
 			Logger::get().info("forwarding invite to sentinal '" + openset::globals::mapper->getRouteName(sentinelRoute) + "'");
 
@@ -492,6 +491,7 @@ void Admin::onMessage(
 			inviteNode(database, partitions, &request, &response);
 		}
 		break;
+		default: ;
 	};
 
 	if (handled)
@@ -507,7 +507,7 @@ void Admin::onMessage(
 		&request,
 		&response))
 	{
-	case forwardStatus_e::error:
+	case ForwardStatus_e::error:
 		error(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
@@ -516,7 +516,7 @@ void Admin::onMessage(
 			&response);
 		break;
 
-	case forwardStatus_e::isForwarded:
+	case ForwardStatus_e::isForwarded:
 		switch (iter->second) // second is type adminFunction_e 
 		{
 		case adminFunction_e::create_table:
@@ -551,7 +551,7 @@ void Admin::onMessage(
 			// error
 			break;
 		}
-		case forwardStatus_e::dispatched: break;
+		case ForwardStatus_e::dispatched: break;
 		default: ;
 	};
 
@@ -612,7 +612,7 @@ void Admin::initCluster(
 
 	partitions->mapPartitionsToAsyncWorkers();
 
-	auto logLine = "configured for " + to_string(partitionMax) + " partitions.";
+	const auto logLine = "configured for " + to_string(partitionMax) + " partitions.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);	
 
@@ -637,10 +637,10 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 		return;
 	}
 
-	auto host = request->xPathString("/params/host", "");
-	auto port = request->xPathInt("/params/port", 0);
-	auto newNodeName = openset::config::createName();
-	auto newNodeId = MakeHash(newNodeName);
+	const auto host = request->xPathString("/params/host", "");
+	const auto port = request->xPathInt("/params/port", 0);
+	const auto newNodeName = openset::config::createName();
+	const auto newNodeId = MakeHash(newNodeName);
 
 	if (!host.length() || !port)
 	{
@@ -881,11 +881,13 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 	auto columns = table->getColumns();
 
 	// set the default required columns
-	columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false, 0);
-	columns->setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false, 0);
-	columns->setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false, 0);
-	columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false, 0);
-	columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false, 0);
+	columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
+	columns->setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
+	columns->setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 
 	int64_t columnEnum = 1000;
 
@@ -906,7 +908,7 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 			return;
 		}
 
-		auto colType = openset::db::columnTypes_e::intColumn;
+		columnTypes_e colType;
 
 		if (type == "text")
 			colType = columnTypes_e::textColumn;
@@ -957,13 +959,7 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 		}
 	}
 
-// make the output directory
-	//OpenSet::IO::Directory::mkdir(globals::running->path + "tables/" + tableName);
-
-	// write our new file
-	//cjson::toFile(globals::running->path + "tables/" + tableName + "/table.json", &tableJson, true);
-
-	auto logLine = "table '" + tableName + "' created.";
+	const auto logLine = "table '" + tableName + "' created.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
 
@@ -1039,7 +1035,7 @@ void Admin::describeTable(
 				columnRecord->set("deleted", c.deleted);
 		}
 
-	auto logLine = "describe table '" + tableName + "'.";
+	const auto logLine = "describe table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
@@ -1299,11 +1295,7 @@ void Admin::setTrigger(Database* database, AsyncPool* partitions, cjson* request
 		}
 	}
 
-	// save out the config
-	// change - save is performed on commit
-	// table->saveConfig();
-
-	auto logLine = "set trigger '" + triggerName + "' on table '" + tableName + "'.";
+	const auto logLine = "set trigger '" + triggerName + "' on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
 
@@ -1340,7 +1332,7 @@ void Admin::describeTriggers(Database* database, AsyncPool* partitions, cjson* r
 		return;
 	}
 
-	auto triggers = table->getTriggerConf();
+	const auto triggers = table->getTriggerConf();
 
 	auto triggerNode = response->setArray("triggers");
 
@@ -1351,7 +1343,7 @@ void Admin::describeTriggers(Database* database, AsyncPool* partitions, cjson* r
 		trigNode->set("entry", t.second->entryFunction);
 	}
 
-	auto logLine = "describe triggers on table '" + tableName + "'.";
+	const auto logLine = "describe triggers on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
@@ -1387,8 +1379,8 @@ void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* reques
 		return;
 	}
 
-	auto triggers = table->getTriggerConf();
-	auto trigger = triggers->find(triggerName);
+	const auto triggers = table->getTriggerConf();
+	const auto trigger = triggers->find(triggerName);
 
 	if (trigger == triggers->end())
 	{
@@ -1404,7 +1396,7 @@ void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* reques
 	triggers->erase(triggerName);
 	table->forceReload();
 
-	auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
+	const auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
 }
@@ -1412,7 +1404,6 @@ void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* reques
 void Insert::onInsert(
 	Database* database,
 	AsyncPool* partitions,
-	//uvConnection* connection,
 	openset::comms::Message* message)
 {
 	auto msgText = message->toString();
@@ -1514,7 +1505,6 @@ void Insert::onInsert(
 	}
 
 	auto remoteCount = 0;
-	auto thanksCount = 0;
 
 	const auto thankyouCB = [](openset::comms::Message* message)
 	{		
@@ -1745,7 +1735,7 @@ void forkQuery(
 	Table* table,
 	AsyncPool* partitions,
 	cjson* request,
-	openset::query::macro_s queryMacros,
+	openset::query::Macro_s queryMacros,
 	openset::comms::Message* message) // errorHandled will be true if an error was happend during the fork
 {
 
@@ -1806,7 +1796,7 @@ void forkQuery(
 		{
 			auto tNode = jsonArray->pushObject();
 
-			if (c.modifier == openset::query::modifiers_e::var)
+			if (c.modifier == openset::query::Modifiers_e::var)
 			{
 				tNode->set("mode", "var");
 				tNode->set("name", c.alias);
@@ -1834,7 +1824,7 @@ void forkQuery(
 			}
 			else if (openset::query::isTimeModifiers.count(c.modifier))
 			{
-				auto mode = openset::query::modifierDebugStrings.at(c.modifier);
+				auto mode = openset::query::ModifierDebugStrings.at(c.modifier);
 				toLower(mode);
 				tNode->set("mode", mode);
 				tNode->set("name", c.alias);
@@ -1842,7 +1832,7 @@ void forkQuery(
 			}
 			else
 			{
-				auto mode = openset::query::modifierDebugStrings.at(c.modifier);
+				auto mode = openset::query::ModifierDebugStrings.at(c.modifier);
 				toLower(mode);
 				tNode->set("mode", mode);
 				tNode->set("name", c.alias);
@@ -1911,12 +1901,11 @@ void Query::error(openset::errors::Error error, cjson* response)
 void Query::onQuery(
 	Database* database,
 	AsyncPool* partitions,
-	bool isFork,
+	const bool isFork,
 	cjson* request,
 	openset::comms::Message* message)
 {
-
-	std::string log = "Inbound query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+	const std::string log = "Inbound query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
 	Logger::get().info(log);
 
 	const auto tableName = request->xPathString("/params/table", "");
@@ -1946,6 +1935,8 @@ void Query::onQuery(
 		return;
 	}
 
+	const auto sessionTime = request->xPathInt("/params/session_time", table->getSessionTime());
+
 	/*
 	 * Build a map of variable names and vars that will
 	 * become the new default value for variables defined
@@ -1967,7 +1958,7 @@ void Query::onQuery(
 			{
 				case cjsonType::VOIDED: 
 				case cjsonType::NUL:
-					paramVar = NULLCELL;
+					paramVar = NONE;
 				break;
 				case cjsonType::OBJECT: 
 				case cjsonType::ARRAY: 
@@ -1990,7 +1981,7 @@ void Query::onQuery(
 		}
 	}
 
-	openset::query::macro_s queryMacros; // this is our compiled code block
+	openset::query::Macro_s queryMacros; // this is our compiled code block
 	openset::query::QueryParser p;
 
 	try
@@ -2023,6 +2014,10 @@ void Query::onQuery(
 		message->reply(cjson::Stringify(&response, true));
 		return;
 	}
+
+	// set the sessionTime (timeout) value, this will get relayed 
+	// through the to oloop_query, the person object and finally the grid
+	queryMacros.sessionTime = sessionTime;
 
 	const auto compileTime = Now() - startTime;
 	const auto queryStart = Now();
@@ -2133,9 +2128,6 @@ void Query::onQuery(
 				voidfunc release_cb)
 		{ // process the data and respond
 
-			auto queryTime = Now() - queryStart;
-			auto serialStart = Now();
-
 			int64_t population = 0;
 			int64_t totalPopulation = 0;
 
@@ -2199,7 +2191,7 @@ void Query::onQuery(
 void Query::onCount(
 	Database* database,
 	AsyncPool* partitions,
-	bool isFork,
+	const bool isFork,
 	cjson* request,
 	openset::comms::Message* message)
 {
@@ -2254,7 +2246,7 @@ void Query::onCount(
 			{
 			case cjsonType::VOIDED:
 			case cjsonType::NUL:
-				paramVar = NULLCELL;
+				paramVar = NONE;
 				break;
 			case cjsonType::OBJECT:
 			case cjsonType::ARRAY:
@@ -2286,7 +2278,7 @@ void Query::onCount(
 	for (auto r: subQueries)
 	{
 
-		openset::query::macro_s queryMacros; // this is our compiled code block
+		openset::query::Macro_s queryMacros; // this is our compiled code block
 		openset::query::QueryParser p;
 		p.compileQuery(r.second.c_str(), table->getColumns(), queryMacros, &paramVars);
 
@@ -2306,7 +2298,7 @@ void Query::onCount(
 
 		queryMacros.isSegment = true;
 
-		queries.emplace_back(std::pair<std::string, openset::query::macro_s>{r.first, queryMacros});
+		queries.emplace_back(std::pair<std::string, openset::query::Macro_s>{r.first, queryMacros});
 	}
 
 	// Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
@@ -2400,9 +2392,6 @@ void Query::onCount(
 			 voidfunc release_cb)
 		{ 
 			// process the data and respond
-			auto queryTime = Now() - queryStart;
-			auto serialStart = Now();
-
 			int64_t population = 0;
 			int64_t totalPopulation = 0;
 
@@ -2460,8 +2449,7 @@ void Query::onCount(
 	// pass factory function (as lambda) to create new cell objects
 	partitions->cellFactory(activeList, [shuttle, table, queries, resultSets, &workers, &instance](AsyncLoop* loop) -> OpenLoop*
 	{
-		instance++;
-		auto partitionId = loop->partition;
+		++instance;
 		++workers;
 		return new OpenLoopCount(shuttle, table, queries, resultSets[loop->getWorkerId()], instance);
 	});

@@ -27,30 +27,30 @@ namespace openset
 
 			inline void clear()
 			{
-				key[0] = NULLCELL;
-				key[1] = NULLCELL;
-				key[2] = NULLCELL;
-				key[3] = NULLCELL;
-				key[4] = NULLCELL;
-				key[5] = NULLCELL;
-				key[6] = NULLCELL;
-				key[7] = NULLCELL;
+				key[0] = NONE;
+				key[1] = NONE;
+				key[2] = NONE;
+				key[3] = NONE;
+				key[4] = NONE;
+				key[5] = NONE;
+				key[6] = NONE;
+				key[7] = NONE;
 			}
 
-			inline void clearFrom(int index)
+			inline void clearFrom(const int index)
 			{
 				for (auto iter = key + index; iter < key + keyDepth; ++iter)
-					*iter = NULLCELL;
+					*iter = NONE;
 			}
 
-			inline RowKey keyFrom(int index) const
+			inline RowKey keyFrom(const int index) const
 			{
 				auto newKey{ *this };
 				newKey.clearFrom(index);
 				return newKey;
 			}
 
-			inline void keyFrom(int index, RowKey& rowKey) const
+			inline void keyFrom(const int index, RowKey& rowKey) const
 			{
 				rowKey = *this;
 				rowKey.clearFrom(index);
@@ -60,7 +60,7 @@ namespace openset
 			{
 				auto count = 0;
 				for (auto iter = key; iter < key + keyDepth; ++iter, ++count)
-					if (*iter == NULLCELL)
+					if (*iter == NONE)
 						break;
 				return count;
 			}
@@ -116,7 +116,7 @@ namespace std
 			auto count = 1;
 			for (auto iter = key.key + 1; iter < key.key + openset::result::keyDepth; ++iter, ++count)
 			{
-				if (*iter == NULLCELL)
+				if (*iter == NONE)
 					return hash;
 				hash = (hash << count) + key.key[1];
 			}
@@ -130,7 +130,7 @@ namespace openset
 {
 	namespace result
 	{
-		struct accumulation_s
+		struct Accumulation_s
 		{
 			int64_t value;
 			int32_t count;
@@ -140,7 +140,7 @@ namespace openset
 
 		struct Accumulator
 		{
-			accumulation_s columns[ACCUMULATOR_DEPTH];
+			Accumulation_s columns[ACCUMULATOR_DEPTH];
 
 			Accumulator()
 			{
@@ -151,8 +151,8 @@ namespace openset
 			{
 				for (auto &i : columns)
 				{
-					//i.distinctId = NULLCELL;
-					i.value = NULLCELL;
+					//i.distinctId = NONE;
+					i.value = NONE;
 					i.count = 0;
 				}
 			}
@@ -182,11 +182,11 @@ namespace openset
 			ResultSet(ResultSet&& other) noexcept;
 
 			void makeSortedList();
-			void setAtDepth(RowKey& key, function<void(Accumulator*)> set_cb);
+			void setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb);
 
 			// this is a cache of text values local to our partition (thread), blob requires
 			// a lock, whereas this does not, we will merge them after.
-			void addLocalText(int64_t hashId, cvar &value)
+			void addLocalText(const int64_t hashId, cvar &value)
 			{
 				const auto textPair = localText.get(hashId);
 
@@ -198,7 +198,7 @@ namespace openset
 				}
 			}
 
-			void addLocalText(int64_t hashId, const std::string &value)
+			void addLocalText(const int64_t hashId, const std::string &value)
 			{
 				const auto textPair = localText.get(hashId);
 
@@ -210,7 +210,7 @@ namespace openset
 				}
 			}
 
-			void addLocalText(int64_t hashId, char* value, int32_t length)
+			void addLocalText(const int64_t hashId, char* value, const int32_t length)
 			{
 				const auto textPair = localText.get(hashId);
 
@@ -248,15 +248,13 @@ namespace openset
 			{}
 
 			CellQueryResult_s(
-				//OpenSet::result::ResultSet* partitionResult,
-				int64_t executionTime,
-				int64_t runCount,
-				int64_t population,
-				int64_t totalPopulation,
-				int64_t instanceId,
-				openset::errors::Error error,
+				const int64_t executionTime,
+				const int64_t runCount,
+				const int64_t population,
+				const int64_t totalPopulation,
+				const int64_t instanceId,
+				const openset::errors::Error error,
 				openset::db::TablePartitioned* partitionedObjects) :
-					//result(partitionResult),
 					time(executionTime),
 					iterations(runCount),
 					population(population),
@@ -277,17 +275,11 @@ namespace openset
 				parts = other.parts;
 				other.parts = nullptr;
 
-				//result = other.result;
-				//other.result = nullptr;
-
 				time = other.time;
 			}
 
 			~CellQueryResult_s()
-			{
-				//if (result)
-					//delete result;
-			}
+			{}
 
 			CellQueryResult_s& operator=(CellQueryResult_s&& other) noexcept
 			{
@@ -300,9 +292,6 @@ namespace openset
 
 				parts = other.parts;
 				other.parts = nullptr;
-
-				//result = other.result;
-				//other.result = nullptr;
 
 				return *this;
 			}
@@ -320,18 +309,18 @@ namespace openset
 			// retuns a new result set which can be used to serialize to
 			// JSON
 			static bigRing<int64_t, const char*> mergeText(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_s macros,
 				openset::db::Table* table,
 				std::vector<openset::result::ResultSet*> resultSets);
 
 			static ResultSet::RowVector mergeResultSets(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_s macros,
 				openset::db::Table* table,
 				std::vector<openset::result::ResultSet*> resultSets);
 
 			// generate a result set from JSON
 			static char* resultSetToInternode(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_s macros,
 				openset::db::Table* table,
 				ResultSet::RowVector& rows,
 				bigRing<int64_t, const char*>& mergedText,
@@ -344,7 +333,7 @@ namespace openset
 				int64_t blockLength);
 
 			static void resultSetToJSON(
-				const openset::query::macro_s macros,
+				const openset::query::Macro_s macros,
 				openset::db::Table* table,
 				cjson* doc,
 				ResultSet::RowVector& rows,

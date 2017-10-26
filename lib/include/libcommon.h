@@ -50,5 +50,5 @@
 #define SAFE_DELETE_ARRAY(x) { if(x != NULL) { delete [] x; x = NULL; } }
 #define SAFE_DELETE_VECTOR_POINTERS( type, vector ) { type* ptr; while ( ! vector.empty() ) { ptr = vector.back(); SAFE_DELETE( ptr ); vector.pop_back(); } }
 
-const int64_t NULLCELL = LLONG_MIN; // huge negative number, allows for memset 0xFE to clear large structs
+const int64_t NONE = LLONG_MIN; // huge negative number, allows for memset 0xFE to clear large structs
 const int64_t NOVALUE = LLONG_MAX;

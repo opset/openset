@@ -148,7 +148,7 @@ inline Tests test_complex_events()
 					auto table = database->getTable("__test002__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this

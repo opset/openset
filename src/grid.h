@@ -48,7 +48,7 @@ namespace openset
 			future_trigger = 2, // scheduled trigger
 		};
 
-		struct flags_s // 26 bytes.
+		struct Flags_s // 26 bytes.
 		{
 			int64_t reference; // what this flag refers to (i.e. a trigger ID)
 			int64_t context; // value 1 (i.e. hash of function name)
@@ -56,15 +56,15 @@ namespace openset
 			flagType_e flagType;
 
 			void set(
-				flagType_e FlagType,
-				int64_t Reference,
-				int64_t Context,
-				int64_t Value) 
+				const flagType_e flagType,
+				const int64_t reference,
+				const int64_t context,
+				const int64_t value)
 			{
-				flagType = FlagType;
-				reference = Reference;
-				context = Context;
-				value = Value;
+				this->flagType = flagType;
+				this->reference = reference;
+				this->context = context;
+				this->value = value;
 			};
 
 			// Note: flags are implemented using a Pool block and that pointer
@@ -74,7 +74,7 @@ namespace openset
 			// to cast and check the buffer. 
 		};
 
-		struct personData_s
+		struct PersonData_s
 		{
 			/*
 			*  A User Record is a packed structure with the following layout
@@ -112,7 +112,7 @@ namespace openset
 				idBytes = idString.length();
 			}
 
-			void setIdStr(char* idString, int len)
+			void setIdStr(char* idString, const int len)
 			{
 				std::memcpy(events, idString, len);
 				idBytes = len;
@@ -120,19 +120,19 @@ namespace openset
 
 			int64_t flagBytes() const
 			{
-				return (flagRecords * sizeof(flags_s));
+				return (flagRecords * sizeof(Flags_s));
 			}
 
 			int64_t size() const
 			{
-				return sizeof(personData_s) + comp + propBytes + idBytes + flagBytes();
+				return sizeof(PersonData_s) + comp + propBytes + idBytes + flagBytes();
 			}
 
-			flags_s* getFlags() 
+			Flags_s* getFlags() 
 			{
 				if (!flagRecords)
 					return nullptr;
-				return reinterpret_cast<flags_s*>(events + idBytes);
+				return reinterpret_cast<Flags_s*>(events + idBytes);
 			}
 
 			char* getIdPtr()
@@ -153,31 +153,31 @@ namespace openset
 			}
 		};
 
-		struct col_s
+		struct Col_s
 		{
 			int64_t cols[MAXCOLUMNS];
 		};
 #pragma pack(pop)
 
-		using Rows = vector<col_s*>;
+		using Rows = vector<Col_s*>;
 
 		class Grid
 		{
 		private:
 
-			using lineNodes = vector<cjson*>;
-			using expandedRows = vector<lineNodes>;
+			using LineNodes = vector<cjson*>;
+			using ExpandedRows = vector<LineNodes>;
 
 #pragma pack(push,1)
-			struct cast_s
+			struct Cast_s
 			{
 				int16_t columnNum; 
 				int64_t val64;
 			};
 #pragma pack(pop)			
 
-			const static int sizeOfCastHeader = sizeof(cast_s::columnNum);
-			const static int sizeOfCast = sizeof(cast_s);
+			const static int sizeOfCastHeader = sizeof(Cast_s::columnNum);
+			const static int sizeOfCast = sizeof(Cast_s);
 
 			// mapping
 			int16_t columnMap[MAXCOLUMNS]; // TODO - FIX THIS
@@ -189,10 +189,12 @@ namespace openset
 			// so rows have tight cache affinity 
 			HeapStack mem;
 			Rows rows;
-			personData_s* rawData{ nullptr };
+			PersonData_s* rawData{ nullptr };
 
 			int32_t columnCount{ 0 };
 			int32_t uuidColumn{ -1 }; // auto mapped in prepare
+			int32_t sessionColumn{ -1 };
+			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
 			Table* table{ nullptr };
 			Attributes* attributes{ nullptr };
@@ -220,21 +222,26 @@ namespace openset
 			bool mapSchema(Table* tablePtr, Attributes* attributesPtr);
 			bool mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& columnNames);
 
-			void mount(personData_s* personData);
+			void setSessionTime(const int64_t sessionTime)
+			{
+				this->sessionTime = sessionTime;
+			}
+
+			void mount(PersonData_s* personData);
 			void prepare();
 			void insert(cjson* rowData);
 
-			personData_s* addFlag(flagType_e flagType, int64_t reference, int64_t context, int64_t value);
-			personData_s* clearFlag(flagType_e flagType, int64_t reference, int64_t context);
+			PersonData_s* addFlag(const flagType_e flagType, const int64_t reference, const int64_t context, const int64_t value);
+			PersonData_s* clearFlag(const flagType_e flagType, const  int64_t reference, const int64_t context);
 
 			/**
 			* \brief re-encodes and compresses the row data after inserts
 			*/
-			personData_s* commit();
+			PersonData_s* commit();
 
 			// given an actual schema column, what is the 
 			// column in the grid (which is compact)
-			inline int getGridColumn( int schemaColumn ) const
+			inline int getGridColumn(const int schemaColumn) const
 			{
 				return reverseMap[schemaColumn];
 			}
@@ -281,13 +288,13 @@ namespace openset
 				return table;
 			}
 
-			cjson toJSON(bool condensed = true) const;
+			cjson toJSON(const bool condensed = true) const;
 
 			// brings object back to zero state
 			void reinit();
 
 		private:
-			col_s* newRow();
+			Col_s* newRow();
 			/**
 			* \brief reset rows (without resetting mappings)
 			*
@@ -295,7 +302,7 @@ namespace openset
 			*       want to do that once if we are re-using grids (or Person)
 			*       objects.
 			*/
-			expandedRows iterate_expand(cjson* json) const;
+			ExpandedRows iterate_expand(cjson* json) const;
 
 			// ready object for re-use while maintaining mountings
 			void reset();

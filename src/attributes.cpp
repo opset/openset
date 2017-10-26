@@ -3,25 +3,18 @@
 
 using namespace openset::db;
 
-attr_s::attr_s() :
-	changeTail(nullptr),
-	text(nullptr),
-	ints(0),
-	comp(0)
-{}
-
-void attr_s::addChange(int32_t LinearId, bool State)
+void Attr_s::addChange(const int32_t linearId, const bool state)
 {
 	// using placement new here into a POOL buffer
-	auto change =
-		new(PoolMem::getPool().getPtr(sizeof(attr_changes_s)))
-		attr_changes_s(
-			LinearId, (State) ? 1 : 0, changeTail);
+	const auto change =
+		new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
+		Attr_changes_s(
+			linearId, (state) ? 1 : 0, changeTail);
 
 	changeTail = change;
 }
 
-IndexBits* attr_s::getBits()
+IndexBits* Attr_s::getBits()
 {
 	auto bits = new IndexBits();
 	bits->mount(index, ints);
@@ -41,7 +34,7 @@ IndexBits* attr_s::getBits()
 	return bits;
 }
 
-Attributes::Attributes(int partition, AttributeBlob* attributeBlob, Columns* columns) :
+Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Columns* columns) :
 	blob(attributeBlob),
 	columns(columns),
 	partition(partition)
@@ -51,77 +44,74 @@ Attributes::Attributes(int partition, AttributeBlob* attributeBlob, Columns* col
 Attributes::~Attributes()
 {}
 
-Attributes::ColumnIndex* Attributes::getColumnIndex(int32_t column)
+Attributes::ColumnIndex* Attributes::getColumnIndex(const int32_t column)
 {
-	auto colRingPair = columnIndex.find(column);
+	const auto colRingPair = columnIndex.find(column);
 
 	if (colRingPair != columnIndex.end())
 		return colRingPair->second;
 
-	auto newRing = new ColumnIndex(ringHint_e::lt_compact);
-
+	const auto newRing = new ColumnIndex(ringHint_e::lt_compact);
 	columnIndex[column] = newRing;
 
 	return newRing;
 }
 
-attr_s* Attributes::getMake(int32_t column, int64_t value)
+Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
 {
-
 	auto columnIndex = getColumnIndex(column);
-	AttrPair* attrPair;
-
-	if ((attrPair = columnIndex->get(value)) == nullptr)
+	
+	if (auto attrPair = columnIndex->get(value); attrPair == nullptr)
 	{
-		auto attr = new(PoolMem::getPool().getPtr(sizeof(attr_s)))attr_s();
+		const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
 		attrPair = columnIndex->set(value, attr);
+		return attrPair->second;
 	}
-
-	return attrPair->second;
+	else
+	{
+		return attrPair->second;
+	}
 }
 
-attr_s* Attributes::getMake(int32_t column, string value)
+Attr_s* Attributes::getMake(const int32_t column, const string value)
 {
 	auto columnIndex = getColumnIndex(column);
-	AttrPair* attrPair;
+	const auto valueHash = MakeHash(value);
 
-	auto valueHash = MakeHash(value);
-
-	if ((attrPair = columnIndex->get(valueHash)) == nullptr)
+	if (auto attrPair = columnIndex->get(valueHash); attrPair == nullptr)
 	{
-		auto attr = new(PoolMem::getPool().getPtr(sizeof(attr_s)))attr_s();
-
+		const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
 		attr->text = blob->storeValue(column, value);
 		attrPair = columnIndex->set(valueHash, attr);
+		return attrPair->second;
 	}
-
-	return attrPair->second;
+	else
+	{
+		return attrPair->second;
+	}
 }
 
-attr_s* Attributes::get(int32_t column, int64_t value)
+Attr_s* Attributes::get(const int32_t column, const int64_t value)
 {
-	auto columnIndex = getColumnIndex(column);
-	AttrPair* attrPair;
-
-	if ((attrPair = columnIndex->get(value)) != nullptr)
+	const auto columnIndex = getColumnIndex(column);
+	
+	if (const auto attrPair = columnIndex->get(value); attrPair != nullptr)
 		return attrPair->second;
 
 	return nullptr;
 }
 
-attr_s* Attributes::get(int32_t column, string value)
+Attr_s* Attributes::get(const int32_t column, const string value)
 {
-	auto columnIndex = getColumnIndex(column);
-	AttrPair* attrPair;
-	auto valueHash = MakeHash(value);
+	const auto columnIndex = getColumnIndex(column);
 
-	if ((attrPair = columnIndex->get(valueHash)) != nullptr)
+	if (const auto attrPair = columnIndex->get(MakeHash(value)); attrPair != nullptr)
 		return attrPair->second;
 
 	return nullptr;
 }
 
-void Attributes::setDirty(int32_t linId, int32_t column, int64_t value, attr_s* attrInfo)
+void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value, Attr_s* attrInfo)
 {
 	dirty.insert(attr_key_s::makeKey(column, value));
 	attrInfo->addChange(linId, true);
@@ -134,13 +124,12 @@ void Attributes::clearDirty()
 
 	for (auto& d : dirty)
 	{
-
-		auto columnIndex = getColumnIndex(d.column);
+		const auto columnIndex = getColumnIndex(d.column);
 
 		if ((attrPair = columnIndex->get(d.value)) == nullptr)
 			continue;
 
-		auto attr = attrPair->second;
+		const auto attr = attrPair->second;
 
 		bits.mount(attr->index, attr->ints);
 
@@ -152,7 +141,7 @@ void Attributes::clearDirty()
 				bits.bitSet(t->linId);
 			else
 				bits.bitClear(t->linId);
-			auto prev = t->prev;
+			const auto prev = t->prev;
 			PoolMem::getPool().freePtr(t);
 			t = prev;
 		}
@@ -162,11 +151,11 @@ void Attributes::clearDirty()
 		int64_t compBytes = 0; // OUT value via reference
 
 							   // compress the data, get it back in a pool ptr
-		auto compData = bits.store(compBytes);
-		auto destAttr = recast<attr_s*>(PoolMem::getPool().getPtr(sizeof(attr_s) + compBytes));
+		const auto compData = bits.store(compBytes);
+		const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 		// copy header
-		memcpy(destAttr, attr, sizeof(attr_s));
+		memcpy(destAttr, attr, sizeof(Attr_s));
 		memcpy(destAttr->index, compData, compBytes);
 
 		// return work buffer from bits.store to the pool
@@ -185,25 +174,25 @@ void Attributes::clearDirty()
 	dirty.clear();
 }
 
-void Attributes::swap(int32_t column, int64_t value, IndexBits* newBits)
+void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newBits)
 {
 	AttrPair* attrPair;
 
-	auto columnIndex = getColumnIndex(column);
+	const auto columnIndex = getColumnIndex(column);
 
 	if ((attrPair = columnIndex->get(value)) == nullptr)
 		return;
 
-	auto attr = attrPair->second;
+	const auto attr = attrPair->second;
 
 	int64_t compBytes = 0; // OUT value via reference
 
-						   // compress the data, get it back in a pool ptr
-	auto compData = newBits->store(compBytes);
-	auto destAttr = recast<attr_s*>(PoolMem::getPool().getPtr(sizeof(attr_s) + compBytes));
+	// compress the data, get it back in a pool ptr, size returned in compBytes
+	const auto compData = newBits->store(compBytes);
+	const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
-	memcpy(destAttr, attr, sizeof(attr_s));
+	memcpy(destAttr, attr, sizeof(Attr_s));
 	memcpy(destAttr->index, compData, compBytes);
 
 	// return work buffer from bits.store to the pool
@@ -224,10 +213,10 @@ AttributeBlob* Attributes::getBlob() const
 	return blob;
 }
 
-Attributes::AttrList Attributes::getColumnValues(int32_t column, listMode_e mode, int64_t value)
+Attributes::AttrList Attributes::getColumnValues(const int32_t column, const listMode_e mode, const int64_t value)
 {
 	Attributes::AttrList result;
-	attr_s* attr;
+	Attr_s* attr;
 
 	switch (mode)
 	{
@@ -239,16 +228,15 @@ Attributes::AttrList Attributes::getColumnValues(int32_t column, listMode_e mode
 		if (attr)
 			result.push_back(attr);
 		return result;
-		break;
 	case listMode_e::PRESENT:
-		attr = get(column, NULLCELL);
+		attr = get(column, NONE);
 		if (attr)
 			result.push_back(attr);
 		return result;
-		break;
+		default: ;
 	}
 
-	auto columnIndex = getColumnIndex(column);
+	const auto columnIndex = getColumnIndex(column);
 
 	for (auto &kv : *columnIndex)
 	{
@@ -285,7 +273,7 @@ void Attributes::serialize(HeapStack* mem)
 	*recast<serializedBlockType_e*>(mem->newPtr(sizeof(int64_t))) = serializedBlockType_e::attributes;
 
 	// grab 8 more bytes, this will be the length of the attributes data within the block
-	auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
+	const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
 	(*sectionLength) = 0;
 
 	for (auto& col : columnIndex)
@@ -293,7 +281,7 @@ void Attributes::serialize(HeapStack* mem)
 		for (auto &item : *col.second)
 		{
 			// add a header to the HeapStack
-			auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
+			const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
 
 			// fill in the header
 			blockHeader->column = col.first;
@@ -305,14 +293,14 @@ void Attributes::serialize(HeapStack* mem)
 			// copy a text/blob value if any
 			if (blockHeader->textSize)
 			{
-				auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
+				const auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
 				memcpy(textData, item.second->text, blockHeader->textSize);
 			}
 
 			// copy the compressed data
 			if (blockHeader->compSize)
 			{
-				auto blockData = recast<char*>(mem->newPtr(blockHeader->compSize));
+				const auto blockData = recast<char*>(mem->newPtr(blockHeader->compSize));
 				memcpy(blockData, item.second->index, blockHeader->compSize);
 			}
 
@@ -333,7 +321,7 @@ int64_t Attributes::deserialize(char* mem)
 
 	read += sizeof(int64_t);
 
-	auto blockSize = *recast<int64_t*>(read);
+	const auto blockSize = *recast<int64_t*>(read);
 
 	if (blockSize == 0)
 	{
@@ -344,16 +332,16 @@ int64_t Attributes::deserialize(char* mem)
 	read += sizeof(int64_t);
 
 	// end is the length of the block after the 16 bytes of header
-	auto end = read + blockSize;
+	const auto end = read + blockSize;
 
 	while (read < end)
 	{
 		// pointer to block
-		auto blockHeader = recast<serializedAttr_s*>(read);
-		auto blockLength = sizeof(serializedAttr_s) + blockHeader->textSize + blockHeader->compSize;
+		const auto blockHeader = recast<serializedAttr_s*>(read);
+		const auto blockLength = sizeof(serializedAttr_s) + blockHeader->textSize + blockHeader->compSize;
 
-		auto textPtr = read + sizeof(serializedAttr_s);
-		auto dataPtr = textPtr + blockHeader->textSize;
+		const auto textPtr = read + sizeof(serializedAttr_s);
+		const auto dataPtr = textPtr + blockHeader->textSize;
 
 		// get or make a column index
 		auto columnIndex = getColumnIndex(blockHeader->column);
@@ -366,7 +354,7 @@ int64_t Attributes::deserialize(char* mem)
 			blobPtr = blob->storeValue(blockHeader->column, std::string{ textPtr, static_cast<size_t>(blockHeader->textSize) });
 
 		// create an attr_s object
-		auto attr = recast<attr_s*>(PoolMem::getPool().getPtr(sizeof(attr_s) + blockHeader->compSize));
+		const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
 		attr->text = blobPtr;
 		attr->ints = blockHeader->ints;
 		attr->comp = blockHeader->compSize;

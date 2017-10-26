@@ -49,7 +49,7 @@ void ResultSet::makeSortedList()
 		});
 }
 
-void ResultSet::setAtDepth(RowKey& key, function<void(Accumulator*)> set_cb)
+void ResultSet::setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb)
 {
 	auto tPair = results.get(key);
 
@@ -87,12 +87,10 @@ void ResultSet::setAtDepth(RowKey& key, function<void(Accumulator*)> set_cb)
 */
 
 ResultSet::RowVector ResultMuxDemux::mergeResultSets(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_s macros,
 	openset::db::Table* table,
 	std::vector<openset::result::ResultSet*> resultSets)
 {
-
-	auto schema = table->getColumns();
 
 	vector<ResultSet::RowVector*> mergeList;
 
@@ -170,9 +168,9 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 						{
 							const auto valueIndex = columnIndex + shiftOffset;
 
-							if (right->columns[valueIndex].value != NULLCELL)
+							if (right->columns[valueIndex].value != NONE)
 							{
-								if (left->columns[valueIndex].value == NULLCELL)
+								if (left->columns[valueIndex].value == NONE)
 								{
 									// if it's the first setting, copy the whole dang thang.
 									left->columns[valueIndex] = right->columns[valueIndex];
@@ -182,29 +180,30 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 									// we are updating columns here, accumulator rules apply here
 									switch (macros.vars.columnVars[columnIndex].modifier) // WAS TABLEVAR
 									{
-									case query::modifiers_e::min:
+									case query::Modifiers_e::min:
 										if (left->columns[valueIndex].value < right->columns[valueIndex].value)
 										{
 											left->columns[valueIndex].value = right->columns[valueIndex].value;
 											left->columns[valueIndex].count = right->columns[valueIndex].count;
 										}
 										break;
-									case query::modifiers_e::max:
+									case query::Modifiers_e::max:
 										if (left->columns[valueIndex].value > right->columns[valueIndex].value)
 										{
 											left->columns[valueIndex].value = right->columns[valueIndex].value;
 											left->columns[valueIndex].count = right->columns[valueIndex].count;
 										}
 										break;
-									case query::modifiers_e::value:
+									case query::Modifiers_e::value:
 
 										left->columns[valueIndex].value = right->columns[valueIndex].value;
 										left->columns[valueIndex].count = right->columns[valueIndex].count;
 										break;
-									case query::modifiers_e::var:
-									case query::modifiers_e::avg: // average is determined later
-									case query::modifiers_e::sum:
-									case query::modifiers_e::count:
+									case query::Modifiers_e::var:
+									case query::Modifiers_e::avg: // average is determined later
+									case query::Modifiers_e::sum:
+									case query::Modifiers_e::count:
+									case query::Modifiers_e::dist_count_person:
 										left->columns[valueIndex].value += right->columns[valueIndex].value;
 										left->columns[valueIndex].count += right->columns[valueIndex].count;
 										break;
@@ -235,7 +234,7 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 }
 
 bigRing<int64_t, const char*> ResultMuxDemux::mergeText(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_s macros,
 	openset::db::Table* table,
 	std::vector<openset::result::ResultSet*> resultSets)
 {
@@ -249,20 +248,19 @@ bigRing<int64_t, const char*> ResultMuxDemux::mergeText(
 
 	// merge all the localText mappings into a merged text mapping
 	for (auto &r : resultSets)
-		for (auto t : r->localText)
+		for (const auto &t : r->localText)
 			mergedText[t.first] = t.second;
 
 	return mergedText;
 }
 
 char* ResultMuxDemux::resultSetToInternode(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_s macros,
 	openset::db::Table* table,
 	ResultSet::RowVector& rows,
 	bigRing<int64_t, const char*>& mergedText,
 	int64_t& bufferLength)
 {
-	char* result = nullptr;
 	bufferLength = 0;
 
 	// we are going to serialize to a HeapStack object
@@ -328,7 +326,7 @@ char* ResultMuxDemux::resultSetToInternode(
 
 bool ResultMuxDemux::isInternode(
 	char* data,
-	int64_t blockLength)
+	const int64_t blockLength)
 {
 	const auto binaryMarkerPtr = static_cast<char*>(data);
 
@@ -338,8 +336,8 @@ bool ResultMuxDemux::isInternode(
 }
 
 openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
-	char* data, 
-	int64_t blockLength)
+	char* data,
+	const int64_t blockLength)
 {
 	// we are going to make a sorta-bogus result object.
 	// the actual 
@@ -396,13 +394,12 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 }
 
 void ResultMuxDemux::resultSetToJSON(
-	const openset::query::macro_s macros,
+	const openset::query::Macro_s macros,
 	openset::db::Table* table,
 	cjson* doc,
 	ResultSet::RowVector& rows,
 	bigRing<int64_t, const char*>& mergedText)
 {
-
 	auto blob = table->getAttributeBlob();
 
 	const auto shiftIterations = macros.segments.size() ? macros.segments.size() : 1;
@@ -420,7 +417,7 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// if no column is found we can't look in the AttributeBlob, so
 		// return NA_TEXT
-		if (column == NULLCELL)
+		if (column == NONE)
 			return NA_TEXT;
 
 		// look in the blob
@@ -439,15 +436,12 @@ void ResultMuxDemux::resultSetToJSON(
 		return NA_TEXT;
 	};
 
-	auto tableColumns = table->getColumns();
-
 	RowKey lastKey;
 	lastKey.clear();
 
 	// we are going to move the root down a node
 	auto current = doc->pushArray();
 	current->setName("_");
-	auto root = current;
 
 	auto maxDepth = 0;
 	for (auto &r : rows)
@@ -486,7 +480,7 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// set group - this could be text... so, lets see if we cached it (all text 
 		// stored by script will be cached)
-		auto text = getText(NULLCELL, currentKey.key[depth]);
+		auto text = getText(NONE, currentKey.key[depth]);
 
 		if (text != NA_TEXT)
 			entry->set("g", text);
@@ -510,7 +504,7 @@ void ResultMuxDemux::resultSetToJSON(
 				// Is this a null, a double, a string or anything else (ints)
 
 				// sorry for all the {} but it makes it easier for me to follow
-				if (r.second->columns[dataIndex].value == NULLCELL)
+				if (r.second->columns[dataIndex].value == NONE)
 				{
 					array->pushNull();
 				}
@@ -518,15 +512,15 @@ void ResultMuxDemux::resultSetToJSON(
 				{
 					switch (g.modifier)
 					{
-					case query::modifiers_e::sum:
-					case query::modifiers_e::min:
-					case query::modifiers_e::max:
+					case query::Modifiers_e::sum:
+					case query::Modifiers_e::min:
+					case query::Modifiers_e::max:
 						if (g.schemaType == db::columnTypes_e::doubleColumn)
 							array->push(r.second->columns[dataIndex].value / 10000.0);
 						else
 							array->push(r.second->columns[dataIndex].value);
 						break;
-					case query::modifiers_e::avg:
+					case query::Modifiers_e::avg:
 						if (!r.second->columns[dataIndex].count)
 							array->pushNull();
 						else if (g.schemaType == db::columnTypes_e::doubleColumn)
@@ -534,10 +528,11 @@ void ResultMuxDemux::resultSetToJSON(
 						else
 							array->push(r.second->columns[dataIndex].value / static_cast<double>(r.second->columns[dataIndex].count));
 						break;
-					case query::modifiers_e::count:
+					case query::Modifiers_e::count:
+					case query::Modifiers_e::dist_count_person:
 						array->push(r.second->columns[dataIndex].value);
 						break;
-					case query::modifiers_e::value:
+					case query::Modifiers_e::value:
 						if (g.schemaType == db::columnTypes_e::textColumn)
 							array->push(getText(g.schemaColumn, r.second->columns[dataIndex].value));
 						else if (g.schemaType == db::columnTypes_e::doubleColumn)
@@ -545,9 +540,9 @@ void ResultMuxDemux::resultSetToJSON(
 						else
 							array->push(r.second->columns[dataIndex].value);
 						break;
-					case query::modifiers_e::var:
+					case query::Modifiers_e::var:
 					{
-						auto columnText = getText(NULLCELL, r.second->columns[dataIndex].value);
+						auto columnText = getText(NONE, r.second->columns[dataIndex].value);
 
 						// TODO - figure out some smart way to say this was a floating point number
 

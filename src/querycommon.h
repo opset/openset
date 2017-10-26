@@ -14,7 +14,7 @@ namespace openset
 {
 	namespace query
 	{
-		enum class blockType_e
+		enum class BlockType_e
 		{
 			code,
 			lambda,
@@ -22,13 +22,14 @@ namespace openset
 		};
 
 		// Result Column Modifiers						
-		enum class modifiers_e : int32_t
+		enum class Modifiers_e : int32_t
 		{
 			sum,
 			min,
 			max,
 			avg,
 			count,
+			dist_count_person,
 			value,
 			var,
 			second_number,
@@ -50,7 +51,7 @@ namespace openset
 			year_date,
 		};
 
-		enum class opCode_e : int32_t
+		enum class OpCode_e : int32_t
 		{
 			NOP = 0, // No operation
 
@@ -68,7 +69,7 @@ namespace openset
 			PSHLITSTR, // push string
 			PSHLITINT, // push integer
 			PSHLITFLT, // push double
-			PSHLITNUL, // push None value (NULLCELL)
+			PSHLITNUL, // push None value (NONE)
 
 			POPUSROBJ, // pop object with deref
 			POPUSRVAR, // pop variable
@@ -116,7 +117,7 @@ namespace openset
 		};
 
 		// Marshal Functions
-		enum class marshals_e : int64_t
+		enum class Marshals_e : int64_t
 		{
 			marshal_tally,
 			marshal_now,
@@ -135,7 +136,6 @@ namespace openset
 			marshal_to_days,
 			marshal_get_second,
 			marshal_round_second,
-			marshal_to_second_date,
 			marshal_get_minute,
 			marshal_round_minute,
 			marshal_get_hour,
@@ -157,7 +157,6 @@ namespace openset
 			marshal_iter_move_last,
 			marshal_iter_next,
 			marshal_iter_prev,
-			marshal_iter_event, // not implemented yet
 			marshal_event_count,
 			marshal_iter_within,
 			marshal_iter_between,
@@ -166,7 +165,6 @@ namespace openset
 			marshal_union,
 			marshal_compliment,
 			marshal_difference,
-			marshal_session,
 			marshal_session_count,
 			marshal_return,
 			marshal_break,
@@ -198,10 +196,17 @@ namespace openset
 			marshal_clear,
 			marshal_keys,
 			marshal_range, // not implemented
+			marshal_str_split,
+			marshal_str_find,
+			marshal_str_rfind,
+			marshal_str_replace,
+			marshal_str_slice,
+			marshal_str_strip,
+			marshal_url_decode
 		};
 
 		// enum used for query index optimizer
-		enum class hintOp_e : int64_t
+		enum class HintOp_e : int64_t
 		{
 			UNSUPPORTED,
 			PUSH_EQ,
@@ -229,36 +234,36 @@ namespace std
 	 */
 
 	template <>
-	struct hash<openset::query::modifiers_e>
+	struct hash<openset::query::Modifiers_e>
 	{
-		size_t operator()(const openset::query::modifiers_e& v) const
+		size_t operator()(const openset::query::Modifiers_e& v) const
 		{
 			return static_cast<size_t>(v);
 		}
 	};
 
 	template <>
-	struct hash<openset::query::opCode_e>
+	struct hash<openset::query::OpCode_e>
 	{
-		size_t operator()(const openset::query::opCode_e& v) const
+		size_t operator()(const openset::query::OpCode_e& v) const
 		{
 			return static_cast<size_t>(v);
 		}
 	};
 
 	template <>
-	struct hash<openset::query::hintOp_e>
+	struct hash<openset::query::HintOp_e>
 	{
-		size_t operator()(const openset::query::hintOp_e& v) const
+		size_t operator()(const openset::query::HintOp_e& v) const
 		{
 			return static_cast<size_t>(v);
 		}
 	};
 
 	template <>
-	struct hash<openset::query::marshals_e>
+	struct hash<openset::query::Marshals_e>
 	{
-		size_t operator()(const openset::query::marshals_e& v) const
+		size_t operator()(const openset::query::Marshals_e& v) const
 		{
 			return static_cast<size_t>(v);
 		}
@@ -270,7 +275,7 @@ namespace openset
 	namespace query
 	{
 		// String to Result Columns Modifier
-		static const unordered_map<string, int64_t> timeConstants = {
+		static const unordered_map<string, int64_t> TimeConstants = {
 					{"seconds", 1'000},
 					{"second", 1'000},
 					{"minute", 60'000},
@@ -281,7 +286,7 @@ namespace openset
 					{"days", 86'400'000}
 			};
 
-		static const unordered_map<string, int64_t> withinConstants = {
+		static const unordered_map<string, int64_t> WithinConstants = {
 					{"live", MakeHash("live")},
 					{"first_event", MakeHash("first_event")},
 					{"last_event", MakeHash("last_event")},
@@ -290,28 +295,7 @@ namespace openset
 					{"first_match", MakeHash("first_match")},
 			};
 
-/*
-		enum class within_e : int
-		{
-			live,
-			first_event,
-			last_event,
-			prev_match,
-			first_match
-		};
-
-		static const unordered_map<string, within_e> withinSwitchMap =
-			{
-					{"live", within_e::live},
-					{"first_event", within_e::first_event},
-					{"last_event", within_e::last_event},
-					{"prev_match", within_e::prev_match},
-					{"previous_match", within_e::prev_match},
-					{"first_match", within_e::first_match},
-			};
-*/
-
-		enum class timeSwitch_e : int
+		enum class TimeSwitch_e : int
 		{
 			seconds,
 			minutes,
@@ -319,146 +303,148 @@ namespace openset
 			days
 		};
 
-		static const unordered_map<string, timeSwitch_e> timeSwitchMap =
+		static const unordered_map<string, TimeSwitch_e> TimeSwitchMap =
 			{
-					{"seconds", timeSwitch_e::seconds},
-					{"minutes", timeSwitch_e::minutes},
-					{"hours", timeSwitch_e::hours},
-					{"days", timeSwitch_e::days}
+					{"seconds", TimeSwitch_e::seconds},
+					{"minutes", TimeSwitch_e::minutes},
+					{"hours", TimeSwitch_e::hours},
+					{"days", TimeSwitch_e::days}
 			};
 
 		// String to Result Columns Modifier
-		static const unordered_map<string, modifiers_e> columnModifiers = {
-					{"sum", modifiers_e::sum},
-					{"min", modifiers_e::min},
-					{"max", modifiers_e::max},
-					{"avg", modifiers_e::avg},
-					{"count", modifiers_e::count},
-					{"value", modifiers_e::value},
-					{"val", modifiers_e::value },
-					{"variable", modifiers_e::var },
-					{"var", modifiers_e::var},					
+		static const unordered_map<string, Modifiers_e> ColumnModifiers = {
+					{"sum", Modifiers_e::sum},
+					{"min", Modifiers_e::min},
+					{"max", Modifiers_e::max},
+					{"avg", Modifiers_e::avg},
+					{"count", Modifiers_e::count},
+					{"dist_count_person", Modifiers_e::dist_count_person },
+					{"value", Modifiers_e::value},
+					{"val", Modifiers_e::value },
+					{"variable", Modifiers_e::var },
+					{"var", Modifiers_e::var},					
 			};
 
 		// Modifier to String (for debug output)
-		static const unordered_map<modifiers_e, string> modifierDebugStrings = {
-					{modifiers_e::sum, "SUM"},
-					{modifiers_e::min, "MIN"},
-					{modifiers_e::max, "MAX"},
-					{modifiers_e::avg, "AVG"},
-					{modifiers_e::count, "COUNT"},
-					{modifiers_e::value, "VALUE"},
-					{modifiers_e::var, "VAR"},
-					{modifiers_e::second_number, "SECOND"},
-					{modifiers_e::second_date, "DT_SECOND"},
-					{modifiers_e::minute_number, "MINUTE"},
-					{modifiers_e::minute_date, "DT_MINUTE"},
-					{modifiers_e::hour_number, "HOUR"},
-					{modifiers_e::hour_date, "DT_HOUR"},
-					{modifiers_e::day_date, "DT_DAY"},
-					{modifiers_e::day_of_week, "DAY_OF_WEEK"},
-					{modifiers_e::day_of_month, "DAY_OF_MONTH"},
-					{modifiers_e::day_of_year, "DAY_OF_YEAR"},
-					{modifiers_e::week_date, "DT_WEEK"},
-					{modifiers_e::month_date, "DT_MONTH"},
-					{modifiers_e::month_number, "MONTH"},
-					{modifiers_e::quarter_number, "QUARTER"},
-					{modifiers_e::quarter_date, "DT_QUARTER"},
-					{modifiers_e::year_number, "YEAR"},
-					{modifiers_e::year_date, "DT_YEAR"},
+		static const unordered_map<Modifiers_e, string> ModifierDebugStrings = {
+					{Modifiers_e::sum, "SUM"},
+					{Modifiers_e::min, "MIN"},
+					{Modifiers_e::max, "MAX"},
+					{Modifiers_e::avg, "AVG"},
+					{Modifiers_e::count, "COUNT"},
+					{Modifiers_e::dist_count_person, "DCNTPP" },
+					{Modifiers_e::value, "VALUE"},
+					{Modifiers_e::var, "VAR"},
+					{Modifiers_e::second_number, "SECOND"},
+					{Modifiers_e::second_date, "DT_SECOND"},
+					{Modifiers_e::minute_number, "MINUTE"},
+					{Modifiers_e::minute_date, "DT_MINUTE"},
+					{Modifiers_e::hour_number, "HOUR"},
+					{Modifiers_e::hour_date, "DT_HOUR"},
+					{Modifiers_e::day_date, "DT_DAY"},
+					{Modifiers_e::day_of_week, "DAY_OF_WEEK"},
+					{Modifiers_e::day_of_month, "DAY_OF_MONTH"},
+					{Modifiers_e::day_of_year, "DAY_OF_YEAR"},
+					{Modifiers_e::week_date, "DT_WEEK"},
+					{Modifiers_e::month_date, "DT_MONTH"},
+					{Modifiers_e::month_number, "MONTH"},
+					{Modifiers_e::quarter_number, "QUARTER"},
+					{Modifiers_e::quarter_date, "DT_QUARTER"},
+					{Modifiers_e::year_number, "YEAR"},
+					{Modifiers_e::year_date, "DT_YEAR"},
 			};
 
 		// opCode to String (for debug output)
-		static const unordered_map<opCode_e, string> opDebugStrings =
+		static const unordered_map<OpCode_e, string> OpDebugStrings =
 			{
-					{opCode_e::NOP, "NOP"},
+					{OpCode_e::NOP, "NOP"},
 
-					{opCode_e::PSHTBLCOL, "PSHTBLCOL"},
-					{opCode_e::PSHRESCOL, "PSHRESCOL"},
-					{opCode_e::VARIDX, "VARIDX"},
-					{opCode_e::PSHPAIR, "PSHPAIR"},
+					{OpCode_e::PSHTBLCOL, "PSHTBLCOL"},
+					{OpCode_e::PSHRESCOL, "PSHRESCOL"},
+					{OpCode_e::VARIDX, "VARIDX"},
+					{OpCode_e::PSHPAIR, "PSHPAIR"},
 				//{opCode_e::PSHRESGRP, "PSHRESGRP"},
-					{opCode_e::PSHUSROBJ, "PSHUSROBJ"},
-					{opCode_e::PSHUSROREF, "PSHUSROREF" },
-					{opCode_e::PSHUSRVAR, "PSHUSRVAR"},
-					{ opCode_e::PSHUSRVREF, "PSHUSRVREF" },
-					{opCode_e::PSHLITSTR, "PSHLITSTR"},
-					{opCode_e::PSHLITINT, "PSHLITINT"},
-					{opCode_e::PSHLITFLT, "PSHLITFLT"},
-					{opCode_e::PSHLITNUL, "PSHLITNUL"},
-					{ opCode_e::PSHLITTRUE, "PSHLITTRUE" },
-					{ opCode_e::PSHLITFALSE, "PSHLITFALSE" },
+					{OpCode_e::PSHUSROBJ, "PSHUSROBJ"},
+					{OpCode_e::PSHUSROREF, "PSHUSROREF" },
+					{OpCode_e::PSHUSRVAR, "PSHUSRVAR"},
+					{ OpCode_e::PSHUSRVREF, "PSHUSRVREF" },
+					{OpCode_e::PSHLITSTR, "PSHLITSTR"},
+					{OpCode_e::PSHLITINT, "PSHLITINT"},
+					{OpCode_e::PSHLITFLT, "PSHLITFLT"},
+					{OpCode_e::PSHLITNUL, "PSHLITNUL"},
+					{ OpCode_e::PSHLITTRUE, "PSHLITTRUE" },
+					{ OpCode_e::PSHLITFALSE, "PSHLITFALSE" },
 
-					{opCode_e::POPUSROBJ, "POPUSROBJ"},
-					{opCode_e::POPUSRVAR, "POPUSRVAR"},
-					{opCode_e::POPTBLCOL, "POPTBLCOL"},
-					{opCode_e::POPRESGRP, "POPRESGRP"},
-					{opCode_e::POPRESCOL, "POPRESCOL"},
+					{OpCode_e::POPUSROBJ, "POPUSROBJ"},
+					{OpCode_e::POPUSRVAR, "POPUSRVAR"},
+					{OpCode_e::POPTBLCOL, "POPTBLCOL"},
+					{OpCode_e::POPRESGRP, "POPRESGRP"},
+					{OpCode_e::POPRESCOL, "POPRESCOL"},
 
-					{opCode_e::CNDIF, "CNDIF"},
-					{opCode_e::CNDELIF, "CNDELIF"},
-					{opCode_e::CNDELSE, "CNDELSE"},
+					{OpCode_e::CNDIF, "CNDIF"},
+					{OpCode_e::CNDELIF, "CNDELIF"},
+					{OpCode_e::CNDELSE, "CNDELSE"},
 
-					{opCode_e::ITNEXT, "ITNEXT"},
-					{opCode_e::ITPREV, "ITPREV"},
-					{opCode_e::ITFOR, "ITFOR"},
+					{OpCode_e::ITNEXT, "ITNEXT"},
+					{OpCode_e::ITPREV, "ITPREV"},
+					{OpCode_e::ITFOR, "ITFOR"},
 
-					{opCode_e::MATHADD, "MATHADD"},
-					{opCode_e::MATHSUB, "MATHSUB"},
-					{opCode_e::MATHMUL, "MATHMUL"},
-					{opCode_e::MATHDIV, "MATHDIV"},
+					{OpCode_e::MATHADD, "MATHADD"},
+					{OpCode_e::MATHSUB, "MATHSUB"},
+					{OpCode_e::MATHMUL, "MATHMUL"},
+					{OpCode_e::MATHDIV, "MATHDIV"},
 
-					{ opCode_e::MATHADDEQ, "OPADDEQ"},
-					{ opCode_e::MATHSUBEQ, "OPSUBEQ"},
-					{ opCode_e::MATHMULEQ, "OPMULEQ"},
-					{ opCode_e::MATHDIVEQ, "OPDIVEQ"},
+					{ OpCode_e::MATHADDEQ, "OPADDEQ"},
+					{ OpCode_e::MATHSUBEQ, "OPSUBEQ"},
+					{ OpCode_e::MATHMULEQ, "OPMULEQ"},
+					{ OpCode_e::MATHDIVEQ, "OPDIVEQ"},
 
-					{opCode_e::OPGT, "OPGT"},
-					{opCode_e::OPLT, "OPLT"},
-					{opCode_e::OPGTE, "OPGTE"},
-					{opCode_e::OPLTE, "OPLTE"},
-					{opCode_e::OPEQ, "OPEQ"},
-					{opCode_e::OPNEQ, "OPNEQ"},
-					{opCode_e::OPWTHN, "OPWTHN"},
-					{opCode_e::OPNOT, "OPNOT"},
+					{OpCode_e::OPGT, "OPGT"},
+					{OpCode_e::OPLT, "OPLT"},
+					{OpCode_e::OPGTE, "OPGTE"},
+					{OpCode_e::OPLTE, "OPLTE"},
+					{OpCode_e::OPEQ, "OPEQ"},
+					{OpCode_e::OPNEQ, "OPNEQ"},
+					{OpCode_e::OPWTHN, "OPWTHN"},
+					{OpCode_e::OPNOT, "OPNOT"},
 
-					{opCode_e::LGCAND, "LGCAND"},
-					{opCode_e::LGCOR, "LGCOR"},
+					{OpCode_e::LGCAND, "LGCAND"},
+					{OpCode_e::LGCOR, "LGCOR"},
 
-					{opCode_e::MARSHAL, "MARSHAL"},
-					{opCode_e::CALL, "CALL"},
-					{opCode_e::RETURN, "RETURN"},
+					{OpCode_e::MARSHAL, "MARSHAL"},
+					{OpCode_e::CALL, "CALL"},
+					{OpCode_e::RETURN, "RETURN"},
 
-					{opCode_e::TERM, "TERM"}
+					{OpCode_e::TERM, "TERM"}
 
 			};
 
-		static const unordered_map<string, modifiers_e> timeModifiers =
+		static const unordered_map<string, Modifiers_e> TimeModifiers =
 			{
-					{"second", modifiers_e::second_number},
-					{"date_second", modifiers_e::second_number},
-					{"minute", modifiers_e::minute_number},
-					{"date_minute", modifiers_e::minute_date},
-					{"hour", modifiers_e::hour_number},
-					{"date_hour", modifiers_e::hour_date},
-					{"date_day", modifiers_e::day_date},
-					{"day_of_week", modifiers_e::day_of_week},
-					{"day_of_month", modifiers_e::day_of_month},
-					{"day_of_year", modifiers_e::day_of_year},
-					{"date_week", modifiers_e::week_date},
-					{"date_month", modifiers_e::month_date},
-					{"month", modifiers_e::month_number},
-					{"quarter", modifiers_e::quarter_number},
-					{"date_quarter", modifiers_e::quarter_date},
-					{"year", modifiers_e::year_number},
-					{"date_year", modifiers_e::year_date},
+					{"second", Modifiers_e::second_number},
+					{"date_second", Modifiers_e::second_number},
+					{"minute", Modifiers_e::minute_number},
+					{"date_minute", Modifiers_e::minute_date},
+					{"hour", Modifiers_e::hour_number},
+					{"date_hour", Modifiers_e::hour_date},
+					{"date_day", Modifiers_e::day_date},
+					{"day_of_week", Modifiers_e::day_of_week},
+					{"day_of_month", Modifiers_e::day_of_month},
+					{"day_of_year", Modifiers_e::day_of_year},
+					{"date_week", Modifiers_e::week_date},
+					{"date_month", Modifiers_e::month_date},
+					{"month", Modifiers_e::month_number},
+					{"quarter", Modifiers_e::quarter_number},
+					{"date_quarter", Modifiers_e::quarter_date},
+					{"year", Modifiers_e::year_number},
+					{"date_year", Modifiers_e::year_date},
 			};
 
-		static const unordered_set<modifiers_e> isTimeModifiers =
+		static const unordered_set<Modifiers_e> isTimeModifiers =
 			{
 			};
 
-		static const unordered_set<string> redundantSugar =
+		static const unordered_set<string> RedundantSugar =
 			{
 					{"of"},
 					{"events"},
@@ -466,106 +452,110 @@ namespace openset
 			};
 
 		// Marshal maps
-		static const unordered_map<string, marshals_e> marshals =
+		static const unordered_map<string, Marshals_e> Marshals =
 			{
-					{"tally", marshals_e::marshal_tally},
-					{"now", marshals_e::marshal_now},
-					{"event_time", marshals_e::marshal_event_time},
-					{"last_event", marshals_e::marshal_last_event},
-					{"first_event", marshals_e::marshal_first_event},
-					{"prev_match", marshals_e::marshal_prev_match},
-					{"first_match", marshals_e::marshal_first_match},
-					{"bucket", marshals_e::marshal_bucket},
-					{"round", marshals_e::marshal_round},
-					{"trunc", marshals_e::marshal_trunc},
-					{"fix", marshals_e::marshal_fix},
-					{"to_seconds", marshals_e::marshal_to_seconds},
-					{"to_minutes", marshals_e::marshal_to_minutes},
-					{"to_hours", marshals_e::marshal_to_hours},
-					{"to_days", marshals_e::marshal_to_days},
-					{"get_second", marshals_e::marshal_get_second},
-					{"date_second", marshals_e::marshal_round_second},
-					{"get_minute", marshals_e::marshal_get_minute},
-					{"date_minute", marshals_e::marshal_round_minute},
-					{"get_hour", marshals_e::marshal_get_hour},
-					{"date_hour", marshals_e::marshal_round_hour},
-					{"date_day", marshals_e::marshal_round_day},
-					{"get_day_of_week", marshals_e::marshal_get_day_of_week},
-					{"get_day_of_month", marshals_e::marshal_get_day_of_month},
-					{"get_day_of_year", marshals_e::marshal_get_day_of_year},
-					{"date_week", marshals_e::marshal_round_week},
-					{"date_month", marshals_e::marshal_round_month},
-					{"get_month", marshals_e::marshal_get_month},
-					{"get_quarter", marshals_e::marshal_get_quarter},
-					{"date_quarter", marshals_e::marshal_round_quarter},
-					{"get_year", marshals_e::marshal_get_year},
-					{"date_year", marshals_e::marshal_round_year},
-					{"emit", marshals_e::marshal_emit},
-					{"schedule", marshals_e::marshal_schedule},
-					{"iter_get", marshals_e::marshal_iter_get },
-					{"iter_set", marshals_e::marshal_iter_set },
-					{"iter_move_first", marshals_e::marshal_iter_move_first },
-					{"iter_move_last", marshals_e::marshal_iter_move_last },
-					{"iter_next", marshals_e::marshal_iter_next },
-					{"iter_prev", marshals_e::marshal_iter_prev },
-					{"event_count", marshals_e::marshal_event_count },
-					{"iter_within", marshals_e::marshal_iter_within},
-					{"iter_between", marshals_e::marshal_iter_between},
-					{"population", marshals_e::marshal_population },
-					{"intersection", marshals_e::marshal_intersection},
-					{"union", marshals_e::marshal_union},
-					{"compliment", marshals_e::marshal_compliment},
-					{"difference", marshals_e::marshal_difference},
-					{"marshal_session", marshals_e::marshal_session},
-					{"marshal_session_count", marshals_e::marshal_session_count},
-					{"return", marshals_e::marshal_return},
-					{"continue", marshals_e::marshal_continue},
-					{"break", marshals_e::marshal_break},
-					{"log", marshals_e::marshal_log},
-					{"debug", marshals_e::marshal_debug},
-					{"exit", marshals_e::marshal_exit},
-					{"__internal_init_dict", marshals_e::marshal_init_dict},
-					{"__internal_init_list", marshals_e::marshal_init_list},
-					{ "set", marshals_e::marshal_set },
-					{ "list", marshals_e::marshal_list },
-					{ "dict", marshals_e::marshal_dict },
-					{ "int", marshals_e::marshal_int },
-					{ "float", marshals_e::marshal_float },
-					{ "str", marshals_e::marshal_str },
-					{"__internal_make_dict", marshals_e::marshal_make_dict},
-					{"__internal_make_list", marshals_e::marshal_make_list},
-					{ "len", marshals_e::marshal_len },
-					{ "__append", marshals_e::marshal_append },
-					{ "__update", marshals_e::marshal_update },
-					{ "__add", marshals_e::marshal_add },
-					{ "__remove", marshals_e::marshal_remove },
-					{ "__del", marshals_e::marshal_del },
-					{ "__contains", marshals_e::marshal_contains },
-					{ "__notcontains", marshals_e::marshal_not_contains },
-					{ "__pop", marshals_e::marshal_pop },
-					{ "__clear", marshals_e::marshal_clear },
-					{ "__keys", marshals_e::marshal_keys },
-					{ "range", marshals_e::marshal_range }
+					{"tally", Marshals_e::marshal_tally},
+					{"now", Marshals_e::marshal_now},
+					{"event_time", Marshals_e::marshal_event_time},
+					{"last_event", Marshals_e::marshal_last_event},
+					{"first_event", Marshals_e::marshal_first_event},
+					{"prev_match", Marshals_e::marshal_prev_match},
+					{"first_match", Marshals_e::marshal_first_match},
+					{"bucket", Marshals_e::marshal_bucket},
+					{"round", Marshals_e::marshal_round},
+					{"trunc", Marshals_e::marshal_trunc},
+					{"fix", Marshals_e::marshal_fix},
+					{"to_seconds", Marshals_e::marshal_to_seconds},
+					{"to_minutes", Marshals_e::marshal_to_minutes},
+					{"to_hours", Marshals_e::marshal_to_hours},
+					{"to_days", Marshals_e::marshal_to_days},
+					{"get_second", Marshals_e::marshal_get_second},
+					{"date_second", Marshals_e::marshal_round_second},
+					{"get_minute", Marshals_e::marshal_get_minute},
+					{"date_minute", Marshals_e::marshal_round_minute},
+					{"get_hour", Marshals_e::marshal_get_hour},
+					{"date_hour", Marshals_e::marshal_round_hour},
+					{"date_day", Marshals_e::marshal_round_day},
+					{"get_day_of_week", Marshals_e::marshal_get_day_of_week},
+					{"get_day_of_month", Marshals_e::marshal_get_day_of_month},
+					{"get_day_of_year", Marshals_e::marshal_get_day_of_year},
+					{"date_week", Marshals_e::marshal_round_week},
+					{"date_month", Marshals_e::marshal_round_month},
+					{"get_month", Marshals_e::marshal_get_month},
+					{"get_quarter", Marshals_e::marshal_get_quarter},
+					{"date_quarter", Marshals_e::marshal_round_quarter},
+					{"get_year", Marshals_e::marshal_get_year},
+					{"date_year", Marshals_e::marshal_round_year},
+					{"emit", Marshals_e::marshal_emit},
+					{"schedule", Marshals_e::marshal_schedule},
+					{"iter_get", Marshals_e::marshal_iter_get },
+					{"iter_set", Marshals_e::marshal_iter_set },
+					{"iter_move_first", Marshals_e::marshal_iter_move_first },
+					{"iter_move_last", Marshals_e::marshal_iter_move_last },
+					{"iter_next", Marshals_e::marshal_iter_next },
+					{"iter_prev", Marshals_e::marshal_iter_prev },
+					{"event_count", Marshals_e::marshal_event_count },
+					{"iter_within", Marshals_e::marshal_iter_within},
+					{"iter_between", Marshals_e::marshal_iter_between},
+					{"population", Marshals_e::marshal_population },
+					{"intersection", Marshals_e::marshal_intersection},
+					{"union", Marshals_e::marshal_union},
+					{"compliment", Marshals_e::marshal_compliment},
+					{"difference", Marshals_e::marshal_difference},
+					{"session_count", Marshals_e::marshal_session_count},
+					{"return", Marshals_e::marshal_return},
+					{"continue", Marshals_e::marshal_continue},
+					{"break", Marshals_e::marshal_break},
+					{"log", Marshals_e::marshal_log},
+					{"debug", Marshals_e::marshal_debug},
+					{"exit", Marshals_e::marshal_exit},
+					{"__internal_init_dict", Marshals_e::marshal_init_dict},
+					{"__internal_init_list", Marshals_e::marshal_init_list},
+					{ "set", Marshals_e::marshal_set },
+					{ "list", Marshals_e::marshal_list },
+					{ "dict", Marshals_e::marshal_dict },
+					{ "int", Marshals_e::marshal_int },
+					{ "float", Marshals_e::marshal_float },
+					{ "str", Marshals_e::marshal_str },
+					{"__internal_make_dict", Marshals_e::marshal_make_dict},
+					{"__internal_make_list", Marshals_e::marshal_make_list},
+					{ "len", Marshals_e::marshal_len },
+					{ "__append", Marshals_e::marshal_append },
+					{ "__update", Marshals_e::marshal_update },
+					{ "__add", Marshals_e::marshal_add },
+					{ "__remove", Marshals_e::marshal_remove },
+					{ "__del", Marshals_e::marshal_del },
+					{ "__contains", Marshals_e::marshal_contains },
+					{ "__notcontains", Marshals_e::marshal_not_contains },
+					{ "__pop", Marshals_e::marshal_pop },
+					{ "__clear", Marshals_e::marshal_clear },
+					{ "__keys", Marshals_e::marshal_keys },
+					{ "__split", Marshals_e::marshal_str_split },
+					{ "__find", Marshals_e::marshal_str_find },
+					{ "__rfind", Marshals_e::marshal_str_rfind },
+					{ "__slice", Marshals_e::marshal_str_slice },
+					{ "__strip", Marshals_e::marshal_str_strip},
+					{ "range", Marshals_e::marshal_range },
+					{ "url_decode", Marshals_e::marshal_url_decode }
 			};
 
-		static const unordered_set<marshals_e> segmentMathMarshals =
+		static const unordered_set<Marshals_e> SegmentMathMarshals =
 			{
-					{marshals_e::marshal_population },
-					{marshals_e::marshal_intersection},
-					{marshals_e::marshal_union},
-					{marshals_e::marshal_compliment},
-					{marshals_e::marshal_difference},
+					{Marshals_e::marshal_population },
+					{Marshals_e::marshal_intersection},
+					{Marshals_e::marshal_union},
+					{Marshals_e::marshal_compliment},
+					{Marshals_e::marshal_difference},
 			};
 
-		static const unordered_set<marshals_e> sessionMarshals =
+		static const unordered_set<string> SessionMarshals =
 			{
-					{marshals_e::marshal_session},
-					{marshals_e::marshal_session_count},
+					"session_count",
 			};
 
 		// these are marshals that do not take params by default, so they appear
 		// like variables.
-		static const unordered_set<string> macroMarshals =
+		static const unordered_set<string> MacroMarshals =
 			{
 					{"now"},
 					{"event_time"},
@@ -574,125 +564,127 @@ namespace openset
 					{"prev_match"},
 					{"first_match"},
 					{"session_count"},
-					{"session"},
 					{"__internal_init_dict"},
 					{"__internal_init_list"},
 			};
 
 		// Comparatives
-		static const unordered_map<string, opCode_e> operators = {
-					{">=",opCode_e::OPGTE},
-					{"<=",opCode_e::OPLTE},
-					{">",opCode_e::OPGT},
-					{"<",opCode_e::OPLT},
-					{"==",opCode_e::OPEQ},
-					{"is",opCode_e::OPEQ},
-					{ "=",opCode_e::OPEQ },
-					{"!=",opCode_e::OPNEQ},
-					{"<>",opCode_e::OPNEQ},
-					{"not",opCode_e::OPNOT},
-					{"isnot",opCode_e::OPNEQ},
+		static const unordered_map<string, OpCode_e> Operators = {
+					{">=",OpCode_e::OPGTE},
+					{"<=",OpCode_e::OPLTE},
+					{">",OpCode_e::OPGT},
+					{"<",OpCode_e::OPLT},
+					{"==",OpCode_e::OPEQ},
+					{"is",OpCode_e::OPEQ},
+					{ "=",OpCode_e::OPEQ },
+					{"!=",OpCode_e::OPNEQ},
+					{"<>",OpCode_e::OPNEQ},
+					{"not",OpCode_e::OPNOT},
+					{"isnot",OpCode_e::OPNEQ},
 					// {"within",opCode_e::OPWTHN},
 			};
 
-		static const unordered_map<string, opCode_e> mathAssignmentOperators = {
-			{ "+=", opCode_e::MATHADDEQ }, // math operators
-			{ "-=", opCode_e::MATHSUBEQ },
-			{ "*=", opCode_e::MATHMULEQ },
-			{ "/=", opCode_e::MATHDIVEQ },
+		static const unordered_map<string, OpCode_e> MathAssignmentOperators = {
+			{ "+=", OpCode_e::MATHADDEQ }, // math operators
+			{ "-=", OpCode_e::MATHSUBEQ },
+			{ "*=", OpCode_e::MATHMULEQ },
+			{ "/=", OpCode_e::MATHDIVEQ },
 		};
 
-		static const unordered_map<opCode_e, string> operatorsDebug = {
-					{opCode_e::OPGTE, ">="},
-					{opCode_e::OPLTE, "<="},
-					{opCode_e::OPGT, ">"},
-					{opCode_e::OPLT, "<"},
-					{opCode_e::OPEQ, "=="},
-					{opCode_e::OPNEQ, "!="},
-					{opCode_e::OPNOT, "!"}
+		static const unordered_map<OpCode_e, string> OperatorsDebug = {
+					{OpCode_e::OPGTE, ">="},
+					{OpCode_e::OPLTE, "<="},
+					{OpCode_e::OPGT, ">"},
+					{OpCode_e::OPLT, "<"},
+					{OpCode_e::OPEQ, "=="},
+					{OpCode_e::OPNEQ, "!="},
+					{OpCode_e::OPNOT, "!"}
 					// {opCode_e::OPWTHN, "within"}
 			};
 
 		// Math
-		static const unordered_map<string, opCode_e> math =
+		static const unordered_map<string, OpCode_e> Math =
 		{
-				{"+", opCode_e::MATHADD},
-				{"-", opCode_e::MATHSUB},
-				{"*", opCode_e::MATHMUL},
-				{"/", opCode_e::MATHDIV}
+				{"+", OpCode_e::MATHADD},
+				{"-", OpCode_e::MATHSUB},
+				{"*", OpCode_e::MATHMUL},
+				{"/", OpCode_e::MATHDIV}
 		};
 
 		// Conditionals
-		static const unordered_map<string, opCode_e> logicalOperators =
+		static const unordered_map<string, OpCode_e> LogicalOperators =
 			{
-					{"and", opCode_e::LGCAND},
-					{"or", opCode_e::LGCOR},
-					{"in", opCode_e::LGCOR},
-					{"nest_and", opCode_e::LGCNSTAND},
-					{"nest_or", opCode_e::LGCNSTOR},
+					{"and", OpCode_e::LGCAND},
+					{"or", OpCode_e::LGCOR},
+					{"in", OpCode_e::LGCOR},
+					{"nest_and", OpCode_e::LGCNSTAND},
+					{"nest_or", OpCode_e::LGCNSTOR},
 			};
 
-		static const unordered_map<opCode_e, string> logicalOperatorsDebug = {
-					{opCode_e::LGCAND, "and"},
-					{opCode_e::LGCOR, "or"},
+		static const unordered_map<OpCode_e, string> LogicalOperatorsDebug = {
+					{OpCode_e::LGCAND, "and"},
+					{OpCode_e::LGCOR, "or"},
 			};
 
-		static const unordered_map<hintOp_e, string> hintOperatorsDebug = {
-					{hintOp_e::UNSUPPORTED, "UNSUP"},
-					{hintOp_e::PUSH_EQ, "PUSH_EQ"},
-					{hintOp_e::PUSH_NEQ, "PUSH_NEQ"},
-					{hintOp_e::PUSH_GT, "PUSH_GT"},
-					{hintOp_e::PUSH_GTE, "PUSH_GTE"},
-					{hintOp_e::PUSH_LT, "PUSH_LT"},
-					{hintOp_e::PUSH_LTE, "PUSH_LTE"},
-					{hintOp_e::PUSH_PRESENT, "PUSH_PRES"},
-					{hintOp_e::PUSH_NOP, "PUSH_NOP"},
-					{hintOp_e::BIT_OR, "BIT_OR"},
-					{hintOp_e::BIT_AND, "BIT_AND"},
-					{hintOp_e::NST_BIT_OR, "NST_BIT_OR"},
-					{hintOp_e::NST_BIT_AND, "NST_BIT_AND"},
+		static const unordered_map<HintOp_e, string> HintOperatorsDebug = {
+					{HintOp_e::UNSUPPORTED, "UNSUP"},
+					{HintOp_e::PUSH_EQ, "PUSH_EQ"},
+					{HintOp_e::PUSH_NEQ, "PUSH_NEQ"},
+					{HintOp_e::PUSH_GT, "PUSH_GT"},
+					{HintOp_e::PUSH_GTE, "PUSH_GTE"},
+					{HintOp_e::PUSH_LT, "PUSH_LT"},
+					{HintOp_e::PUSH_LTE, "PUSH_LTE"},
+					{HintOp_e::PUSH_PRESENT, "PUSH_PRES"},
+					{HintOp_e::PUSH_NOP, "PUSH_NOP"},
+					{HintOp_e::BIT_OR, "BIT_OR"},
+					{HintOp_e::BIT_AND, "BIT_AND"},
+					{HintOp_e::NST_BIT_OR, "NST_BIT_OR"},
+					{HintOp_e::NST_BIT_AND, "NST_BIT_AND"},
 
 			};
 
-		static const unordered_map<opCode_e, hintOp_e> opToHintOp = {
-					{opCode_e::OPGTE, hintOp_e::PUSH_GTE},
-					{opCode_e::OPLTE, hintOp_e::PUSH_LTE},
-					{opCode_e::OPGT, hintOp_e::PUSH_GT},
-					{opCode_e::OPLT, hintOp_e::PUSH_LT},
-					{opCode_e::OPEQ, hintOp_e::PUSH_EQ},
-					{opCode_e::OPNEQ, hintOp_e::PUSH_NEQ},
-					{opCode_e::OPNOT, hintOp_e::PUSH_NOT},
-					{opCode_e::LGCAND, hintOp_e::BIT_AND},
-					{opCode_e::LGCOR, hintOp_e::BIT_OR},
-					{opCode_e::LGCNSTOR, hintOp_e::NST_BIT_OR},
-					{opCode_e::LGCNSTAND, hintOp_e::NST_BIT_AND},
+		static const unordered_map<OpCode_e, HintOp_e> OpToHintOp = {
+					{OpCode_e::OPGTE, HintOp_e::PUSH_GTE},
+					{OpCode_e::OPLTE, HintOp_e::PUSH_LTE},
+					{OpCode_e::OPGT, HintOp_e::PUSH_GT},
+					{OpCode_e::OPLT, HintOp_e::PUSH_LT},
+					{OpCode_e::OPEQ, HintOp_e::PUSH_EQ},
+					{OpCode_e::OPNEQ, HintOp_e::PUSH_NEQ},
+					{OpCode_e::OPNOT, HintOp_e::PUSH_NOT},
+					{OpCode_e::LGCAND, HintOp_e::BIT_AND},
+					{OpCode_e::LGCOR, HintOp_e::BIT_OR},
+					{OpCode_e::LGCNSTOR, HintOp_e::NST_BIT_OR},
+					{OpCode_e::LGCNSTAND, HintOp_e::NST_BIT_AND},
 			};
 
-		struct hintOp_s
+		struct HintOp_s
 		{
-			hintOp_e op;
+			HintOp_e op;
 			string column;
 			int64_t intValue;
 			string textValue;
 			bool numeric;
 
-			hintOp_s(hintOp_e op, string column, int64_t intValue) :
+			HintOp_s(const HintOp_e op, 
+				     const string column, 
+				     const int64_t intValue) :
 				op(op),
 				column(column),
 				intValue(intValue),
 				numeric(true)
 			{}
 
-			hintOp_s(hintOp_e op, string column, string text) :
+			HintOp_s(const HintOp_e op, 
+				     const string column, 
+				     const string text) :
 				op(op),
 				column(column),
-
 				intValue(0),
 				numeric(false)
 			{
 				if (text == "None") // special case
 				{
-					intValue = NULLCELL;
+					intValue = NONE;
 					numeric = true;
 				}
 				else
@@ -702,22 +694,22 @@ namespace openset
 				}
 			}
 
-			explicit hintOp_s(hintOp_e op) :
+			explicit HintOp_s(const HintOp_e op) :
 				op(op),
 				intValue(0),
 				numeric(false)
 			{}
 		};
 
-		using HintOpList = vector<hintOp_s>;
+		using HintOpList = vector<HintOp_s>;
 
-		struct variable_s
+		struct Variable_s
 		{
 			string actual; // actual name
 			string alias; // alias
 			string space; // namespace
 			string distinctColumnName{"__action"}; // name of column used for aggregators
-			modifiers_e modifier{modifiers_e::value}; // default is value
+			Modifiers_e modifier{Modifiers_e::value}; // default is value
 			int index{-1}; // index
 			int column{-1}; // column in grid
 			int schemaColumn{-1}; // column in schema
@@ -729,23 +721,26 @@ namespace openset
 			int lambdaIndex{-1}; // used for variable assignment by lambada
 			bool nonDistinct{ false };
 
-			cvar value{NULLCELL};
-			cvar startingValue{NULLCELL};
+			cvar value{NONE};
+			cvar startingValue{NONE};
 
-			variable_s()
+			Variable_s()
 			{}
 
-			variable_s(string actual, string space, int sortOrder = -1) :
+			Variable_s(const string actual, 
+					   const string space, 
+				       const int sortOrder = -1):
 				actual(actual),
 				alias(actual),
 				space(space),
 				sortOrder(sortOrder)
 			{}
 
-			variable_s(string actual, string alias,
-			           string space,
-			           modifiers_e modifier = modifiers_e::value,
-			           int sortOrder = -1) :
+			Variable_s(const string actual, 
+					   const string alias,
+			           const string space,
+			           const Modifiers_e modifier = Modifiers_e::value,
+			           const int sortOrder = -1):
 				actual(actual),
 				alias(alias),
 				space(space),
@@ -753,7 +748,7 @@ namespace openset
 				sortOrder(sortOrder)
 			{}
 
-			variable_s(const variable_s& source)
+			Variable_s(const Variable_s& source)
 			{
 				actual = source.actual;
 				alias = source.alias;
@@ -797,23 +792,22 @@ namespace openset
 			{
 				return "@" + to_string(number) + " " + trim(text, " \t");
 			}
-
 		};
 
 		// structure fo final build
-		struct instruction_s
+		struct Instruction_s
 		{
-			opCode_e op;
+			OpCode_e op;
 			int64_t index;
 			int64_t value;
 			int64_t extra;
 			Debug_s debug;
 
-			instruction_s(
-				opCode_e op,
-				int64_t index,
-				int64_t value,
-				int64_t extra,
+			Instruction_s(
+				const OpCode_e op,
+				const int64_t index,
+				const int64_t value,
+				const int64_t extra,
 				Debug_s& dbg) :
 				op(op),
 				index(index),
@@ -822,11 +816,11 @@ namespace openset
 				debug(dbg)
 			{}
 
-			instruction_s(
-				opCode_e op,
-				int64_t index,
-				int64_t value,
-				int64_t extra) :
+			Instruction_s(
+				const OpCode_e op,
+				const int64_t index,
+				const int64_t value,
+				const int64_t extra) :
 				op(op),
 				index(index),
 				value(value),
@@ -835,18 +829,18 @@ namespace openset
 			{}
 		};
 
-		using InstructionList = vector<instruction_s>;
+		using InstructionList = vector<Instruction_s>;
 
-		struct textLiteral_s
+		struct TextLiteral_s
 		{
 			int64_t hashValue; // xxhash of string
 			int64_t index;
 			string value;
 		};
 
-		using LiteralsList = vector<textLiteral_s>;
-		using VarList = vector<variable_s>;
-		using VarMap = unordered_map<string, variable_s>;
+		using LiteralsList = vector<TextLiteral_s>;
+		using VarList = vector<Variable_s>;
+		using VarMap = unordered_map<string, Variable_s>;
 
 		enum class sortOrder_e : int
 		{
@@ -854,48 +848,48 @@ namespace openset
 			descending
 		};
 
-		struct sort_s
+		struct Sort_s
 		{
 			string name;
 			sortOrder_e order;
 			int64_t column;
 
-			sort_s(string columnName, sortOrder_e sortOrder):
+			Sort_s(const string columnName, const sortOrder_e sortOrder):
 				name(columnName),
 				order(sortOrder),
 				column(-1)
 			{}
 		};
 
-		using SortList = vector<sort_s>;
+		using SortList = vector<Sort_s>;
 
-		struct function_s
+		struct Function_s
 		{
 			string name;
 			int64_t nameHash;
 			int64_t execPtr;
 
-			function_s(string functionName, int64_t codePtr):
+			Function_s(const string functionName, const int64_t codePtr):
 				name(functionName),
 				nameHash(MakeHash(functionName)),
 				execPtr(codePtr)
 			{}
 		};
 
-		using FunctionList = vector<function_s>;
+		using FunctionList = vector<Function_s>;
 
 		using ColumnLambdas = vector<int64_t>;
 
-		struct count_s
+		struct Count_S
 		{
 			string name;
 			int64_t functionHash;
 		};
 
-		using CountList = vector<count_s>;
+		using CountList = vector<Count_S>;
 
 		// structure for variables
-		struct variables_s
+		struct Variables_S
 		{
 			VarList userVars;
 			VarList tableVars;
@@ -913,33 +907,26 @@ namespace openset
 		using SegmentList = vector<std::string>;
 
 		// struct containing compiled macro
-		struct macro_s
+		struct Macro_s
 		{
-			variables_s vars;
+			Variables_S vars;
 			InstructionList code;
 			HintPairs indexes;
-			bool isSegment;
 			string segmentName;
-			int64_t segmentTTL;
-			int64_t segmentRefresh;
 			SegmentList segments;
 
-			bool useGlobals; // uses global for table
-			bool useCached; // for segments allow use of cached values within TTL
-			bool isSegmentMath; // for segments, the index has the value, script execution not required
-			bool useSessions; // uses session functions, we can cache these
+			int64_t segmentTTL{ -1 };
+			int64_t segmentRefresh{ -1 };
+			int sessionColumn{ -1 };
+			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
-			macro_s() :
-				isSegment(false),
-				segmentTTL(-1),
-				segmentRefresh(-1),
-				useGlobals(false),
-				useCached(false),
-				isSegmentMath(false),
-				useSessions(false)
-			{};
+			bool isSegment{ false };
+			bool useGlobals{ false }; // uses global for table
+			bool useCached{ false }; // for segments allow use of cached values within TTL
+			bool isSegmentMath{ false }; // for segments, the index has the value, script execution not required
+			bool useSessions{ false }; // uses session functions, we can cache these
 		};
 
-		using QueryPairs = vector<pair<string, macro_s>>;
+		using QueryPairs = vector<pair<string, Macro_s>>;
 	}
 }

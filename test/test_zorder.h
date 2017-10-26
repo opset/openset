@@ -181,7 +181,7 @@ inline Tests test_zorder()
 
 	return {
 		{
-			"db: create and prepare a table", [database, user1_raw_inserts] {
+			"z-order: test event z-order", [database, user1_raw_inserts] {
 
 				// prepare our table
 				auto table = database->newTable("__test001__");

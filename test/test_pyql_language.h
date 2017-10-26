@@ -519,32 +519,139 @@ inline Tests test_pyql_language()
 	// test sdk functions (1)
 	auto test16_pyql = fixIndent(R"pyql(
 
-		# bucket always rounds to the lower bucket
-		# it is useful when generating distributions
+	# bucket always rounds to the lower bucket
+	# it is useful when generating distributions
 
-		debug(bucket(513, 25) == 500)
-		debug(bucket(525, 25) == 525)
-		debug(bucket(551, 25) == 550)
-		debug(bucket(5.11, 0.25) == 5.00)
-		debug(bucket(5.25, 0.25) == 5.25)
-		debug(bucket(5.51, 0.25) == 5.50)
+	debug(bucket(513, 25) == 500)
+	debug(bucket(525, 25) == 525)
+	debug(bucket(551, 25) == 550)
+	debug(bucket(5.11, 0.25) == 5.00)
+	debug(bucket(5.25, 0.25) == 5.25)
+	debug(bucket(5.51, 0.25) == 5.50)
 
-		# fix fixes a floating point number to
-        # a rounded set number of decimals and
-		# returns a string. Fix is useful for
-		# grouping where you likely want
-        # a consistent fixed precision group
-        # name.
+	# fix fixes a floating point number to
+    # a rounded set number of decimals and
+	# returns a string. Fix is useful for
+	# grouping where you likely want
+    # a consistent fixed precision group
+    # name.
 
-		debug(fix(0.01111, 2) == "0.01")
-		debug(fix(0.015, 2) == "0.02")
-		debug(fix(1234.5678, 2) == "1234.57")
-		debug(fix(1234.5678, 0) == "1235")
-		debug(fix(-0.01111, 2) == "-0.01")
-		debug(fix(-0.015, 2) == "-0.02")
-		debug(fix(-1234.5678, 2) == "-1234.57")
-		debug(fix(-1234.5678, 0) == "-1235")
+	debug(fix(0.01111, 2) == "0.01")
+	debug(fix(0.015, 2) == "0.02")
+	debug(fix(1234.5678, 2) == "1234.57")
+	debug(fix(1234.5678, 0) == "1235")
+	debug(fix(-0.01111, 2) == "-0.01")
+	debug(fix(-0.015, 2) == "-0.02")
+	debug(fix(-1234.5678, 2) == "-1234.57")
+	debug(fix(-1234.5678, 0) == "-1235")
 
+
+	)pyql");
+
+	// test slicing of strings and arrays
+	auto test17_pyql = fixIndent(R"pyql(
+
+    # test slicing lists
+    some_array = ['zero', 'one', 'two', 'three', 'four', 'five']
+
+	new_array = some_array[1:3]
+	debug(len(new_array) == 2 and new_array[0] == 'one' and new_array[1] == 'two')
+
+	new_array = some_array[:2]
+	debug(len(new_array) == 2 and new_array[0] == 'zero' and new_array[1] == 'one')
+
+	new_array = some_array[2:]
+	debug(len(new_array) == 4 and new_array[0] == 'two')
+
+	new_array = some_array[:]
+	debug(len(new_array) == 6 and new_array[0] == 'zero' and new_array[5] == 'five')
+
+	new_array = some_array[-1:]
+	debug(len(new_array) == 1 and new_array[0] == 'five')
+
+	new_array = some_array[-3:-2]
+	debug(len(new_array) == 1 and new_array[0] == 'three')
+
+    # test slicing strings
+	some_string = 'the rain in spain'
+
+	new_string = some_string[-5:]
+	debug(new_string == 'spain')
+
+	new_string = some_string[:3]
+	debug(new_string == 'the')
+
+	new_string = some_string[4:8]
+	debug(new_string == 'rain')
+
+	# test find and rfind
+    index = some_string.find('rain')
+	debug(index == 4)
+
+    index = some_string.find('teeth')
+	debug(index == -1)
+
+    index = some_string.find('in', 8)
+	debug(index == 9)
+
+    index = some_string.rfind('in', 0)
+	debug(index == 15)
+
+    index = some_string.rfind('the')
+	debug(index == 0)
+
+    index = some_string.rfind('rain', 8)
+	debug(index == 4)
+
+    index = some_string.find('rain', 0, 7)
+	debug(index == -1)
+
+	# test split
+	some_string = 'see spot run'
+	parts = some_string.split(' ')
+	debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
+
+	some_string = 'this::is::fun'
+	parts = some_string.split('::')
+	debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
+
+	some_string = "this won't split"
+	parts = some_string.split('|')
+	debug(parts[0] == some_string)
+
+	# test strip
+
+	some_string = '\t  this is a string \r\n'
+	clean = some_string.strip()
+	debug(clean == 'this is a string')
+
+	some_string = "\t \n \r"
+	clean = some_string.strip()
+	debug(clean == '')
+	
+	some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
+	parts = url_decode(some_url)
+
+	debug(parts['host'] == 'somehost.com')
+    debug(parts['path'] == '/this/is/the/path')
+	debug(parts['query'] == 'param1=one&param2=two&param3')
+	debug(len(parts['params']) == 3)
+    debug(parts['params']['param1'] == 'one')
+    debug(parts['params']['param2'] == 'two')
+    debug(parts['params']['param3'] == True)
+
+	some_url = "/this/is/the/path?param1=one"
+	parts = url_decode(some_url)
+	debug(parts['host'] == None)
+    debug(parts['path'] == '/this/is/the/path')
+    debug(len(parts['params']) == 1)
+    debug(parts['params']['param1'] == 'one')
+
+	some_url = "/this/is/the/path"
+	parts = url_decode(some_url)
+	debug(parts['host'] == None)
+    debug(parts['path'] == '/this/is/the/path')
+    debug(len(parts['params']) == 0)
 
 	)pyql");
 
@@ -659,7 +766,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -709,7 +816,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -745,10 +852,7 @@ inline Tests test_pyql_language()
 					interpreter->exec();
 					ASSERT(interpreter->error.inError() == false);
 
-					auto debug = &interpreter->debugLog;
-
-					ASSERT(debug->size() == 1);
-					ASSERT(debug->at(0) == 1);
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 				},
 				{
@@ -759,7 +863,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -810,7 +914,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -861,7 +965,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -914,7 +1018,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -967,7 +1071,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1020,7 +1124,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1067,7 +1171,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1120,7 +1224,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1172,7 +1276,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1223,7 +1327,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1262,7 +1366,7 @@ inline Tests test_pyql_language()
 					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
 					
 					ASSERT(interpreter->debugLog.size() == 8);
-					ASSERT(testAllTrue(interpreter->debugLog));
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 				},
 				{
@@ -1273,7 +1377,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1312,7 +1416,7 @@ inline Tests test_pyql_language()
 					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
 
 					ASSERT(interpreter->debugLog.size() == 9);
-					ASSERT(testAllTrue(interpreter->debugLog));
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 				},
 				{
@@ -1323,7 +1427,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1362,7 +1466,7 @@ inline Tests test_pyql_language()
 					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
 
 					ASSERT(interpreter->debugLog.size() == 22);
-					ASSERT(testAllTrue(interpreter->debugLog));
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 			},
 			{
@@ -1373,7 +1477,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1412,7 +1516,7 @@ inline Tests test_pyql_language()
 					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
 
 					ASSERT(interpreter->debugLog.size() == 9);
-					ASSERT(testAllTrue(interpreter->debugLog));
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 			},
 			{
@@ -1423,7 +1527,7 @@ inline Tests test_pyql_language()
 					auto table = database->getTable("__test003__");
 					auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-					openset::query::macro_s queryMacros; // this is our compiled code block
+					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
 
 					// compile this
@@ -1461,8 +1565,58 @@ inline Tests test_pyql_language()
 					interpreter->exec();
 					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
 
-					ASSERT(testAllTrue(interpreter->debugLog));
+					ASSERTDEBUGLOG(interpreter->debugLog);
+				}
+			},
+			{
+				"test_pyql_language: test slicing of lists and strings", [test17_pyql]
+				{
+					auto database = openset::globals::database;
+
+					auto table = database->getTable("__test003__");
+					auto parts = table->getPartitionObjects(0); // partition zero for test				
+
+					openset::query::Macro_s queryMacros; // this is our compiled code block
+					openset::query::QueryParser p;
+
+					// compile this
+					p.compileQuery(test17_pyql.c_str(), table->getColumns(), queryMacros);
+					ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
+
+					//cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+
+					// mount the compiled query to an interpretor
+					auto interpreter = new openset::query::Interpreter(queryMacros);
+
+					openset::result::ResultSet resultSet;
+					interpreter->setResultObject(&resultSet);
+
+					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+					ASSERT(personRaw != nullptr);
+					auto mappedColumns = interpreter->getReferencedColumns();
+
+					// MappedColumns? Why? Because the basic mapTable function (without a 
+					// columnList) maps all the columns in the table - which is what we want when 
+					// inserting or updating rows but means more processing and less data affinity
+					// when performing queries
+
+					Person person; // Person overlay for personRaw;
+					person.mapTable(table, 0, mappedColumns);
+
+					person.mount(personRaw); // this tells the person object where the raw compressed data is
+					person.prepare(); // this actually decompresses
+
+									  // this mounts the now decompressed data (in the person overlay)
+									  // into the interpreter
+					interpreter->mount(&person);
+
+					// run it
+					interpreter->exec();
+					ASSERTMSG(interpreter->error.inError() == false, interpreter->error.getErrorJSON());
+
+					ASSERTDEBUGLOG(interpreter->debugLog);
 				}
 			}
+
 	};
 }

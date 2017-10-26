@@ -47,7 +47,7 @@ namespace openset
 
 		private:
 			Grid grid;
-			personData_s* data;
+			PersonData_s* data;
 			Table* table;
 			Attributes* attributes;
 			AttributeBlob* blob;
@@ -74,12 +74,17 @@ namespace openset
 			 * \brief maps a personData_s object to the Person object
 			 * \param[in] personData 
 			 */
-			void mount(personData_s* personData);
+			void mount(PersonData_s* personData);
 
 			/**
 			 * \brief expands personData_s object into Grid object
 			 */
 			void prepare();
+
+			void setSessionTime(const int64_t sessionTime)
+			{
+				grid.setSessionTime(sessionTime);
+			}
 
 			/**
 			 * \brief return reference to grid object
@@ -95,7 +100,7 @@ namespace openset
 				return data->id;
 			}
 
-			inline personData_s* getMeta() const
+			inline PersonData_s* getMeta() const
 			{
 				return data;
 			}
@@ -116,7 +121,7 @@ namespace openset
 			 *       from the caller will be invalid, so this commit
 			 *       returns the new pointer if this is important.
 			 */
-			personData_s* commit();
+			PersonData_s* commit();
 
 		private:
 			/**

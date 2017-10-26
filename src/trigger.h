@@ -31,7 +31,7 @@ namespace openset
 		class TablePartitioned;
 		class Attributes;
 		class IndexBits;
-		struct attr_s;
+		struct Attr_s;
 	};
 
 };
@@ -130,7 +130,7 @@ namespace openset
 			std::string name;
 			std::string script;
 			int configVersion;
-			openset::query::macro_s macros;
+			openset::query::Macro_s macros;
 		};
 
 		class Trigger
@@ -144,12 +144,12 @@ namespace openset
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 
-			openset::query::macro_s macros; // this will be a copy of what is in the triggerSettings_S
+			openset::query::Macro_s macros; // this will be a copy of what is in the triggerSettings_S
 			openset::query::Interpreter* interpreter;
 
 			openset::db::Person* person;
 
-			openset::db::attr_s* attr;
+			openset::db::Attr_s* attr;
 			openset::db::IndexBits* bits;
 
 			int64_t currentFunctionHash;
@@ -169,7 +169,7 @@ namespace openset
 				openset::db::Table* table, 
 				std::string name, 
 				std::string script,
-				openset::query::macro_s &targetMacros);
+				openset::query::Macro_s &targetMacros);
 
 			void init();
 
