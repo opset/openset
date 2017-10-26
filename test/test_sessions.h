@@ -114,9 +114,8 @@ inline Tests test_sessions()
 	auto test1_pyql = fixIndent(R"pyql(
 	agg:
 		count person
-		distinct session
+		count session
         count some_val
-		distinct some_str
 
 	match:
 		tally("all", some_str)
@@ -293,7 +292,7 @@ inline Tests test_sessions()
 				auto totalsNode = dataNodes[0]->xPath("/c");
 				auto values = cjson::Stringify(totalsNode);
 
-				ASSERT(values == "[1,3,9,6]");
+				ASSERT(values == "[1,3,9]");
 
 			}
 		},
