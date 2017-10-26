@@ -39,7 +39,7 @@ openset::errors::Error Trigger::compileTrigger(
 	openset::db::Table* table, 
 	std::string name, 
 	std::string script,
-	openset::query::Macro_S &targetMacros)
+	openset::query::Macro_s &targetMacros)
 {
 
 /*

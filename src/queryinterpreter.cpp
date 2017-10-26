@@ -9,7 +9,7 @@
 const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
 
-openset::query::Interpreter::Interpreter(Macro_S& macros, const InterpretMode_e interpretMode):
+openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode):
 	macros(macros),
 	interpretMode(interpretMode)
 {
@@ -192,10 +192,10 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 				 */ 				
 				
 				distinctKey = ValuesSeenKey{
-					resCol.index, 
-					resCol.modifier == modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
+					resCol.index,
+					resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
 					recast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
-					resCol.schemaColumn == COL_UUID ? 0 : columns->cols[COL_STAMP]
+					resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
 				};
 
 				// emplace try will return false if the value exists
@@ -207,7 +207,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 			switch (resCol.modifier)
 			{
-				case modifiers_e::sum:
+				case Modifiers_e::sum:
 					if (columns->cols[resCol.column] != NONE)
 					{
 						if (resultColumns->columns[resultIndex].value == NONE)
@@ -217,21 +217,21 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 					}
 					break;
 
-				case modifiers_e::min:
+				case Modifiers_e::min:
 					if (columns->cols[resCol.column] != NONE &&
 							(resultColumns->columns[resultIndex].value == NONE ||
 							 resultColumns->columns[resultIndex].value > columns->cols[resCol.column]))
 						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
-				case modifiers_e::max:
+				case Modifiers_e::max:
 					if (columns->cols[resCol.column] != NONE &&
 							(resultColumns->columns[resultIndex].value == NONE ||
 							 resultColumns->columns[resultIndex].value < columns->cols[resCol.column]))
 						resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
-				case modifiers_e::avg:
+				case Modifiers_e::avg:
 					if (columns->cols[resCol.column] != NONE)
 					{
 						if (resultColumns->columns[resultIndex].value == NONE)
@@ -246,7 +246,8 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 						}
 					}
 					break;
-				case modifiers_e::count:
+				case Modifiers_e::dist_count_person:
+				case Modifiers_e::count:
 					if (columns->cols[resCol.column] != NONE)
 					{
 						if (resultColumns->columns[resultIndex].value == NONE)
@@ -256,11 +257,11 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 					}
 					break;
 
-				case modifiers_e::value:
+				case Modifiers_e::value:
 					resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
 					break;
 
-				case modifiers_e::var:
+				case Modifiers_e::var:
 					if (resultColumns->columns[resultIndex].value == NONE)
 						resultColumns->columns[resultIndex].value = fixToInt(resCol.value);
 					else
@@ -1211,7 +1212,7 @@ void openset::query::Interpreter::marshal_strip(const int paramCount) const
 	*(stackPtr - 1) = text;
 }
 
-void openset::query::Interpreter::marshal_url_decode(const int paramCount)
+void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 {
 	if (paramCount != 1)
 		throw std::runtime_error("url_decode malformed");
@@ -1302,9 +1303,9 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 
 	// note: param order is reversed, last item on the stack
 	// is also last param in function call
-	switch (cast<marshals_e>(inst->index))
+	switch (cast<Marshals_e>(inst->index))
 	{
-	case marshals_e::marshal_tally:
+	case Marshals_e::marshal_tally:
 	{
 		if (interpretMode == InterpretMode_e::count)
 		{
@@ -1318,127 +1319,127 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		marshal_tally(inst->extra, (*rows)[currentRow], currentRow);
 	}
 	break;
-	case marshals_e::marshal_now:
+	case Marshals_e::marshal_now:
 		*stackPtr = Now();
 		++stackPtr;
 		break;
-	case marshals_e::marshal_event_time:
+	case Marshals_e::marshal_event_time:
 		*stackPtr = (*rows)[currentRow]->cols[COL_STAMP];
 		++stackPtr;
 		break;
-	case marshals_e::marshal_last_event:
+	case Marshals_e::marshal_last_event:
 		*stackPtr = rows->back()->cols[COL_STAMP];
 		++stackPtr;
 		break;
-	case marshals_e::marshal_first_event:
+	case Marshals_e::marshal_first_event:
 		*stackPtr = rows->front()->cols[COL_STAMP];
 		++stackPtr;
 		break;
-	case marshals_e::marshal_prev_match:
+	case Marshals_e::marshal_prev_match:
 		*stackPtr = (matchStampPrev.size() > 1) ? *(matchStampPrev.end() - 2) : matchStampTop;
 		++stackPtr;
 		break;
-	case marshals_e::marshal_first_match:
+	case Marshals_e::marshal_first_match:
 		*stackPtr = matchStampTop;
 		++stackPtr;
 		break;
-	case marshals_e::marshal_bucket:
+	case Marshals_e::marshal_bucket:
 		marshal_bucket(inst->extra);
 		break;
-	case marshals_e::marshal_round:
+	case Marshals_e::marshal_round:
 		marshal_round(inst->extra);
 		break;
-	case marshals_e::marshal_fix:
+	case Marshals_e::marshal_fix:
 		marshal_fix(inst->extra);
 		break;
-	case marshals_e::marshal_trunc:
+	case Marshals_e::marshal_trunc:
 		*(stackPtr - 1) = (stackPtr - 1)->getInt64(); // always trucates a float
 		break;
-	case marshals_e::marshal_to_seconds:
+	case Marshals_e::marshal_to_seconds:
 		*(stackPtr - 1) /= int64_t(1'000); // in place
 		break;
-	case marshals_e::marshal_to_minutes:
+	case Marshals_e::marshal_to_minutes:
 		*(stackPtr - 1) /= int64_t(60'000); // in place							
 		break;
-	case marshals_e::marshal_to_hours:
+	case Marshals_e::marshal_to_hours:
 		*(stackPtr - 1) /= int64_t(3'600'000); // in place							
 		break;
-	case marshals_e::marshal_to_days:
+	case Marshals_e::marshal_to_days:
 		*(stackPtr - 1) /= int64_t(86'400'000); // in place							
 		break;
-	case marshals_e::marshal_get_second:
+	case Marshals_e::marshal_get_second:
 		*(stackPtr - 1) = Epoch::epochSecondNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_second:
+	case Marshals_e::marshal_round_second:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochSecondDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_minute:
+	case Marshals_e::marshal_get_minute:
 		*(stackPtr - 1) = Epoch::epochMinuteNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_minute:
+	case Marshals_e::marshal_round_minute:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochMinuteDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_hour:
+	case Marshals_e::marshal_get_hour:
 		*(stackPtr - 1) = Epoch::epochHourNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_hour:
+	case Marshals_e::marshal_round_hour:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochHourDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_round_day:
+	case Marshals_e::marshal_round_day:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochDayDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_day_of_week:
+	case Marshals_e::marshal_get_day_of_week:
 		*(stackPtr - 1) = Epoch::epochDayOfWeek(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_get_day_of_month:
+	case Marshals_e::marshal_get_day_of_month:
 		*(stackPtr - 1) = Epoch::epochDayOfMonth(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_get_day_of_year:
+	case Marshals_e::marshal_get_day_of_year:
 		*(stackPtr - 1) = Epoch::epochDayOfYear(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_week:
+	case Marshals_e::marshal_round_week:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochWeekDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_month:
+	case Marshals_e::marshal_get_month:
 		*(stackPtr - 1) = Epoch::epochMonthNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_month:
+	case Marshals_e::marshal_round_month:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochMonthDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_quarter:
+	case Marshals_e::marshal_get_quarter:
 		*(stackPtr - 1) = Epoch::epochQuarterNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_quarter:
+	case Marshals_e::marshal_round_quarter:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochQuarterDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_get_year:
+	case Marshals_e::marshal_get_year:
 		*(stackPtr - 1) = Epoch::epochYearNumber(*(stackPtr - 1));
 		break;
-	case marshals_e::marshal_round_year:
+	case Marshals_e::marshal_round_year:
 		*(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
 		break;
-	case marshals_e::marshal_iter_get:
+	case Marshals_e::marshal_iter_get:
 		*stackPtr = currentRow;
 		++stackPtr;
 		break;
-	case marshals_e::marshal_iter_set:
+	case Marshals_e::marshal_iter_set:
 		currentRow = (stackPtr - 1)->getInt64();
 		if (currentRow < 0 || currentRow >= rows->size())
 			throw std::runtime_error("row iterator out of range");
 		rows->begin() + currentRow;
 		--stackPtr;
 		break;
-	case marshals_e::marshal_iter_move_first:
+	case Marshals_e::marshal_iter_move_first:
 		currentRow = 0;
 		rows->begin() + currentRow;
 		break;
-	case marshals_e::marshal_iter_move_last:
+	case Marshals_e::marshal_iter_move_last:
 		currentRow = rows->size() - 1;
 		if (currentRow < 0)
 			throw std::runtime_error("iter_set_last called on empty set");
 		rows->begin() + currentRow;
 		break;
-	case marshals_e::marshal_iter_next:
+	case Marshals_e::marshal_iter_next:
 	{
 		/* 
 		 * Will advance the event if it can, else it will
@@ -1478,7 +1479,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		}
 	}
 	break;
-	case marshals_e::marshal_event_count:
+	case Marshals_e::marshal_event_count:
 
 		if (eventCount == -1)
 		{
@@ -1499,77 +1500,77 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		*stackPtr = eventCount;
 		++stackPtr;
 		break;
-	case marshals_e::marshal_iter_prev:
+	case Marshals_e::marshal_iter_prev:
 		break;
-	case marshals_e::marshal_iter_within:
+	case Marshals_e::marshal_iter_within:
 		marshal_dt_within(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
 		break;
-	case marshals_e::marshal_iter_between:
+	case Marshals_e::marshal_iter_between:
 		marshal_dt_between(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
 		break;
-	case marshals_e::marshal_population:
+	case Marshals_e::marshal_population:
 		marshal_population(inst->extra);
 		break;
-	case marshals_e::marshal_intersection:
+	case Marshals_e::marshal_intersection:
 		marshal_intersection(inst->extra);
 		break;
-	case marshals_e::marshal_union:
+	case Marshals_e::marshal_union:
 		marshal_union(inst->extra);
 		break;
-	case marshals_e::marshal_compliment:
+	case Marshals_e::marshal_compliment:
 		marshal_compliment(inst->extra);
 		break;
-	case marshals_e::marshal_difference:
+	case Marshals_e::marshal_difference:
 		marshal_difference(inst->extra);
 		break;
-	case marshals_e::marshal_return:
+	case Marshals_e::marshal_return:
 		// return will have its params on the stack,
 		// we will just leave these on the stack and
 		// break out of this block... magic!
 		--recursion;
 		return true;
-	case marshals_e::marshal_break:
+	case Marshals_e::marshal_break:
 		marshal_break(inst->extra);
 		break;
-	case marshals_e::marshal_continue:
+	case Marshals_e::marshal_continue:
 		loopState = LoopState_e::in_continue;
 		*stackPtr = 0;
 		++stackPtr;
 		break;
-	case marshals_e::marshal_log:
+	case Marshals_e::marshal_log:
 		marshal_log(inst->extra);
 		break;
-	case marshals_e::marshal_emit:
+	case Marshals_e::marshal_emit:
 		marshal_emit(inst->extra);
 		break;
-	case marshals_e::marshal_schedule:
+	case Marshals_e::marshal_schedule:
 		marshal_schedule(inst->extra);
 		break;
-	case marshals_e::marshal_debug:
+	case Marshals_e::marshal_debug:
 		--stackPtr;
 		debugLog.push_back(*stackPtr);
 		break;
-	case marshals_e::marshal_exit:
+	case Marshals_e::marshal_exit:
 		loopState = LoopState_e::in_exit;
 		*stackPtr = 0;
 		++stackPtr;
 		--recursion;
 		return true;
-	case marshals_e::marshal_init_dict:
+	case Marshals_e::marshal_init_dict:
 		(*stackPtr).dict();
 		++stackPtr;
 		break;
-	case marshals_e::marshal_init_list:
+	case Marshals_e::marshal_init_list:
 		(*stackPtr).list();
 		++stackPtr;
 		break;
-	case marshals_e::marshal_make_dict:
+	case Marshals_e::marshal_make_dict:
 		marshal_makeDict(inst->extra);
 		break;
-	case marshals_e::marshal_make_list:
+	case Marshals_e::marshal_make_list:
 		marshal_makeList(inst->extra);
 		break;
-	case marshals_e::marshal_set:
+	case Marshals_e::marshal_set:
 		if (!inst->extra) // no params is just init
 		{
 			(*stackPtr).set();
@@ -1580,7 +1581,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			marshal_makeSet(inst->extra);
 		}
 		break;
-	case marshals_e::marshal_list:
+	case Marshals_e::marshal_list:
 		if (!inst->extra) // no params is just init
 		{
 			(*stackPtr).list();
@@ -1591,7 +1592,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			marshal_makeList(inst->extra);
 		}
 		break;
-	case marshals_e::marshal_dict:
+	case Marshals_e::marshal_dict:
 		if (!inst->extra) // no params is just init
 		{
 			(*stackPtr).dict();
@@ -1602,21 +1603,21 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			marshal_makeDict(inst->extra);
 		}
 		break;
-	case marshals_e::marshal_int:
+	case Marshals_e::marshal_int:
 		*(stackPtr - 1) = (stackPtr - 1)->getInt64();
 		break;
-	case marshals_e::marshal_float:
+	case Marshals_e::marshal_float:
 		*(stackPtr - 1) = (stackPtr - 1)->getDouble();
 		break;
-	case marshals_e::marshal_str:
+	case Marshals_e::marshal_str:
 		*(stackPtr - 1) = (stackPtr - 1)->getString();
 		break;
-	case marshals_e::marshal_len:
+	case Marshals_e::marshal_len:
 		*(stackPtr - 1) = (stackPtr - 1)->len();
 		break;
-	case marshals_e::marshal_append:
-	case marshals_e::marshal_update:
-	case marshals_e::marshal_add:
+	case Marshals_e::marshal_append:
+	case Marshals_e::marshal_update:
+	case Marshals_e::marshal_add:
 		if (inst->extra != 2)
 			throw std::runtime_error(".append/.update requires parameters");
 		if ((stackPtr - 2)->typeof() != cvar::valueType::REF)
@@ -1629,8 +1630,8 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			*(stackPtr - 2)->getReference() += *(stackPtr - 1);
 		stackPtr -= 2;
 		break;
-	case marshals_e::marshal_remove:
-	case marshals_e::marshal_del:
+	case Marshals_e::marshal_remove:
+	case Marshals_e::marshal_del:
 		if (inst->extra != 2)
 			throw std::runtime_error("del requires parameters");
 		if ((stackPtr - 2)->typeof() != cvar::valueType::REF)
@@ -1638,19 +1639,19 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		*(stackPtr - 2)->getReference() -= *(stackPtr - 1);
 		stackPtr -= 2;
 		break;
-	case marshals_e::marshal_contains:
+	case Marshals_e::marshal_contains:
 		if (inst->extra != 2)
 			throw std::runtime_error("contain requires parameters (malformed in clause)");
 		*(stackPtr - 2) = (stackPtr - 1)->contains(*(stackPtr - 2));
 		--stackPtr;
 		break;
-	case marshals_e::marshal_not_contains:
+	case Marshals_e::marshal_not_contains:
 		if (inst->extra != 2)
 			throw std::runtime_error("not_contains requires parameters (malformed not in clause)");
 		*(stackPtr - 2) = !((stackPtr - 1)->contains(*(stackPtr - 2)));
 		--stackPtr;
 		break;
-	case marshals_e::marshal_pop:
+	case Marshals_e::marshal_pop:
 		if (inst->extra != 1)
 			throw std::runtime_error("pop requires reference parameter");
 		{
@@ -1693,7 +1694,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				throw std::runtime_error("pop can only be performed on set or list types");
 		}
 		break;
-	case marshals_e::marshal_clear:
+	case Marshals_e::marshal_clear:
 		if (inst->extra != 1)
 			throw std::runtime_error("pop requires reference parameter");
 		{
@@ -1715,7 +1716,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				throw std::runtime_error("pop can only be performed on set or list types");
 		}
 		break;
-	case marshals_e::marshal_keys:
+	case Marshals_e::marshal_keys:
 		if (inst->extra != 1)
 			throw std::runtime_error("keys requires reference parameter");
 		{
@@ -1731,31 +1732,31 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				throw std::runtime_error("keys can only be performed on dict types");
 		}
 		break;
-	case marshals_e::marshal_session: 
-		throw std::runtime_error("session is not implemented");
+	case Marshals_e::marshal_session_count: 
+		if (macros.sessionColumn == -1)
+			throw std::runtime_error("session column could not be found");
+		++stackPtr;
+		*(stackPtr - 1) = rows->back()->cols[macros.sessionColumn];
 		break;
-	case marshals_e::marshal_session_count: 
-		throw std::runtime_error("session_count is not implemented");
-		break;
-	case marshals_e::marshal_str_split: 
+	case Marshals_e::marshal_str_split: 
 		marshal_split(inst->extra);
 		break;
-	case marshals_e::marshal_str_find: 
+	case Marshals_e::marshal_str_find: 
 		marshal_find(inst->extra);
 		break;
-	case marshals_e::marshal_str_rfind:
+	case Marshals_e::marshal_str_rfind:
 		marshal_find(inst->extra, true);
 		break;
-	case marshals_e::marshal_str_slice:
+	case Marshals_e::marshal_str_slice:
 		marshal_slice(inst->extra);
 		break;
-	case marshals_e::marshal_str_strip:
+	case Marshals_e::marshal_str_strip:
 		marshal_strip(inst->extra);
 		break;
-	case marshals_e::marshal_range:
+	case Marshals_e::marshal_range:
 		throw std::runtime_error("range is not implemented");
 		break;
-	case marshals_e::marshal_url_decode:
+	case Marshals_e::marshal_url_decode:
 		marshal_url_decode(inst->extra);
 		break;
 
@@ -1826,10 +1827,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 		switch (inst->op)
 		{
-			case opCode_e::NOP:
+			case OpCode_e::NOP:
 				// do nothing... nothing to see here... move on
 				break;
-			case opCode_e::PSHTBLCOL:
+			case OpCode_e::PSHTBLCOL:
 				// push a column value
 				switch (macros.vars.tableVars[inst->index].schemaType)
 				{
@@ -1863,11 +1864,11 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 				++stackPtr;
 				break;
-			case opCode_e::VARIDX:
+			case OpCode_e::VARIDX:
 				*stackPtr = inst->index;
 				++stackPtr;
 				break;
-			case opCode_e::PSHPAIR:
+			case OpCode_e::PSHPAIR:
 				// we are simply going to pop two items off the stack (the key, then the value)
 				// and assign these to a new Dictionary (a dictionary with one pair)
 				{
@@ -1880,10 +1881,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					++stackPtr;
 				}
 				break;
-			case opCode_e::PSHRESCOL:
+			case OpCode_e::PSHRESCOL:
 				// push a select value onto stack
 				{
-					if (macros.vars.columnVars[inst->index].modifier != modifiers_e::var)
+					if (macros.vars.columnVars[inst->index].modifier != Modifiers_e::var)
 					{
 						// push mapped column value into 
 						// TODO range check
@@ -1897,7 +1898,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 				}
 				break;
-			case opCode_e::PSHUSROBJ:
+			case OpCode_e::PSHUSROBJ:
 				{
 					auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -1912,7 +1913,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					++stackPtr;
 				}
 				break;
-			case opCode_e::PSHUSROREF:
+			case OpCode_e::PSHUSROREF:
 			{
 				auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -1927,48 +1928,48 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				++stackPtr;
 			}
 			break;
-			case opCode_e::PSHUSRVAR:
+			case OpCode_e::PSHUSRVAR:
 				// push a cvar							
 				*stackPtr = macros.vars.userVars[inst->index].value;
 				++stackPtr;
 				break;
-			case opCode_e::PSHUSRVREF:
+			case OpCode_e::PSHUSRVREF:
 				// push a cvar							
 				stackPtr->setReference(&macros.vars.userVars[inst->index].value);
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITTRUE:
+			case OpCode_e::PSHLITTRUE:
 				// push boolean true						
 				*stackPtr = true;
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITFALSE:
+			case OpCode_e::PSHLITFALSE:
 				// push boolean false
 				*stackPtr = false;
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITSTR:
+			case OpCode_e::PSHLITSTR:
 				// push a string value
 				//result->addLocalText(macros.vars.literals[inst->index].value);
 				*stackPtr = macros.vars.literals[inst->index].value; // WAS hashValue
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITINT:
+			case OpCode_e::PSHLITINT:
 				// push a numeric value
 				*stackPtr = inst->value;
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITFLT:
+			case OpCode_e::PSHLITFLT:
 				// push a floating point value
 				*stackPtr = cast<double>(inst->value) / cast<double>(1'000'000);
 				++stackPtr;
 				break;
-			case opCode_e::PSHLITNUL:
+			case OpCode_e::PSHLITNUL:
 				// push a floating point value
 				*stackPtr = NONE;
 				++stackPtr;
 				break;
-			case opCode_e::POPUSROBJ:
+			case OpCode_e::POPUSROBJ:
 				{
 					auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -1986,18 +1987,18 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					(*tcvar)[key] = std::move(*stackPtr);
 				}
 				break;
-			case opCode_e::POPUSRVAR:
+			case OpCode_e::POPUSRVAR:
 				// pop stack into cvar
 				--stackPtr;
 				macros.vars.userVars[inst->index].value = std::move(*stackPtr);
 				break;
-			case opCode_e::POPTBLCOL:
+			case OpCode_e::POPTBLCOL:
 				// pop stack into column value
 				// NOTE: we don't actually do this
 				break;
-			case opCode_e::POPRESCOL:
+			case OpCode_e::POPRESCOL:
 				// pop stack into select
-				if (macros.vars.columnVars[inst->index].modifier == modifiers_e::var)
+				if (macros.vars.columnVars[inst->index].modifier == Modifiers_e::var)
 				{
 					--stackPtr;
 					macros.vars.columnVars[inst->index].value = *stackPtr;
@@ -2007,7 +2008,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					// TODO - can we do anything to the data? probably not					
 				}
 				break;
-			case opCode_e::CNDIF:
+			case OpCode_e::CNDIF:
 				// execute lambda, and if not 0 on stack
 				// next a block.
 				// IF is implemented with a lambda. If it returns true
@@ -2030,8 +2031,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
-					while (inst->op == opCode_e::CNDELIF ||
-						inst->op == opCode_e::CNDELSE)
+					while (inst->op == OpCode_e::CNDELIF ||
+						inst->op == OpCode_e::CNDELSE)
 						++inst;
 
 					// we've advanced the instruction pointer
@@ -2039,7 +2040,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					continue;
 				}
 				break;
-			case opCode_e::CNDELIF:
+			case OpCode_e::CNDELIF:
 				// ELIF always follows an IF
 				// if a match is made the execution pointer after
 				// nesting must move to the first non-ELSE/ELIF
@@ -2061,8 +2062,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
-					while (inst->op == opCode_e::CNDELIF ||
-						inst->op == opCode_e::CNDELSE)
+					while (inst->op == OpCode_e::CNDELIF ||
+						inst->op == OpCode_e::CNDELSE)
 						++inst;
 
 					// we've advanced the instruction pointer
@@ -2071,14 +2072,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 
 				break;
-			case opCode_e::CNDELSE:
+			case OpCode_e::CNDELSE:
 				// ELSE block be executed only when all if/elif blocks fail
 				// DEFAULTED - run the code block (recursive)
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
 				break;
-			case opCode_e::ITFOR:
+			case OpCode_e::ITFOR:
 				{
 					--stackPtr;
 					const int64_t keyIdx = *stackPtr;
@@ -2261,7 +2262,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 				}
 				break;
-			case opCode_e::ITNEXT:
+			case OpCode_e::ITNEXT:
 				// fancy and strange stuff happens here					
 				{
 					auto iterCount = 0;
@@ -2373,10 +2374,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					// otherwise we move to the next line, loop is done
 				}
 				break;
-			case opCode_e::ITPREV:
+			case OpCode_e::ITPREV:
 				// more fancy and strange stuff happens here
 				break;
-			case opCode_e::MATHADD:
+			case OpCode_e::MATHADD:
 				// add last two items on stack
 				// return product
 				--stackPtr;
@@ -2385,7 +2386,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr += *(stackPtr + 1);
 				++stackPtr;
 				break;
-			case opCode_e::MATHSUB:
+			case OpCode_e::MATHSUB:
 				// subtract last two items on stack
 				// return product
 				--stackPtr;
@@ -2394,7 +2395,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr -= *(stackPtr + 1);
 				++stackPtr;
 				break;
-			case opCode_e::MATHMUL:
+			case OpCode_e::MATHMUL:
 				// multiply last two items on stack
 				// return product
 				--stackPtr;
@@ -2403,7 +2404,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr *= *(stackPtr + 1);
 				++stackPtr;
 				break;
-			case opCode_e::MATHDIV:
+			case OpCode_e::MATHDIV:
 				// divide last two items on stack
 				// return product
 				// NOTE: Divide by zero returns 0
@@ -2413,7 +2414,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr /= *(stackPtr + 1); // divide by zero handled in `cvar` /= operator
 				++stackPtr;
 				break;
-			case opCode_e::MATHADDEQ:
+			case OpCode_e::MATHADDEQ:
 			{
 				auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -2439,7 +2440,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 			}
 			break;
-			case opCode_e::MATHSUBEQ:
+			case OpCode_e::MATHSUBEQ:
 			{
 				auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -2465,7 +2466,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 			}
 			break;
-			case opCode_e::MATHMULEQ:
+			case OpCode_e::MATHMULEQ:
 			{
 				auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -2491,7 +2492,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 			}
 			break;
-			case opCode_e::MATHDIVEQ:
+			case OpCode_e::MATHDIVEQ:
 			{
 				auto* tcvar = &macros.vars.userVars[inst->index].value;
 
@@ -2517,7 +2518,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 			}
 			break;
-			case opCode_e::OPGT:
+			case OpCode_e::OPGT:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2525,7 +2526,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr > *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPLT:
+			case OpCode_e::OPLT:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2533,7 +2534,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr < *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPGTE:
+			case OpCode_e::OPGTE:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2541,7 +2542,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr >= *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPLTE:
+			case OpCode_e::OPLTE:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2549,7 +2550,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr <= *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPEQ:
+			case OpCode_e::OPEQ:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2557,7 +2558,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr == *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPNEQ:
+			case OpCode_e::OPNEQ:
 				// compare last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2565,16 +2566,16 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr != *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::OPWTHN:
+			case OpCode_e::OPWTHN:
 				// compare last two items on stack
 				// TODO - figure this one out
 				break;
-			case opCode_e::OPNOT:
+			case OpCode_e::OPNOT:
 				--stackPtr;
 				*stackPtr = ((*stackPtr).typeof() == cvar::valueType::BOOL && *stackPtr && *stackPtr != NONE) ? false : true;
 				++stackPtr;
 				break;
-			case opCode_e::LGCAND:
+			case OpCode_e::LGCAND:
 				// AND last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2586,7 +2587,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr && *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::LGCOR:
+			case OpCode_e::LGCOR:
 				// AND last two items on stack
 				--stackPtr;
 				//right = *stackPtr;
@@ -2599,17 +2600,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = (*stackPtr || *(stackPtr + 1));
 				++stackPtr;
 				break;
-			case opCode_e::MARSHAL:
+			case OpCode_e::MARSHAL:
 				if (marshal(inst, currentRow))
 					return;
 				break;
-			case opCode_e::CALL:
+			case OpCode_e::CALL:
 				// Call a Script Function
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
 				break;
-			case opCode_e::RETURN:
+			case OpCode_e::RETURN:
 				if (stack == stackPtr)
 				{
 					*stackPtr = 0;
@@ -2617,7 +2618,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				}
 				--recursion;
 				return;
-			case opCode_e::TERM:
+			case OpCode_e::TERM:
 				// script is complete, exit all nested
 				// loops
 				loopState = LoopState_e::in_exit;
@@ -2768,10 +2769,9 @@ void openset::query::Interpreter::exec()
 			additional
 		);
 	}
-
 }
 
-void openset::query::Interpreter::exec(string functionName)
+void openset::query::Interpreter::exec(const string functionName)
 {
 	execReset();
 
@@ -2803,19 +2803,6 @@ void openset::query::Interpreter::exec(string functionName)
 					opRunner(inst, 0);
 				}
 			}
-			/*catch (const std::exception& ex)
-			{
-				std::string additional = "";
-				if (lastDebug)
-					additional = lastDebug->toStrShort();
-
-				error.set(
-					OpenSet::errors::errorClass_e::run_time,
-					OpenSet::errors::errorCode_e::run_time_exception_triggered,
-					std::string{ ex.what() } +" (1)",
-					additional
-				);
-			}*/
 			catch (const std::runtime_error& ex)
 			{
 				std::string additional = "";
@@ -2853,7 +2840,7 @@ void openset::query::Interpreter::exec(string functionName)
 		"function: " + functionName);
 }
 
-void openset::query::Interpreter::exec(int64_t functionHash)
+void openset::query::Interpreter::exec(const int64_t functionHash)
 {
 	execReset();
 

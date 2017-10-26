@@ -13,7 +13,7 @@ using namespace openset::result;
 OpenLoopQuery::OpenLoopQuery(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
 	Table* table, 
-	Macro_S macros, 
+	Macro_s macros, 
 	openset::result::ResultSet* result,
 	int instance) :
 
@@ -85,6 +85,7 @@ void OpenLoopQuery::prepare()
 
 	// map table, partition and select schema columns to the Person object
 	person.mapTable(table, loop->partition, mappedColumns);
+	person.setSessionTime(macros.sessionTime);
 	
 	startTime = Now();
 }

@@ -77,7 +77,7 @@ namespace openset
 			const int64_t breakTopHash = MakeHash("top");
 
 			// execution
-			Macro_S& macros;
+			Macro_s& macros;
 			cvar* stack;
 			cvar* stackPtr;
 
@@ -144,7 +144,7 @@ namespace openset
 			Debug_s* lastDebug{ nullptr };
 
 			explicit Interpreter(
-				Macro_S& macros,
+				Macro_s& macros,
 				const InterpretMode_e interpretMode = InterpretMode_e::query);
 
 			~Interpreter();
@@ -194,7 +194,7 @@ namespace openset
 			void marshal_split(const int paramCount) const;
 			void marshal_strip(const int paramCount) const;
 
-			void marshal_url_decode(const int paramCount);
+			void marshal_url_decode(const int paramCount) const;
 
 			// get a string from the literals script block by ID
 			string getLiteral(const int64_t id) const;
@@ -213,8 +213,8 @@ namespace openset
 			// check for firstrun, check for globals.
 			void execReset();
 			void exec();
-			void exec(string functionName);
-			void exec(int64_t functionHash);
+			void exec(const string functionName);
+			void exec(const int64_t functionHash);
 		};
 	}
 }

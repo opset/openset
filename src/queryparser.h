@@ -132,7 +132,7 @@ namespace openset
 
 			struct MiddleOp_s
 			{
-				opCode_e op{opCode_e::NOP};
+				OpCode_e op{OpCode_e::NOP};
 				int64_t params{ 0 };
 				int64_t value{ 0 };
 				string valueString;
@@ -147,12 +147,12 @@ namespace openset
 				MiddleOp_s()
 				{}
 
-				MiddleOp_s(const opCode_e op, const int64_t value) :
+				MiddleOp_s(const OpCode_e op, const int64_t value) :
 					op(op),
 					value(value)
 				{}
 
-				MiddleOp_s(const opCode_e op, const int64_t value, Debug_s& debugCopy, const int64_t lambda = -1) :
+				MiddleOp_s(const OpCode_e op, const int64_t value, Debug_s& debugCopy, const int64_t lambda = -1) :
 					op(op),
 					value(value),
 					lambda(lambda)
@@ -162,7 +162,7 @@ namespace openset
 					debug.translation = debugCopy.translation;
 				}
 
-				MiddleOp_s(const opCode_e op, const string valueString, Debug_s& debugCopy, const int64_t lambda = -1) :
+				MiddleOp_s(const OpCode_e op, const string valueString, Debug_s& debugCopy, const int64_t lambda = -1) :
 					op(op),
 					valueString(valueString),
 					isString(true),
@@ -181,12 +181,12 @@ namespace openset
 				int64_t blockId;
 				int64_t refs; // block reference count
 				MiddleOpList code;
-				blockType_e type;
+				BlockType_e type;
 				string blockName; // function name in general
 				MiddleBlock_s() :
 					blockId(-1),
 					refs(0),
-					type(blockType_e::code)
+					type(BlockType_e::code)
 				{}
 			};
 
@@ -286,13 +286,13 @@ namespace openset
 				if (isColumnVar(name))
 				{
 					const auto var = vars.columnVars.find(name);
-					return (var->second.modifier != modifiers_e::var);
+					return (var->second.modifier != Modifiers_e::var);
 				}
 
 				if (isGroupVar(name))
 				{
 					const auto var = vars.groupVars.find(name);
-					return (var->second.modifier != modifiers_e::var);
+					return (var->second.modifier != Modifiers_e::var);
 				}
 
 				return false;
@@ -333,9 +333,9 @@ namespace openset
 			static LineParts breakLine(const string &text);
 
 			FirstPass mergeLines(FirstPass& lines) const;
-			FirstPass extractLines(const char* query) const;
+			FirstPass extractLines(const char* query);
 
-			void lineTranslation(FirstPass& lines) const;
+			void lineTranslation(FirstPass& lines);
 
 			// converts line list into blocks by indent level, sets
 			// references for sub-block in parent block
@@ -364,11 +364,11 @@ namespace openset
 		public:
 
 			// compile a query into a macro_s block
-			bool compileQuery(const char* query, Columns* columnsPtr, Macro_S& macros, ParamVars* templateVars = nullptr);
+			bool compileQuery(const char* query, Columns* columnsPtr, Macro_s& macros, ParamVars* templateVars = nullptr);
 
 			static std::vector<std::pair<std::string, std::string>> extractCountQueries(const char* query);
 		};
 
-		string MacroDbg(Macro_S& macro);
+		string MacroDbg(Macro_s& macro);
 	};
 };

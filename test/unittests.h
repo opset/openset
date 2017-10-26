@@ -6,6 +6,7 @@
 #include "test_complex_events.h"
 #include "test_pyql_language.h"
 #include "test_zorder.h"
+#include "test_sessions.h"
 #include "../src/logger.h"
 
 bool unitTest()
@@ -25,6 +26,7 @@ bool unitTest()
 	add(test_complex_events());
 	add(test_pyql_language());
 	add(test_zorder());
+	add(test_sessions());
 
 	return runTests(allTests).size() == 0; // true if zero
 }

@@ -234,7 +234,7 @@ QueryParser::LineParts QueryParser::breakLine(const string &text)
 	return parts;
 }
 
-QueryParser::FirstPass QueryParser::extractLines(const char* query) const
+QueryParser::FirstPass QueryParser::extractLines(const char* query) 
 {
 	FirstPass result;
 	FirstPass_s current;
@@ -407,16 +407,11 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 				{
 					// force format:
 					//    modifier name <as> <alias>
-					if (columnModifiers.find(c.parts[0]) ==	columnModifiers.end())
-					{
-						if (isTableColumn(c.parts[0]))
-							c.parts.insert(c.parts.begin(), "count"); // if in table then value
-						else
-							c.parts.insert(c.parts.begin(), "var"); // else this is a user var
-					}
+					if (!ColumnModifiers.count(c.parts[0]))
+						c.parts.insert(c.parts.begin(), isTableColumn(c.parts[0]) ? "count" : "var"); // if in table then value
 
-					const auto modifier = columnModifiers.find(c.parts[0]);
-					if (modifier == columnModifiers.end())
+					auto modifier = ColumnModifiers.find(c.parts[0]);
+					if (modifier == ColumnModifiers.end())
 						throw ParseFail_s{
 						errors::errorClass_e::parse,
 						errors::errorCode_e::syntax_error,
@@ -424,24 +419,22 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 						c.debug 
 					};
 
-
-					if (c.parts[1] == "person")
-						c.parts[1] = "__uuid";
-					else if (c.parts[1] == "action")
-						c.parts[1] = "__action";
-
-					auto alias = c.parts[1]; // name
-					
-					auto distinct = std::string{ alias };
-
 					auto nonDistinct = false;
-
-					// if it's long enough an the 3rd item is "as"
-					// there is an alias.
+					auto forceDistinct = false;
 					auto lambdaIdx = -1;
 					auto lambdaId = -1;
 
-					auto forceDistinct = false;
+					if (c.parts[1] == "__session")
+					{
+						useSessions = true;
+						// distinct_count_person distinct counts per person, meaning over a query it sums the 
+						// distict total for each match for each person, making it only really useful for
+						// counting sessions
+						modifier = ColumnModifiers.find("dist_count_person");
+					}
+
+					auto alias = c.parts[1]; // name				
+					auto distinct = std::string{ alias };
 
 					for (auto s = 1; s < c.parts.size(); ++s)
 					{
@@ -468,7 +461,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 					
 					if (lambdaIdx != -1) // found a lambda? Then assign a lambda assignment
 					{
-						if (modifier->second != modifiers_e::var)
+						if (modifier->second != Modifiers_e::var)
 							throw ParseFail_s{
 							errors::errorClass_e::parse,
 							errors::errorCode_e::syntax_error,
@@ -482,10 +475,12 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 						     back_inserter(lambdaCapture));
 
 						if (!lambdaCapture.size())
-						{
-							// TODO report this error
-							return 0;
-						}
+							throw ParseFail_s{
+							errors::errorClass_e::parse,
+							errors::errorCode_e::syntax_error,
+							"lambda contains no code",
+							c.debug
+						};
 
 						// this isn't pretty, but, we are making
 						// a code block (i.e. nested block, function, lamda, etc).
@@ -528,7 +523,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 
 					if (forceDistinct && 
 						!isTableColumn(distinct) && 
-						modifier->second != modifiers_e::var)
+						modifier->second != Modifiers_e::var)
 						throw ParseFail_s{
 							errors::errorClass_e::parse,
 							errors::errorCode_e::column_not_in_table,
@@ -641,7 +636,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 				"__uuid",
 				"person",
 				"column",
-				modifiers_e::count,
+				Modifiers_e::count,
 				cast<int>(vars.columnVars.size())
 			});
 	}
@@ -685,8 +680,8 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				stackOp);
 		}
 		// is it a comparative
-		else if (operators.find(conditions[index]) !=
-			operators.end())
+		else if (Operators.find(conditions[index]) !=
+			Operators.end())
 		{
 			const int newindex = parseConditions(
 				conditions,
@@ -696,14 +691,14 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				true);
 
 			opList.emplace_back(
-				operators.find(conditions[index])->second,
+				Operators.find(conditions[index])->second,
 				0,
 				debug);
 
 			index = newindex;
 		}
-		else if (math.find(conditions[index]) !=
-			math.end())
+		else if (Math.find(conditions[index]) !=
+			Math.end())
 		{
 			const int newindex = parseConditions(
 				conditions,
@@ -714,14 +709,14 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				stackOp); // force the stop
 
 			opList.emplace_back(
-				math.find(conditions[index])->second,
+				Math.find(conditions[index])->second,
 				0,
 				debug);
 
 			index = newindex;
 		}
-		else if (logicalOperators.find(conditions[index]) !=
-			logicalOperators.end())
+		else if (LogicalOperators.find(conditions[index]) !=
+			LogicalOperators.end())
 		{
 			if (stopOnConditions)
 			{
@@ -740,7 +735,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 			// pass in last op for hinting
 			// don't stop on conditional (and/or) here!
 			opList.emplace_back(
-				logicalOperators.find(conditions[index])->second,
+				LogicalOperators.find(conditions[index])->second,
 				0,
 				debug);
 
@@ -750,7 +745,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 		else if (conditions[index] == "None")
 		{
 			opList.emplace_back(
-				opCode_e::PSHLITNUL,
+				OpCode_e::PSHLITNUL,
 				0,
 				debug);
 			break;
@@ -758,7 +753,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 		else
 		{
 			// this is a function call
-			if (macroMarshals.count(conditions[index]))
+			if (MacroMarshals.count(conditions[index]))
 			{
 				index = parseCall(conditions, opList, index, debug);
 				continue; // because index is already incremented we want to avoid doing so at the bottom of this loop
@@ -778,7 +773,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 						value = value.substr(value.find('.') + 1);
 
 					opList.emplace_back(
-						opCode_e::PSHTBLCOL,
+						OpCode_e::PSHTBLCOL,
 						value,
 						debug);
 
@@ -792,14 +787,14 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 				else if (isVar(vars.columnVars, value))
 				{
 					opList.emplace_back(
-						opCode_e::PSHRESCOL,
+						OpCode_e::PSHRESCOL,
 						value,
 						debug);
 				}
 				else if (isString(value))
 				{
 					opList.emplace_back(
-						opCode_e::PSHLITSTR,
+						OpCode_e::PSHLITSTR,
 						value,
 						debug);
 
@@ -844,7 +839,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 					}
 
 					opList.emplace_back(
-						opCode_e::PSHLITFLT,
+						OpCode_e::PSHLITFLT,
 						cast<int64_t>(dblValue * 1'000'000), // dirty secret, doubles are actually ints multipled for 6 digits
 						debug);
 				}
@@ -856,7 +851,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 					intValue = expandTime(value);
 
 					opList.emplace_back(
-						opCode_e::PSHLITINT,
+						OpCode_e::PSHLITINT,
 						intValue,
 						debug);
 				}
@@ -908,7 +903,7 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 					         });
 
 						opList.emplace_back(
-							isRef ? opCode_e::PSHUSROREF : opCode_e::PSHUSROBJ,
+							isRef ? OpCode_e::PSHUSROREF : OpCode_e::PSHUSROBJ,
 							value,
 							debug);
 
@@ -925,21 +920,21 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 						if (value == "True")
 						{
 							opList.emplace_back(
-								opCode_e::PSHLITTRUE,
+								OpCode_e::PSHLITTRUE,
 								value,
 								debug);
 						}
 						else if (value == "False")
 						{
 							opList.emplace_back(
-								opCode_e::PSHLITFALSE,
+								OpCode_e::PSHLITFALSE,
 								value, 
 								debug);
 						}
 						else
 						{
 							opList.emplace_back(
-								isRef ? opCode_e::PSHUSRVREF : opCode_e::PSHUSRVAR,
+								isRef ? OpCode_e::PSHUSRVREF : OpCode_e::PSHUSRVAR,
 								value,
 								debug);
 
@@ -972,9 +967,12 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 	index++;
 
 	// these are function calls that appear like variables, they are read-only
-	if (macroMarshals.count(functionName))
+	if (MacroMarshals.count(functionName))
 	{
-		opList.emplace_back(opCode_e::CALL, functionName, debug);
+		if (SessionMarshals.count(functionName))
+			useSessions = true;
+
+		opList.emplace_back(OpCode_e::CALL, functionName, debug);
 		opList.back().params = 0;
 		opList.back().deferredStr = "";
 		return index;
@@ -982,7 +980,10 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 
 	if (index >= conditions.size())
 	{
-		opList.emplace_back(opCode_e::CALL, functionName, debug);
+		if (SessionMarshals.count(functionName))
+			useSessions = true;
+
+		opList.emplace_back(OpCode_e::CALL, functionName, debug);
 		opList.back().params = 0;
 		return index;
 	}
@@ -1044,7 +1045,10 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 		++index;
 	}
 
-	opList.emplace_back(opCode_e::CALL, functionName, debug);
+	if (SessionMarshals.count(functionName))
+		useSessions = true;
+
+	opList.emplace_back(OpCode_e::CALL, functionName, debug);
 	opList.back().params = params;
 
 	return index;
@@ -1056,7 +1060,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 	auto i = 0;
 
-	const auto pushBlock = [&](MiddleOpList& lambdaBlock, int newId, blockType_e blockType = blockType_e::code)
+	const auto pushBlock = [&](MiddleOpList& lambdaBlock, int newId, BlockType_e blockType = BlockType_e::code)
 	{
 		MiddleBlock_s newBlock;
 		newBlock.blockId = newId;
@@ -1065,7 +1069,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 		outputBlocks.emplace_back(newBlock);
 	};
 
-	auto currentBlockType = blockType_e::code;
+	auto currentBlockType = BlockType_e::code;
 	string blockName = "";
 
 	while (i < lines.size())
@@ -1144,14 +1148,14 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			for (auto v = varList.rbegin(); v != varList.rend(); ++v)
 			{
-				block.emplace_back(opCode_e::POPUSRVAR, *v, lines[i].debug);
+				block.emplace_back(OpCode_e::POPUSRVAR, *v, lines[i].debug);
 				block.back().nameSpace = functionName;
 
 				if (!isVar(vars.userVars, *v))
 					vars.userVars.emplace(*v, Variable_s{*v, *v, functionName});
 			}
 
-			currentBlockType = blockType_e::function;
+			currentBlockType = BlockType_e::function;
 			blockName = functionName;
 		}
 		else if (lines[i].parts[0] == "if" ||
@@ -1162,10 +1166,10 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			auto lambdaId = blockCounter;
 			MiddleOpList lambdaBlock;
 			parseConditions(lines[i].parts, lambdaBlock, 1, lines[i].debug, false);
-			pushBlock(lambdaBlock, lambdaId, blockType_e::lambda);
+			pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
 
 			block.emplace_back(
-				(lines[i].parts[0] == "if") ? opCode_e::CNDIF : opCode_e::CNDELIF,
+				(lines[i].parts[0] == "if") ? OpCode_e::CNDIF : OpCode_e::CNDELIF,
 				lines[i].block, // value is the block ID
 				lines[i].debug,
 				lambdaId);
@@ -1173,7 +1177,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 		else if (lines[i].parts[0] == "else")
 		{
 			block.emplace_back(
-				opCode_e::CNDELSE,
+				OpCode_e::CNDELSE,
 				lines[i].block, // value is block ID
 				lines[i].debug);
 		}
@@ -1253,13 +1257,13 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			         vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 
 			         block.emplace_back(
-				         opCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
+				         OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
 				         item,
 				         lines[i].debug);
 		         });
 
 			block.emplace_back(
-				opCode_e::ITFOR,
+				OpCode_e::ITFOR,
 				lines[i].block,
 				lines[i].debug);
 
@@ -1336,7 +1340,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 					lines[i].debug,
 					false);
 
-				pushBlock(lambdaBlock, lambdaId, blockType_e::lambda);
+				pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
 			}
 
 			int64_t iterCount = 9999999;
@@ -1347,7 +1351,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 				iterCount = stoll(lines[i].parts[1]);
 
 			block.emplace_back(
-				(lines[i].parts[0] == "match") ? opCode_e::ITNEXT : opCode_e::ITPREV,
+				(lines[i].parts[0] == "match") ? OpCode_e::ITNEXT : OpCode_e::ITPREV,
 				lines[i].block,
 				lines[i].debug,
 				lambdaId);
@@ -1410,14 +1414,14 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			// the first item on this line will be a user variable (object with deref)
 			// we want to pop a value into it
 
-			auto op = opCode_e::POPUSROBJ;
+			auto op = OpCode_e::POPUSROBJ;
 
 			// 
 			if (lines[i].parts[derefEndIdx] != "=")
 			{
-				if (mathAssignmentOperators.count(lines[i].parts[derefEndIdx]))
+				if (MathAssignmentOperators.count(lines[i].parts[derefEndIdx]))
 				{
-					op = mathAssignmentOperators.find(lines[i].parts[derefEndIdx])->second;
+					op = MathAssignmentOperators.find(lines[i].parts[derefEndIdx])->second;
 				}
 				else
 					throw ParseFail_s{
@@ -1439,7 +1443,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 		}
 		else if (lines[i].parts.size() >= 2 &&
-			mathAssignmentOperators.count(lines[i].parts[1]))
+			MathAssignmentOperators.count(lines[i].parts[1]))
 		{
 			MiddleOpList rightSideOps;
 
@@ -1461,7 +1465,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 				vars.userVars.emplace(leftSide, Variable_s{ leftSide,"" });
 
 			block.emplace_back(
-				mathAssignmentOperators.find(lines[i].parts[1])->second,
+				MathAssignmentOperators.find(lines[i].parts[1])->second,
 				leftSide,
 				lines[i].debug);
 		}
@@ -1487,21 +1491,21 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			if (isVar(vars.columnVars, lines[i].parts[0]))
 			{
 				block.emplace_back(
-					opCode_e::POPRESCOL,
+					OpCode_e::POPRESCOL,
 					lines[i].parts[0],
 					lines[i].debug);
 			}
 			else
 			{
 				block.emplace_back(
-					opCode_e::POPUSRVAR,
+					OpCode_e::POPUSRVAR,
 					lines[i].parts[0],
 					lines[i].debug);
 
 				vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 			}
 		}
-		else if (marshals.find(lines[i].parts[0]) != marshals.end())
+		else if (Marshals.find(lines[i].parts[0]) != Marshals.end())
 		{
 			MiddleOpList functionCallOps;
 			parseCall(
@@ -1899,7 +1903,7 @@ void QueryParser::extractParam(LineParts& conditions, const int startIdx, int& e
 }
 
 
-void QueryParser::lineTranslation(FirstPass& lines) const
+void QueryParser::lineTranslation(FirstPass& lines) 
 {
 	auto lineIndex = 0;
 	//for (auto& line : lines)
@@ -2506,7 +2510,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				
 				if (conditions.size() > index + 1 &&
 					conditions[index + 1] == "in" &&
-					conditions[0] == "next")
+					conditions[0] == "match")
 				{
 					const auto var = conditions[index];
 
@@ -2590,7 +2594,7 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
-				if (redundantSugar.count(conditions[index]))
+				if (RedundantSugar.count(conditions[index]))
 				{
 					conditions.erase(conditions.begin() + index);
 					changes = true; // loop again
@@ -2748,6 +2752,14 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 					break;
 				}
 
+				if (conditions[index] == "session")
+				{
+					conditions[index] = "__session";
+					changes = true;
+					useSessions = true;
+					break;
+				}
+
 				if (conditions[index] == "person")
 				{
 					conditions[index] = "__uuid";
@@ -2815,14 +2827,14 @@ void QueryParser::lineTranslation(FirstPass& lines) const
 				// TRANSLATE TIME convert days, minutes, hours, seconds to math
 				// we convert: x seconds -> (x * 60)
 				if (index + 1 < conditions.size() &&
-					timeConstants.count(conditions[index + 1]))
+					TimeConstants.count(conditions[index + 1]))
 				{
 					const auto item = conditions[index];
 					const auto timeConst = conditions[index + 1];
 
 					conditions.erase(conditions.begin() + index, conditions.begin() + index + 2);
 
-					const auto timeValue = timeConstants.at(timeConst);
+					const auto timeValue = TimeConstants.at(timeConst);
 
 					// It's an optimizing compiler now!
 					if (isNumeric(item))
@@ -3033,21 +3045,21 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	LineParts accumulation;
 
 	// helper to convert our regular macro Ops to Hint style Ops
-	auto convertOp = [](string op) -> hintOp_e
+	auto convertOp = [](string op) -> HintOp_e
 	{		
-		const auto opIter = operators.find(op); 
+		const auto opIter = Operators.find(op); 
 
-		if (opIter == operators.end())
+		if (opIter == Operators.end())
 		{
-			auto logIter = logicalOperators.find(op);
-			if (logIter == logicalOperators.end())
-				return hintOp_e::UNSUPPORTED;
-			auto iter = opToHintOp.find(logIter->second);
-			return iter != opToHintOp.end() ? iter->second : hintOp_e::UNSUPPORTED;
+			auto logIter = LogicalOperators.find(op);
+			if (logIter == LogicalOperators.end())
+				return HintOp_e::UNSUPPORTED;
+			auto iter = OpToHintOp.find(logIter->second);
+			return iter != OpToHintOp.end() ? iter->second : HintOp_e::UNSUPPORTED;
 		}
 
-		auto iter = opToHintOp.find(opIter->second);
-		return iter != opToHintOp.end() ? iter->second : hintOp_e::UNSUPPORTED;
+		auto iter = OpToHintOp.find(opIter->second);
+		return iter != OpToHintOp.end() ? iter->second : HintOp_e::UNSUPPORTED;
 	};
 
 	// store textual values as we come across them
@@ -3085,7 +3097,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			if (isNonuserVar(left))
 			{
 				// use PUSH_PRESENT (value 0 is ignored)
-				opList.emplace_back(hintOp_e::PUSH_PRESENT, left, 0);
+				opList.emplace_back(HintOp_e::PUSH_PRESENT, left, 0);
 				accumulation.clear();
 				return;
 			}
@@ -3093,7 +3105,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			{
 				// we don't know what this is, so we will push an
 				// ignorable value into here
-				opList.emplace_back(hintOp_e::PUSH_NOP);
+				opList.emplace_back(HintOp_e::PUSH_NOP);
 				accumulation.clear();
 				return;
 			}
@@ -3105,19 +3117,19 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			// function calls, either way, we can't optimize
 			// with math (especially when variables are involved)
 			// so we will emit a NOP as a placeholder for the logic
-			opList.emplace_back(hintOp_e::PUSH_NOP);
+			opList.emplace_back(HintOp_e::PUSH_NOP);
 			accumulation.clear();
 			return;
 		}
 
 		auto left = accumulation[0];
-		hintOp_e op = convertOp(accumulation[1]);
+		HintOp_e op = convertOp(accumulation[1]);
 		auto right = accumulation[2];
 
-		if (op == hintOp_e::UNSUPPORTED)
+		if (op == HintOp_e::UNSUPPORTED)
 		{
 			// we can't index on this operator so emit a NOP placeholder
-			opList.emplace_back(hintOp_e::PUSH_NOP);
+			opList.emplace_back(HintOp_e::PUSH_NOP);
 			accumulation.clear();
 			return;
 		}
@@ -3128,7 +3140,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 		if (leftIsTableVar && rightIsTableVar)
 		{
 			// skip column to column comparisons, emit a NOP placeholder
-			opList.emplace_back(hintOp_e::PUSH_NOP);
+			opList.emplace_back(HintOp_e::PUSH_NOP);
 			accumulation.clear();
 			return;
 		}
@@ -3136,14 +3148,14 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 		if (!leftIsTableVar && !rightIsTableVar)
 		{
 			// skip non-table variable comparisons, emit a NOP placeholder
-			opList.emplace_back(hintOp_e::PUSH_NOP);
+			opList.emplace_back(HintOp_e::PUSH_NOP);
 			accumulation.clear();
 			return;
 		}
 
 		if (isUserVar(left) || isUserVar(right))
 		{
-			opList.emplace_back(hintOp_e::PUSH_NOP);
+			opList.emplace_back(HintOp_e::PUSH_NOP);
 			accumulation.clear();
 			return;
 		}
@@ -3159,17 +3171,17 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			// swap certain operators if right is a var
 			switch (op)
 			{
-				case hintOp_e::PUSH_GT:
-					op = hintOp_e::PUSH_LTE;
+				case HintOp_e::PUSH_GT:
+					op = HintOp_e::PUSH_LTE;
 					break;
-				case hintOp_e::PUSH_LT:
-					op = hintOp_e::PUSH_GTE;
+				case HintOp_e::PUSH_LT:
+					op = HintOp_e::PUSH_GTE;
 					break;
-				case hintOp_e::PUSH_GTE:
-					op = hintOp_e::PUSH_LT;
+				case HintOp_e::PUSH_GTE:
+					op = HintOp_e::PUSH_LT;
 					break;
-				case hintOp_e::PUSH_LTE:
-					op = hintOp_e::PUSH_GT;
+				case HintOp_e::PUSH_LTE:
+					op = HintOp_e::PUSH_GT;
 					break;
 				default: ;
 			}
@@ -3219,8 +3231,8 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				index + 1,
 				false);
 		}
-		else if (logicalOperators.find(conditions[index]) !=
-			logicalOperators.end())
+		else if (LogicalOperators.find(conditions[index]) !=
+			LogicalOperators.end())
 		{
 			store();
 
@@ -3267,7 +3279,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 				index = idx;
 
-				opList.emplace_back(hintOp_e::PUSH_NOP);
+				opList.emplace_back(HintOp_e::PUSH_NOP);
 				accumulation.clear();
 				//break;
 			}
@@ -3328,7 +3340,7 @@ void QueryParser::build(
 	{
 		// add non var types (aka db columns) to the
 		// tableVars list
-		if (v.second.modifier != modifiers_e::var)
+		if (v.second.modifier != Modifiers_e::var)
 		{
 			vars.tableVars[v.second.actual] = v.second;
 			const auto colInfo = columns->getColumn(v.second.actual);
@@ -3337,7 +3349,7 @@ void QueryParser::build(
 				throw ParseFail_s{
 					errors::errorClass_e::parse,
 					errors::errorCode_e::column_not_in_table,
-					"select column: " + v.second.actual
+					"agg result column: " + v.second.actual
 				};
 			v.second.schemaColumn = colInfo->idx;
 			v.second.schemaType = colInfo->type;
@@ -3411,7 +3423,7 @@ void QueryParser::build(
 
 	for (auto& v : finVars.columnVars)
 	{
-		if (v.modifier == modifiers_e::var)
+		if (v.modifier == Modifiers_e::var)
 			continue;
 		const auto tableVar = vars.tableVars.find(v.actual);
 		if (tableVar == vars.tableVars.end())		
@@ -3427,7 +3439,7 @@ void QueryParser::build(
 	// map the distinct key column
 	for (auto& v : finVars.columnVars)
 	{
-		if (v.modifier == modifiers_e::var)
+		if (v.modifier == Modifiers_e::var)
 			continue;
 		const auto tableVar = vars.tableVars.find(v.distinctColumnName);
 		if (tableVar == vars.tableVars.end())
@@ -3504,7 +3516,7 @@ void QueryParser::build(
 
 			// if this is a function map its name to the 
 			// final Code line
-			if (b.type == blockType_e::function)
+			if (b.type == BlockType_e::function)
 				functionMap[b.blockName] = finCode.size();
 
 			// iterate instruction
@@ -3512,9 +3524,9 @@ void QueryParser::build(
 			{
 				switch (c.op)
 				{
-					case opCode_e::NOP:
+					case OpCode_e::NOP:
 						break;
-					case opCode_e::PSHTBLCOL:
+					case OpCode_e::PSHTBLCOL:
 						finCode.emplace_back(
 							c.op,
 							vars.tableVars[c.valueString].index,
@@ -3522,7 +3534,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHRESCOL:
+					case OpCode_e::PSHRESCOL:
 						finCode.emplace_back(
 							c.op,
 							vars.columnVars[c.valueString].index,
@@ -3530,7 +3542,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::VARIDX:
+					case OpCode_e::VARIDX:
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
@@ -3538,8 +3550,8 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHLITTRUE:
-					case opCode_e::PSHLITFALSE:
+					case OpCode_e::PSHLITTRUE:
+					case OpCode_e::PSHLITFALSE:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3547,10 +3559,10 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHUSROBJ:
-					case opCode_e::PSHUSRVAR:
-					case opCode_e::PSHUSRVREF:
-					case opCode_e::PSHUSROREF:
+					case OpCode_e::PSHUSROBJ:
+					case OpCode_e::PSHUSRVAR:
+					case OpCode_e::PSHUSRVREF:
+					case OpCode_e::PSHUSROREF:
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
@@ -3558,7 +3570,7 @@ void QueryParser::build(
 							c.params,
 							c.debug);
 						break;
-					case opCode_e::PSHLITSTR:
+					case OpCode_e::PSHLITSTR:
 						finCode.emplace_back(
 							c.op,
 							vars.literals[c.valueString], // map is to index
@@ -3566,7 +3578,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHLITINT:
+					case OpCode_e::PSHLITINT:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3574,7 +3586,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHLITFLT:
+					case OpCode_e::PSHLITFLT:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3582,8 +3594,8 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::PSHPAIR:
-					case opCode_e::PSHLITNUL:
+					case OpCode_e::PSHPAIR:
+					case OpCode_e::PSHLITNUL:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3592,8 +3604,8 @@ void QueryParser::build(
 							c.debug);
 						break;
 
-					case opCode_e::POPUSRVAR:
-					case opCode_e::POPUSROBJ:
+					case OpCode_e::POPUSRVAR:
+					case OpCode_e::POPUSROBJ:
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
@@ -3601,7 +3613,7 @@ void QueryParser::build(
 							c.params,
 							c.debug);
 						break;
-					case opCode_e::POPTBLCOL:
+					case OpCode_e::POPTBLCOL:
 						finCode.emplace_back(
 							c.op,
 							vars.tableVars[c.valueString].index,
@@ -3609,7 +3621,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::POPRESCOL:
+					case OpCode_e::POPRESCOL:
 						finCode.emplace_back(
 							c.op,
 							vars.columnVars[c.valueString].index,
@@ -3617,8 +3629,8 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::CNDIF:
-					case opCode_e::CNDELIF:
+					case OpCode_e::CNDIF:
+					case OpCode_e::CNDELIF:
 						finCode.emplace_back(
 							c.op,
 							c.value, // value for the moment is block_id
@@ -3626,7 +3638,7 @@ void QueryParser::build(
 							c.lambda, // extra maps to lambda
 							c.debug);
 						break;
-					case opCode_e::CNDELSE:
+					case OpCode_e::CNDELSE:
 						finCode.emplace_back(
 							c.op,
 							c.value, // value for the moment is block_id
@@ -3634,7 +3646,7 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::ITFOR:
+					case OpCode_e::ITFOR:
 						finCode.emplace_back(
 							c.op,
 							c.value, // value for the moment is block_id
@@ -3642,8 +3654,8 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::ITNEXT:
-					case opCode_e::ITPREV:
+					case OpCode_e::ITNEXT:
+					case OpCode_e::ITPREV:
 						finCode.emplace_back(
 							c.op,
 							c.value, // value for the moment is block_id
@@ -3651,20 +3663,20 @@ void QueryParser::build(
 							c.lambda, // extra maps to lambda
 							c.debug);
 						break;
-					case opCode_e::MATHADD:
-					case opCode_e::MATHSUB:
-					case opCode_e::MATHMUL:
-					case opCode_e::MATHDIV:
-					case opCode_e::OPGT:
-					case opCode_e::OPLT:
-					case opCode_e::OPGTE:
-					case opCode_e::OPLTE:
-					case opCode_e::OPEQ:
-					case opCode_e::OPNEQ:
-					case opCode_e::OPWTHN:
-					case opCode_e::OPNOT:
-					case opCode_e::LGCAND:
-					case opCode_e::LGCOR:
+					case OpCode_e::MATHADD:
+					case OpCode_e::MATHSUB:
+					case OpCode_e::MATHMUL:
+					case OpCode_e::MATHDIV:
+					case OpCode_e::OPGT:
+					case OpCode_e::OPLT:
+					case OpCode_e::OPGTE:
+					case OpCode_e::OPLTE:
+					case OpCode_e::OPEQ:
+					case OpCode_e::OPNEQ:
+					case OpCode_e::OPWTHN:
+					case OpCode_e::OPNOT:
+					case OpCode_e::LGCAND:
+					case OpCode_e::LGCOR:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3672,10 +3684,10 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case opCode_e::MATHADDEQ:
-					case opCode_e::MATHSUBEQ:
-					case opCode_e::MATHMULEQ:
-					case opCode_e::MATHDIVEQ :
+					case OpCode_e::MATHADDEQ:
+					case OpCode_e::MATHSUBEQ:
+					case OpCode_e::MATHMULEQ:
+					case OpCode_e::MATHDIVEQ :
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
@@ -3684,7 +3696,7 @@ void QueryParser::build(
 							c.debug);
 						break;
 
-					case opCode_e::MARSHAL:
+					case OpCode_e::MARSHAL:
 						// these should not appear in generated code
 						// something is rotten in Denmark
 						throw ParseFail_s{
@@ -3694,19 +3706,16 @@ void QueryParser::build(
 							c.debug 
 						};
 
-					case opCode_e::CALL:
-						if (marshals.find(c.valueString) != marshals.end())
+					case OpCode_e::CALL:
+						if (Marshals.find(c.valueString) != Marshals.end())
 						{
-							auto marshal = marshals.find(c.valueString)->second;
+							auto marshal = Marshals.find(c.valueString)->second;
 
-							if (segmentMathMarshals.count(marshal))
+							if (SegmentMathMarshals.count(marshal))
 								isSegmentMath = true;
 
-							if (sessionMarshals.count(marshal))
-								useSessions = true;
-
 							finCode.emplace_back(
-								opCode_e::MARSHAL,
+								OpCode_e::MARSHAL,
 								cast<int64_t>(marshal),
 								0,
 								c.params, // extra has param count
@@ -3719,14 +3728,14 @@ void QueryParser::build(
 							callMap[finCode.size()] = c.valueString;
 
 							finCode.emplace_back(
-								opCode_e::CALL,
+								OpCode_e::CALL,
 								c.value, // this is the code block index
 								0,
 								0,
 								c.debug);
 						}
 						break;
-					case opCode_e::RETURN:
+					case OpCode_e::RETURN:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3735,7 +3744,7 @@ void QueryParser::build(
 							c.debug);
 						break;
 
-					case opCode_e::TERM:
+					case OpCode_e::TERM:
 						finCode.emplace_back(
 							c.op,
 							0,
@@ -3759,7 +3768,7 @@ void QueryParser::build(
 	}
 
 	// add the term code to the end of the program
-	finCode.emplace_back(opCode_e::TERM, 0, 0, 0);
+	finCode.emplace_back(OpCode_e::TERM, 0, 0, 0);
 
 	int64_t lineNumber = 0;
 
@@ -3767,23 +3776,23 @@ void QueryParser::build(
 	{
 		switch (f.op)
 		{
-			case opCode_e::CNDIF:
-			case opCode_e::CNDELIF:
-			case opCode_e::ITFOR:
-			case opCode_e::ITNEXT:
-			case opCode_e::ITPREV:
+			case OpCode_e::CNDIF:
+			case OpCode_e::CNDELIF:
+			case OpCode_e::ITFOR:
+			case OpCode_e::ITNEXT:
+			case OpCode_e::ITPREV:
 				// map index to index of BlockID
 				f.index = blockIndex[f.index];
 				// map lambda (extra) to index of BlockId
 				f.extra = blockIndex[f.extra];
 				break;
 
-			case opCode_e::CNDELSE:
+			case OpCode_e::CNDELSE:
 				// map index to index of BlockID
 				f.index = blockIndex[f.index];
 				break;
 
-			case opCode_e::CALL:
+			case OpCode_e::CALL:
 				if (!functionMap.count(callMap[lineNumber]))
 					throw ParseFail_s{
 						errors::errorClass_e::parse,
@@ -3819,7 +3828,7 @@ void QueryParser::build(
 	}
 }
 
-bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& macros, ParamVars* templateVars)
+bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& macros, ParamVars* templateVars)
 {
 
 	try
@@ -3856,7 +3865,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& 
 		for (auto& m : middleBlocks)
 		{
 			Debug_s dbg;
-			m.code.emplace_back(opCode_e::RETURN, 0, dbg);
+			m.code.emplace_back(OpCode_e::RETURN, 0, dbg);
 		}
 
 		// sort blocks into descending block order, blocks are likely to be accessed
@@ -3865,6 +3874,12 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& 
 		{
 			return a.blockId < b.blockId;
 		});
+
+
+		if (useSessions && vars.tableVars.count("__session") == 0)
+			vars.tableVars.emplace(
+				"__session",
+				Variable_s{ "__session", "grid" });
 
 		// fill class variable 'macro' with the built code.
 		// the macro structure can be passed to the interpretor
@@ -3887,21 +3902,24 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_S& 
 			macros.indexes.emplace_back(hintPair);
 		}
 
-		if (useSessions)
-		{
-			macros.vars.tableVars.push_back({ "__session", "grid" });
-			macros.vars.tableVars.back().column = COL_SESSION;
-			macros.vars.tableVars.back().index = macros.vars.tableVars.size() - 1;
-		}
-
 		macros.segments = std::move(vars.segmentNames); // move these over, these are evaluated at run-time
 		macros.segmentTTL = segmentTTL;
 		macros.segmentRefresh = segmentRefresh;
 		macros.useCached = segmentUseCached;
 		macros.isSegment = isSegment;
 		macros.isSegmentMath = isSegmentMath;
-		macros.useSessions = useSessions;
 		macros.useGlobals = useGlobals;
+
+		macros.useSessions = useSessions;
+		if (macros.useSessions)
+		{
+			for (auto &c: macros.vars.tableVars)
+				if (c.actual == "__session"s)
+				{
+					macros.sessionColumn = c.index;
+					break;
+				}
+		}
 
 		return true;
 	}
@@ -4086,7 +4104,7 @@ string padding(const int64_t number, const int length, const bool left = true, c
 	return padding(to_string(number), length, left, filler);
 }
 
-string openset::query::MacroDbg(Macro_S& macro)
+string openset::query::MacroDbg(Macro_s& macro)
 {
 	stringstream ss;
 
@@ -4133,7 +4151,7 @@ string openset::query::MacroDbg(Macro_S& macro)
 	for (auto& v : macro.vars.columnVars)
 	{
 		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << padding(modifierDebugStrings.find(v.modifier)->second, 6, false) << " ";
+		ss << padding(ModifierDebugStrings.find(v.modifier)->second, 6, false) << " ";
 		if (v.column == -1)
 			ss << "  NA  ";
 		else
@@ -4150,7 +4168,7 @@ string openset::query::MacroDbg(Macro_S& macro)
 	auto count = 0;
 	for (auto& m: macro.code)
 	{
-		const auto opString = opDebugStrings.find(m.op)->second;
+		const auto opString = OpDebugStrings.find(m.op)->second;
 		ss << padding(count, 4, true, '0') << "  ";
 		ss << padding(opString, 12, false);
 		ss << padding(m.value, 13, left);
@@ -4173,17 +4191,17 @@ string openset::query::MacroDbg(Macro_S& macro)
 		ss << "--------------------------------" << endl;
 		for (auto& i : index)
 		{
-			const auto op = hintOperatorsDebug.find(i.op)->second;
+			const auto op = HintOperatorsDebug.find(i.op)->second;
 			ss << padding(op, 14, false);
 
 			switch (i.op)
 			{
-				case hintOp_e::PUSH_EQ:
-				case hintOp_e::PUSH_NEQ:
-				case hintOp_e::PUSH_GT:
-				case hintOp_e::PUSH_GTE:
-				case hintOp_e::PUSH_LT:
-				case hintOp_e::PUSH_LTE:
+				case HintOp_e::PUSH_EQ:
+				case HintOp_e::PUSH_NEQ:
+				case HintOp_e::PUSH_GT:
+				case HintOp_e::PUSH_GTE:
+				case HintOp_e::PUSH_LT:
+				case HintOp_e::PUSH_LTE:
 					ss << padding(i.column, 32, false);
 					if (i.numeric)
 						ss << to_string(i.intValue);
@@ -4191,7 +4209,7 @@ string openset::query::MacroDbg(Macro_S& macro)
 						ss << i.textValue;
 					break;
 
-				case hintOp_e::PUSH_PRESENT:
+				case HintOp_e::PUSH_PRESENT:
 					ss << padding(i.column, 32, false);
 					break;
 				default: ;

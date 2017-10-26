@@ -194,6 +194,7 @@ namespace openset
 			int32_t columnCount{ 0 };
 			int32_t uuidColumn{ -1 }; // auto mapped in prepare
 			int32_t sessionColumn{ -1 };
+			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
 			Table* table{ nullptr };
 			Attributes* attributes{ nullptr };
@@ -220,6 +221,11 @@ namespace openset
 			*/
 			bool mapSchema(Table* tablePtr, Attributes* attributesPtr);
 			bool mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& columnNames);
+
+			void setSessionTime(const int64_t sessionTime)
+			{
+				this->sessionTime = sessionTime;
+			}
 
 			void mount(PersonData_s* personData);
 			void prepare();

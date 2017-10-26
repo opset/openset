@@ -81,6 +81,11 @@ namespace openset
 			 */
 			void prepare();
 
+			void setSessionTime(const int64_t sessionTime)
+			{
+				grid.setSessionTime(sessionTime);
+			}
+
 			/**
 			 * \brief return reference to grid object
 			 * \return Grid const pointer (read only)

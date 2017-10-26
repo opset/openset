@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.h"
-#include "attributes.h"
 #include "people.h"
 #include "threads/locks.h"
 #include "columns.h"
@@ -25,27 +24,27 @@ namespace openset
 		class Database;
 		class TablePartitioned;
 
-		struct segmentTTL_s
+		struct SegmentTtl_s
 		{
 			string segmentName;
 			int64_t TTL;
 
-			segmentTTL_s(std::string segmentName, int64_t TTL) :
+			SegmentTtl_s(const std::string segmentName, const int64_t TTL) :
 				segmentName(segmentName),
 				TTL(TTL)
 			{}
 		};
 
-		struct segmentRefresh_s
+		struct SegmentRefresh_s
 		{
 			string segmentName;
 			int64_t refreshTime;
-			query::Macro_S macros;
+			query::Macro_s macros;
 
-			segmentRefresh_s(
-				std::string segmentName, 
-				query::Macro_S macros,
-				int64_t refreshTime) :
+			SegmentRefresh_s(
+				const std::string segmentName,
+				const query::Macro_s macros,
+				const int64_t refreshTime) :
 				segmentName(segmentName),
 				refreshTime(refreshTime),
 				macros(macros)
@@ -59,10 +58,7 @@ namespace openset
 
 		class Table
 		{
-		public:
 			// partition specific object container
-
-		private:
 			string name;
 			CriticalSection cs;
 		
@@ -73,9 +69,9 @@ namespace openset
 			// segmentRefresh maps
 			CriticalSection segmentCS;
 			// map of segments, their TTLs, last refresh times, etc
-			std::unordered_map<std::string, segmentTTL_s> segmentTTL;
+			std::unordered_map<std::string, SegmentTtl_s> segmentTTL;
 			// list of segments that auto update and the code to update them
-			std::unordered_map<std::string, segmentRefresh_s> segmentRefresh;
+			std::unordered_map<std::string, SegmentRefresh_s> segmentRefresh;
 
 			// global variables
 			CriticalSection globalVarCS;
@@ -97,9 +93,9 @@ namespace openset
 			int64_t loadVersion;
 
 		public:
-			int rowCull{ 5000 }; // remove oldest rows if more than
-			int64_t stampCull{ 86400000LL * 365LL }; // auto cull older than
-			int64_t sessionTime{ 60000LL * 30LL }; // 30 minutes
+			int rowCull{ 5000 }; // remove oldest rows if more than rowCull
+			int64_t stampCull{ 86'400'000LL * 365LL }; // auto cull older than stampCull
+			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
 			explicit Table(string name, openset::db::Database* database);
 
@@ -109,6 +105,11 @@ namespace openset
 
 			TablePartitioned* getPartitionObjects(int32_t partition);
 			void releasePartitionObjects(int32_t partition);
+
+			int64_t getSessionTime() const
+			{
+				return sessionTime;
+			}
 
 			inline Columns* getColumns()
 			{
@@ -157,12 +158,12 @@ namespace openset
 				return &segmentCS;
 			}
 
-			inline std::unordered_map<std::string, segmentTTL_s>* getSegmentTTL()
+			inline std::unordered_map<std::string, SegmentTtl_s>* getSegmentTTL()
 			{
 				return &segmentTTL;
 			}
 
-			inline std::unordered_map<std::string, segmentRefresh_s>* getSegmentRefresh()
+			inline std::unordered_map<std::string, SegmentRefresh_s>* getSegmentRefresh()
 			{
 				return &segmentRefresh;
 			}
@@ -197,16 +198,16 @@ namespace openset
 				return &triggerConf;
 			}
 
-			void setSegmentRefresh(std::string segmentName, query::Macro_S macros, int64_t refreshTime)
+			void setSegmentRefresh(std::string segmentName, const query::Macro_s macros, const int64_t refreshTime)
 			{
 				csLock lock(segmentCS);
-				segmentRefresh.emplace(segmentName, segmentRefresh_s{ segmentName, macros, refreshTime });
+				segmentRefresh.emplace(segmentName, SegmentRefresh_s{ segmentName, macros, refreshTime });
 			}
 
-			void setSegmentTTL(std::string segmentName, int64_t TTL)
+			void setSegmentTTL(std::string segmentName, const int64_t TTL)
 			{
 				csLock lock(segmentCS);
-				segmentTTL.emplace(segmentName, segmentTTL_s{ segmentName, TTL });
+				segmentTTL.emplace(segmentName, SegmentTtl_s{ segmentName, TTL });
 			}
 
 			// serialize table structure, pk, trigger names, into cjson branch

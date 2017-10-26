@@ -16,7 +16,7 @@ namespace openset
 			using IndexPair = std::tuple<std::string, openset::db::IndexBits, bool>;
 			using IndexList = std::vector<IndexPair>;
 
-			Macro_S macros;
+			Macro_s macros;
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 			int partition;
@@ -28,7 +28,7 @@ namespace openset
 
 			void mount(
 				openset::db::Table* tablePtr, 
-				Macro_S& queryMacros, 
+				Macro_s& queryMacros, 
 				int partitionNumber, 
 				int stopAtBit);
 

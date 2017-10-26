@@ -277,7 +277,7 @@ inline Tests test_db()
 				auto table = database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-				openset::query::Macro_S queryMacros; // this is our compiled code block
+				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
 
 				// compile this
@@ -373,7 +373,7 @@ inline Tests test_db()
 				auto table = database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-				openset::query::Macro_S queryMacros; // this is our compiled code block
+				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
 
 				// compile this - passing in the template vars
@@ -460,7 +460,7 @@ inline Tests test_db()
 				auto table = database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
-				openset::query::Macro_S queryMacros; // this is our compiled code block
+				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
 
 				// compile this - passing in the template vars

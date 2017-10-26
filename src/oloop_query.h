@@ -20,7 +20,7 @@ namespace openset
 		class OpenLoopQuery : public OpenLoop
 		{
 		public:
-			openset::query::Macro_S macros;
+			openset::query::Macro_s macros;
 			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
@@ -39,7 +39,7 @@ namespace openset
 			explicit OpenLoopQuery(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
 				openset::db::Table* table,
-				openset::query::Macro_S macros, 
+				openset::query::Macro_s macros, 
 				openset::result::ResultSet* result,
 				int instance);
 

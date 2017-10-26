@@ -422,9 +422,9 @@ void Grid::prepare()
 		{
 			if (sessionColumn != -1)
 			{
-				if (lastSessionTime && row->cols[0] - lastSessionTime > table->sessionTime)
+				if (row->cols[COL_STAMP] - lastSessionTime > sessionTime)
 					++session;
-				lastSessionTime = row->cols[0];
+				lastSessionTime = row->cols[COL_STAMP];
 				row->cols[sessionColumn] = session;
 			}
 			

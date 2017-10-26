@@ -130,7 +130,7 @@ namespace openset
 			std::string name;
 			std::string script;
 			int configVersion;
-			openset::query::Macro_S macros;
+			openset::query::Macro_s macros;
 		};
 
 		class Trigger
@@ -144,7 +144,7 @@ namespace openset
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 
-			openset::query::Macro_S macros; // this will be a copy of what is in the triggerSettings_S
+			openset::query::Macro_s macros; // this will be a copy of what is in the triggerSettings_S
 			openset::query::Interpreter* interpreter;
 
 			openset::db::Person* person;
@@ -169,7 +169,7 @@ namespace openset
 				openset::db::Table* table, 
 				std::string name, 
 				std::string script,
-				openset::query::Macro_S &targetMacros);
+				openset::query::Macro_s &targetMacros);
 
 			void init();
 
