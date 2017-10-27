@@ -13,7 +13,6 @@
 #include "uvserver.h"
 
 #include <thread>
-#include <chrono>
 
 namespace openset
 {
@@ -22,11 +21,11 @@ namespace openset
 
 	bool Service::start()
 	{
-		auto IP = globals::running->host;
-		auto port = globals::running->port;
-		auto pool = std::thread::hardware_concurrency() * 4; // set to number of cores
+		const auto IP = globals::running->host;
+		const auto port = globals::running->port;
+		const auto pool = std::thread::hardware_concurrency() * 2; // set to number of cores
 
-		auto partitionTotal = globals::running->partitionMax;
+		const auto partitionTotal = globals::running->partitionMax;
 
 #ifndef _MSC_VER
 		signal(SIGPIPE, SIG_IGN);

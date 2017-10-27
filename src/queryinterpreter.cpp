@@ -1848,12 +1848,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						break;
 					case columnTypes_e::textColumn:
 						{
-							const auto attr = grid->getAttributes()->get(
+							const auto text = grid->getAttributes()->blob->getValue(
 								macros.vars.tableVars[inst->index].schemaColumn,
 								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
 
-							if (attr && attr->text)
-								*stackPtr = attr->text;
+							if (text)
+								*stackPtr = text;
 							else
 								*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
 						}

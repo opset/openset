@@ -82,7 +82,8 @@ Attr_s* Attributes::getMake(const int32_t column, const string value)
 	if (auto attrPair = columnIndex->get(valueHash); attrPair == nullptr)
 	{
 		const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-		attr->text = blob->storeValue(column, value);
+		//attr->text = 
+		blob->storeValue(column, value);
 		attrPair = columnIndex->set(valueHash, attr);
 		return attrPair->second;
 	}
@@ -296,14 +297,17 @@ void Attributes::serialize(HeapStack* mem)
 			blockHeader->column = col.first;
 			blockHeader->hashValue = item.first;
 			blockHeader->ints = item.second->ints;
-			blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
+			auto text = this->blob->getValue(col.first, item.first);
+			blockHeader->textSize = text ? strlen(text) : 0;
+			//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
 			blockHeader->compSize = item.second->comp;
 
 			// copy a text/blob value if any
 			if (blockHeader->textSize)
 			{
 				const auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
-				memcpy(textData, item.second->text, blockHeader->textSize);
+				memcpy(textData, text, blockHeader->textSize);
+				//memcpy(textData, item.second->text, blockHeader->textSize);
 			}
 
 			// copy the compressed data
@@ -364,7 +368,7 @@ int64_t Attributes::deserialize(char* mem)
 
 		// create an attr_s object
 		const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
-		attr->text = blobPtr;
+		//attr->text = blobPtr;
 		attr->ints = blockHeader->ints;
 		attr->comp = blockHeader->compSize;
 		attr->changeTail = nullptr;

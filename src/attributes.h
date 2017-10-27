@@ -78,7 +78,7 @@ namespace openset::db
 		 * 
 		 */
 		Attr_changes_s* changeTail{ nullptr };
-		char* text{ nullptr };
+		//char* text{ nullptr };
 		int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
 		int32_t comp{ 0 }; // compressed size in bytes
 		int32_t linId{ -1 };

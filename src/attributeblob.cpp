@@ -47,7 +47,7 @@ char* openset::db::AttributeBlob::storeValue(int32_t column, string value)
 char* openset::db::AttributeBlob::getValue(int32_t column, int64_t valueHash)
 {
 	char* blob = nullptr;
-	auto key = attr_key_s::makeKey(column, valueHash);
+	const auto key = attr_key_s::makeKey(column, valueHash);
 
 	csLock lock(cs);
 	attributesBlob.get(key, blob);

@@ -290,8 +290,8 @@ cjson Grid::toJSON(const bool condensed) const
 						case columnTypes_e::textColumn:
 						{
 							// value here is the hashed value							
-							if (const auto attr = attributes->get(colInfo->idx, value); attr->text)
-								rowObj->set(colInfo->name, attr->text);
+							if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+								rowObj->set(colInfo->name, text);
 						}
 						break;
 						}
@@ -343,8 +343,8 @@ cjson Grid::toJSON(const bool condensed) const
 							break;
 						case columnTypes_e::textColumn:
 						{							
-							if (const auto attr = attributes->get(colInfo->idx, value); attr && attr->text)
-								rowObj->set(colInfo->name, attr->text);
+							if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+								rowObj->set(colInfo->name, text);
 						}
 						break;
 						}
