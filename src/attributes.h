@@ -58,10 +58,30 @@ namespace openset::db
 	*/
 	struct Attr_s
 	{
+		/*
+		 * The Attr_s is an index structure. 
+		 *  
+		 * Standard layout:
+		 *   ints - the number of uint64_t in the bit index array decompressed
+		 *   comp - how much space they take compressed (in bytes)
+		 * 
+		 * Sparse Layout:
+		 *   ints - negative number, abs value is number of int32_ts in list
+		 *   comp - size of array in bytes (4 x length)
+		 * 
+		 * Note: some indexes are really sparce, and while they compress well
+		 *   if there are thousands or millions of bits, compressing just one or
+		 *   two bits can be a waste of processor cycles and space as the result
+		 *   is still larger than it need be. In situtations where the population
+		 *   of the index is low, we will use an array of int32_t values, where
+		 *   each int32_t is a linear_id (linear user id).
+		 * 
+		 */
 		Attr_changes_s* changeTail{ nullptr };
 		char* text{ nullptr };
 		int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
 		int32_t comp{ 0 }; // compressed size in bytes
+		int32_t linId{ -1 };
 		char index[1]; // char* (1st byte) of packed index bits struct
 
 		Attr_s() {};

@@ -26,25 +26,25 @@ namespace openset
 
 			// make bits that are on or off
 			// index is number of bits, state is 1 or 0
-			void makeBits(int64_t index, int state);
+			void makeBits(const int64_t index, const int state);
 
 			// takes buffer to compressed data and actual size as parameters
 			// note: actual size is number of long longs (in64_t)
-			void mount(char* compressedData, int32_t Ints);
+			void mount(char* compressedData, const int32_t integers, const int32_t linId);
 
 			int64_t getSizeBytes() const;
 
 			// returns a POOL buffer, and the number of bytes
 			// required for the stored data... obviously, and it's a pity
 			// we need to double copy the result.
-			char* store(int64_t& compressedBytes);
+			char* store(int64_t& compressedBytes, int32_t &linId);
 
-			void grow(int32_t Required);
+			void grow(const int32_t required);
 
-			void lastBit(int64_t index);
-			void bitSet(int64_t index);
-			void bitClear(int64_t index);
-			bool bitState(int64_t index) const;
+			void lastBit(const int64_t index);
+			void bitSet(const int64_t index);
+			void bitClear(const int64_t index);
+			bool bitState(const int64_t index) const;
 
 			int64_t population(int stopBit) const;
 
@@ -55,7 +55,7 @@ namespace openset
 			void opAndNot(IndexBits& source);
 			void opNot() const;
 
-			bool linearIter(int64_t& linId, int stopBit) const;
+			bool linearIter(int32_t& linId, int stopBit) const;
 
 			class BitProxy
 			{
@@ -64,7 +64,7 @@ namespace openset
 				int idx;
 				int value;
 
-				BitProxy(IndexBits* bits, int idx) :
+				BitProxy(IndexBits* bits, const int idx) :
 					bits(bits),
 					idx(idx)
 				{

@@ -17,7 +17,8 @@ void Attr_s::addChange(const int32_t linearId, const bool state)
 IndexBits* Attr_s::getBits()
 {
 	auto bits = new IndexBits();
-	bits->mount(index, ints);
+
+	bits->mount(index, ints, linId);
 
 	auto t = changeTail;
 
@@ -131,7 +132,7 @@ void Attributes::clearDirty()
 
 		const auto attr = attrPair->second;
 
-		bits.mount(attr->index, attr->ints);
+		bits.mount(attr->index, attr->ints, attr->linId);
 
 		auto t = attr->changeTail;
 
@@ -149,20 +150,24 @@ void Attributes::clearDirty()
 		attr->changeTail = nullptr;
 
 		int64_t compBytes = 0; // OUT value via reference
+		int32_t linId;
 
-							   // compress the data, get it back in a pool ptr
-		const auto compData = bits.store(compBytes);
+		// compress the data, get it back in a pool ptr
+		const auto compData = bits.store(compBytes, linId);
 		const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 		// copy header
 		memcpy(destAttr, attr, sizeof(Attr_s));
-		memcpy(destAttr->index, compData, compBytes);
+		if (compData)
+		{
+			memcpy(destAttr->index, compData, compBytes);
+			// return work buffer from bits.store to the pool
+			PoolMem::getPool().freePtr(compData);
+		}
 
-		// return work buffer from bits.store to the pool
-		PoolMem::getPool().freePtr(compData);
-
-		destAttr->ints = bits.ints;
+		destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
 		destAttr->comp = compBytes;
+		destAttr->linId = linId;
 
 		// if we made a new destination, we have to update the 
 		// index to point to it, and free the old one up.
@@ -185,21 +190,25 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 
 	const auto attr = attrPair->second;
 
-	int64_t compBytes = 0; // OUT value via reference
+	int64_t compBytes = 0; // OUT value
+	int32_t linId = -1;
 
 	// compress the data, get it back in a pool ptr, size returned in compBytes
-	const auto compData = newBits->store(compBytes);
+	const auto compData = newBits->store(compBytes, linId);
 	const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
 	memcpy(destAttr, attr, sizeof(Attr_s));
-	memcpy(destAttr->index, compData, compBytes);
+	if (compData)
+	{
+		memcpy(destAttr->index, compData, compBytes);
+		// return work buffer from bits.store to the pool
+		PoolMem::getPool().freePtr(compData);
+	}
 
-	// return work buffer from bits.store to the pool
-	PoolMem::getPool().freePtr(compData);
-
-	destAttr->ints = newBits->ints;
+	destAttr->ints = newBits->ints;//asList ? 0 : newBits->ints;
 	destAttr->comp = compBytes;
+	destAttr->linId = linId;
 
 	// if we made a new destination, we have to update the 
 	// index to point to it, and free the old one up.

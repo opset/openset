@@ -24,7 +24,7 @@ namespace openset
 			openset::db::Table* table;
 
 			int64_t maxLinearId;
-			int64_t currentLinId;
+			int32_t currentLinId;
 			Person person;
 			openset::query::Interpreter* interpreter;
 			int instance;
