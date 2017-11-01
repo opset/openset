@@ -1852,7 +1852,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								macros.vars.tableVars[inst->index].schemaColumn,
 								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
 
-							*stackPtr = (attr && attr->text) ? attr->text : *stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
+							if (attr && attr->text)
+								*stackPtr = attr->text;
+							else
+								*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
 						}
 						break;
 					default:
