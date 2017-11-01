@@ -162,7 +162,7 @@ namespace openset
 		class ResultSet
 		{
 		public:
-			bigRing<RowKey, Accumulator*> results;
+			bigRing<RowKey, Accumulator*> results{ ringHint_e::lt_compact };
 			using RowPair = pair<RowKey, Accumulator*>;
 			using RowVector = vector<RowPair>;
 			vector<RowPair> sortedResult;			
@@ -176,7 +176,7 @@ namespace openset
 			// object will be populated
 			bool isPremerged = false;
 
-			bigRing<int64_t, char*> localText; // text local to result set
+			bigRing<int64_t, char*> localText{ ringHint_e::lt_compact }; // text local to result set
 
 			ResultSet();
 			ResultSet(ResultSet&& other) noexcept;

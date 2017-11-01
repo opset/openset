@@ -3,34 +3,11 @@
 
 using namespace openset::db;
 
-void Attr_s::addChange(const int32_t linearId, const bool state)
-{
-	// using placement new here into a POOL buffer
-	const auto change =
-		new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
-		Attr_changes_s(
-			linearId, (state) ? 1 : 0, changeTail);
-
-	changeTail = change;
-}
-
 IndexBits* Attr_s::getBits()
 {
 	auto bits = new IndexBits();
 
 	bits->mount(index, ints, linId);
-
-	auto t = changeTail;
-
-	// non-destructively apply any dirty bits to the bit index
-	while (t)
-	{
-		if (t->state)
-			bits->bitSet(t->linId);
-		else
-			bits->bitClear(t->linId);
-		t = t->prev;
-	}
 
 	return bits;
 }
@@ -45,27 +22,28 @@ Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Column
 Attributes::~Attributes()
 {}
 
-Attributes::ColumnIndex* Attributes::getColumnIndex(const int32_t column)
+void Attributes::addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state)
 {
-	const auto colRingPair = columnIndex.find(column);
+	const auto changeRecord = changeIndex.get({ column, value });
+	Attr_changes_s* changeTail = changeRecord ? changeRecord->second : nullptr;
 
-	if (colRingPair != columnIndex.end())
-		return colRingPair->second;
+	// using placement new here into a POOL buffer
+	const auto change =
+		new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
+		Attr_changes_s(
+			linearId, (state) ? 1 : 0, changeTail);
 
-	const auto newRing = new ColumnIndex(ringHint_e::lt_compact);
-	columnIndex[column] = newRing;
-
-	return newRing;
+	changeIndex.set({ column, value }, change);
+	//changeTail = change;
 }
+
 
 Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
 {
-	auto columnIndex = getColumnIndex(column);
-	
-	if (auto attrPair = columnIndex->get(value); attrPair == nullptr)
+	if (auto attrPair = columnIndex.get({ column, value }); attrPair == nullptr)
 	{
 		const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-		attrPair = columnIndex->set(value, attr);
+		attrPair = columnIndex.emplace({ column, value }, attr);
 		return attrPair->second;
 	}
 	else
@@ -76,15 +54,13 @@ Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
 
 Attr_s* Attributes::getMake(const int32_t column, const string value)
 {
-	auto columnIndex = getColumnIndex(column);
 	const auto valueHash = MakeHash(value);
 
-	if (auto attrPair = columnIndex->get(valueHash); attrPair == nullptr)
+	if (auto attrPair = columnIndex.get({ column, valueHash }); attrPair == nullptr)
 	{
 		const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-		//attr->text = 
-		blob->storeValue(column, value);
-		attrPair = columnIndex->set(valueHash, attr);
+		attr->text = blob->storeValue(column, value);
+		attrPair = columnIndex.set({ column, valueHash }, attr);
 		return attrPair->second;
 	}
 	else
@@ -93,49 +69,43 @@ Attr_s* Attributes::getMake(const int32_t column, const string value)
 	}
 }
 
-Attr_s* Attributes::get(const int32_t column, const int64_t value)
+Attr_s* Attributes::get(const int32_t column, const int64_t value) const
 {
-	const auto columnIndex = getColumnIndex(column);
-	
-	if (const auto attrPair = columnIndex->get(value); attrPair != nullptr)
+	if (const auto attrPair = columnIndex.get({ column, value }); attrPair != nullptr)
 		return attrPair->second;
 
 	return nullptr;
 }
 
-Attr_s* Attributes::get(const int32_t column, const string value)
+Attr_s* Attributes::get(const int32_t column, const string value) const
 {
-	const auto columnIndex = getColumnIndex(column);
-
-	if (const auto attrPair = columnIndex->get(MakeHash(value)); attrPair != nullptr)
+	if (const auto attrPair = columnIndex.get({ column, MakeHash(value) }); attrPair != nullptr)
 		return attrPair->second;
 
 	return nullptr;
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value, Attr_s* attrInfo)
+void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value)
 {
-	dirty.insert(attr_key_s::makeKey(column, value));
-	attrInfo->addChange(linId, true);
+	addChange(column, value, linId, true);
 }
 
 void Attributes::clearDirty()
 {
 	IndexBits bits;
-	AttrPair* attrPair;
 
-	for (auto& d : dirty)
+	for (auto& change : changeIndex)
 	{
-		const auto columnIndex = getColumnIndex(d.column);
+		const auto attrPair = columnIndex.get({ change.first.column, change.first.value });
 
-		if ((attrPair = columnIndex->get(d.value)) == nullptr)
+		if (!attrPair || !attrPair->second)
 			continue;
 
 		const auto attr = attrPair->second;
 
 		bits.mount(attr->index, attr->ints, attr->linId);
 
-		auto t = attr->changeTail;
+		auto t = change.second; // second is the tail pointer for our changes
 
 		while (t)
 		{
@@ -147,8 +117,6 @@ void Attributes::clearDirty()
 			PoolMem::getPool().freePtr(t);
 			t = prev;
 		}
-
-		attr->changeTail = nullptr;
 
 		int64_t compBytes = 0; // OUT value via reference
 		int32_t linId;
@@ -177,16 +145,14 @@ void Attributes::clearDirty()
 		PoolMem::getPool().freePtr(attr);
 
 	}
-	dirty.clear();
+	changeIndex.clear();
 }
 
-void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newBits)
+void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newBits) const
 {
 	AttrPair* attrPair;
 
-	const auto columnIndex = getColumnIndex(column);
-
-	if ((attrPair = columnIndex->get(value)) == nullptr)
+	if ((attrPair = columnIndex.get({ column, value })) == nullptr)
 		return;
 
 	const auto attr = attrPair->second;
@@ -207,6 +173,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 		PoolMem::getPool().freePtr(compData);
 	}
 
+	destAttr->text = attr->text;
 	destAttr->ints = newBits->ints;//asList ? 0 : newBits->ints;
 	destAttr->comp = compBytes;
 	destAttr->linId = linId;
@@ -226,7 +193,6 @@ AttributeBlob* Attributes::getBlob() const
 Attributes::AttrList Attributes::getColumnValues(const int32_t column, const listMode_e mode, const int64_t value)
 {
 	Attributes::AttrList result;
-	Attr_s* attr;
 
 	switch (mode)
 	{
@@ -234,38 +200,37 @@ Attributes::AttrList Attributes::getColumnValues(const int32_t column, const lis
 		// in query indexing
 	case listMode_e::NEQ:
 	case listMode_e::EQ:
-		attr = get(column, value);
-		if (attr)
-			result.push_back(attr);
+		if (const auto tattr = get(column, value); tattr)
+			result.push_back(tattr);
 		return result;
-	case listMode_e::PRESENT:
-		attr = get(column, NONE);
-		if (attr)
-			result.push_back(attr);
+	case listMode_e::PRESENT:		
+		if (const auto tattr = get(column, NONE); tattr)
+			result.push_back(tattr);
 		return result;
 		default: ;
 	}
 
-	const auto columnIndex = getColumnIndex(column);
-
-	for (auto &kv : *columnIndex)
+	for (auto &kv : columnIndex)
 	{
+		if (kv.first.column != column)
+			continue;
+
 		switch (mode)
 		{
 		case listMode_e::GT:
-			if (kv.first > value)
+			if (kv.first.value > value)
 				result.push_back(kv.second);
 			break;
 		case listMode_e::GTE:
-			if (kv.first >= value)
+			if (kv.first.value >= value)
 				result.push_back(kv.second);
 			break;
 		case listMode_e::LT:
-			if (kv.first < value)
+			if (kv.first.value < value)
 				result.push_back(kv.second);
 			break;
 		case listMode_e::LTE:
-			if (kv.first <= value)
+			if (kv.first.value <= value)
 				result.push_back(kv.second);
 			break;
 		default:
@@ -286,42 +251,50 @@ void Attributes::serialize(HeapStack* mem)
 	const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
 	(*sectionLength) = 0;
 
-	for (auto& col : columnIndex)
+	for (auto& kv : columnIndex)
 	{
-		for (auto &item : *col.second)
+		/* STL ugliness - I wish they let you alias these names somehow
+		 *
+		 * kv.first is column and value
+		 * kv.second is Attr_s*
+		 * 
+		 * so
+		 * 
+		 * kv.first.first is column
+		 * kv.first.second is value
+		 */
+
+		// add a header to the HeapStack
+		const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
+
+		// fill in the header
+		blockHeader->column = kv.first.column;
+		blockHeader->hashValue = kv.first.value;
+		blockHeader->ints = kv.second->ints;
+		const auto text = this->blob->getValue(kv.first.column, kv.first.value);
+		blockHeader->textSize = text ? strlen(text) : 0;
+		//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
+		blockHeader->compSize = kv.second->comp;
+
+		// copy a text/blob value if any
+		if (blockHeader->textSize)
 		{
-			// add a header to the HeapStack
-			const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
-
-			// fill in the header
-			blockHeader->column = col.first;
-			blockHeader->hashValue = item.first;
-			blockHeader->ints = item.second->ints;
-			auto text = this->blob->getValue(col.first, item.first);
-			blockHeader->textSize = text ? strlen(text) : 0;
-			//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
-			blockHeader->compSize = item.second->comp;
-
-			// copy a text/blob value if any
-			if (blockHeader->textSize)
-			{
-				const auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
-				memcpy(textData, text, blockHeader->textSize);
-				//memcpy(textData, item.second->text, blockHeader->textSize);
-			}
-
-			// copy the compressed data
-			if (blockHeader->compSize)
-			{
-				const auto blockData = recast<char*>(mem->newPtr(blockHeader->compSize));
-				memcpy(blockData, item.second->index, blockHeader->compSize);
-			}
-
-			(*sectionLength) +=
-				sizeof(serializedAttr_s) +
-				blockHeader->textSize +
-				blockHeader->compSize;
+			const auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
+			memcpy(textData, text, blockHeader->textSize);
+			//memcpy(textData, item.second->text, blockHeader->textSize);
 		}
+
+		// copy the compressed data
+		if (blockHeader->compSize)
+		{
+			const auto blockData = recast<char*>(mem->newPtr(blockHeader->compSize));
+			memcpy(blockData, kv.second->index, blockHeader->compSize);
+		}
+
+		(*sectionLength) +=
+			sizeof(serializedAttr_s) +
+			blockHeader->textSize +
+			blockHeader->compSize;
 	}
 }
 
@@ -356,9 +329,6 @@ int64_t Attributes::deserialize(char* mem)
 		const auto textPtr = read + sizeof(serializedAttr_s);
 		const auto dataPtr = textPtr + blockHeader->textSize;
 
-		// get or make a column index
-		auto columnIndex = getColumnIndex(blockHeader->column);
-
 		char* blobPtr = nullptr;
 
 		// is there text? Lets add this to the blob and use this pointer after to set the
@@ -368,16 +338,15 @@ int64_t Attributes::deserialize(char* mem)
 
 		// create an attr_s object
 		const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
-		//attr->text = blobPtr;
+		attr->text = blobPtr;
 		attr->ints = blockHeader->ints;
 		attr->comp = blockHeader->compSize;
-		attr->changeTail = nullptr;
 
 		// copy the data in
 		memcpy(attr->index, dataPtr, blockHeader->compSize);
 
 		// add it to the index
-		columnIndex->set(blockHeader->hashValue, attr);
+		columnIndex.set({ blockHeader->column, blockHeader->hashValue }, attr);
 
 		// next block please
 		read += blockLength;

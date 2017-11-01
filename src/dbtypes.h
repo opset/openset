@@ -91,9 +91,9 @@ namespace openset
 			int32_t column;
 			int64_t value;
 
-			static attr_key_s makeKey(int32_t Column, int64_t Value)
+			static attr_key_s makeKey(const int32_t column, const int64_t value)
 			{
-				return {Column, Value};
+				return {column, value};
 			}
 
 			bool operator==(const attr_key_s& other) const

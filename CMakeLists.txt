@@ -16,7 +16,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
 	if (MSVC)
-		add_definitions(-D_CRT_SECURE_NO_WARNINGS /std:c++17 /O2)
+		add_definitions(-D_CRT_SECURE_NO_WARNINGS /std:c++17 /Ox)
 	else()
 		add_definitions(-m64 -std=c++17 -pthread -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops)
 	endif()

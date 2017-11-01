@@ -65,12 +65,11 @@ void openset::mapping::OutboundClient::runLocalLoop()
 			--backlogSize;
 		}
 
-		// TODO call the RPC handler...
-		auto iter = globals::server->handlers.find(message->getRPC());
-		if (iter != globals::server->handlers.end())
+		// TODO call the RPC handler...		
+		if (const auto iter = globals::server->handlers.find(message->getRPC()); iter != globals::server->handlers.end())
 		{
 			// call back the handler
-			auto cb = iter->second;
+			const auto cb = iter->second;
 			cb(message);
 		}
 		else
@@ -191,8 +190,6 @@ void openset::mapping::OutboundClient::runRemote()
 				message->dispose();
 		}
 	}
-
-	closeConnection();
 }
 
 void openset::mapping::OutboundClient::startRoute()
@@ -327,15 +324,13 @@ int32_t openset::mapping::OutboundClient::directRequest(comms::RouteHeader_s rou
 		return -1;
 
 	const char* headerPtr = recast<char*>(&routing);
-	auto headerLen = sizeof(comms::RouteHeader_s);
-	auto sent = 0;
+	const auto headerLen = sizeof(comms::RouteHeader_s);
 	auto total = 0;
-
 	routing.length = len;
 
 	while (total < headerLen)
 	{
-		sent = send(this->sock, headerPtr, headerLen - total, MSG_NOSIGNAL);
+		const auto sent = send(this->sock, headerPtr, headerLen - total, MSG_NOSIGNAL);
 
 		if (sent == SOCKET_ERROR)
 		{
@@ -350,12 +345,12 @@ int32_t openset::mapping::OutboundClient::directRequest(comms::RouteHeader_s rou
 	if (buffer == nullptr)
 		return 0;
 
-	const char* bufferPtr = buffer;
+	auto bufferPtr = buffer;
 	total = 0;
 
 	while (total < len)
 	{
-		sent = send(this->sock, bufferPtr, len - total, MSG_NOSIGNAL);
+		const auto sent = send(this->sock, bufferPtr, len - total, MSG_NOSIGNAL);
 
 		lastRx = Now();
 
@@ -401,13 +396,12 @@ openset::comms::RouteHeader_s openset::mapping::OutboundClient::waitDirectRespon
 
 	auto headerPtr = reinterpret_cast<char*>(&result);
 
-	auto headerLen = sizeof(comms::RouteHeader_s);
+	const auto headerLen = sizeof(comms::RouteHeader_s);
 	auto total = 0;
-	auto received = 0;
 
 	while (total < headerLen)
 	{
-		received = recv(sock, headerPtr, headerLen - total, 0);
+		const auto received = recv(sock, headerPtr, headerLen - total, 0);
 
 		lastRx = Now();
 
@@ -427,12 +421,12 @@ openset::comms::RouteHeader_s openset::mapping::OutboundClient::waitDirectRespon
 	if (result.length)
 	{
 		data = new char[result.length];
-		char* offset = data;
+		auto offset = data;
 		total = 0;
 
 		while (total < result.length)
 		{
-			received = recv(sock, offset, result.length - total, 0);
+			const auto received = recv(sock, offset, result.length - total, 0);
 
 			if (received <= 0)
 			{

@@ -99,7 +99,7 @@ bool AsyncLoop::Run(int64_t &nextRun)
 	// it will call each job that is ready to run
 	for (auto w : active)
 	{
-		auto now = Now();
+		const auto now = Now();
 
 		if (!w->prepared)
 		{

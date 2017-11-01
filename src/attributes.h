@@ -51,6 +51,8 @@ namespace openset::db
 		char* blob; // shared location in attributes blob
 	};
 
+	class Attributes;
+
 	/*
 	attr_s defines an index item. It is cast over a variable length
 	chunk of memory. "people" is an array of bytes containing
@@ -77,15 +79,14 @@ namespace openset::db
 		 *   each int32_t is a linear_id (linear user id).
 		 * 
 		 */
-		Attr_changes_s* changeTail{ nullptr };
-		//char* text{ nullptr };
+		//Attr_changes_s* changeTail{ nullptr };
+		char* text{ nullptr };
 		int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
 		int32_t comp{ 0 }; // compressed size in bytes
 		int32_t linId{ -1 };
 		char index[1]; // char* (1st byte) of packed index bits struct
 
-		Attr_s() {};
-		void addChange(const int32_t linearId, const bool state);
+		Attr_s() {};		
 		IndexBits* getBits();
 	};
 #pragma pack(pop)
@@ -119,11 +120,13 @@ namespace openset::db
 		using AttrList = vector<Attr_s*>;
 
 		// value and attribute info
-		using ColumnIndex = bigRing<int64_t, Attr_s*>;
-		using AttrPair = pair<int64_t, Attr_s*>;
+		using ColumnIndex = bigRing<attr_key_s, Attr_s*>;
+		using ChangeIndex = bigRing<attr_key_s, Attr_changes_s*>;
+		using AttrPair = pair<attr_key_s, Attr_s*>;
 
-		unordered_set<attr_key_s> dirty;
-		unordered_map<int32_t, ColumnIndex*> columnIndex;
+		ColumnIndex columnIndex{ ringHint_e::lt_1_million };
+		ChangeIndex changeIndex{ ringHint_e::lt_compact };
+		
 
 		AttributeBlob* blob;
 		Columns* columns;
@@ -132,19 +135,19 @@ namespace openset::db
 		explicit Attributes(const int parition, AttributeBlob* attributeBlob, Columns* columns);
 		~Attributes();
 
-		ColumnIndex* getColumnIndex(const int32_t column);
+		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);
 
 		Attr_s* getMake(const int32_t column, const int64_t value);
 		Attr_s* getMake(const int32_t column, const string value);
 
-		Attr_s* get(const int32_t column, const int64_t value);
-		Attr_s* get(const int32_t column, const string value);
+		Attr_s* get(const int32_t column, const int64_t value) const;
+		Attr_s* get(const int32_t column, const string value) const;
 
-		void setDirty(const int32_t linId, const int32_t column, const int64_t value, Attr_s* attrInfo);
+		void setDirty(const int32_t linId, const int32_t column, const int64_t value);
 		void clearDirty();
 
 		// replace an indexes bits with new ones, used when generating segments
-		void swap(const int32_t column, const int64_t value, IndexBits* newBits);
+		void swap(const int32_t column, const int64_t value, IndexBits* newBits) const;
 
 		AttributeBlob* getBlob() const;
 

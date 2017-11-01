@@ -10,57 +10,42 @@ namespace bigConf
 {
 	struct big_info_s
 	{
-		int steps;
 		std::vector<int> powers;
-		std::vector<int> probing;
+		int steps() const
+		{
+			return powers.size();
+		}
+		//std::vector<int> probing;
 	};
 
 	const std::vector<big_info_s> big_info =
 	{
 		{ // lt_compact
-			3,
-			{ 32, 256, 2048 },
-			{ 2, 4, 8 }
+			{ 16, 64, 128, 512 },
 		},
 		{ // lt_1_million
-			5,
-			{ 32, 1024, 4096, 8192, 16384 },
-			{ 1, 2, 3, 3, 4 }
+			{ 256, 1024, 2048, 4096, 8192 },
 		},
 		{ // lt_5_million
-			5,
 			{ 1024, 4096, 8192, 65536, 131072 },
-			{ 1, 2, 3, 3, 4, 6 }
 		},
 		{ // lt_25_million
-			6,
 			{ 2048, 8192, 65536, 262144, 1048576, 4194304 },
-			{ 1, 2, 2, 3, 4, 6 }
 		},
 		{ // gt_25_million
-			7, 
 			{ 2048, 8192, 65536, 262144, 1048576, 4194304, 8388608 },
-			{ 1, 2, 2, 3, 3, 4, 6 }
 		},
 		{ // gt_50_million
-			8,
-			{ 4096, 8192, 65536, 262144, 1048576, 4194304, 8388608, 16777216 },
-			{ 1, 2, 2, 3, 3, 4, 4, 6 }
+			{ 8192, 65536, 262144, 1048576, 4194304, 8388608, 16777216 },
 		},
 		{ // gt_150_million
-			8,
-			{ 8192, 65536, 262144, 1048576, 4194304, 8388608, 16777216, 33554432 },
-			{ 1, 2, 2, 3, 3, 4, 4, 6 }
+			{ 65536, 262144, 1048576, 4194304, 8388608, 16777216, 33554432 },
 		},
 		{ // gt_250_million
-			6,
 			{ 1'048'576, 4'194'304, 8'388'608, 16'777'216, 33'554'432, 67'108'864 },
-			{ 2, 2, 3, 3, 4, 6 }
 		},
 		{ // gt_1_billion
-			5,
 			{ 8'388'608, 16'777'216, 33'554'432, 67'108'864, 134'217'728 },
-			{ 1, 2, 3, 4, 6 }
 		}
 	};
 }
@@ -85,12 +70,12 @@ struct bigRingPage
 	using item_s = std::pair<K, V>;
 #pragma pack(pop)
 
-	int overflow;
-	int size;
+	int64_t overflow;
+	int64_t size;
 	bigRingPage* nextRing;
 	item_s items[1];
 
-	bigRingPage(int size, int overflow) :
+	bigRingPage(const int64_t size, const int64_t overflow) :
 		overflow(overflow),
 		size(size),
 		nextRing(nullptr)
@@ -159,15 +144,8 @@ public:
 
 	RingPage* newbig()
 	{
-		auto overflow = 
-			(branchCount >= conf.steps) ?
-				conf.probing[conf.steps - 1] :
-					conf.probing[branchCount];
-
-		auto elements = 
-			(branchCount >= conf.steps) ?
-				conf.powers[conf.steps - 1] :
-					conf.powers[branchCount];
+		const auto elements = (branchCount >= conf.steps()) ? conf.powers[conf.steps() - 1] : conf.powers[branchCount];
+		const auto overflow = (elements <= 64) ? 2 : 4;
 
 		auto sizeBytes = 
 			((elements + overflow) * sizeof(Item)) + sizeof(RingPage);
@@ -441,11 +419,11 @@ public:
 	private:
 
 		const bigRing<K, V>* dict;
-		RingPage* current;
+		RingPage* current{ nullptr };
 
-		int bigIter;
-		int totalIter;
-		int totalSize;
+		int64_t bigIter{ -1 };
+		int64_t totalIter{ 0 };
+		int64_t totalSize{ 0 };
 
 	public:
 
@@ -458,11 +436,7 @@ public:
 
 
 		explicit iterator(const bigRing* dict) :
-			dict(dict),
-			current(nullptr),
-			bigIter(-1),
-			totalIter(0),
-			totalSize(0)
+			dict(dict)
 		{
 			current = dict->root;
 			auto t = dict->root;
@@ -483,7 +457,7 @@ public:
 			totalIter = totalSize;
 		}
 
-		void moveToLocation(int64_t totalOffset, int64_t ringOffset, int64_t depth)
+		void moveToLocation(const int64_t totalOffset, const int64_t ringOffset, const int depth)
 		{
 			current = dict->root;
 
@@ -566,7 +540,7 @@ public:
 
 		typename std::iterator_traits<iterator>::difference_type
 			// Note the return type here, truly generic
-			distance(iterator first_position, iterator second_position,
+			distance(iterator first_position, const iterator second_position,
 				std::input_iterator_tag)
 		{
 			// note the type of the temp variable here, truly generic 
@@ -596,11 +570,11 @@ public:
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
 		int64_t totalOffset = 0;
-		int64_t depth = 0;
+		int depth = 0;
 
 		while (current)
 		{
-			auto ringOffset = keyHash % current->size;
+			auto ringOffset = static_cast<int64_t>(keyHash % current->size);
 			auto item = current->items + ringOffset;
 			auto last = item + current->overflow;
 
@@ -671,7 +645,7 @@ public:
 		return (it == end()) ? 0 : 1;
 	}
 
-	void clear(bool deleteAll = false)
+	void clear(const bool deleteAll = false)
 	{
 		if (!deleteAll && (!root || !distinct))
 			return;

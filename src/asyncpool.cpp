@@ -316,21 +316,21 @@ void AsyncPool::runner(int32_t workerId) noexcept
 			globalAsyncSuspendedWorkerCount -= 1;
 		}
 
-		// using a C++11 conditional lock (eventing) so that if
-		// we aren't tasked up, we can wait for a cell to be added, or 1000ms
 
-		//if (!runAgain)
+		if (!runAgain)
 		{ // we don't need the lock, so we will exit the moment we have it
 
-			if (nextRun == -1)
-				nextRun = Now() + 250;
 
-			auto delay = nextRun - Now();
+			auto delay = (nextRun == -1) ? 250 : nextRun - Now();
+
 			if (delay < 0) 
 				delay = 0;
 
-			if (!worker->triggered)
+			if (delay && !worker->triggered)
 			{
+				// using a C++11 conditional lock (eventing) so that if
+				// we aren't tasked up, we can wait for a cell to be added, or 250ms
+
 				unique_lock<std::mutex> lock(worker->lock);
 				worker->conditional.wait_for(lock, std::chrono::milliseconds(delay), [&]() -> bool
 				{

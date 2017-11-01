@@ -127,8 +127,8 @@ void Trigger::init()
 
 		// flip some bits when we emits - these will get flushed by the 
 		// standard dirty write back on insert
-		auto emitAttr = parts->attributes.getMake(5, emitMessage);
-		emitAttr->addChange(person->getMeta()->linId, true);
+		auto emitAttr = parts->attributes.getMake(COL_EMIT, emitMessage);
+		parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
 
 		// queue trigger messages, these are held on a per trigger basis
 		// these are shuttled out to a master queue at some point
@@ -171,8 +171,7 @@ void Trigger::flushDirty()
 	int32_t linId = -1;
 	const auto compData = bits->store(compBytes, linId);
 
-	const auto columnIndex = parts->attributes.getColumnIndex(COL_TRIGGERS); // 4 is triggers
-	auto attrPair = columnIndex->find(settings->id); // settings.id is this trigger
+	auto attrPair = parts->attributes.columnIndex.find({ COL_TRIGGERS, settings->id }); // settings.id is this trigger
 
 	const auto oldAttr = attrPair->second; // keep it so we can delete it.
 

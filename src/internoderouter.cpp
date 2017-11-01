@@ -3,6 +3,7 @@
 #include "file/file.h"
 #include "config.h"
 
+#include "sba/sba.h"
 #include "internoderouter.h"
 #include "internodemessage.h"
 #include "internodeoutbound.h"
@@ -222,11 +223,7 @@ void openset::mapping::Mapper::disposeMessage(MessageID messageId)
 	}
 
 	if (message != messages.end())
-	{
 		delete message->second; // message destructor removes message
-		//csLock lock(cs);
-		//messages.erase(messageId);
-	}
 }
 
 class dispatchState

@@ -48,10 +48,10 @@ public:
 
 		do
 		{
-			while (locked.load(std::memory_order_relaxed))
+			while (locked.load(std::memory_order_relaxed));
 #ifdef _MSC_VER
 				_mm_pause();
-#elif (COMPILER == GCC || COMPILER == LLVM)
+#else
 				asm("pause");
 #endif
 		}

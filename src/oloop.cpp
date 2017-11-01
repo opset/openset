@@ -64,7 +64,7 @@ void OpenLoop::suicide()
 
 bool OpenLoop::sliceComplete() const
 {
-	auto sliceDivisor = inBypass() ? 3 : 1;
+	const auto sliceDivisor = inBypass() ? 3 : 1;
 	return (Now() > runStart + (loop->runTime / sliceDivisor));
 }
 
@@ -73,7 +73,7 @@ bool OpenLoop::checkCondition()
 	return true; // always good
 }
 
-bool OpenLoop::checkTimer(int64_t milliNow)
+bool OpenLoop::checkTimer(const int64_t milliNow)
 {
 	return (milliNow >= runAt) ? true : false;
 }

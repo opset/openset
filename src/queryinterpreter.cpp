@@ -105,6 +105,7 @@ void openset::query::Interpreter::mount(Person* person)
 
 	grid = person->getGrid(); // const
 	blob = grid->getAttributeBlob();
+	attrs = grid->getAttributes();
 	rows = grid->getRows(); // const
 	rowCount = rows->size();
 
@@ -1755,7 +1756,6 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		break;
 	case Marshals_e::marshal_range:
 		throw std::runtime_error("range is not implemented");
-		break;
 	case Marshals_e::marshal_url_decode:
 		marshal_url_decode(inst->extra);
 		break;
@@ -1848,14 +1848,11 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						break;
 					case columnTypes_e::textColumn:
 						{
-							const auto text = grid->getAttributes()->blob->getValue(
+							const auto attr = attrs->get(
 								macros.vars.tableVars[inst->index].schemaColumn,
 								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
 
-							if (text)
-								*stackPtr = text;
-							else
-								*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
+							*stackPtr = (attr && attr->text) ? attr->text : *stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
 						}
 						break;
 					default:

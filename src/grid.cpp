@@ -958,7 +958,7 @@ void Grid::insert(cjson* rowData)
 				fillCount++;
 
 				auto attrInfo = attributes->getMake(schemaCol, NONE);
-				attributes->setDirty(this->rawData->linId, schemaCol, NONE, attrInfo);
+				attributes->setDirty(this->rawData->linId, schemaCol, NONE);
 				
 				auto val = NONE;
 
@@ -989,7 +989,7 @@ void Grid::insert(cjson* rowData)
 						default:
 							break;
 					}					
-					attributes->setDirty(this->rawData->linId, schemaCol, val, attrInfo);
+					attributes->setDirty(this->rawData->linId, schemaCol, val);
 					break;
 				case cjsonType::DBL:
 					switch (colInfo->type)
@@ -1016,7 +1016,7 @@ void Grid::insert(cjson* rowData)
 						default:
 							break;
 					}					
-					attributes->setDirty(this->rawData->linId, schemaCol, val, attrInfo);
+					attributes->setDirty(this->rawData->linId, schemaCol, val);
 					break;
 				case cjsonType::STR:
 					switch (colInfo->type)
@@ -1038,7 +1038,7 @@ void Grid::insert(cjson* rowData)
 					default:
 						break;
 					}
-					attributes->setDirty(this->rawData->linId, schemaCol, val, attrInfo);
+					attributes->setDirty(this->rawData->linId, schemaCol, val);
 					break;
 				case cjsonType::BOOL:
 					switch (colInfo->type)
@@ -1067,7 +1067,7 @@ void Grid::insert(cjson* rowData)
 					}
 
 					// attrInfo = attributes->getMake(schemaCol, val);
-					attributes->setDirty(this->rawData->linId, schemaCol, val, attrInfo);
+					attributes->setDirty(this->rawData->linId, schemaCol, val);
 					break;
 
 				default:
