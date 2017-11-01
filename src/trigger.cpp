@@ -4,7 +4,6 @@
 #include "table.h"
 #include "queryparser.h"
 #include "indexbits.h"
-#include "cjson/cjson.h"
 #include "config.h"
 #include "file/file.h"
 
@@ -88,14 +87,14 @@ void Trigger::init()
 	interpreter = new openset::query::Interpreter(macros, openset::query::InterpretMode_e::job);
 
 	// This is the text value for this triggers on_insert event
-	auto valueName = settings->name + "::on_insert";
+	const auto valueName = settings->name + "::on_insert";
 
 	settings->id = MakeHash(valueName);
 
 	// get our index bits if we have any. We will be keeping these cached
 	attr = parts->attributes.getMake(COL_TRIGGERS, valueName);
 	bits = new IndexBits();
-	bits->mount(attr->index, attr->ints);
+	bits->mount(attr->index, attr->ints, attr->linId);
 
 	// this call back will be called by the 'schedule' marshal in the interpretor
 	auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
@@ -128,8 +127,8 @@ void Trigger::init()
 
 		// flip some bits when we emits - these will get flushed by the 
 		// standard dirty write back on insert
-		auto emitAttr = parts->attributes.getMake(5, emitMessage);
-		emitAttr->addChange(person->getMeta()->linId, true);
+		auto emitAttr = parts->attributes.getMake(COL_EMIT, emitMessage);
+		parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
 
 		// queue trigger messages, these are held on a per trigger basis
 		// these are shuttled out to a master queue at some point
@@ -169,21 +168,20 @@ void Trigger::flushDirty()
 	*/
 
 	int64_t compBytes = 0; // OUT value via reference filled by ->store
-	auto compData = bits->store(compBytes);
+	int32_t linId = -1;
+	const auto compData = bits->store(compBytes, linId);
 
+	auto attrPair = parts->attributes.columnIndex.find({ COL_TRIGGERS, settings->id }); // settings.id is this trigger
 
+	const auto oldAttr = attrPair->second; // keep it so we can delete it.
 
-	auto columnIndex = parts->attributes.getColumnIndex(COL_TRIGGERS); // 4 is triggers
-	auto attrPair = columnIndex->find(settings->id); // settings.id is this trigger
-
-	auto oldAttr = attrPair->second; // keep it so we can delete it.
-
-	auto newAttr = recast<Attr_s*>(
+	const auto newAttr = recast<Attr_s*>(
 		PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
 	std::memcpy(newAttr, oldAttr, sizeof(Attr_s));
 	std::memcpy(newAttr->index, compData, compBytes);
+	newAttr->linId = linId;
 
 	// swap old index
 	attrPair->second = newAttr;
@@ -229,7 +227,7 @@ void Trigger::postInsertTest()
 		bits->bitSet(person->getMeta()->linId);
 }
 
-bool Trigger::runFunction(int64_t functionHash)
+bool Trigger::runFunction(const int64_t functionHash)
 {
 	checkReload();
 

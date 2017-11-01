@@ -8,9 +8,7 @@ using namespace openset::result;
 
 static char NA_TEXT[] = "n/a";
 
-ResultSet::ResultSet():
-	results(ringHint_e::lt_1_million),
-	localText(ringHint_e::lt_compact) 
+ResultSet::ResultSet()
 {}
 
 ResultSet::ResultSet(ResultSet&& other) noexcept:

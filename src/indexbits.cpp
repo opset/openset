@@ -73,7 +73,7 @@ void IndexBits::reset()
 	placeHolder = false;
 }
 
-void IndexBits::makeBits(int64_t index, int state)
+void IndexBits::makeBits(const int64_t index, const int state)
 {
 	reset();
 
@@ -95,24 +95,24 @@ void IndexBits::makeBits(int64_t index, int state)
 	}
 }
 
-void IndexBits::mount(char* compressedData, int32_t Ints)
+void IndexBits::mount(char* compressedData, const int32_t integers, const int32_t linId)
 {
 	reset();
 
-	if (!Ints) // if this is empty then make a buffer
+	if (!integers || linId >= 0)
 	{
 		ints = 1; // LZ4 compressor uses 9 bytes with a bit set with one INT
-		const auto bytes = ints * sizeof(int64_t);
-		const auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
+		bits = cast<uint64_t*>(PoolMem::getPool().getPtr(8));
 
-		// empty these bits otherwise we will get false data
-		memset(output, 0, bytes);
+		*bits = 0;
 		
-		bits = recast<uint64_t*>(output);
+		if (linId >= 0)
+			bitSet(linId);
+
 		return;
 	}
 
-	const auto bytes = Ints * sizeof(int64_t);
+	const auto bytes = integers * sizeof(int64_t);
 	const auto output = cast<char*>(PoolMem::getPool().getPtr(bytes));
 	memset(output, 0, bytes);
 
@@ -122,8 +122,12 @@ void IndexBits::mount(char* compressedData, int32_t Ints)
 
 	assert(code > 0);
 
-	ints = Ints;
+	ints = integers;
 	bits = recast<uint64_t*>(output);
+
+	if (linId >= 0)
+		bitSet(linId);
+
 }
 
 int64_t IndexBits::getSizeBytes() const
@@ -131,29 +135,43 @@ int64_t IndexBits::getSizeBytes() const
 	return ints * sizeof(int64_t);
 }
 
-char* IndexBits::store(int64_t& compressedBytes) 
+char* IndexBits::store(int64_t& compressedBytes, int32_t &linId)
 {
 	if (!ints)
 		grow(1);
 
+	if (const auto pop = population(ints * 64); pop == 0)
+	{
+		linId = -1;
+		compressedBytes = 0;
+		return nullptr;
+	}
+	else if (pop == 1)
+	{
+		linId = -1;
+		compressedBytes = 0;
+		linearIter(linId, ints * 64);
+		return nullptr;
+	}
+
 	const auto maxBytes = LZ4_compressBound(ints * sizeof(int64_t));
 	const auto compressionBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
-	memset(compressionBuffer, 0, maxBytes);
+	//memset(compressionBuffer, 0, maxBytes);
 
 	compressedBytes = LZ4_compress_fast(
-		recast<char*>(bits), 
-		compressionBuffer, 
+		recast<char*>(bits),
+		compressionBuffer,
 		ints * sizeof(int64_t),
 		maxBytes,
-		2);
+		10);
 
-	assert(compressedBytes <= maxBytes);
+	linId = -1;
 
 	return compressionBuffer;
 }
 
-void IndexBits::grow(int32_t required)
+void IndexBits::grow(const int32_t required)
 {
 	if (ints >= required)
 		return;
@@ -179,7 +197,7 @@ void IndexBits::grow(int32_t required)
 	ints = required;
 }
 
-void IndexBits::bitSet(int64_t index)
+void IndexBits::bitSet(const int64_t index)
 {
 	const auto pos = index >> 6ULL; // divide by 8
 
@@ -189,7 +207,7 @@ void IndexBits::bitSet(int64_t index)
 	bits[pos] |= BITMASK[index & 63ULL]; // mod 64
 }
 
-void IndexBits::lastBit(int64_t index)
+void IndexBits::lastBit(const int64_t index)
 {
 	const auto pos = index >> 6ULL; // divide by 8
 
@@ -197,7 +215,7 @@ void IndexBits::lastBit(int64_t index)
 		grow(pos + 1);
 }
 
-void IndexBits::bitClear(int64_t index)
+void IndexBits::bitClear(const int64_t index)
 {
 	const auto pos = index >> 6ULL; // divide by 8
 
@@ -207,7 +225,7 @@ void IndexBits::bitClear(int64_t index)
 	bits[pos] &= ~(BITMASK[index & 63ULL]); // mod 64
 }
 
-bool IndexBits::bitState(int64_t index) const
+bool IndexBits::bitState(const int64_t index) const
 {
 	const auto pos = index >> 6ULL; // divide by 8
 
@@ -425,7 +443,7 @@ return true if a new linear id is found.
 
 recommend using in a while loop.
 */
-bool IndexBits::linearIter(int64_t& linId, int stopBit) const
+bool IndexBits::linearIter(int32_t& linId, int stopBit) const
 {
 	++linId;
 
@@ -435,7 +453,7 @@ bool IndexBits::linearIter(int64_t& linId, int stopBit) const
 	{
 		if (bits[currentInt])
 		{
-			const int64_t bitNumber = linId % 64;
+			const int32_t bitNumber = linId % 64;
 
 			//if (bitIndex >= stopBit)
 			if (linId >= stopBit)

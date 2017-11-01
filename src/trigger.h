@@ -186,7 +186,7 @@ namespace openset
 			void preInsertTest();
 			void postInsertTest();
 
-			bool runFunction(int64_t functionHash);
+			bool runFunction(const int64_t functionHash);
 
 			std::string getName() const
 			{

@@ -50,7 +50,7 @@ namespace openset
 
 			bool sliceComplete() const;
 			virtual bool checkCondition();
-			virtual bool checkTimer(int64_t milliNow);
+			virtual bool checkTimer(const int64_t milliNow);
 
 			// these must be overridden (preferrably final) in derived classes
 			virtual void prepare() = 0;

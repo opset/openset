@@ -94,6 +94,8 @@ void OpenLoopCount::storeSegments()
 
 			if (!bits) continue;
 
+			auto pop = bits->population(maxLinearId);
+
 			// make sure it exists in the index, we don't care about the return value
 			parts->attributes.getMake(COL_SEGMENT, segmentName);
 
@@ -252,7 +254,7 @@ void OpenLoopCount::prepare()
 	// require iterating user records (as in were cached, segmentMath, or indexed).
 	if (!nextMacro())
 	{
-		auto time = Now() - startTime;
+		const auto time = Now() - startTime;
 
 		openset::errors::Error error;
 
@@ -297,7 +299,7 @@ void OpenLoopCount::run()
 		// if there was an error, exit
 		if (interpreter->error.inError())
 		{
-			auto time = Now() - startTime;
+			const auto time = Now() - startTime;
 
 			shuttle->reply(
 				0, 
@@ -326,8 +328,7 @@ void OpenLoopCount::run()
 			// is there another query to run? If not we are done
 			if (!nextMacro())
 			{
-				
-				auto time = Now() - startTime;
+				const auto time = Now() - startTime;
 
 				openset::errors::Error error;
 

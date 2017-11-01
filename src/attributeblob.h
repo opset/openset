@@ -5,6 +5,7 @@
 
 #include "threads/locks.h"
 #include "mem/bigring.h"
+#include "heapstack/heapstack.h"
 
 using namespace std;
 
@@ -14,18 +15,19 @@ namespace openset
 	{
 		class AttributeBlob
 		{
-			bigRing<attr_key_s, char*> attributesBlob;
+			bigRing<attr_key_s, char*> attributesBlob{ ringHint_e::lt_1_million };
+			HeapStack mem;
 		public:
 
 			CriticalSection cs;
 			AttributeBlob();
 			~AttributeBlob();
 
-			bool isAttribute(int32_t column, int64_t valueHash);
-			bool isAttribute(int32_t column, string value);
-			char* storeValue(int32_t column, string value);
+			bool isAttribute(const int32_t column, const int64_t valueHash);
+			bool isAttribute(const int32_t column, const string& value);
+			char* storeValue(const int32_t column, const string& value);
 
-			char* getValue(int32_t column, int64_t valueHash);
+			char* getValue(const int32_t column, const int64_t valueHash);
 		};
 	};
 };

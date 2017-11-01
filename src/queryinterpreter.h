@@ -91,6 +91,7 @@ namespace openset
 			int rowCount{ 0 };
 
 			AttributeBlob* blob{ nullptr };
+			Attributes* attrs{ nullptr };
 			result::ResultSet* result{ nullptr };
 			result::RowKey rowKey;
 

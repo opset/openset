@@ -114,7 +114,7 @@ void OpenLoopQuery::run()
 		// next set bit until there are no more, or maxLinId is met
 		if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
 		{
-			auto time = Now() - startTime;
+			const auto time = Now() - startTime;
 
 			shuttle->reply(
 				0, 
