@@ -10,7 +10,8 @@
 
 #include "sentinel.h"
 
-#include "uvserver.h"
+#include "http_serve.h"
+
 
 #include <thread>
 
@@ -21,7 +22,7 @@ namespace openset
 
 	bool Service::start()
 	{
-		const auto IP = globals::running->host;
+		const auto ip = globals::running->host;
 		const auto port = globals::running->port;
 		const auto pool = std::thread::hardware_concurrency() * 2; // set to number of cores
 
@@ -38,7 +39,6 @@ namespace openset
 		openset::mapping::Mapper mapper;
 		mapper.startRouter();
 		
-		openset::comms::uvServer server;
 		openset::db::Database db;
 
 		// aysnc.run will create our thread pool o
@@ -60,12 +60,16 @@ namespace openset
 		
 		openset::mapping::Sentinel teamster(&mapper, &db);
 
+		web::HttpServe httpd;	
+		httpd.serve(ip, port); // this function will never return
+
+		/*
 		// inter-node
 		server.handler(openset::mapping::rpc_e::inter_node, [&db, &async]
 		(comms::Message* message)
 		{
 			// evaluate message and start any threads, cells, processes, etc.
-			openset::comms::Internode::onMessage(&db, &async, message);
+			openset::comms::RpcInternode::onMessage(&db, &async, message);
 		});
 
 		// inter_node xfer - this is a binary protocol
@@ -81,7 +85,7 @@ namespace openset
 			(comms::Message* message)
 			{
 				// evaluate message and start any threads, cells, processes, etc.
-				openset::comms::Admin::onMessage(&db, &async, message);
+				openset::comms::RpcTable::onMessage(&db, &async, message);
 			});
 
 		// insert sub-service channel
@@ -89,7 +93,7 @@ namespace openset
 			(comms::Message* message)
 			{
 				// create some insert cells
-				openset::comms::Insert::onInsert(&db, &async, message);
+				//openset::comms::RpcInsert::onInsert(&db, &async, message);
 			});
 
 		// insert sub-service channel
@@ -97,7 +101,7 @@ namespace openset
 			(comms::Message* message)
 			{
 				// create query cells
-				openset::comms::Query::onMessage(&db, &async, message);
+				openset::comms::RpcQuery::onMessage(&db, &async, message);
 			});
 
 		// insert sub-service channel
@@ -113,6 +117,7 @@ namespace openset
 		server.serve(IP, port, pool);
 
 		Logger::get().error("could not start server");
+		*/
 
 		return true;
 	}

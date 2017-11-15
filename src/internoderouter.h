@@ -2,10 +2,9 @@
 
 #include <atomic>
 #include "common.h"
-#include "internodecommon.h"
-#include "internodeoutbound.h"
 #include "internodemapping.h"
-#include "threads/locks.h"
+#include "http_cli.h"
+#include "threads/spinlock.h"
 
 namespace openset
 {
@@ -26,11 +25,13 @@ namespace openset
 		{
 		public:
 
+			// map route to node name
 			using RouteNames = unordered_map<int64_t, string>;
-			using Routes = unordered_map<int64_t, OutboundClient*>;
-			using Messages = unordered_map<MessageID, openset::comms::Message*>;
+			// map route to HTTP string
+			using Routes = unordered_map<int64_t, std::pair<std::string, int>>;
 
-			using DataBlock = std::pair<char*, int64_t>;
+			using DataBlock = std::pair<char*, size_t>;
+			using DataBlockPtr = shared_ptr<DataBlock>;
 
 			struct Responses_s
 			{
@@ -48,7 +49,6 @@ namespace openset
 			PartitionMap partitionMap;
 			Routes routes;
 			RouteNames names;
-			Messages messages;
 
 			// we increment every time we make a mailbox - use atomics as they are thread safe
 			atomic<int64_t> slotCounter;
@@ -59,54 +59,59 @@ namespace openset
 
 			int64_t getSlotNumber();
 
-			void removeRoute(int64_t routeId);
-			void addRoute(std::string routeName, int64_t routeId, std::string ip, int32_t port);
-			std::string getRouteName(int64_t routeId);
+			void addRoute(const std::string routeName, const int64_t routeId, const std::string ip, const int32_t port);
+			void removeRoute(const int64_t routeId);
 
-			OutboundClient* getRoute(int64_t routeId);
+			std::string getRouteName(const int64_t routeId);
+			int64_t getRouteId(const std::string routeName);
+
+			// factories a Rest object
+			openset::web::RestPtr getRoute(const int64_t routeId);
+
+			bool isRoute(const int64_t routeId);
+			bool isRouteNoLock(const int64_t routeId);
 
 			// dispatchAsync - send a payload down a route.
-			openset::comms::Message* dispatchAsync(
-				int64_t route, 
-				rpc_e rpc, 
-				char* data, 
-				int64_t length, 
-				openset::comms::ReadyCB callback);		
+			bool dispatchAsync(
+				const int64_t route, 
+				const std::string method,
+				const std::string path, 
+				const openset::web::QueryParams params,
+				const char* payload, 
+				const size_t length, 
+				const openset::web::RestCbBin callback);
 
-			openset::comms::Message* dispatchAsync(
-				int64_t route, 
-				rpc_e rpc, 
-				const char* data, 
-				int64_t length, 
-				openset::comms::ReadyCB callback);
+			bool dispatchAsync(
+				const int64_t route,
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
+				const std::string& payload,
+				const openset::web::RestCbBin callback);
 
-			openset::comms::Message* dispatchAsync(
-				int64_t route,
-				rpc_e rpc,
-				const cjson* doc,
-				openset::comms::ReadyCB callback);
+			bool dispatchAsync(
+				const int64_t route,
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
+				cjson& payload,
+				const openset::web::RestCbBin callback);
 
-			openset::comms::Message* dispatchSync(
-				int64_t route,
-				rpc_e rpc,
-				char* data,
-				int64_t length);
+			DataBlockPtr dispatchSync(
+				const int64_t route,
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
+				const char* payload,
+				const size_t length);
 
-			openset::comms::Message* dispatchSync(
-				int64_t route,
-				rpc_e rpc,
-				const char* data,
-				int64_t length);
+			DataBlockPtr dispatchSync(
+				const int64_t route,
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
+				cjson& payload);
 
-			openset::comms::Message* dispatchSync(
-				int64_t route,
-				rpc_e rpc,
-				const cjson* doc);
-
-			openset::comms::Message* getMessage(MessageID messageId);
-
-			void dereferenceMessage(MessageID messageId);
-			void disposeMessage(MessageID messageId);
 
 			openset::mapping::PartitionMap* getPartitionMap()
 			{
@@ -115,37 +120,41 @@ namespace openset
 
 			// send a message to all known routes
 			Responses dispatchCluster(
-				rpc_e rpc, 
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
 				const char* data, 
-				int64_t length,
-				bool internalDispatch = false);
+				const size_t length,
+				const bool internalDispatch = false);
 
 			Responses dispatchCluster(
-				rpc_e rpc,
-				cjson* doc,
-				bool internalDispatch = false);
+				const std::string method,
+				const std::string path,
+				const openset::web::QueryParams params,
+				cjson& json,
+				const bool internalDispatch = false);
 
 			// helper to clean up responses from dispatchCluster
 			static void releaseResponses(Responses &responseSet);
 
 			// get the node ID that is the teamster
 			int64_t getSentinelId() const;
-			int countFailedRoutes() const;
-			int countActiveRoutes() const;
+			int countFailedRoutes();
+			int countActiveRoutes();
 			int countRoutes() const;
-			std::vector<int64_t> getActiveRoutes() const;
-			std::vector<int64_t> getFailedRoutes() const;
+			std::vector<int64_t> getActiveRoutes();
+			std::vector<int64_t> getFailedRoutes();
 
-			std::vector<std::pair<int64_t, int>> getPartitionCountsByRoute(std::unordered_set<NodeState_e> states) const;
+			std::vector<std::pair<int64_t, int>> getPartitionCountsByRoute(std::unordered_set<NodeState_e> states);
 			
 			// replaces existing mapping, cleaning up orphaned
 			// partitions and creating new ones when needed
 			void changeMapping(
-				cjson* config, 
-				std::function<void(int)> addPartition_cb, 
-				std::function<void(int)> deletePartition_cb, 
-				std::function<void(string, int64_t, string, int)> addRoute_cb,
-				std::function<void(int64_t)> deleteRoute_cb);
+				const cjson& config, 
+				const std::function<void(int)> addPartition_cb, 
+				const std::function<void(int)> deletePartition_cb, 
+				const std::function<void(string, int64_t, string, int)> addRoute_cb,
+				const std::function<void(int64_t)> deleteRoute_cb);
 
 			void loadPartitions();
 			void savePartitions();

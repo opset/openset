@@ -4,8 +4,7 @@
 
 using namespace openset::db;
 
-People::People(int partition) :	
-	peopleMap(ringHint_e::lt_compact),
+People::People(const int partition) :	
 	partition(partition)
 {}
 

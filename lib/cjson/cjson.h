@@ -216,6 +216,8 @@ public:
 
 	~cjson();
 
+	cjson& operator=(cjson&& source) noexcept;
+
 	/*
 	-------------------------------------------------------------------------
 	node information

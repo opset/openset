@@ -1,14 +1,12 @@
 #pragma once 
 
+#include <vector>
+
 #include "common.h"
 #include "cjson/cjson.h"
 #include "threads/locks.h"
 
-#include <vector>
-#include <unordered_map>
-
 // See initConfig() factory at the end of this file
-
 namespace openset
 {
 	namespace config
@@ -24,9 +22,9 @@ namespace openset
 		{
 		public:
 			std::string hostLocal = "0.0.0.0";
-			int portLocal = 2020;
-			std::string hostExternal = "";
-			int portExternal = 0;
+			int portLocal = 8080;
+			std::string hostExternal = "127.0.0.1";
+			int portExternal = 8080;
 			std::string path = "./";
 
 			void fix()

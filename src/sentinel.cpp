@@ -85,6 +85,8 @@ bool openset::mapping::Sentinel::failCheck()
 bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, int64_t targetNode) const
 {
 	// make a JSON request payload
+
+	/*
 	cjson request;
 
 	request.set("action", "transfer");
@@ -110,12 +112,14 @@ bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, in
 		Logger::get().error("xfer error on paritition " + to_string(partitionId) + ".");
 		return false;
 	}
+	*/
 
 	return true;
 }
 
 bool openset::mapping::Sentinel::broadcastMap() const
 {
+	/*
 	cjson configBlock;
 	configBlock.set("action", "map_change");
 
@@ -140,6 +144,7 @@ bool openset::mapping::Sentinel::broadcastMap() const
 	openset::globals::mapper->releaseResponses(responses);
 
 	// TODO - parse all those responses and figure out if this is actually TRUE
+	*/
 	return true;
 }
 

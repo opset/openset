@@ -10,6 +10,8 @@ namespace openset::errors
 		parse,
 		run_time,
 		insert,
+		query,
+		internode
 	};
 
 	enum class errorCode_e : int32_t
@@ -78,6 +80,8 @@ namespace openset::errors
 		{errorClass_e::parse,    "parse"},
 		{errorClass_e::run_time, "run_time"},
 		{errorClass_e::insert,   "insert"},
+		{ errorClass_e::query,   "query" },
+		{ errorClass_e::internode, "internode"}
 	};
 
 
