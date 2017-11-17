@@ -79,7 +79,6 @@ void toUpper(std::string& Text);
 
 // Convert a std::string into uppercase characters
 void toLower(std::string& Text);
-void toLower(char* str);
 
 std::string char2hex(char dec);
 

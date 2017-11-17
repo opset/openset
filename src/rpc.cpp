@@ -154,10 +154,10 @@ void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMap
 	message->reply(response);
 }
 
-void RpcInternode::transfer_partition(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::transfer_init(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	const auto targetNode = message->getParamString("/params/target_node");
-	const auto partitionId = message->getParamInt("/params/partition");
+	const auto targetNode = message->getParamString("node");
+	const auto partitionId = message->getParamInt("partition");
 
 	std::vector<openset::db::Table*> tables;
 
@@ -206,7 +206,7 @@ void RpcInternode::transfer_partition(const openset::web::MessagePtr message, co
 
 				blockPtr = mem.flatten();
 				blockSize = mem.getBytes();
-			}
+			} // HeapStack mem gets release here
 
 			const auto targetNodeId = globals::mapper->getRouteId(targetNode);
 
@@ -215,13 +215,13 @@ void RpcInternode::transfer_partition(const openset::web::MessagePtr message, co
 			const auto responseMessage = openset::globals::mapper->dispatchSync(
 				targetNodeId,
 				"POST",
-				"/v1/internode/xfer",
+				"/v1/internode/transfer",
 				{ { "paritition", to_string(partitionId) }, {"table", t->getName() } },
 				blockPtr,
 				blockSize);
 
 			if (!responseMessage)
-				Logger::get().error("xfer error " + t->getName() + ".");
+				Logger::get().error("partition transfer error " + t->getName() + ".");
 			else
 				Logger::get().info("transfered " + t->getName() + " on " + openset::globals::mapper->getRouteName(partitionId) + ".");
 		}
@@ -231,9 +231,53 @@ void RpcInternode::transfer_partition(const openset::web::MessagePtr message, co
 
 	Logger::get().info("transfer complete on partition " + to_string(partitionId) + ".");
 
-	response->set("response", "thank you.");
+	cjson response;
+	response.set("response", "thank you.");	
+	message->reply(response);
+}
+
+void RpcInternode::transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches)
+{
+	// This is a binary message, it will contain an inbound table for a given partition.
+	// in the header will be the partition, and table name. 
+	/*
+	Logger::get().info("transfer in (received " + to_string(message->length) + " bytes).");
+
+	auto read = message->data;
+
+	const auto partitionId = *recast<int32_t*>(read);
+	read += 4;
+
+	const auto tableNameLength = *recast<int32_t*>(read);
+	read += 4;
+	const std::string tableName(read);
+
+	read += tableNameLength;
+
+	openset::globals::async->suspendAsync();
+
+	auto table = database->getTable(tableName);
+
+	if (!table)
+	table = database->newTable(tableName);
+
+	// make table partition objects
+	auto parts = table->getPartitionObjects(partitionId);
+	// make async partition object (loop, etc).
+	openset::globals::async->initPartition(partitionId);
+
+	read += parts->attributes.deserialize(read);
+	parts->people.deserialize(read);
+
+	openset::globals::async->resumeAsync();
+
+	// reply when done
+	cjson response;
+	response.set("transferred", true);
+	message->reply(&response);
 	*/
 }
+
 
 
 void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -1214,7 +1258,7 @@ void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMap
 	*/
 }
 
-void RpcInsert::onInsert(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 	auto database = openset::globals::database;
 	const auto partitions = openset::globals::async;
@@ -2243,52 +2287,6 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 
 	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
-
-void InternodeXfer::onXfer(
-	Database* database,
-	AsyncPool* partitions,	
-	openset::web::Message* message)
-{
-	// This is a binary message, it will contain an inbound table for a given partition.
-	// in the header will be the partition, and table name. 
-/*
-	Logger::get().info("transfer in (received " + to_string(message->length) + " bytes).");
-
-	auto read = message->data;
-
-	const auto partitionId = *recast<int32_t*>(read);
-	read += 4;
-
-	const auto tableNameLength = *recast<int32_t*>(read);
-	read += 4;
-	const std::string tableName(read);
-
-	read += tableNameLength;
-
-	openset::globals::async->suspendAsync();
-
-	auto table = database->getTable(tableName);
-
-	if (!table)
-		table = database->newTable(tableName);
-
-	// make table partition objects
-	auto parts = table->getPartitionObjects(partitionId);
-	// make async partition object (loop, etc).
-	openset::globals::async->initPartition(partitionId);
-
-	read += parts->attributes.deserialize(read);
-	parts->people.deserialize(read);
-
-	openset::globals::async->resumeAsync();
-	
-	// reply when done
-	cjson response;
-	response.set("transferred", true);
-	message->reply(&response);	
-*/
-}
-
 
 void openset::comms::Dispatch(const openset::web::MessagePtr message)
 {

@@ -64,6 +64,24 @@ Create a re-eventing trigger.
 
 Describe a re-eventing trigger
 
+## Query
+
+#### POST /v1/query/{table}/events
+
+This will perform an event scanning query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
+
+Available query strings options include:
+- `debug=true` will return the assembly for the query rather than the results
+
+#### POST /v1/query/{table}/counts
+
+This will perform an index counting query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
+
+Unlike the `/events` query, segments created in by the `/counts` query are named and cached and can be used in subsequent `/counts` queries as well as to filter `/events` queries.
+
+Available query strings options include:
+- `debug=true` will return the assembly for the query rather than the results
+
 ## Internode (internode node chatter)
 
 > :pushpin: Don't call these from client code. 
@@ -96,20 +114,18 @@ At this point the node will be empty. The `sentinel` for the elected node will s
 
 Dispatched by `sentinel` when node mapping and membership have changed. This is the basic mechanism that keeps cluster topology in sync.
 
-#### POST /v1/internode/transfer?partition={partition_id}&node={node_name}
+#### PUT /v1/internode/transfer?partition={partition_id}&node={dest_node_name}
 
-Tells a given node to transfer it's partition to the specified node
+This initiates a partition transfer. The node containing the partition to transfer is contacted directly. It is provided the `partition_id` to transfer and the `dest_node_name` to send it to. 
 
-#### POST /v1/internode/xfer?partition={partition_id}
+This will result in potentially several transfers, one for each table using `POST /v1/internode/transfer`. The recipient receives `partition_id` and `table_name` for each block.
+
+After a successful transfer the `sentinel` will send a `POST /v1/internode/map_change` request to tell the cluster that the partition is available. 
+
+#### POST /v1/internode/transfer?partition={partition_id}&table={table_name}
 
 Transfers packed `binary` data for partition. Partition is `partition_id` is passed in URL as an integer.
 
-## Query
-
-#### POST /v1/query/{table}/events
-
-Post data contains raw text for query script. 
-Result is JSON.
 
 
 

@@ -54,10 +54,12 @@ namespace openset::comms
 		static void is_member(const openset::web::MessagePtr message, const RpcMapping& matches);
 		// GET /v1/cluster/is_member
 		static void add_node(const openset::web::MessagePtr message, const RpcMapping& matches);
-		// POST /v1/internode/transfer/{partition_id}
-		static void transfer_partition(const openset::web::MessagePtr message, const RpcMapping& matches);
 		// POST /v1/internode/map_change
 		static void map_change(const openset::web::MessagePtr message, const RpcMapping& matches);
+		// PUT /v1/internode/transfer?partition={partition_id}&node={node_name}
+		static void transfer_init(const openset::web::MessagePtr message, const RpcMapping& matches);
+		// POST /v1/internode/transfer?partition={partition_id}&table={table_name}
+		static void transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches);
 	};
 
 	class RpcCluster
@@ -108,7 +110,7 @@ namespace openset::comms
 	class RpcInsert
 	{
 	public:
-		static void onInsert(const openset::web::MessagePtr message, const RpcMapping& matches);
+		static void insert(const openset::web::MessagePtr message, const RpcMapping& matches);
 	};
 
 	class Feed
@@ -119,16 +121,6 @@ namespace openset::comms
 			AsyncPool* partitions,
 			web::Message* message);
 	};
-
-	class InternodeXfer
-	{
-	public:
-		static void onXfer(
-			Database* database,
-			AsyncPool* partitions,
-			web::Message* message);
-	};
-
 
 	// order matters, longer matches in a section should appear first
 	static const std::vector <RpcMapTuple> MatchList = {
@@ -145,7 +137,7 @@ namespace openset::comms
 		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/events(\/|\?|\#|)$)"), RpcQuery::events,{ { 1, "table" } } },
 
 		// RpcInsert
-		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::onInsert, { { 1, "table" } } },
+		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },
 
 		// RpcRevent
 		{ "GET", std::regex(R"(^/v1/table/([a-z0-9_]+)/revent/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcRevent::revent_describe,{ { 1, "table" },{ 2, "name" } } },
@@ -156,8 +148,8 @@ namespace openset::comms
 		{ "GET", std::regex(R"(^/v1/internode/is_member$)"), RpcInternode::is_member, {} },
 		{ "POST", std::regex(R"(^/v1/internode/join_to_cluster$)"), RpcInternode::join_to_cluster, {} },
 		{ "POST", std::regex(R"(^/v1/internode/add_node$)"), RpcInternode::add_node, {} },
+		{ "PUT", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_init, {} },
 		{ "POST", std::regex(R"(^/v1/internode/map_change$)"), RpcInternode::map_change, {} },
-		{ "POST", std::regex(R"(^/v1/internode/transfer/([0-9_]+)(\/|\?|\#|)$)"), RpcInternode::transfer_partition,{ { 1, "partition_id" } } },
 	};
 
 	void Dispatch(openset::web::MessagePtr message);

@@ -82,44 +82,39 @@ bool openset::mapping::Sentinel::failCheck()
 	return false;
 }
 
-bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, int64_t targetNode) const
+bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const
 {
 	// make a JSON request payload
-
-	/*
-	cjson request;
-
-	request.set("action", "transfer");
-	auto params = request.setObject("params");
-	params->set("source_node", sourceNode);
-	params->set("target_node", targetNode);
-	params->set("partition", partitionId);
+	auto targetNodeName = globals::mapper->getRouteName(targetNode);
 
 	Logger::get().info("dispatching transfer " + to_string(partitionId) + " to " + globals::mapper->getRouteName(targetNode));
 
-	int64_t jsonLength;
-	auto jsonPtr = cjson::StringifyCstr(&request, jsonLength);
-
-	auto message = openset::globals::mapper->dispatchSync(
+	const auto message = openset::globals::mapper->dispatchSync(
 		sourceNode, // we send this to the source node, it will copy to target
-		openset::mapping::rpc_e::inter_node,
-		jsonPtr,
-		jsonLength);
+		"PUT",
+		"/v1/internode/transfer",
+		{{"partition", std::to_string(partitionId)}, { "node", targetNodeName }},
+		nullptr,
+		0);
 
 	if (!message)
 	{
+		// this will unset the partition from the map
 		openset::globals::mapper->getPartitionMap()->setState(partitionId, targetNode, openset::mapping::NodeState_e::free);
-		Logger::get().error("xfer error on paritition " + to_string(partitionId) + ".");
+		Logger::get().error("transfer error on paritition " + to_string(partitionId) + ".");
 		return false;
 	}
-	*/
+	else
+	{
+		// TODO Parse message for errors
+	}
 
 	return true;
 }
 
 bool openset::mapping::Sentinel::broadcastMap() const
 {
-	/*
+
 	cjson configBlock;
 	configBlock.set("action", "map_change");
 
@@ -137,15 +132,19 @@ bool openset::mapping::Sentinel::broadcastMap() const
 	
 	// blast this out to our cluster
 	auto responses = openset::globals::mapper->dispatchCluster(
-		openset::mapping::rpc_e::inter_node,
-		newNodeJson.c_str(),
+		"POST",
+		"/v1/internode/map_change",
+		{},
+		&newNodeJson[0],
 		newNodeJson.length());
+
+	const auto inError = responses.routeError;
 
 	openset::globals::mapper->releaseResponses(responses);
 
 	// TODO - parse all those responses and figure out if this is actually TRUE
-	*/
-	return true;
+
+	return !inError;
 }
 
 void printMap()
@@ -408,7 +407,7 @@ void openset::mapping::Sentinel::runMonitor()
 		}
 
 		// get number of active routes		
-		auto routes = mapper->countRoutes();
+		const auto routes = mapper->countRoutes();
 
 		// number of replicas, so 2 would mean there are three copies, the active and two clones
 		auto replicas = 2; // amount of replication we want in the cluster
@@ -454,15 +453,12 @@ void openset::mapping::Sentinel::runMonitor()
 				int64_t sourceNode = -1;
 
 				for (auto n : foundOnNodes)
-				{
-					auto state = partitionMap->getState(p, n);
-					if (state == NodeState_e::active_owner ||
+					if (const auto state = partitionMap->getState(p, n); state == NodeState_e::active_owner ||
 						state == NodeState_e::active_clone)
 					{
 						sourceNode = n;
 						break;
 					}
-				}
 
 				if (sourceNode == -1)
 				{
