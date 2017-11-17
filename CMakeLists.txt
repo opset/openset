@@ -27,7 +27,6 @@ include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simpl
 # file(GLOB_RECURSE ASIO_FILES vendor/asio/asio/include/*.hpp)
 
 set(SOURCE_FILES
-        vendor/libuv/include/uv.h
         vendor/lz4/lib/lz4.c
         vendor/lz4/lib/lz4.h
         vendor/lz4/lib/xxhash.c
@@ -153,4 +152,4 @@ add_executable(openset ${SOURCE_FILES})
 enable_testing()
 add_test(NAME openset-unit-test COMMAND $<TARGET_FILE:openset> --test)
 
-target_link_libraries(openset uv)
+target_link_libraries(openset)
