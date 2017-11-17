@@ -22,7 +22,6 @@ elseif(CMAKE_BUILD_TYPE MATCHES Release)
 	endif()
 endif()
 
-add_subdirectory(vendor/libuv-cmake)
 include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simple-web-server)
 
 # file(GLOB_RECURSE ASIO_FILES vendor/asio/asio/include/*.hpp)
