@@ -213,7 +213,7 @@ class dispatchState
 {
 	int requestCount{ 0 };
 	atomic<int> responseCount{ 0 };
-	bool active = true;	
+	bool active{ true };
 public:
 	bool isActive() const
 	{
