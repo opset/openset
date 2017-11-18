@@ -4,17 +4,20 @@
 #include <mutex>
 #include <queue>
 
-#include "common.h"
-#include "config.h"
-#include "http_serve.h"
-
 #include "threads/locks.h"
+#include "server_http.hpp"
 
+#include "common.h"
+#include "http_serve.h"
 #include "http_cli.h"
-
 #include "rpc.h"
 
 using namespace std::string_literals;
+
+namespace openset
+{
+	namespace http = SimpleWeb;
+}
 
 namespace openset
 {
@@ -61,7 +64,7 @@ namespace openset::web
 		{
 			// wait on accept handler
 
-			std::shared_ptr<Message> message = nullptr;
+			std::shared_ptr<Message> message;
 
 			{ // scope for lock
 				// wait on a job to appear, verify it's there, and run it.
@@ -117,37 +120,31 @@ namespace openset::web
 	void HttpServe::mapEndpoints(T& server)
 	{
 
-		server.resource["^/v1/.*$"]["GET"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		using SharedResponseT = std::shared_ptr<typename T::Response>;
+		using SharedRequestT = std::shared_ptr<typename T::Request>;
+
+		server.resource["^/v1/.*$"]["GET"] = [&](SharedResponseT response, SharedRequestT request) {
 			queueMessage(std::move(MakeMessage(response, request)));
 		};
 
-		server.resource["^/v1/.*$"]["POST"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		server.resource["^/v1/.*$"]["POST"] = [&](SharedResponseT response, SharedRequestT request) {
 			queueMessage(std::move(MakeMessage(response, request)));
 		};
 
-		server.resource["^/v1/.*$"]["PUT"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		server.resource["^/v1/.*$"]["PUT"] = [&](SharedResponseT response, SharedRequestT request) {
 			queueMessage(std::move(MakeMessage(response, request)));
 		};
 
-		server.resource["^/v1/.*$"]["DELETE"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		server.resource["^/v1/.*$"]["DELETE"] = [&](SharedResponseT response, SharedRequestT request) {
 			queueMessage(std::move(MakeMessage(response, request)));
 		};
 
-		server.resource["^/ping$"]["GET"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		server.resource["^/ping$"]["GET"] = [&](SharedResponseT response, SharedRequestT request) {
 			response->write("{\"pong\":true}");
 		};
 
-		server.resource["^/xfer.*$"]["POST"] = [&](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {						
-			queueMessage(std::move(MakeMessage(response, request)));
-		};
-
-		server.resource[R"(^/internode/([a-zA-Z0-9_]+)(\/|\?|\#|)+(?:.*))"]["GET"] = [](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
-			std::string text = "{\"capture\":\"" + std::string(request->path_match[1]) + "\"}";
-			response->write(text);
-		};
-
 		// default
-		server.resource["^/status$"]["GET"] = [](std::shared_ptr<T::Response> response, std::shared_ptr<T::Request> request) {
+		server.resource["^/status$"]["GET"] = [](SharedResponseT response, SharedRequestT request) {
 			response->write("{\"status\":\"OK\"}");
 		};
 	}
@@ -197,64 +194,8 @@ namespace openset::web
 			server.start(); // blocks
 		});
 
-		while (!server.io_service)
-			ThreadSleep(50);
-
 		// make a client object for our Rest class (http_cli.h)		
 		openset::globals::global_io_service = std::make_shared<asio::io_service>();
-
-		/*
-		Rest rest("127.0.0.1:8080");
-
-		thread work_thread([&rest] {
-			ThreadSleep(1000);
-			for (auto i = 0; i < 500; ++i)
-			{
-				rest.request("GET", "/ping", {}, nullptr, 0, [i](bool error, cjson doc)
-				{
-					Logger::get().info(to_string(i) + "  " + cjson::Stringify(&doc));
-				});
-			}
-		});
-		work_thread.detach();
-
-		thread work_thread2([&rest] {
-			ThreadSleep(1000);
-			for (auto i = 500; i < 1000; ++i)
-			{
-				rest.request("GET", "/ping", {}, nullptr, 0, [i](bool error, cjson doc)
-				{
-					Logger::get().info(to_string(i) + "  " + cjson::Stringify(&doc));
-				});
-			}
-		});
-		work_thread2.detach();
-
-		thread work_thread3([&rest] {
-			ThreadSleep(1000);
-			for (auto i = 1000; i < 1500; ++i)
-			{
-				rest.request("GET", "/ping", {}, nullptr, 0, [i](bool error, cjson doc)
-				{
-					Logger::get().info(to_string(i) + "  " + cjson::Stringify(&doc));
-				});
-			}
-		});
-		work_thread3.detach();
-
-		thread work_thread4([&rest] {
-			ThreadSleep(1000);
-			for (auto i = 1500; i < 200000; ++i)
-			{
-				ThreadSleep(100);
-				rest.request("GET", "/ping", {}, nullptr, 0, [i](bool error, cjson doc)
-				{
-					Logger::get().info(to_string(i) + "  " + cjson::Stringify(&doc));
-				});
-			}
-		});
-		work_thread4.detach();
-		*/
 		
 		server_thread.join();
 	}
