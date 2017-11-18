@@ -116,8 +116,11 @@ bool openset::mapping::Mapper::dispatchAsync(
 {
 	// check if there is a route here
 	if (auto rest = getRoute(route); rest)
+	{
 		rest->request(method, path, params, payload, length, callback);
-	return nullptr;
+		return true;
+	}
+	return false;
 }
 
 bool openset::mapping::Mapper::dispatchAsync(
@@ -130,8 +133,11 @@ bool openset::mapping::Mapper::dispatchAsync(
 {
 	// check if there is a route here
 	if (auto rest = getRoute(route); rest)
+	{
 		rest->request(method, path, params, &payload[0], payload.length(), callback);
-	return nullptr;
+		return true;
+	}
+	return false;
 }
 
 bool openset::mapping::Mapper::dispatchAsync(
@@ -146,8 +152,11 @@ bool openset::mapping::Mapper::dispatchAsync(
 	auto json = cjson::Stringify(&payload);
 
 	if (auto rest = getRoute(route); rest)
+	{
 		rest->request(method, path, params, &json[0], json.length(), callback);
-	return nullptr;
+		return true;
+	}
+	return false;
 }
 
 openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
