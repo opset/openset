@@ -7,7 +7,7 @@
 #include "threads/locks.h"
 #include "server_http.hpp"
 
-#include "common.h"
+#include "logger.h"
 #include "http_serve.h"
 #include "http_cli.h"
 #include "rpc.h"
@@ -185,7 +185,7 @@ namespace openset::web
 			auto size = request->content.size();
 			char buffer[1024];
 			request->content.read(buffer, size);
-			response->write("{\"error\":\"unknown request\"");
+			response->write("{\"error\":\"unknown request\""s);
 		};
 
 		std::thread server_thread([&server]() {
@@ -197,6 +197,8 @@ namespace openset::web
 		// make a client object for our Rest class (http_cli.h)		
 		openset::globals::global_io_service = std::make_shared<asio::io_service>();
 		
+		Logger::get().info("REST server listening on "s + ip + ":"s + to_string(port) + "."s);
+
 		server_thread.join();
 	}
 }

@@ -116,16 +116,14 @@ namespace openset::comms
 	class Feed
 	{
 	public:
-		static void onSub(
-			Database* database,
-			AsyncPool* partitions,
-			web::Message* message);
+		static void onSub(const openset::web::MessagePtr message, const RpcMapping& matches);
 	};
 
 	// order matters, longer matches in a section should appear first
 	static const std::vector <RpcMapTuple> MatchList = {
 		// RpcCluster
 		{ "PUT", std::regex(R"(^/v1/cluster/init$)"), RpcCluster::init,{} },
+		{ "PUT", std::regex(R"(^/v1/cluster/join$)"), RpcCluster::join,{} },
 
 		// RpcTable
 		{ "PUT", std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+):([a-z]+)(\/|\?|\#|)$)"), RpcTable::column_add,{ { 1, "table" }, { 2, "name" }, { 3, "type" } } },
@@ -149,6 +147,7 @@ namespace openset::comms
 		{ "POST", std::regex(R"(^/v1/internode/join_to_cluster$)"), RpcInternode::join_to_cluster, {} },
 		{ "POST", std::regex(R"(^/v1/internode/add_node$)"), RpcInternode::add_node, {} },
 		{ "PUT", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_init, {} },
+		{ "POST", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_receive, {} },
 		{ "POST", std::regex(R"(^/v1/internode/map_change$)"), RpcInternode::map_change, {} },
 	};
 

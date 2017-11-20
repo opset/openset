@@ -50,7 +50,10 @@ void openset::mapping::Mapper::addRoute(const std::string routeName, const int64
 		
 	// create it if it doesn't exist
 	if (auto rt = routes.find(routeId); rt == routes.end())
-		rt = routes.insert({ routeId, { ip, port }}).first; // make it
+		if (routeId == globals::running->nodeId)
+			rt = routes.insert({ routeId,{ globals::running->host == "0.0.0.0" ? "127.0.0.1" : globals::running->host, globals::running->port } }).first; // local route answers on local ip:port
+		else
+			rt = routes.insert({ routeId, { ip, port }}).first; // make it
 }
 
 void openset::mapping::Mapper::removeRoute(const int64_t routeId)
@@ -546,7 +549,7 @@ void openset::mapping::Mapper::serializeRoutes(cjson* doc)
 
 void openset::mapping::Mapper::deserializeRoutes(cjson* doc)
 {
-	if (doc->empty())
+	if (!doc || doc->empty())
 	{
 		Logger::get().error("no inter-node routes configured.");
 		return;

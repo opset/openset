@@ -10,6 +10,7 @@
 #include "oloop_query.h"
 #include "oloop_count.h"
 
+#include "asyncpool.h"
 #include "config.h"
 #include "sentinel.h"
 #include "querycommon.h"
@@ -68,9 +69,14 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 	globals::mapper->removeRoute(globals::running->nodeId);
 
 	const auto request = message->getJSON();
-	const auto nodeName = request.xPathString("/settings/node_name", "");
-	const auto nodeId = request.xPathInt("/settings/node_id", 0);
-	const auto partitionMax = request.xPathInt("/settings/partition_max", 0);
+	const auto nodeName = request.xPathString("/node_name", "");
+	const auto nodeId = request.xPathInt("/node_id", 0);
+	const auto partitionMax = request.xPathInt("/partition_max", 0);
+
+	auto rpcJson = cjson::Stringify((cjson*)&request);
+	cout << rpcJson << endl;
+
+	// TODO - error check here
 
 	cout << endl;
 	Logger::get().info("Joining cluster as: '" + nodeName + "'.");
@@ -86,7 +92,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 	}
 
 	// create the routes
-	openset::globals::mapper->deserializeRoutes(request.xPath("/params/routes"));
+	openset::globals::mapper->deserializeRoutes(request.xPath("/routes"));
 
 	// set number of partitions
 	globals::async->setPartitionMax(partitionMax);
@@ -94,12 +100,12 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 	globals::async->startAsync();
 
 	// set the partition map
-	openset::globals::mapper->getPartitionMap()->deserializePartitionMap(request.xPath("/params/cluster"));
+	openset::globals::mapper->getPartitionMap()->deserializePartitionMap(request.xPath("/cluster"));
 	globals::async->mapPartitionsToAsyncWorkers();
 
 	globals::async->suspendAsync();
 	// create the tables
-	auto nodes = request.xPath("/params/tables")->getNodes();
+	auto nodes = request.xPath("/tables")->getNodes();
 	for (auto n : nodes)
 	{
 		auto tableName = n->xPathString("/name", "");
@@ -216,14 +222,16 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
 				targetNodeId,
 				"POST",
 				"/v1/internode/transfer",
-				{ { "paritition", to_string(partitionId) }, {"table", t->getName() } },
+				{},
 				blockPtr,
 				blockSize);
 
 			if (!responseMessage)
 				Logger::get().error("partition transfer error " + t->getName() + ".");
 			else
-				Logger::get().info("transfered " + t->getName() + " on " + openset::globals::mapper->getRouteName(partitionId) + ".");
+				Logger::get().info(
+					"transferred for table " + t->getName() + " to " + openset::globals::mapper->getRouteName(partitionId) + 
+					" (transfered " + to_string(blockSize) + " bytes).");
 		}
 	}
 
@@ -238,12 +246,13 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
 
 void RpcInternode::transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
+
 	// This is a binary message, it will contain an inbound table for a given partition.
 	// in the header will be the partition, and table name. 
-	/*
-	Logger::get().info("transfer in (received " + to_string(message->length) + " bytes).");
 
-	auto read = message->data;
+	Logger::get().info("transfer in (received " + to_string(message->getPayloadLength()) + " bytes).");
+
+	auto read = message->getPayload();
 
 	const auto partitionId = *recast<int32_t*>(read);
 	read += 4;
@@ -256,10 +265,11 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr message, cons
 
 	openset::globals::async->suspendAsync();
 
-	auto table = database->getTable(tableName);
+	auto table = globals::database->getTable(tableName);
 
+	// TODO - skipping this might be correct, and return false
 	if (!table)
-	table = database->newTable(tableName);
+		table = globals::database->newTable(tableName);
 
 	// make table partition objects
 	auto parts = table->getPartitionObjects(partitionId);
@@ -271,11 +281,12 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr message, cons
 
 	openset::globals::async->resumeAsync();
 
+	Logger::get().info("transfer comlete");
+
 	// reply when done
 	cjson response;
 	response.set("transferred", true);
-	message->reply(&response);
-	*/
+	message->reply(response);
 }
 
 
@@ -513,7 +524,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
 		cjson responseJson;
 
-		client.request("GET", "/v1/cluster/is_member", {}, nullptr, 0, [&error, &ready, &responseJson](bool err, cjson json) mutable
+		client.request("GET", "/v1/internode/is_member", {}, nullptr, 0, [&error, &ready, &responseJson](bool err, cjson json) mutable
 		{
 			error = err;
 
@@ -557,13 +568,12 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 		// TODO glue together the whole config
 		cjson configBlock;
 
-		auto settings = configBlock.setObject("settings");
-		settings->set("node_name", newNodeName);
-		settings->set("node_id", newNodeId);
-		settings->set("partition_max", cast<int64_t>(openset::globals::async->partitionMax));
+		configBlock.set("node_name", newNodeName);
+		configBlock.set("node_id", newNodeId);
+		configBlock.set("partition_max", cast<int64_t>(openset::globals::async->partitionMax));
 
 		// make am array node called tables, push the tables, triggers, columns into the array
-		auto tables = settings->setArray("tables");
+		auto tables = configBlock.setArray("tables");
 
 		for (auto n : openset::globals::database->tables)
 		{
@@ -579,13 +589,15 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 		}
 
 		// make a node called routes, serialize the routes (nodes) under it
-		openset::globals::mapper->serializeRoutes(settings->setObject("routes"));
+		openset::globals::mapper->serializeRoutes(configBlock.setObject("routes"));
 
 		// make a node called cluster, serialize the partitionMap under it
-		openset::globals::mapper->getPartitionMap()->serializePartitionMap(settings->setObject("cluster"));
+		openset::globals::mapper->getPartitionMap()->serializePartitionMap(configBlock.setObject("cluster"));
 
 
 		auto rpcJson = cjson::Stringify(&configBlock);
+
+		cout << rpcJson << endl;
 
 		Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
@@ -598,7 +610,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
 		// send command that joins remote node to this cluster, this transfers all
 		// config to the remote node.
-		client.request("POST", "/v1/internode/join_to_cluster", {}, nullptr, 0, [&error, &ready, &responseJson](bool err, cjson json)
+		client.request("POST", "/v1/internode/join_to_cluster", {}, &rpcJson[0], rpcJson.length(), [&error, &ready, &responseJson](bool err, cjson json)
 		{
 			error = err;
 
@@ -1418,10 +1430,7 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 	message->reply("{\"response\":\"thank you.\"}");
 }
 
-void Feed::onSub(
-	Database* database, 
-	AsyncPool* partitions, 
-	openset::web::Message* message)
+void Feed::onSub(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 	/*
 	if (!partitions->partitionMax || !partitions->running)

@@ -33,13 +33,13 @@ namespace openset::web
 		Rest(const std::string server) :
 			client(server)
 		{
-			cout << "****" << server << endl;
-			client.io_service = openset::globals::global_io_service;
+			//cout << "****" << server << endl;
+			//client.io_service = openset::globals::global_io_service;
 		};
 
 		~Rest()
 		{
-			cout << "destroyed" << endl;
+			//cout << "destroyed" << endl;
 		}
 
 		void request(const std::string method, const std::string path, const QueryParams params, const char* payload,

@@ -1,15 +1,13 @@
 #include "errors.h"
 
-openset::errors::Error::Error(): 
-	eCode(errorCode_e::no_error),	
-	eClass(errorClass_e::no_error)
+openset::errors::Error::Error()
 {}
 
 openset::errors::Error::Error(
-	errorClass_e errorClass, 
-	errorCode_e errorCode, 
-	std::string errorDetail,
-	std::string errorAdditional) :
+	const errorClass_e errorClass,
+	const errorCode_e errorCode,
+	const std::string errorDetail,
+	const std::string errorAdditional) :
 		eCode(errorCode),
 		eClass(errorClass),
 		message(string(openset::errors::errorStrings.at(errorCode))),
@@ -22,10 +20,10 @@ openset::errors::Error::~Error()
 {}
 
 void openset::errors::Error::set(
-	errorClass_e errorClass, 
-	errorCode_e errorCode, 
-	std::string errorDetail,
-	std::string errorAdditional)
+	const errorClass_e errorClass, 
+	const errorCode_e errorCode, 
+	const std::string errorDetail,
+	const std::string errorAdditional)
 {
 	eCode = errorCode;
 	eClass = errorClass;
@@ -49,6 +47,6 @@ std::string openset::errors::Error::getErrorJSON() const
 		json += ",\"detail\":\"" + detail + "\"";
 	if (additional.length())
 		json += ",\"additional\":\"" + additional + "\"";
-	return json + "}";
+	return json + "}}";
 }
 

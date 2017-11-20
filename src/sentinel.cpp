@@ -41,8 +41,51 @@ int64_t openset::mapping::Sentinel::getSentinel() const
 bool openset::mapping::Sentinel::failCheck()
 {
 	// Did we lose many nodes?
-	auto failedCount = mapper->countFailedRoutes();
+	auto activeRoutes = mapper->getActiveRoutes();
 
+	auto errorCount = 0;
+
+	for (auto r : activeRoutes)
+	{
+		
+		const auto result = mapper->dispatchSync(
+			r,
+			"GET",
+			"/ping",
+			{},
+			nullptr, 
+			0);
+
+		bool isValid = false;
+
+		if (result)
+		{
+			std::string resultJson( result->first,result->second );
+			cjson json(resultJson, resultJson.length());
+
+			if (json.xPathBool("/pong", false))
+				isValid = true;
+		}
+
+		if (!isValid)
+		{
+			markDeadRoute(r);
+			partitionMap->purgeNodeById(r);
+			mapper->removeRoute(r);
+			Logger::get().error("node down, removing.");
+			++errorCount;
+		}
+	}
+
+	if (isSentinel() && errorCount)
+	{
+		broadcastMap();
+		return true;
+	}
+
+	return false;
+
+/*
 	// are there any downed nodes? Because this could be bad!
 	if (failedCount)
 	{
@@ -80,6 +123,7 @@ bool openset::mapping::Sentinel::failCheck()
 	}
 
 	return false;
+*/
 }
 
 bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const
@@ -116,16 +160,11 @@ bool openset::mapping::Sentinel::broadcastMap() const
 {
 
 	cjson configBlock;
-	configBlock.set("action", "map_change");
-
-	auto params = configBlock.setObject("params");
-
-	params->set("config_version", globals::running->updateConfigVersion());
 
 	// make a node called routes, serialize the routes (nodes) under it
-	mapper->serializeRoutes(params->setObject("routes"));
+	mapper->serializeRoutes(configBlock.setObject("routes"));
 	// make a node called cluster, serialize the partitionMap under it
-	partitionMap->serializePartitionMap(params->setObject("cluster"));
+	partitionMap->serializePartitionMap(configBlock.setObject("cluster"));
 
 	// JSON to text
 	auto newNodeJson = cjson::Stringify(&configBlock);
@@ -149,6 +188,8 @@ bool openset::mapping::Sentinel::broadcastMap() const
 
 void printMap()
 {
+
+	return;
 
 	auto pad3 = [](int number)
 	{
@@ -254,10 +295,9 @@ void openset::mapping::Sentinel::runMonitor()
 	// our cluster is complete. 
 	while (true)
 	{
-		auto partitionMax = openset::globals::async->getPartitionMax();
+		const auto partitionMax = openset::globals::async->getPartitionMax();
 
-		if (failCheck())
-			continue;
+		failCheck();
 
 		// Are we running this? If not, lets loop and wait until
 		// someday we get to be the boss
