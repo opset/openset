@@ -5,6 +5,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "errors.h"
 #include "dbtypes.h"
 #include "attributes.h"
 #include "var/var.h"
@@ -450,6 +451,8 @@ namespace openset
 					{"events"},
 					{"event"}
 			};
+
+		using MarshalSet = std::unordered_set<openset::query::Marshals_e>;
 
 		// Marshal maps
 		static const unordered_map<string, Marshals_e> Marshals =
@@ -905,7 +908,7 @@ namespace openset
 		using HintPairs = vector<HintPair>;
 		using ParamVars = unordered_map<string, cvar>;
 		using SegmentList = vector<std::string>;
-
+		
 		// struct containing compiled macro
 		struct Macro_s
 		{
@@ -914,11 +917,14 @@ namespace openset
 			HintPairs indexes;
 			string segmentName;
 			SegmentList segments;
+			MarshalSet marshalsReferenced;
 
 			int64_t segmentTTL{ -1 };
 			int64_t segmentRefresh{ -1 };
 			int sessionColumn{ -1 };
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
+
+			std::string rawScript;
 
 			bool isSegment{ false };
 			bool useGlobals{ false }; // uses global for table

@@ -2380,27 +2380,21 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::MATHADD:
 				// add last two items on stack
 				// return product
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr += *(stackPtr + 1);
 				++stackPtr;
 				break;
 			case OpCode_e::MATHSUB:
 				// subtract last two items on stack
 				// return product
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr -= *(stackPtr + 1);
 				++stackPtr;
 				break;
 			case OpCode_e::MATHMUL:
 				// multiply last two items on stack
 				// return product
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr *= *(stackPtr + 1);
 				++stackPtr;
 				break;
@@ -2408,9 +2402,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				// divide last two items on stack
 				// return product
 				// NOTE: Divide by zero returns 0
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr /= *(stackPtr + 1); // divide by zero handled in `cvar` /= operator
 				++stackPtr;
 				break;
@@ -2520,49 +2512,37 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			break;
 			case OpCode_e::OPGT:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr > *(stackPtr + 1));
 				++stackPtr;
 				break;
 			case OpCode_e::OPLT:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr < *(stackPtr + 1));
 				++stackPtr;
 				break;
 			case OpCode_e::OPGTE:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr >= *(stackPtr + 1));
 				++stackPtr;
 				break;
 			case OpCode_e::OPLTE:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr <= *(stackPtr + 1));
 				++stackPtr;
 				break;
 			case OpCode_e::OPEQ:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr == *(stackPtr + 1));
 				++stackPtr;
 				break;
 			case OpCode_e::OPNEQ:
 				// compare last two items on stack
-				--stackPtr;
-				//right = *stackPtr;
-				--stackPtr;
+				stackPtr -= 2;
 				*stackPtr = (*stackPtr != *(stackPtr + 1));
 				++stackPtr;
 				break;
@@ -2578,7 +2558,6 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::LGCAND:
 				// AND last two items on stack
 				--stackPtr;
-				//right = *stackPtr;
 				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 				--stackPtr;
@@ -2590,13 +2569,11 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::LGCOR:
 				// AND last two items on stack
 				--stackPtr;
-				//right = *stackPtr;
 				if (stackPtr->typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
 				--stackPtr;
 				if ((*stackPtr).typeof() != cvar::valueType::BOOL && *stackPtr == NONE)
 					*stackPtr = false;
-
 				*stackPtr = (*stackPtr || *(stackPtr + 1));
 				++stackPtr;
 				break;

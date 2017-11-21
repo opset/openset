@@ -1,6 +1,9 @@
-[submodule "vendor/libuv"]
-	path = vendor/libuv
-	url = https://github.com/libuv/libuv.git
 [submodule "vendor/lz4"]
 	path = vendor/lz4
 	url = https://github.com/lz4/lz4.git
+[submodule "vendor/simple-web-server"]
+	path = vendor/simple-web-server
+	url = https://github.com/eidheim/Simple-Web-Server
+[submodule "vendor/asio"]
+	path = vendor/asio
+	url = https://github.com/chriskohlhoff/asio/

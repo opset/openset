@@ -6,7 +6,7 @@ OpenSet is written in modern C++ (using some of the latest features from C++11/1
 
 OpenSet incorporates the following amazing and wonderful open source projects:
 
-- [libuv](https://github.com/libuv/libuv), the famous portable async io library written for Node.js. It's extensive and written good old fashioned C, at the moment we primarily use the async TCP components to serve connections.
+- [Simple-Web-Server](https://github.com/eidheim/Simple-Web-Server), a great library by Ole Christian Eidheim that leverages ASIO to provide asynchronous http and https client and server functionality to any C++ project.
 - [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by Yann Collet. Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
 - [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  Yann Collet. A good hash is hard to find, a fast hash is even harder --- Yann has created both.
 
@@ -57,19 +57,21 @@ make
 
 #### Building on Windows
 
+You will need Visual Studio 2017 version 15.4.x (or higher). 
+
 1. Clone this repo (recursively as it has linked repos)
 ```bash
 mkdir openset
 cd openset
 git clone --recursive https://github.com/perple-io/openset.git 
 ```
-2. Open the `openset` folder in VisualStudio
-3. Open the file `CMakeList.txt`, wait for VisualStudio to index it.
-4. In the `Project Settings` dropdown select `x64-Release` or `x64-debug`
-5. In the `Select Startup Item` dropdown (next to the Project Settings)  select `openset.exe`
-6. From the `CMake` dropdown select `Build All`
-7. From the `CMake` dropdown expand `Cache (build type)` and select `Open Cache Folder`
-8. You should now have a `Folder` open, and within it `openset.exe`, copy this a folder somewhere called `openset` 
+1. Open the `openset` folder in Visual Studio
+2. Open the file `CMakeList.txt`, wait for Visual Studio to index it.
+3. In the `Project Settings` dropdown select `x64-Release` or `x64-debug`
+4. In the `Select Startup Item` dropdown (next to the Project Settings)  select `openset.exe` or `${buildRoot}\openset.exe`.
+5. From the `CMake` dropdown select `Build All`
+6. From the `CMake` dropdown expand `Cache (build type)` and select `Open Cache Folder`
+7. You should now have a `Folder` open, and within it `openset.exe`, copy this file to a folder somewhere else named `openset` 
 
 ### Running OpenSet
 
@@ -78,7 +80,7 @@ The following command line options can be used
 - `--test` runs internal tests to confirm OpenSet is operating correctly.
 - `--host'` specifies the ip/hostname to answer on (optional, defaults to 0.0.0.0)
 - `--hostext` specifies an external host name that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs (defaults to the machine name)
-- `--port` specifies the port that to answer on (optional, defaults to 2020)
+- `--port` specifies the port that to answer on (optional, defaults to http 8080)
 - `--portext` specifies the external port that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs if port mapping is used (defaults to the 2020)
 - `--data` path to data if using commits (optional, defaults to current directory `./`)
 - `--help` shows the help
@@ -87,3 +89,5 @@ When you start OpenSet it will wait in a `ready` state. You must initialize Open
 
 1. Make it the Cluster Leader by sending an `init_cluster` command, this must be done even you only intend to run a cluster of one.
 2. Join it to a cluster. You can connect to any node in a running cluster and send a `invite_node` command. The command will be routed through whichever node is the elected leader, and the target node will be invited into the cluster.
+
+> :pushpin: There are samples in the OpenSet samples directory that can get you started.

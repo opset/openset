@@ -2,7 +2,7 @@
 
 OpenSet samples are provided in Node.js. Be sure to have a recent version of node installed.
 
-These tools share common dependencies. To install them, go to the `openset/samples` directory and type:
+These examples use the popular node `request` module, but any http client library will work as well as the ever useful `async` module.  To install these modules go to the `openset/samples` directory and type:
 ```
 npm install
 ```
@@ -22,7 +22,7 @@ node init.js
 
 #### Test Programs
 
-A few programs have been included that execute the pyql sample queries in the pyql directory. These scripts use the [OpenSet SDK for Node.js](https://github.com/perple-io/openset_sdk_js) and are good starting points to see how it works:
+A few programs have been included that execute the pyql sample queries in the pyql directory. These scripts use make basic REST requests using http methods:
 
 - `node query_simple.js`
 - `node query_total_shipper.js`

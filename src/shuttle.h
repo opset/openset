@@ -1,11 +1,11 @@
 #pragma once
 
-#include "uvserver.h"
-
-#include <mutex>
+#include "common.h"
 #include <functional>
 #include <thread>
+#include <vector>
 #include "threads/locks.h"
+#include "http_serve.h"
 
 /*
 	Shuttles - classes that fit between working cells
@@ -38,7 +38,7 @@ namespace openset
 				code(0) 
 			{}
 
-			response_s(int32_t resultCode, response_t resultData) :
+			response_s(const int32_t resultCode, response_t resultData) :
 				code(resultCode),
 				data(std::move(resultData))
 			{}
@@ -54,9 +54,9 @@ namespace openset
 		{
 		public:
 
-			openset::comms::Message* message;
+			openset::web::MessagePtr message;
 
-			explicit Shuttle(openset::comms::Message* message) :
+			explicit Shuttle(openset::web::MessagePtr message) :
 				message(message)
 			{ }
 
@@ -72,18 +72,15 @@ namespace openset
 			 * \brief 
 			 * \param messageString 
 			 */
-			virtual void reply(string messageString)
+			virtual void reply(const http::StatusCode status, const string messageString)
 			{
-				auto length = messageString.length();
-				auto data = recast<char*>(PoolMem::getPool().getPtr(length));
-				memcpy(data, messageString.c_str(), length);
-				message->reply(data, length);
+				message->reply(status, &messageString[0], messageString.length());
 				release();
 			}
 
-			virtual void reply(char* data, int64_t length)
+			virtual void reply(const http::StatusCode status, const char* data, const int64_t length)
 			{
-				message->reply(data, length);
+				message->reply(status, data, length);
 				// Shuttles are always pointers, they must delete themselves
 				release();
 			}
@@ -115,18 +112,15 @@ namespace openset
 		class ShuttleLambda : public Shuttle<response_t>
 		{
 		public:
+			// vector of responses from partitions			
 
-			// vector of responses from partitions
-			vector<response_s<response_t>> responses;
+			vector<openset::async::response_s<response_t>> responses;
 			// guard for our responses
 			CriticalSection responseLock;
 			// how many responses we will get (should always = partitions)
 			int32_t partitionCount;
 			// our callback
-			function<void(
-				vector<response_s<response_t>>&,
-				openset::comms::Message*,
-				voidfunc)> done_cb;
+			function<void(vector<openset::async::response_s<response_t>>&, openset::web::MessagePtr, voidfunc)> done_cb;
 
 			/*
 			This is a little ugly, but essentially you can call back
@@ -146,11 +140,11 @@ namespace openset
 
 			*/
 			ShuttleLambda(
-				openset::comms::Message* message,
-				int32_t partitions,
+				openset::web::MessagePtr message,
+				const int32_t partitions,
 				function<void(
-					vector<response_s<response_t>>&,
-					openset::comms::Message*,
+					vector<openset::async::response_s<response_t>>&,
+					openset::web::MessagePtr,
 					voidfunc)> OnProcessResponses):
 				Shuttle<response_t>(message),
 				partitionCount(partitions),
@@ -203,11 +197,12 @@ namespace openset
 	class ShuttleLambdaAsync: public async::ShuttleLambda<response_t>
 	{
 	public:
+
 		ShuttleLambdaAsync(
-			openset::comms::Message* message,
-			int32_t partitions,
-			const function<void(vector<async::response_s<response_t>>&, openset::comms::Message*, function<void()>)>& OnProcessResponses):
-			async::ShuttleLambda<response_t>(message, partitions, OnProcessResponses)
+			openset::web::MessagePtr message,
+			const int32_t partitions,
+			const function<void(vector<openset::async::response_s<response_t>>&, openset::web::MessagePtr, function<void()>)>& onProcessResponses):
+			async::ShuttleLambda<response_t>(message, partitions, onProcessResponses)
 		{}
 
 		virtual ~ShuttleLambdaAsync()

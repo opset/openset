@@ -41,8 +41,51 @@ int64_t openset::mapping::Sentinel::getSentinel() const
 bool openset::mapping::Sentinel::failCheck()
 {
 	// Did we lose many nodes?
-	auto failedCount = mapper->countFailedRoutes();
+	auto activeRoutes = mapper->getActiveRoutes();
 
+	auto errorCount = 0;
+
+	for (auto r : activeRoutes)
+	{
+		
+		const auto result = mapper->dispatchSync(
+			r,
+			"GET",
+			"/ping",
+			{},
+			nullptr, 
+			0);
+
+		bool isValid = false;
+
+		if (result)
+		{
+			std::string resultJson( result->first,result->second );
+			cjson json(resultJson, resultJson.length());
+
+			if (json.xPathBool("/pong", false))
+				isValid = true;
+		}
+
+		if (!isValid)
+		{
+			markDeadRoute(r);
+			partitionMap->purgeNodeById(r);
+			mapper->removeRoute(r);
+			Logger::get().error("node down, removing.");
+			++errorCount;
+		}
+	}
+
+	if (isSentinel() && errorCount)
+	{
+		broadcastMap();
+		return true;
+	}
+
+	return false;
+
+/*
 	// are there any downed nodes? Because this could be bad!
 	if (failedCount)
 	{
@@ -80,35 +123,34 @@ bool openset::mapping::Sentinel::failCheck()
 	}
 
 	return false;
+*/
 }
 
-bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, int64_t targetNode) const
+bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const
 {
 	// make a JSON request payload
-	cjson request;
-
-	request.set("action", "transfer");
-	auto params = request.setObject("params");
-	params->set("source_node", sourceNode);
-	params->set("target_node", targetNode);
-	params->set("partition", partitionId);
+	auto targetNodeName = globals::mapper->getRouteName(targetNode);
 
 	Logger::get().info("dispatching transfer " + to_string(partitionId) + " to " + globals::mapper->getRouteName(targetNode));
 
-	int64_t jsonLength;
-	auto jsonPtr = cjson::StringifyCstr(&request, jsonLength);
-
-	auto message = openset::globals::mapper->dispatchSync(
+	const auto message = openset::globals::mapper->dispatchSync(
 		sourceNode, // we send this to the source node, it will copy to target
-		openset::mapping::rpc_e::inter_node,
-		jsonPtr,
-		jsonLength);
+		"PUT",
+		"/v1/internode/transfer",
+		{{"partition", std::to_string(partitionId)}, { "node", targetNodeName }},
+		nullptr,
+		0);
 
 	if (!message)
 	{
+		// this will unset the partition from the map
 		openset::globals::mapper->getPartitionMap()->setState(partitionId, targetNode, openset::mapping::NodeState_e::free);
-		Logger::get().error("xfer error on paritition " + to_string(partitionId) + ".");
+		Logger::get().error("transfer error on paritition " + to_string(partitionId) + ".");
 		return false;
+	}
+	else
+	{
+		// TODO Parse message for errors
 	}
 
 	return true;
@@ -116,35 +158,38 @@ bool openset::mapping::Sentinel::tranfer(int partitionId, int64_t sourceNode, in
 
 bool openset::mapping::Sentinel::broadcastMap() const
 {
+
 	cjson configBlock;
-	configBlock.set("action", "map_change");
-
-	auto params = configBlock.setObject("params");
-
-	params->set("config_version", globals::running->updateConfigVersion());
 
 	// make a node called routes, serialize the routes (nodes) under it
-	mapper->serializeRoutes(params->setObject("routes"));
+	mapper->serializeRoutes(configBlock.setObject("routes"));
 	// make a node called cluster, serialize the partitionMap under it
-	partitionMap->serializePartitionMap(params->setObject("cluster"));
+	partitionMap->serializePartitionMap(configBlock.setObject("cluster"));
 
 	// JSON to text
 	auto newNodeJson = cjson::Stringify(&configBlock);
 	
 	// blast this out to our cluster
 	auto responses = openset::globals::mapper->dispatchCluster(
-		openset::mapping::rpc_e::inter_node,
-		newNodeJson.c_str(),
+		"POST",
+		"/v1/internode/map_change",
+		{},
+		&newNodeJson[0],
 		newNodeJson.length());
+
+	const auto inError = responses.routeError;
 
 	openset::globals::mapper->releaseResponses(responses);
 
 	// TODO - parse all those responses and figure out if this is actually TRUE
-	return true;
+
+	return !inError;
 }
 
 void printMap()
 {
+
+	return;
 
 	auto pad3 = [](int number)
 	{
@@ -250,10 +295,9 @@ void openset::mapping::Sentinel::runMonitor()
 	// our cluster is complete. 
 	while (true)
 	{
-		auto partitionMax = openset::globals::async->getPartitionMax();
+		const auto partitionMax = openset::globals::async->getPartitionMax();
 
-		if (failCheck())
-			continue;
+		failCheck();
 
 		// Are we running this? If not, lets loop and wait until
 		// someday we get to be the boss
@@ -403,7 +447,7 @@ void openset::mapping::Sentinel::runMonitor()
 		}
 
 		// get number of active routes		
-		auto routes = mapper->countRoutes();
+		const auto routes = mapper->countRoutes();
 
 		// number of replicas, so 2 would mean there are three copies, the active and two clones
 		auto replicas = 2; // amount of replication we want in the cluster
@@ -449,15 +493,12 @@ void openset::mapping::Sentinel::runMonitor()
 				int64_t sourceNode = -1;
 
 				for (auto n : foundOnNodes)
-				{
-					auto state = partitionMap->getState(p, n);
-					if (state == NodeState_e::active_owner ||
+					if (const auto state = partitionMap->getState(p, n); state == NodeState_e::active_owner ||
 						state == NodeState_e::active_clone)
 					{
 						sourceNode = n;
 						break;
 					}
-				}
 
 				if (sourceNode == -1)
 				{

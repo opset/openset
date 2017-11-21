@@ -1,5 +1,6 @@
 #include <stdexcept>
 #include <cinttypes>
+#include <regex>
 
 #include "rpc.h"
 #include "cjson/cjson.h"
@@ -9,6 +10,7 @@
 #include "oloop_query.h"
 #include "oloop_count.h"
 
+#include "asyncpool.h"
 #include "config.h"
 #include "sentinel.h"
 #include "querycommon.h"
@@ -19,9 +21,8 @@
 #include "tablepartitioned.h"
 #include "errors.h"
 #include "internoderouter.h"
-#include "internodemessage.h"
 #include "names.h"
-
+#include "http_serve.h"
 
 using namespace std;
 using namespace openset::comms;
@@ -41,6 +42,11 @@ enum class internodeFunction_e : int32_t
 	cluster_release,
 };
 
+void RpcError(openset::errors::Error error, const openset::web::MessagePtr message)
+{
+	message->reply(openset::http::StatusCode::client_error_bad_request, error.getErrorJSON());
+}
+
 static const unordered_map<string, internodeFunction_e> internodeMap = {
 	{ "init_config_node", internodeFunction_e::init_config_node },
 	{ "cluster_member", internodeFunction_e::cluster_member },
@@ -51,85 +57,28 @@ static const unordered_map<string, internodeFunction_e> internodeMap = {
 	{ "cluster_release", internodeFunction_e::cluster_release },
 };
 
-void Internode::error(openset::errors::Error error, cjson* response)
+void RpcInternode::is_member(const openset::web::MessagePtr message, const RpcMapping&)
 {
-	cjson::Parse(error.getErrorJSON(), response);
-}
-
-void Internode::onMessage(
-	Database* database,
-	AsyncPool* partitions,
-	openset::comms::Message* message)
-{
-	auto msgText = message->toString();
-	cjson request(msgText, msgText.length());
 	cjson response;
-
-	const auto command = request.xPathString("/action", "__error__");
-	const auto iter = internodeMap.find(command);
-
-	if (iter == internodeMap.end())
-	{
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::general_config_error,
-			"internode function not found" },
-			&response);
-
-		message->reply(cjson::Stringify(&response, true));
-		return;
-	}
-
-	switch (iter->second) // second is type adminFunction_e 
-	{
-		case internodeFunction_e::init_config_node:
-			initConfigureNode(database, partitions, &request, &response);
-		break;
-
-		case internodeFunction_e::cluster_member: 
-			isClusterMember(database, partitions, &request, &response);
-		break;
-
-		case internodeFunction_e::map_change:
-			mapChange(database, partitions, &request, &response);
-			break;
-
-		case internodeFunction_e::transfer:
-			transfer(database, partitions, &request, &response);
-			break;
-
-		case internodeFunction_e::node_add:
-			nodeAdd(database, partitions, &request, &response);
-			break;
-
-		default: ;
-	}
-
-	message->reply(cjson::Stringify(&response, true));
+	response.set("part_of_cluster", globals::running->state != openset::config::nodeState_e::ready_wait);
+	message->reply(openset::http::StatusCode::success_ok, response);
 }
 
-void Internode::isClusterMember(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
-{
-	response->set("part_of_cluster", globals::running->state != openset::config::nodeState_e::ready_wait);
-}
-
-void Internode::initConfigureNode(Database* database, AsyncPool* asyncEngine, cjson* request, cjson* response)
+void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 	globals::mapper->removeRoute(globals::running->nodeId);
 
-	const auto nodeName = request->xPathString("/params/node_name", "");
-	const auto nodeId = request->xPathInt("/params/node_id", 0);
-	const auto partitionMax = request->xPathInt("/params/partition_max", 0);
+	const auto request = message->getJSON();
+	const auto nodeName = request.xPathString("/node_name", "");
+	const auto nodeId = request.xPathInt("/node_id", 0);
+	const auto partitionMax = request.xPathInt("/partition_max", 0);
 
-	cout << endl;
+	// TODO - error check here
 	Logger::get().info("Joining cluster as: '" + nodeName + "'.");
-	cout << endl;
 
 	// assign a new node id
 	{
-		globals::running->updateConfigVersion(request->xPathInt("/params/config_version", 0));
-
+		csLock lock(openset::globals::running->cs);
 		globals::running->nodeId = nodeId;
 		globals::running->state = openset::config::nodeState_e::active;
 		globals::running->configVersion = 1;
@@ -137,20 +86,20 @@ void Internode::initConfigureNode(Database* database, AsyncPool* asyncEngine, cj
 	}
 
 	// create the routes
-	openset::globals::mapper->deserializeRoutes(request->xPath("/params/routes"));
+	openset::globals::mapper->deserializeRoutes(request.xPath("/routes"));
 
 	// set number of partitions
-	asyncEngine->setPartitionMax(partitionMax);
+	globals::async->setPartitionMax(partitionMax);
 	// set them running - this return right away
-	asyncEngine->startAsync();
+	globals::async->startAsync();
 
 	// set the partition map
-	openset::globals::mapper->getPartitionMap()->deserializePartitionMap(request->xPath("/params/cluster"));
-	asyncEngine->mapPartitionsToAsyncWorkers();
+	openset::globals::mapper->getPartitionMap()->deserializePartitionMap(request.xPath("/cluster"));
+	globals::async->mapPartitionsToAsyncWorkers();
 
-	asyncEngine->suspendAsync();
+	globals::async->suspendAsync();
 	// create the tables
-	auto nodes = request->xPath("/params/tables")->getNodes();
+	auto nodes = request.xPath("/tables")->getNodes();
 	for (auto n : nodes)
 	{
 		auto tableName = n->xPathString("/name", "");
@@ -158,28 +107,29 @@ void Internode::initConfigureNode(Database* database, AsyncPool* asyncEngine, cj
 		if (!tableName.length())
 			continue;
 
-		auto table = database->newTable(tableName);
+		auto table = openset::globals::database->newTable(tableName);
 
 		table->deserializeTable(n->xPath("/table"));
 		table->deserializeTriggers(n->xPath("/triggers"));
 	}
 
-	asyncEngine->resumeAsync();
+	openset::globals::async->resumeAsync();
 
-	Logger::get().info("configured for " + to_string(partitionMax) + " partitions.");
+	Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
 
-	response->set("configured", true);
+	cjson response;
+	response.set("configured", true);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Internode::nodeAdd(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	const auto nodeName = request->xPathString("/params/node_name", "");
-	const auto nodeId = request->xPathInt("/params/node_id", 0);
-	auto host = request->xPathString("/params/host", "");
-	const auto port = request->xPathInt("/params/port", 0);
+	auto requestJson = message->getJSON();
 
-	// update - config verison only set on commit
-	// globals::running->updateConfigVersion(request->xPathInt("/params/config_version", 0));
+	const auto nodeName = requestJson.xPathString("/node_name", "");
+	const auto nodeId = requestJson.xPathInt("/node_id", 0);
+	auto host = requestJson.xPathString("/host", "");
+	const auto port = requestJson.xPathInt("/port", 0);
 
 	if (host.length() && port && nodeId)
 	{
@@ -189,29 +139,31 @@ void Internode::nodeAdd(Database* database, AsyncPool* partitions, cjson* reques
 	else
 	{
 		Logger::get().error("change_cluster:node_add - missing params");
-		error(
+		RpcError(
 			openset::errors::Error{
 				openset::errors::errorClass_e::config,
 				openset::errors::errorCode_e::general_config_error,
 				"change_cluster:node_add missing params" 
 			},
-			response);
+			message);
 		return;
 	}
 
-	response->set("response", "thank you.");
+	cjson response;
+	response.set("response", "thank you.");
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Internode::transfer(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+void RpcInternode::transfer_init(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	const auto targetNode = request->xPathInt("/params/target_node", -1);
-	const auto partitionId = request->xPathInt("/params/partition", -1);
+	const auto targetNode = message->getParamString("node");
+	const auto partitionId = message->getParamInt("partition");
 
 	std::vector<openset::db::Table*> tables;
 
 	{ // get a list of tables
-		csLock lock(database->cs);
-		for (const auto t : database->tables)
+		csLock lock(globals::database->cs);
+		for (const auto t : globals::database->tables)
 			tables.push_back(t.second);
 	}
 	
@@ -254,18 +206,26 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 
 				blockPtr = mem.flatten();
 				blockSize = mem.getBytes();
-			}
+			} // HeapStack mem gets release here
+
+			const auto targetNodeId = globals::mapper->getRouteId(targetNode);
+
+			// TODO - test for target
 
 			const auto responseMessage = openset::globals::mapper->dispatchSync(
-				targetNode,
-				openset::mapping::rpc_e::inter_node_partition_xfer,
+				targetNodeId,
+				"POST",
+				"/v1/internode/transfer",
+				{},
 				blockPtr,
 				blockSize);
 
 			if (!responseMessage)
-				Logger::get().error("xfer error " + t->getName() + ".");
+				Logger::get().error("partition transfer error " + t->getName() + ".");
 			else
-				Logger::get().info("transfered " + t->getName() + " on " + openset::globals::mapper->getRouteName(partitionId) + ".");
+				Logger::get().info(
+					"transferred for table " + t->getName() + " to " + openset::globals::mapper->getRouteName(partitionId) + 
+					" (transfered " + to_string(blockSize) + " bytes).");
 		}
 	}
 
@@ -273,11 +233,59 @@ void Internode::transfer(Database* database, AsyncPool* partitions, cjson* reque
 
 	Logger::get().info("transfer complete on partition " + to_string(partitionId) + ".");
 
-	response->set("response", "thank you.");
+	cjson response;
+	response.set("response", "thank you.");	
+	message->reply(http::StatusCode::success_ok, response);
+}
+
+void RpcInternode::transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches)
+{
+
+	// This is a binary message, it will contain an inbound table for a given partition.
+	// in the header will be the partition, and table name. 
+
+	Logger::get().info("transfer in (received " + to_string(message->getPayloadLength()) + " bytes).");
+
+	auto read = message->getPayload();
+
+	const auto partitionId = *recast<int32_t*>(read);
+	read += 4;
+
+	const auto tableNameLength = *recast<int32_t*>(read);
+	read += 4;
+	const std::string tableName(read);
+
+	read += tableNameLength;
+
+	openset::globals::async->suspendAsync();
+
+	auto table = globals::database->getTable(tableName);
+
+	// TODO - skipping this might be correct, and return false
+	if (!table)
+		table = globals::database->newTable(tableName);
+
+	// make table partition objects
+	auto parts = table->getPartitionObjects(partitionId);
+	// make async partition object (loop, etc).
+	openset::globals::async->initPartition(partitionId);
+
+	read += parts->attributes.deserialize(read);
+	parts->people.deserialize(read);
+
+	openset::globals::async->resumeAsync();
+
+	Logger::get().info("transfer comlete");
+
+	// reply when done
+	cjson response;
+	response.set("transferred", true);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
-void Internode::mapChange(Database* database, AsyncPool* asyncEngine, cjson* request, cjson* response)
+
+void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 	// These callbacks allow us to clean objects up when the map is altered.
 	// The map doesn't have knowledge of these objects (and shouldn't) and these
@@ -286,23 +294,22 @@ void Internode::mapChange(Database* database, AsyncPool* asyncEngine, cjson* req
 	const auto addPartition = [&](int partitionId)
 	{
 		// add this partition to the async pool, it will add it to a loop
-		asyncEngine->initPartition(partitionId);
-
+		globals::async->initPartition(partitionId);
 		globals::async->assertAsyncLock(); // dbg - assert we are in a lock
 
-		for (auto t : database->tables)
+		for (auto t : globals::database->tables)
 			t.second->getPartitionObjects(partitionId);
 	};
 
 	const auto removePartition = [&](int partitionId)
 	{
 		// drop this partition from the async engine
-		asyncEngine->freePartition(partitionId);
+		globals::async->freePartition(partitionId);
 
 		globals::async->assertAsyncLock();
 
 		// drop this partition from any table objects
-		for (auto t : database->tables)
+		for (auto t : globals::database->tables)
 			t.second->releasePartitionObjects(partitionId);
 	};
 
@@ -322,10 +329,12 @@ void Internode::mapChange(Database* database, AsyncPool* asyncEngine, cjson* req
 	globals::async->suspendAsync();
 	globals::async->assertAsyncLock();
 
+	const auto requestJson = message->getJSON();
+
 	// map changes require the full undivided attention of the cluster!
 	// nothing executing, means no goofy locks and no bad pointers
 	openset::globals::mapper->changeMapping(
-		request->xPath("/params"),
+		requestJson,
 		addPartition,
 		removePartition,
 		addRoute,
@@ -333,259 +342,116 @@ void Internode::mapChange(Database* database, AsyncPool* asyncEngine, cjson* req
 
 	globals::async->resumeAsync();
 
-	response->set("response", "thank you.");
+	cjson response;
+	response.set("response", "thank you.");
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-
-enum class adminFunction_e : int32_t
-{
-	none,
-	status,
-	shutdown,
-	init_cluster,	
-	invite_node, // invite another node to join the cluster - sent by sentinel
-	create_table,
-	describe_table,
-	add_column,
-	drop_column,
-	set_trigger,
-	describe_triggers,
-	drop_trigger
-};
-
-static const unordered_map<string, adminFunction_e> adminMap = {
-	{"status", adminFunction_e::status},
-	{"shutdown", adminFunction_e::shutdown},
-	{"init_cluster", adminFunction_e::init_cluster },
-	{ "invite_node", adminFunction_e::invite_node },
-	{"create_table", adminFunction_e::create_table },
-	{"describe_table", adminFunction_e::describe_table },
-	{"add_column", adminFunction_e::add_column },
-	{"drop_column", adminFunction_e::drop_column },
-	{"set_trigger", adminFunction_e::set_trigger },
-	{"describe_triggers", adminFunction_e::describe_triggers},
-	{"drop_trigger", adminFunction_e::drop_trigger}
-};
-
-void Admin::error(openset::errors::Error error, cjson* response)
-{
-	cjson::Parse(error.getErrorJSON(), response);
-}
 
 enum class ForwardStatus_e : int
 {
 	dispatched,
-	isForwarded,
+	alreadyForwarded,
 	error
 };
 
-ForwardStatus_e forwardRequest(
-	const openset::mapping::rpc_e rpc,
-	Database* database,
-	AsyncPool* partitions,
-	cjson* request,
-	cjson* response)
+ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
 {
 	if (!openset::globals::mapper->routes.size())
 		return ForwardStatus_e::error;
 	
-	if (request->xPathBool("/forwarded", false))
-		return ForwardStatus_e::isForwarded;
+	if (message->getParamBool("forwarded"))
+		return ForwardStatus_e::alreadyForwarded;
 
-	request->set("forwarded", true);
+	auto newParams = message->getQuery();
+	newParams.emplace("forwarded"s, "true"s);
 
+	// broadcast to the cluster
 	auto result = openset::globals::mapper->dispatchCluster(
-		rpc,
-		request,
+		message->getMethod(),
+		message->getPath(),
+		newParams,
+		message->getPayload(),
+		message->getPayloadLength(),
 		true);
 
-	const auto inError = result.routeError;
-
-	if (!inError)
+	/*
+	 * If it's not an error we reply with the first response received by the cluster
+	 * as they are going to be all the same
+	 */
+	if (!result.routeError)
+	{
+		cjson response;
 		cjson::Parse(
 			string{
 				result.responses[0].first,
-				static_cast<size_t>(result.responses[0].second) 
+				static_cast<size_t>(result.responses[0].second)
 			},
-			response
+			&response
 		);
+
+		message->reply(openset::http::StatusCode::success_ok, response);
+	}
+	else // if it's an error, reply with generic "something bad happened" type error
+	{
+
+        auto nodeFail = false;
+
+        // try to capture a json error that has perculated up from the forked call.
+        if (result.responses[0].first &&
+            result.responses[0].second &&
+            result.responses[0].first[0] == '{')
+        {
+            cjson error(std::string(result.responses[0].first, result.responses[0].second), result.responses[0].second);
+
+            if (error.xPath("/error"))
+                message->reply(openset::http::StatusCode::client_error_bad_request, error);
+            else
+                nodeFail = true;
+        }
+        else
+            nodeFail = true;
+
+        if (nodeFail)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::route_error,
+                "potential node failure - please re-issue the request" },
+                message);
+        }
+	}
 
 	openset::globals::mapper->releaseResponses(result);
 
-	return (inError) ? ForwardStatus_e::error : ForwardStatus_e::dispatched;
+	return (result.routeError) ? ForwardStatus_e::error : ForwardStatus_e::dispatched;
 }
 
-void Admin::onMessage(
-	Database* database,
-	AsyncPool* partitions,
-	openset::comms::Message* message)
+void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	auto msgText = message->toString();
-	cjson request(msgText, msgText.length());
-	cjson response;
-
-	const auto command = request.xPathString("/action", "null");
-	const auto iter = adminMap.find(command);
-
-	if (iter == adminMap.end())
-	{ 
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::general_config_error,
-			"missing or invalid action (" + command + ")" },
-			&response);
-
-		message->reply(&response);
-
-		return;
-	}
-
-	auto handled = false;
-
-	switch (iter->second) // second is type adminFunction_e 
-	{
-	case adminFunction_e::none:
-		handled = true;
-		break;
-
-	case adminFunction_e::status:
-		message->reply("{\"message\":\"hello\"}");
-		break;
-
-	case adminFunction_e::shutdown:
-		handled = true;
-		break;
-
-	case adminFunction_e::init_cluster:
-		handled = true;
-		initCluster(database, partitions, &request, &response);
-		break;
-
-	case adminFunction_e::invite_node:
-		handled = true;
-		if (!openset::globals::sentinel->isSentinel())
-		{
-			const auto sentinelRoute = openset::globals::sentinel->getSentinel();
-
-			Logger::get().info("forwarding invite to sentinal '" + openset::globals::mapper->getRouteName(sentinelRoute) + "'");
-
-			const auto responseMessage = openset::globals::mapper->dispatchSync(
-				sentinelRoute,
-				openset::mapping::rpc_e::admin,
-				&request
-			);
-
-			if (responseMessage)
-			{
-				cjson::Parse(responseMessage->toString(), &response);
-			}
-			else
-			{
-				Logger::get().error("error forwarding node invitiation");
-				response.set("error", true);
-			}
-		}
-		else
-		{
-			inviteNode(database, partitions, &request, &response);
-		}
-		break;
-		default: ;
-	};
-
-	if (handled)
-	{
-		message->reply(&response);
-		return;
-	}
-
-	switch (forwardRequest(
-		openset::mapping::rpc_e::admin,
-		database,
-		partitions,
-		&request,
-		&response))
-	{
-	case ForwardStatus_e::error:
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::route_error,
-			"potential node failure - please re-issue the request" },
-			&response);
-		break;
-
-	case ForwardStatus_e::isForwarded:
-		switch (iter->second) // second is type adminFunction_e 
-		{
-		case adminFunction_e::create_table:
-			createTable(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::describe_table:
-			describeTable(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::add_column:
-			addColumn(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::drop_column:
-			dropColumn(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::set_trigger:
-			setTrigger(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::describe_triggers:
-			describeTriggers(database, partitions, &request, &response);
-			break;
-
-		case adminFunction_e::drop_trigger:
-			dropTrigger(database, partitions, &request, &response);
-			break;
-
-		default:
-			// error
-			break;
-		}
-		case ForwardStatus_e::dispatched: break;
-		default: ;
-	};
-
-	message->reply(&response);
-	
-}
-
-void Admin::initCluster(
-	Database* database,
-	AsyncPool* partitions, 
-	cjson * request, 
-	cjson* response)
-{
-	const auto partitionMax = request->xPathInt("params/partitions", 0);
+	const auto partitions = openset::globals::async;
+	const auto partitionMax = message->getParamInt("partitions"s, 0);
 
 	if (partitionMax < 1 || partitionMax > 1000)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"partitions must be >= 1 and <= 1000" },
-			response);
+			message);
 		return;
 	}
 
 	if (partitions->isRunning())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 				openset::errors::errorClass_e::config,
 				openset::errors::errorCode_e::general_config_error,
 				"This instance is already part of a cluster" },
-			response);
+			message);
 		return;
 	}
 
@@ -612,10 +478,11 @@ void Admin::initCluster(
 
 	partitions->mapPartitionsToAsyncWorkers();
 
-	const auto logLine = "configured for " + to_string(partitionMax) + " partitions.";
-	Logger::get().info(logLine);
-	response->set("message", logLine);	
+	Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
 
+    cjson response;
+    response.set("server_name", globals::running->nodeName);
+	
 	// routes are broadcast to nodes, we use the external host and port
 	// so that nodes can find each other in containered situations where
 	// the container doesn't know it's own IP and ports are mapped
@@ -624,117 +491,104 @@ void Admin::initCluster(
 		globals::running->nodeId, 
 		globals::running->hostExternal, 
 		globals::running->portExternal);
+
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+
+void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 
 	if (globals::running->state != openset::config::nodeState_e::active)
 	{
-		Logger::get().error("node must be initialized to invite other nodes.");
-		response->set("class", "config");
-		response->set("error", "node_not_initialized");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::config,
+			openset::errors::errorCode_e::route_error,
+			"node_not_initialized" },
+			message);
 		return;
 	}
 
-	const auto host = request->xPathString("/params/host", "");
-	const auto port = request->xPathInt("/params/port", 0);
+	const auto host = message->getParamString("host");
+	const auto port = message->getParamInt("port", 8080);
+
 	const auto newNodeName = openset::config::createName();
 	const auto newNodeId = MakeHash(newNodeName);
 
 	if (!host.length() || !port)
 	{
 		Logger::get().error("invite node: missing params.");
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
-			"missing host or port /params/host, /params/port" },
-			response);
-
-		return;
-	}
-
-	// Step 0 - Try to open a connection to the remote node
-	openset::mapping::OutboundClient client(0, host, port, true);
-
-	if (!client.openConnection())
-	{
-		Logger::get().error("invite node: could not connect " + host + ":" + to_string(port) + ".");
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::internode_error,
-			"could not connect to " + host + ":" + to_string(port)},
-			response);
-
+			"missing host. Use param: host={host|ip}" },
+			message);
 		return;
 	}
 
 	// Step 1 - Verify that the remote node exists and is able to join
 	{
-		Logger::get().info("inviting node " + host + ":" + to_string(port) + ".");
+		openset::web::Rest client(host + ":" + to_string(port));
 
-		cjson initRequest;
-		initRequest.set("action", "cluster_member"); 
-		auto params = initRequest.setObject("params");
-		
-		params->set("node_name", newNodeName);
-		params->set("node_id", newNodeId);
-		params->set("config_version", globals::running->configVersion);
+		auto error = false;
+		auto ready = false;
 
-		auto rpcJSON = cjson::Stringify(&initRequest);
+		cjson responseJson;
 
-		openset::comms::RouteHeader_s route;
-		route.route = 0; // special case where we set this to zero (new node has no id)
-		route.rpc = cast<int32_t>(openset::mapping::rpc_e::inter_node);
-		route.replyTo = globals::running->nodeId;
-		route.slot = 0; // reply will come back over this channel
-		route.length = rpcJSON.length();
-
-		client.directRequest(route, rpcJSON.c_str());
-
-		char* initResponseData;
-		auto clientResponseHeader = client.waitDirectResponse(initResponseData);
-
-		if (clientResponseHeader.isError() || !initResponseData)
+		client.request("GET", "/v1/internode/is_member", {}, nullptr, 0, [&error, &ready, &responseJson](http::StatusCode status, bool err, cjson json) mutable
 		{
-			Logger::get().info("invited node " + host + ":" + to_string(port) + " could not be reached.");
-			response->set("class", "config");
-			response->set("error", "verify_node_could_not_be_reached");
+			error = err;
+
+			if (!err)
+				responseJson = std::move(json);
+
+			ready = true;
+		});
+
+		// dumb loop, wait for callback
+		while (!ready)
+			ThreadSleep(50);
+
+		if (error || responseJson.memberCount == 0)
+		{
+			RpcError(
+				openset::errors::Error{
+				openset::errors::errorClass_e::config,
+				openset::errors::errorCode_e::general_config_error,
+				"target node could not be reached." },
+				message);
 			return;
 		}
 
-		// copy to string
-		auto tStr = std::string(initResponseData);
-		delete[] initResponseData; // free buffer
-
-		cjson clientResponseJson(tStr, tStr.length()); // parse from string
-
-		if (clientResponseJson.xPathBool("/part_of_cluster", true))  
+		// node is already part of a cluster
+		if (responseJson.xPathBool("/part_of_cluster", true))
 		{
-			Logger::get().error("invited node " + host + ":" + to_string(port) + " not available to join cluster.");
-			response->set("class", "config");
-			response->set("error", "verify_node_not_available");
+			RpcError(
+				openset::errors::Error{
+				openset::errors::errorClass_e::config,
+				openset::errors::errorCode_e::general_config_error,
+				"target node already part of a cluster." },
+				message);
 			return;
 		}
 	}
 
-	// Step 2 - The remote node is open to being configured, lets send it the entire config	
+
+	// Step 2 - The remote node is open to being configured, lets send it the entire config
 	{
 		// TODO glue together the whole config
 		cjson configBlock;
-		configBlock.set("action", "init_config_node");
-		auto params = configBlock.setObject("params");
 
-		params->set("node_name", newNodeName);
-		params->set("node_id", newNodeId);
-		params->set("partition_max", cast<int64_t>(openset::globals::async->partitionMax));
+		configBlock.set("node_name", newNodeName);
+		configBlock.set("node_id", newNodeId);
+		configBlock.set("partition_max", cast<int64_t>(openset::globals::async->partitionMax));
 
 		// make am array node called tables, push the tables, triggers, columns into the array
-		auto tables = params->setArray("tables");
+		auto tables = configBlock.setArray("tables");
 
-		for (auto n : database->tables)
+		for (auto n : openset::globals::database->tables)
 		{
 			auto tableItem = tables->pushObject();
 
@@ -744,51 +598,72 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 			// the serialize functions so the data becomes a series of
 			// objects within the tables list/array created above
 			n.second->serializeTable(tableItem->setObject("table"));
-			n.second->serializeTriggers(tableItem->setObject("triggers"));							
+			n.second->serializeTriggers(tableItem->setObject("triggers"));
 		}
 
 		// make a node called routes, serialize the routes (nodes) under it
-		openset::globals::mapper->serializeRoutes(params->setObject("routes"));
+		openset::globals::mapper->serializeRoutes(configBlock.setObject("routes"));
 
 		// make a node called cluster, serialize the partitionMap under it
-		openset::globals::mapper->getPartitionMap()->serializePartitionMap(params->setObject("cluster"));
+		openset::globals::mapper->getPartitionMap()->serializePartitionMap(configBlock.setObject("cluster"));
 
 
-		auto rpcJSON = cjson::Stringify(&configBlock);
+		auto rpcJson = cjson::Stringify(&configBlock);
+
+		cout << rpcJson << endl;
 
 		Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
-		openset::comms::RouteHeader_s route;
-		route.route = 0; // special case where we set this to zero (new node has no id)
-		route.rpc = cast<int32_t>(openset::mapping::rpc_e::inter_node);
-		route.replyTo = globals::running->nodeId;
-		route.slot = 0; // reply will come back over this channel
-		route.length = rpcJSON.length();
+		openset::web::Rest client(host + ":" + to_string(port));
 
-		client.directRequest(route, rpcJSON.c_str());
+		auto error = false;
+		auto ready = false;
 
-		char* initResponseData;
-		auto clientResponseHeader = client.waitDirectResponse(initResponseData);
+		cjson responseJson;
 
-		if (clientResponseHeader.isError() || !initResponseData)
+		// send command that joins remote node to this cluster, this transfers all
+		// config to the remote node.
+		client.request(
+            "POST", 
+            "/v1/internode/join_to_cluster", 
+            {}, 
+            &rpcJson[0], 
+            rpcJson.length(), 
+            [&error, &ready, &responseJson](http::StatusCode status, bool err, cjson json)
 		{
-			Logger::get().error("invited node " + host + ":" + to_string(port) + " could not be reached.");
-			response->set("class", "config");
-			response->set("error", "config_node_could_not_be_reached");
+			error = err;
+
+			if (!err)
+				responseJson = std::move(json);
+
+			ready = true;
+		});
+
+		// dumb loop, wait for callback
+		while (!ready)
+			ThreadSleep(50);
+
+
+		if (error || responseJson.memberCount == 0)
+		{
+			RpcError(
+				openset::errors::Error{
+				openset::errors::errorClass_e::config,
+				openset::errors::errorCode_e::general_config_error,
+				"target node could not be reached." },
+				message);
 			return;
 		}
 
 		// copy to string
-		auto tStr = std::string(initResponseData);
-		delete[] initResponseData; // free buffer
-
-		cjson clientResponseJson(tStr, tStr.length()); // parse from string
-
-		if (!clientResponseJson.xPathBool("/configured", false))
+		if (!responseJson.xPathBool("/configured", false))
 		{
-			Logger::get().info("invited node " + host + ":" + to_string(port) + " could not be configured.");
-			response->set("class", "config");
-			response->set("error", "config_node_not_configured");
+			RpcError(
+				openset::errors::Error{
+				openset::errors::errorClass_e::config,
+				openset::errors::errorCode_e::general_config_error,
+				"target node could not be configured." },
+				message);
 			return;
 		}
 
@@ -806,75 +681,127 @@ void Admin::inviteNode(Database* database, AsyncPool* partitions, cjson* request
 		// tell all the nodes (including our new node) about
 		// the new node.
 		cjson newNode;
-		newNode.set("action", "node_add");
-		auto params = newNode.setObject("params");
 		//params->set("config_version", globals::running->updateConfigVersion());
-		params->set("node_name", newNodeName);
-		params->set("node_id", newNodeId);
-		params->set("host", host);
-		params->set("port", port);
+		newNode.set("node_name", newNodeName);
+		newNode.set("node_id", newNodeId);
+		newNode.set("host", host);
+		newNode.set("port", port);
 
 		auto newNodeJson = cjson::Stringify(&newNode);
 
 		auto addResponses = openset::globals::mapper->dispatchCluster(
-			openset::mapping::rpc_e::inter_node, 
-			newNodeJson.c_str(), 
-			newNodeJson.length());
+			"POST",
+			"/v1/internode/add_node",
+			{},
+			newNode,
+			false);
 
 		openset::globals::mapper->releaseResponses(addResponses);
-		// helper?
+
 	}
 
 	// respond to client
-	response->set("node_joined", true);
-	
+	cjson response;
+	response.set("node_joined", true);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
-void Admin::createTable(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+
+void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMapping& matches)
 {	
-	auto tableName = request->xPathString("/params/table", "");
+
+	// this request must be forwarded to all the other nodes
+	if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
+		return;
+	
+	auto database = openset::globals::database;
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
 
 	if (!tableName.size())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
-			"missing /params/table" },
-			response);
+			"bad table name" },
+			message);
 		return;
 	}
 
 	if (database->getTable(tableName))
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"table already exists" },
-			response);
+			message);
 		return;
 	}
 
 	// TODO - look for spaces, check length, look for symbols that aren't - or _ etc.
 
-	const auto sourceColumns = request->xPath("/params/columns");
+	const auto sourceColumns = request.xPath("/columns");
 	if (!sourceColumns)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
-			"column definition required, missing /params/columns" },
-			response);
+			"column definition required, missing /columns" },
+			message);
 
 		return;
 	}
 
-	const auto sourceZOrder = request->xPath("/params/z_order");
+	const auto sourceZOrder = request.xPath("/z_order");
 
 	auto sourceColumnsList = sourceColumns->getNodes();
+
+    // validate column names and types
+    for (auto n: sourceColumnsList)
+    {
+        auto name = n->xPathString("/name", "");
+        auto type = n->xPathString("/type", "");
+
+        if (!name.size() || !type.size())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "missing column type or name" },
+                message);
+            return;
+        }
+
+        // bad type
+        if (openset::db::ColumnTypes.find(type) == openset::db::ColumnTypes.end())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column type: must be int|double|text|bool" },
+                message);
+            return;
+        }
+
+        if (!openset::db::Columns::validColumnName(name))
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
+                message);
+            return;
+        }
+
+    }
+
 
 	globals::async->suspendAsync();
 	auto table = database->newTable(tableName);
@@ -893,20 +820,8 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 
 	for (auto n: sourceColumnsList)
 	{
-		auto name = n->xPathString("/name", "");
-		auto type = n->xPathString("/type", "");
-
-		if (!name.size() || !type.size())
-		{
-			error(
-				openset::errors::Error{
-				openset::errors::errorClass_e::config,
-				openset::errors::errorCode_e::general_config_error,
-				"primary column name or type" },
-				response);
-
-			return;
-		}
+	    const auto name = n->xPathString("/name", "");
+	    const auto type = n->xPathString("/type", "");
 
 		columnTypes_e colType;
 
@@ -920,12 +835,12 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 			colType = columnTypes_e::boolColumn;
 		else
 		{
-			error(
+			RpcError(
 				openset::errors::Error{
 				openset::errors::errorClass_e::config,
 				openset::errors::errorCode_e::general_config_error,
 				"invalide column type" },
-				response);
+				message);
 
 			return;
 		}
@@ -939,9 +854,6 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 
 		++columnEnum;
 	}
-
-	globals::async->resumeAsync();
-
 
 	if (sourceZOrder)
 	{
@@ -959,30 +871,31 @@ void Admin::createTable(Database* database, AsyncPool* partitions, cjson* reques
 		}
 	}
 
-	const auto logLine = "table '" + tableName + "' created.";
-	Logger::get().info(logLine);
-	response->set("message", logLine);
+	globals::async->resumeAsync();
 
+	Logger::get().info("table '" + tableName + "' created.");
+
+	cjson response;
+	response.set("message", "created");
+    response.set("table", tableName);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Admin::describeTable(
-	Database* database,
-	AsyncPool* partitions,
-	cjson* request,
-	cjson* response)
+void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
+	auto database = openset::globals::database;
 
-	auto tableName = request->xPathString("/params/table", "");
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
 
 	if (!tableName.size())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
-			"missing /params/table" },
-			response);
-
+			"missing table name" },
+			message);
 		return;
 	}
 
@@ -990,22 +903,26 @@ void Admin::describeTable(
 
 	if (!table)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"table not found" },
-			response);
+			message);
 
 		return;
 	}
 
-	auto columnNodes = response->setArray("columns");
+	cjson response;
+
+	response.set("table", tableName);
+
+	auto columnNodes = response.setArray("columns");
 	auto columns = table->getColumns();
 
 	for (auto &c : columns->columns)
-		if (c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
-		{
+		if (c.idx > 6 && c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
+		{            
 			auto columnRecord = columnNodes->pushObject();
 
 			std::string type;
@@ -1029,34 +946,36 @@ void Admin::describeTable(
 			}
 
 			columnRecord->set("name", c.name);
-			columnRecord->set("index", cast<int64_t>(c.idx));
 			columnRecord->set("type", type);
-			if (c.deleted)
-				columnRecord->set("deleted", c.deleted);
+            //columnRecord->set("index", cast<int64_t>(c.idx)); not required for describe, possibly confusing
 		}
 
-	const auto logLine = "describe table '" + tableName + "'.";
-	Logger::get().info(logLine);
-	response->set("message", logLine);
+    Logger::get().info("describe table '" + tableName + "'.");	
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Admin::addColumn(
-	Database* database,
-	AsyncPool* partitions,
-	cjson* request,
-	cjson* response)
+void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	auto tableName = request->xPathString("/params/table", "");
-	const auto columnJson = request->xPath("/params/column");
+
+	// this request must be forwarded to all the other nodes
+	if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
+		return;
+
+	auto database = openset::globals::database;
+
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
+	const auto columnName = matches.find("name"s)->second;
+	const auto columnType = matches.find("type"s)->second;
 
 	if (!tableName.size())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"missing /params/table" },
-			response);
+			message);
 
 		return;
 	}
@@ -1065,37 +984,23 @@ void Admin::addColumn(
 
 	if (!table)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"table not found" },
-			response);
+			message);
 		return;
 	}
-
-	if (!columnJson)
-	{
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::general_config_error,
-			"missing /param/column" },
-			response);
-
-		return;
-	}
-
-	auto columnName = columnJson->xPathString("/name", "");
 
 	if (!columnName.size())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
-			"missing column name" },
-			response);
+			"missing or invalid column name" },
+			message);
 		return;
 	}
 
@@ -1110,56 +1015,56 @@ void Admin::addColumn(
 
 	++lowest;
 
-	const auto name = columnJson->xPathString("/name", "");
-	const auto type = columnJson->xPathString("/type", "");
-
 	columnTypes_e colType;
 
-	if (type == "text")
+	if (columnType == "text")
 		colType = columnTypes_e::textColumn;
-	else if (type == "int")
+	else if (columnType == "int")
 		colType = columnTypes_e::intColumn;
-	else if (type == "double")
+	else if (columnType == "double")
 		colType = columnTypes_e::doubleColumn;
-	else if (type == "bool")
+	else if (columnType == "bool")
 		colType = columnTypes_e::boolColumn;
 	else
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"missing or invalid column type" },
-			response);
+			message);
 
 		return; // TODO hmmm...
 	}
 
-	columns->setColumn(lowest, name, colType, false, false);
+	columns->setColumn(lowest, columnName, colType, false, false);
 
-	const auto logLine = "added column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info(logLine);
-	response->set("message", logLine);
+	Logger::get().info("added column '" + columnName + "' from table '" + tableName + "' created.");
+
+	cjson response;
+	response.set("message", "added");
+	response.set("table", tableName);
+	response.set("column", columnName);
+	response.set("type", columnType);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Admin::dropColumn(
-	Database* database,
-	AsyncPool* partitions,
-	cjson* request,
-	cjson* response)
+void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	auto tableName = request->xPathString("/params/table", "");
-	auto columnName = request->xPathString("/params/column", "");
+	auto database = openset::globals::database;
+
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
+	const auto columnName = matches.find("name"s)->second;
 
 	if (!tableName.size())
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"missing /params/table" },
-			response);
-
+			message);
 		return;
 	}
 
@@ -1167,18 +1072,23 @@ void Admin::dropColumn(
 
 	if (!table)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"table not found" },
-			response);
+			message);
 		return;
 	}
 
 	if (!columnName.size())
 	{
-		// TODO error
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::config,
+			openset::errors::errorCode_e::general_config_error,
+			"invalid column name" },
+			message);
 		return;
 	}
 
@@ -1186,30 +1096,30 @@ void Admin::dropColumn(
 
 	if (!column)
 	{
-		error(
+		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
 			openset::errors::errorCode_e::general_config_error,
 			"column not found" },
-			response);
+			message);
 		return;
 	}
 
 	// delete the actual column
 	table->getColumns()->deleteColumn(column);
 
-	// delete it in the config
-	// change - save is performed on commit
-	//table->saveConfig();
+	Logger::get().info("dropped column '" + columnName + "' from table '" + tableName + "' created.");
 
-	const auto logLine = "dropped column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info(logLine);
-	response->set("message", logLine);
+	cjson response;
+	response.set("message", "dropped");	
+	response.set("table", tableName);
+	response.set("column", columnName);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Admin::setTrigger(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	
+	/*
 	auto tableName = request->xPathString("/params/table", "");
 	auto triggerName = request->xPathString("/params/trigger", "");
 	auto script = request->xPathString("/params/script", "");
@@ -1298,11 +1208,12 @@ void Admin::setTrigger(Database* database, AsyncPool* partitions, cjson* request
 	const auto logLine = "set trigger '" + triggerName + "' on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
-
+	*/
 }
 
-void Admin::describeTriggers(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+void RpcRevent::revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
+	/*
 	csLock lock(globals::running->cs);
 
 	auto tableName = request->xPathString("/params/table", "");
@@ -1346,10 +1257,12 @@ void Admin::describeTriggers(Database* database, AsyncPool* partitions, cjson* r
 	const auto logLine = "describe triggers on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
+	*/
 }
 
-void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* request, cjson* response)
+void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
+	/*
 	csLock lock(globals::running->cs);
 
 	auto tableName = request->xPathString("/params/table", "");
@@ -1399,46 +1312,43 @@ void Admin::dropTrigger(Database* database, AsyncPool* partitions, cjson* reques
 	const auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
 	Logger::get().info(logLine);
 	response->set("message", logLine);
+	*/
 }
 
-void Insert::onInsert(
-	Database* database,
-	AsyncPool* partitions,
-	openset::comms::Message* message)
+void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	auto msgText = message->toString();
-	cjson request(msgText, msgText.length());
+	auto database = openset::globals::database;
+	const auto partitions = openset::globals::async;
 
-	const auto onError = [message](const string &error)
-	{
-		message->reply("{\"error\":\"" + error + "\"}");
-	};
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
+	const auto isFork = message->getParamBool("fork");
 
 	if (!partitions->getPartitionMax())
 	{
-		message->reply("{\"error\":{\"class\":\run_time\",\"message\":\"initialize_cluster\"}}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::insert,
+			openset::errors::errorCode_e::route_error,
+			"node_not_initialized" },
+			message);
 		return;
 	}
 
-	Table* table = nullptr;
-
-	const auto eventsNode = request.xPath("/events");
-
-	const auto isFork = request.xPathBool("/is_fork", false);
-
-	const auto tableName = request.xPathString("/profile",
-		request.xPathString("/table", ""));
-
-	if (!table)
-		table = database->getTable(tableName);
+	auto table = database->getTable(tableName);
 
 	if (!table)
 	{
-		onError("missing table"s);
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::insert,
+			openset::errors::errorCode_e::general_error,
+			"missing or invalid table name" },
+			message);
 		return;
 	}
 
-	auto rows = eventsNode->getNodes();
+	auto rows = request.getNodes();
 
 	Logger::get().info("Inserting " + to_string(rows.size()) + " events.");
 
@@ -1506,8 +1416,9 @@ void Insert::onInsert(
 
 	auto remoteCount = 0;
 
-	const auto thankyouCB = [](openset::comms::Message* message)
+	const auto thankyouCB = [](http::StatusCode, bool, char*, size_t)
 	{		
+        // TODO - we should probably handle this horrible possibility somehow.
 		// delete message;
 	};
 
@@ -1534,9 +1445,11 @@ void Insert::onInsert(
 
 			auto jsonText = cjson::Stringify(&json);
 
-			openset::globals::mapper->dispatchAsync(
+			openset::globals::mapper->dispatchAsync( 
 				targetNode,
-				openset::mapping::rpc_e::insert_async,
+				"POST",
+				"/v1/insert/" + tableName,
+				{},
 				jsonText.c_str(),
 				jsonText.length(),
 				thankyouCB);
@@ -1564,15 +1477,14 @@ void Insert::onInsert(
 				to_string(parts->partition) + ".");
 	}
 
-	message->reply("{\"response\":\"thank you.\"}");
+	cjson response;
+	response.set("message", "yummy");
+	message->reply(http::StatusCode::success_ok, response);
 }
 
-void Feed::onSub(
-	Database* database, 
-	AsyncPool* partitions, 
-	openset::comms::Message* message)
+void Feed::onSub(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-
+	/*
 	if (!partitions->partitionMax || !partitions->running)
 	{
 		// TODO - error cluster not ready
@@ -1647,7 +1559,7 @@ void Feed::onSub(
 	// start the subscriber thread
 	std::thread messageThread(messageLambda);
 	messageThread.detach();
-
+	*/
 }
 
 enum class queryFunction_e : int32_t
@@ -1658,62 +1570,6 @@ enum class queryFunction_e : int32_t
 	count,
 };
 
-static const unordered_map<string, queryFunction_e> queryMap = {
-	{ "status", queryFunction_e::status },
-	{ "query", queryFunction_e::query },
-	{ "count", queryFunction_e::count },
-};
-
-
-void Query::onMessage(
-	Database* database,
-	AsyncPool* partitions,
-	openset::comms::Message* message)
-{
-	auto msgText = message->toString();
-	cjson request(msgText, msgText.length());
-
-	const auto command = request.xPathString("/action", "__error__");
-	const auto isFork = request.xPathBool("/is_fork", false);
-	const auto iter = queryMap.find(command);
-
-	if (iter == queryMap.end())
-	{
-		cjson response;
-		error(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::general_query_error,
-			"missing or invalid action" },
-			&response);
-
-		message->reply(cjson::Stringify(&response, true));
-
-		return;
-	}
-
-	switch (iter->second) // second is type adminFunction_e 
-	{
-	case queryFunction_e::none:
-		break;
-
-	case queryFunction_e::status:
-		break;	
-
-	case queryFunction_e::query:
-		onQuery(database, partitions, isFork, &request, message);
-		break;
-
-	case queryFunction_e::count:
-		onCount(database, partitions, isFork, &request, message);
-		break;
-
-	default:
-		// error
-		break;
-	}
-
-}
 
 /*  
  * The magic FORK function. 
@@ -1730,26 +1586,22 @@ void Query::onMessage(
  * result set. This greatly reduces the number of data sets that need to be held
  * in memory and marged by the originator.
  */
-void forkQuery(
-	Database* database,
+shared_ptr<cjson> forkQuery(
 	Table* table,
-	AsyncPool* partitions,
-	cjson* request,
-	openset::query::Macro_s queryMacros,
-	openset::comms::Message* message) // errorHandled will be true if an error was happend during the fork
+	const openset::web::MessagePtr message,
+	openset::query::Macro_s queryMacros) // errorHandled will be true if an error was happend during the fork
 {
-
-	// add the `is_fork` value
-	request->set("is_fork", true);
-
-	auto requestText = cjson::Stringify(request);
-
+	auto newParams = message->getQuery();
+	newParams.emplace("fork", "true");
+	
 	// call all nodes and gather results - JSON is what's coming back
 	// NOTE - it would be fully possible to flatten results to binary
 	auto result = openset::globals::mapper->dispatchCluster(
-		openset::mapping::rpc_e::query_pyql, 
-		requestText.c_str(), 
-		requestText.length(),
+		message->getMethod(),
+		message->getPath(),
+		newParams,
+		message->getPayload(),
+		message->getPayloadLength(),
 		true);
 
 	std::vector<openset::result::ResultSet*> resultSets;
@@ -1762,11 +1614,20 @@ void forkQuery(
 		{
 			// there is an error message from one of the participing nodes
 			// TODO - handle error
-			Logger::get().error("some kinda strange");
+			if (!r.second)
+				RpcError(
+					openset::errors::Error{
+						openset::errors::errorClass_e::internode,
+						openset::errors::errorCode_e::internode_error,
+						"Cluster error. Node had empty reply."},
+					message);
+			else
+				message->reply(openset::http::StatusCode::success_ok, r.first, r.second);
+			return nullptr;
 		}
 	}
 	
-	cjson resultJSON;
+	auto resultJson = make_shared<cjson>();
 
 	// 1. merge the text
 	auto mergedText = ResultMuxDemux::mergeText(
@@ -1784,7 +1645,7 @@ void forkQuery(
 	ResultMuxDemux::resultSetToJSON(
 		queryMacros, 
 		table, 
-		&resultJSON, 
+		resultJson.get(), // bare pointer fine here
 		rows,
 		mergedText);
 
@@ -1864,7 +1725,7 @@ void forkQuery(
 	};
 
 	// add status nodes to JSON document
-	auto metaJson = resultJSON.setObject("info");
+	auto metaJson = resultJson->setObject("info");
 
 	auto dataJson = metaJson->setObject("data");
 	fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
@@ -1878,10 +1739,7 @@ void forkQuery(
 	//metaJson->set("serialize_time", serialTime);
 	//metaJson->set("total_time", elapsed);
 
-	// send back the resulting JSON
-	message->reply(&resultJSON);
-
-	Logger::get().info("Query on " + table->getName());
+	Logger::get().info("RpcQuery on " + table->getName());
 
 	// free up the responses
 	openset::globals::mapper->releaseResponses(result);
@@ -1890,40 +1748,47 @@ void forkQuery(
 	for (auto r : resultSets)
 		delete r;
 
-	// TODO - handle some errors?
+	return std::move(resultJson);
 }
 
-void Query::error(openset::errors::Error error, cjson* response)
-{
-	cjson::Parse(error.getErrorJSON(), response);
-}
 
-void Query::onQuery(
-	Database* database,
-	AsyncPool* partitions,
-	const bool isFork,
-	cjson* request,
-	openset::comms::Message* message)
+void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-	const std::string log = "Inbound query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+
+	auto database = openset::globals::database;
+	const auto partitions = openset::globals::async;
+
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
+	const auto queryCode = std::string{ message->getPayload(), message->getPayloadLength() };
+
+	const auto debug = message->getParamBool("debug");
+	const auto isFork = message->getParamBool("fork");
+
+	const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
 	Logger::get().info(log);
-
-	const auto tableName = request->xPathString("/params/table", "");
-	const auto queryCode = request->xPathString("/params/code", "");
-	const auto debug = request->xPathBool("/params/debug", false);
-	const auto params = request->xPath("/params/params");
-
+	
 	const auto startTime = Now();
 
 	if (!tableName.length())
 	{
-		message->reply("{\"error\":\"missing table name\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"missing or invalid table name" },
+			message);
 		return;
 	}
 
 	if (!queryCode.length())
 	{
-		message->reply("{\"error\":\"missing query code\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"missing query code (POST query as text)" },
+			message);
 		return;
 	}
 
@@ -1931,11 +1796,17 @@ void Query::onQuery(
 
 	if (!table)
 	{
-		message->reply("{\"error\":\"table '" + tableName +	"' could not be found\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"table could not be found" },
+			message);
 		return;
 	}
 
-	const auto sessionTime = request->xPathInt("/params/session_time", table->getSessionTime());
+	// override session time if provided, otherwise use table default
+	const auto sessionTime = message->getParamInt("session_time", table->getSessionTime());
 
 	/*
 	 * Build a map of variable names and vars that will
@@ -1948,6 +1819,7 @@ void Query::onQuery(
 
 	openset::query::ParamVars paramVars;
 
+	/* TODO let us revist these
 	if (params)
 	{
 		auto nodes = params->getNodes();
@@ -1980,6 +1852,7 @@ void Query::onQuery(
 			paramVars.emplace(n->nameCstr(), paramVar);
 		}
 	}
+	*/
 
 	openset::query::Macro_s queryMacros; // this is our compiled code block
 	openset::query::QueryParser p;
@@ -1990,28 +1863,20 @@ void Query::onQuery(
 	}
 	catch (const std::runtime_error &ex)
 	{
-		cjson response;
-
-		error(
+		RpcError(
 			openset::errors::Error{
 				openset::errors::errorClass_e::parse, 
 				openset::errors::errorCode_e::syntax_error, 
 				std::string{ex.what()}
 			}, 
-			&response);
-
-		message->reply(cjson::Stringify(&response, true));
-
+			message);
 		return;
 	}
 
 	if (p.error.inError())
 	{
-		cjson response; 
-		cout << "---------------------------" << endl;
-		cout << p.error.getErrorJSON() << endl;
-		error(p.error, &response);
-		message->reply(cjson::Stringify(&response, true));
+		Logger::get().error(p.error.getErrorJSON());
+		message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
 		return;
 	}
 
@@ -2024,9 +1889,12 @@ void Query::onQuery(
 	
 	if (debug)
 	{
-		cjson response;
-		response.set("debug", openset::query::MacroDbg(queryMacros));
-		message->reply(cjson::Stringify(&response, true));
+		auto debugOutput = openset::query::MacroDbg(queryMacros);
+
+		// TODO - add functions for reply content types and error codes
+
+		// reply as text
+		message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
 		return;
 	}
 
@@ -2046,18 +1914,13 @@ void Query::onQuery(
 	 */
 	if (!isFork)
 	{
-		forkQuery(
-			database,
-			table,
-			partitions,
-			request,
-			queryMacros,
-			message);
+		const auto json = std::move(forkQuery(table, message, queryMacros));
+		if (json) // if null/empty we had an error
+			message->reply(http::StatusCode::success_ok, *json);
 		return;
 	}
 
 	// We are a Fork!
-
 
 	// create list of active_owner parititions for factory function
 	auto activeList = openset::globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
@@ -2104,7 +1967,7 @@ void Query::onQuery(
 			queryMacros, table, rows, mergedText, bufferLength);
 
 		// reply will be responsible for buffer
-		message->reply(buffer, bufferLength);
+		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 		return;
 	}
 
@@ -2118,13 +1981,14 @@ void Query::onQuery(
 	 *  Note: ShuttleLamda comes in two versions, 
 	 */ 
 
+
 	//auto shuttle = new ShuttleLambdaAsync<CellQueryResult_s>(
 	const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
 		message,
 		activeList.size(),
 		[queryMacros, table, resultSets, startTime, queryStart, compileTime]
-			(const vector<openset::async::response_s<CellQueryResult_s>> &responses,
-			openset::comms::Message* message,
+			(vector<openset::async::response_s<CellQueryResult_s>> &responses,
+			openset::web::MessagePtr message,
 				voidfunc release_cb)
 		{ // process the data and respond
 
@@ -2137,11 +2001,14 @@ void Query::onQuery(
 				if (r.data.error.inError())
 				{
 					// any error that is recorded should be considered a hard error, so report it
-					message->reply(r.data.error.getErrorJSON());
-
+					auto errorMessage = r.data.error.getErrorJSON();
+					message->reply(http::StatusCode::client_error_bad_request, errorMessage);
+										
 					// clean up stray resultSets
 					for (auto resultSet : resultSets)
 						delete resultSet;
+
+					release_cb();
 
 					return;
 				}
@@ -2167,7 +2034,7 @@ void Query::onQuery(
 			auto buffer = ResultMuxDemux::resultSetToInternode(
 				queryMacros, table, rows, mergedText, bufferLength);
 
-			message->reply(buffer, bufferLength);
+			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
 			Logger::get().info("Fork query on " + table->getName());
 
@@ -2185,34 +2052,46 @@ void Query::onQuery(
 			instance++;
 			return new OpenLoopQuery(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
 		});
+
 }
 
 
-void Query::onCount(
-	Database* database,
-	AsyncPool* partitions,
-	const bool isFork,
-	cjson* request,
-	openset::comms::Message* message)
+void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
+	auto database = openset::globals::database;
+	const auto partitions = openset::globals::async;
 
-	const auto tableName = request->xPathString("/params/table", "");
-	const auto queryCode = request->xPathString("/params/code", "");
-	const auto debug = request->xPathBool("/params/debug", false);
-	const auto params = request->xPath("/params/params");
+	const auto request = message->getJSON();
+	const auto tableName = matches.find("table"s)->second;
+	const auto queryCode = std::string{ message->getPayload(), message->getPayloadLength() };
+
+	const auto debug = message->getParamBool("debug");
+	const auto isFork = message->getParamBool("fork");
 
 	const auto startTime = Now();
 
+	const auto log = "Inbound counts query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+	Logger::get().info(log);
 
 	if (!tableName.length())
 	{
-		message->reply("{\"error\":\"missing table name\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"missing or invalid table name" },
+			message);
 		return;
 	}
 
 	if (!queryCode.length())
 	{
-		message->reply("{\"error\":\"missing query code\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"missing query code (POST query as text)" },
+			message);
 		return;
 	}
 
@@ -2220,11 +2099,15 @@ void Query::onCount(
 
 	if (!table)
 	{
-		message->reply("{\"error\":\"table '" + tableName +	"' could not be found\"}");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::query,
+			openset::errors::errorCode_e::general_error,
+			"table could not be found" },
+			message);
 		return;
 	}
-
-
+	
 	/*
 	* Build a map of variable names and vars that will
 	* become the new default value for variables defined
@@ -2236,6 +2119,7 @@ void Query::onCount(
 
 	openset::query::ParamVars paramVars;
 
+	/*
 	if (params)
 	{
 		auto nodes = params->getNodes();
@@ -2268,6 +2152,7 @@ void Query::onCount(
 			paramVars.emplace(n->nameCstr(), paramVar);
 		}
 	}
+	*/
 
 	// get the functions extracted and de-indented as named code blocks
 	auto subQueries = openset::query::QueryParser::extractCountQueries(queryCode.c_str());
@@ -2285,8 +2170,8 @@ void Query::onCount(
 		if (p.error.inError())
 		{
 			cjson response;
-			error(p.error, &response);
-			message->reply(cjson::Stringify(&response, true));
+			// FIX error(p.error, &response);
+			message->reply(http::StatusCode::client_error_bad_request, cjson::Stringify(&response, true));
 			return;
 		}
 
@@ -2315,9 +2200,18 @@ void Query::onCount(
 
 	if (debug)
 	{
-		cjson response;
-		// TODO fix this - response.set("debug", OpenSet::query::MacroDbg(queryMacros));
-		message->reply(cjson::Stringify(&response, true));
+		std::string debugOutput;
+
+		for (auto &m : queries)
+			debugOutput += 
+				"Script: " + m.first + 
+				"\n=====================================================================================\n\n" +
+				openset::query::MacroDbg(m.second);
+
+		// TODO - add functions for reply content types and error codes
+
+		// reply as text
+		message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
 		return;
 	}
 
@@ -2337,15 +2231,13 @@ void Query::onCount(
 	*/
 	if (!isFork)
 	{
-		forkQuery(
-			database,
-			table,
-			partitions,
-			request,
-			queries.front().second, // we node some macros, any macros
-			message);
+		const auto json = std::move(forkQuery(table, message, queries.front().second));
+		if (json) // if null/empty we had an error
+			message->reply(http::StatusCode::success_ok, *json);
 		return;
 	}
+
+	// We are a Fork!
 
 	auto activeList = openset::globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
 		openset::globals::running->nodeId,
@@ -2378,7 +2270,7 @@ void Query::onCount(
 			queries.front().second, table, rows, mergedText, bufferLength);
 		
 		// reply is responible for buffer
-		message->reply(buffer, bufferLength);
+		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 		return;
 	}
 
@@ -2388,7 +2280,7 @@ void Query::onCount(
 		activeList.size(),
 			[queries, table, resultSets, startTime, queryStart, compileTime]
 			(const vector<openset::async::response_s<CellQueryResult_s>> &responses,
-			 openset::comms::Message* message,
+			 openset::web::MessagePtr message,
 			 voidfunc release_cb)
 		{ 
 			// process the data and respond
@@ -2401,7 +2293,7 @@ void Query::onCount(
 				if (r.data.error.inError())
 				{
 					// any error that is recorded should be considered a hard error, so report it
-					message->reply(r.data.error.getErrorJSON());
+					message->reply(http::StatusCode::client_error_bad_request, r.data.error.getErrorJSON());
 
 					// clean up stray resultSets
 					for (auto resultSet : resultSets)
@@ -2432,7 +2324,7 @@ void Query::onCount(
 				queries.front().second, table, rows, mergedText, bufferLength);
 
 			// reply is responsible for buffer
-			message->reply(buffer, bufferLength);
+			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
 			Logger::get().info("Fork count(s) on " + table->getName());
 
@@ -2457,46 +2349,27 @@ void Query::onCount(
 	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 
-void InternodeXfer::onXfer(
-	Database* database,
-	AsyncPool* partitions,	
-	openset::comms::Message* message)
+void openset::comms::Dispatch(const openset::web::MessagePtr message)
 {
-	// This is a binary message, it will contain an inbound table for a given partition.
-	// in the header will be the partition, and table name. 
+	const auto path = message->getPath();
 
-	Logger::get().info("transfer in (received " + to_string(message->length) + " bytes).");
+	//for_each(MatchList.begin(),MatchList.end(), [&path, &message](auto &item)
+	for (auto& item: MatchList)
+	{		
+		const auto& [method, rx, handler, packing] = item;
 
-	auto read = message->data;
+		if (std::smatch matches; message->getMethod() == method && regex_match(path, matches, rx))
+		{
+			RpcMapping matchMap;
 
-	const auto partitionId = *recast<int32_t*>(read);
-	read += 4;
+			for (auto &p : packing)
+				if (p.first < matches.size())
+					matchMap[p.second] = matches[p.first];
 
-	const auto tableNameLength = *recast<int32_t*>(read);
-	read += 4;
-	const std::string tableName(read);
+			handler(message, matchMap);
+			return;
+		}
+	};
 
-	read += tableNameLength;
-
-	openset::globals::async->suspendAsync();
-
-	auto table = database->getTable(tableName);
-
-	if (!table)
-		table = database->newTable(tableName);
-
-	// make table partition objects
-	auto parts = table->getPartitionObjects(partitionId);
-	// make async partition object (loop, etc).
-	openset::globals::async->initPartition(partitionId);
-
-	read += parts->attributes.deserialize(read);
-	parts->people.deserialize(read);
-
-	openset::globals::async->resumeAsync();
-	
-	// reply when done
-	cjson response;
-	response.set("transferred", true);
-	message->reply(&response);	
+	message->reply(http::StatusCode::client_error_bad_request, "rpc not found");
 }

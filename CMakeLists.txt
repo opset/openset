@@ -9,28 +9,36 @@ endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
 	if (MSVC)
-		add_definitions(-D_CRT_SECURE_NO_WARNINGS /std:c++17 /Oi)
+		add_definitions(/std:c++17 /Oi /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
 	else()
-		add_definitions(-m64 -std=c++17 -pthread -g -static -static-libstdc++ -static-libgcc)
+		add_definitions(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+		find_package(Threads REQUIRED)
 	endif()
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
 	if (MSVC)
-		add_definitions(-D_CRT_SECURE_NO_WARNINGS /std:c++17 /Ox)
+		add_definitions(/std:c++17 /Ox /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
 	else()
-		add_definitions(-m64 -std=c++17 -pthread -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops)
+		add_definitions(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+		find_package(Threads REQUIRED)
 	endif()
 endif()
 
-add_subdirectory(vendor/libuv-cmake)
-include_directories(src lib vendor/libuv/include vendor/lz4/lib)
+include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simple-web-server)
+
+# file(GLOB_RECURSE ASIO_FILES vendor/asio/asio/include/*.hpp)
 
 set(SOURCE_FILES
-        vendor/libuv/include/uv.h
         vendor/lz4/lib/lz4.c
         vendor/lz4/lib/lz4.h
         vendor/lz4/lib/xxhash.c
         vendor/lz4/lib/xxhash.h
+		vendor/asio/asio/include/asio.hpp
+		vendor/simple-web-server/server_http.hpp
+		vendor/simple-web-server/client_http.hpp
+		vendor/simple-web-server/utility.hpp
         src/common.cpp
         src/common.h
         lib/cjson/cjson.cpp
@@ -81,17 +89,15 @@ set(SOURCE_FILES
         src/errors.h
         src/grid.cpp
         src/grid.h
+		src/http_serve.cpp
+		src/http_serve.h
+		src/http_cli.cpp
+		src/http_cli.h
         src/indexbits.cpp
         src/indexbits.h
         src/internodecommon.h
         src/internodemapping.cpp
         src/internodemapping.h
-        src/internodemessage.cpp
-        src/internodemessage.h
-        src/internodeoutbound.cpp
-        src/internodeoutbound.h
-        src/internoderoute.cpp
-        src/internoderoute.h
         src/internoderouter.cpp
         src/internoderouter.h
         src/logger.h
@@ -138,8 +144,6 @@ set(SOURCE_FILES
         src/trigger.h
         src/triggers.cpp
         src/triggers.h
-        src/uvserver.cpp
-        src/uvserver.h
         test/test_complex_events.h
         test/test_db.h
         test/test_lib_var.h
@@ -149,8 +153,7 @@ set(SOURCE_FILES
 )
 
 add_executable(openset ${SOURCE_FILES})
-
 enable_testing()
 add_test(NAME openset-unit-test COMMAND $<TARGET_FILE:openset> --test)
 
-target_link_libraries(openset uv)
+target_link_libraries(openset ${CMAKE_THREAD_LIBS_INIT})

@@ -8,6 +8,6 @@
   "dependencies": {
     "async": "^2.5.0",
     "command-line-args": "^4.0.7",
-    "openset": "git+https://github.com/perple-io/openset_sdk_js.git"
+    "request": "^2.83.0"
   }
 }

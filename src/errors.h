@@ -10,6 +10,8 @@ namespace openset::errors
 		parse,
 		run_time,
 		insert,
+		query,
+		internode
 	};
 
 	enum class errorCode_e : int32_t
@@ -78,6 +80,8 @@ namespace openset::errors
 		{errorClass_e::parse,    "parse"},
 		{errorClass_e::run_time, "run_time"},
 		{errorClass_e::insert,   "insert"},
+		{ errorClass_e::query,   "query" },
+		{ errorClass_e::internode, "internode"}
 	};
 
 
@@ -120,18 +124,28 @@ namespace openset::errors
 	class Error
 	{
 	private:
-		errorCode_e eCode;
-		errorClass_e eClass;
+		errorCode_e eCode { errorCode_e::no_error };
+		errorClass_e eClass { errorClass_e::no_error };
 		std::string message;
 		std::string classMessage;
 		std::string detail;
 		std::string additional;
 	public:
 		Error();
-		Error(errorClass_e errorClass, errorCode_e errorCode, std::string errorDetail, std::string errorAdditional = "");
+		Error(
+			const errorClass_e errorClass, 
+			const errorCode_e errorCode, 
+			const std::string errorDetail, 
+			const std::string errorAdditional = "");
+		
 		~Error();
 
-		void set(errorClass_e errorClass, errorCode_e errorCode, std::string errorDetail, std::string errorAdditional = "");
+		void set(
+			const errorClass_e errorClass, 
+			const errorCode_e errorCode, 
+			const std::string errorDetail, 
+			const std::string errorAdditional = "");
+
 		bool inError() const;
 		std::string getErrorJSON() const;
 	};

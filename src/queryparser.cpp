@@ -3714,6 +3714,8 @@ void QueryParser::build(
 							if (SegmentMathMarshals.count(marshal))
 								isSegmentMath = true;
 
+							marshalsReferenced.emplace(marshal);
+
 							finCode.emplace_back(
 								OpCode_e::MARSHAL,
 								cast<int64_t>(marshal),
@@ -3829,10 +3831,12 @@ void QueryParser::build(
 }
 
 bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& macros, ParamVars* templateVars)
-{
+{	
 
 	try
 	{
+		rawScript = query;
+
 		templating = templateVars;
 
 		// we will be suing the schema to validate the
@@ -3902,6 +3906,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 			macros.indexes.emplace_back(hintPair);
 		}
 
+		macros.marshalsReferenced = marshalsReferenced;
 		macros.segments = std::move(vars.segmentNames); // move these over, these are evaluated at run-time
 		macros.segmentTTL = segmentTTL;
 		macros.segmentRefresh = segmentRefresh;
@@ -3909,6 +3914,8 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 		macros.isSegment = isSegment;
 		macros.isSegmentMath = isSegmentMath;
 		macros.useGlobals = useGlobals;
+
+		macros.rawScript = rawScript;
 
 		macros.useSessions = useSessions;
 		if (macros.useSessions)
@@ -4108,101 +4115,222 @@ string openset::query::MacroDbg(Macro_s& macro)
 {
 	stringstream ss;
 
-	ss << "text literals" << endl;
-	ss << "-------------" << endl;
-	for (auto& v: macro.vars.literals)
+	auto outSpacer = [&ss]()
 	{
-		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << "#" << hex << v.hashValue << "  ";
-		ss << "\"" << v.value << "\" ";
-
-		for (auto ch : v.value)
-			ss << setfill('0') << setw(2) <<
-				hex << abs(cast<int>(ch)) << " ";
-
-		ss << endl;
-	}
-	// stop hexing!
-	cout << dec;
+		ss << "--------------------------------------------------------------------------------------------------------------------------------------------------------" << endl;
+	};
 
 	ss << endl;
-	ss << "user variables" << endl;
-	ss << "--------------" << endl;
-	for (auto& v : macro.vars.userVars)
-	{
-		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << padding(v.actual, 20, false, ' ') << "  " << (v.startingValue == NONE ? "null" : v.startingValue);
-		ss << endl;
-	}
+	ss << "Raw Script:" << endl;
+	outSpacer();
+	ss << macro.rawScript << endl;
+	outSpacer();
 
-	ss << endl;
-	ss << "table references" << endl;
-	ss << "----------------" << endl;
-	for (auto& v : macro.vars.tableVars)
+	ss << endl << endl;
+	ss << "Text literals:" << endl;
+	outSpacer();
+	ss << "IDX | ID               | TEXT + HEX" << endl;
+	outSpacer();
+	if (macro.vars.literals.size())
 	{
-		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << v.actual;
-		ss << endl;
-	}
+		for (auto& v : macro.vars.literals)
+		{
+			ss << padding(v.index, 3, true) << " | ";
+			ss << "#" << hex << v.hashValue << " | ";
+			ss << "\"" << v.value << "\" hex: ";
 
-	ss << endl;
-	ss << "column variables" << endl;
-	ss << "----------------" << endl;
-	for (auto& v : macro.vars.columnVars)
-	{
-		ss << padding(v.index, 4, true, '0') << "  ";
-		ss << padding(ModifierDebugStrings.find(v.modifier)->second, 6, false) << " ";
-		if (v.column == -1)
-			ss << "  NA  ";
-		else
-			ss << padding(v.column, 4, true) << "  ";
-		ss << v.actual;
-		if (v.alias != v.actual)
-			ss << " (" << v.alias << ") distinct key: " << v.distinctColumnName;
-		ss << endl;
-	}
+			for (auto ch : v.value)
+				ss << setfill('0') << setw(2) << 
+				hex << abs(cast<int>(ch)) << ' ';
 
-	ss << endl;
-	ss << "####  OP                    VAL     IDX     EXT     DBG" << endl;
-	ss << "-------------------------------------------------------" << endl;
-	auto count = 0;
-	for (auto& m: macro.code)
-	{
-		const auto opString = OpDebugStrings.find(m.op)->second;
-		ss << padding(count, 4, true, '0') << "  ";
-		ss << padding(opString, 12, false);
-		ss << padding(m.value, 13, left);
-		ss << padding(m.index, 8, left);
-		ss << padding(m.extra, 8, left);
-		ss << "    ; " << ((m.debug.number == -1) ? "    " : padding(m.debug.number, 4));
-		ss << " " << m.debug.text;
-		ss << endl;
-		if (m.debug.translation.length())
-			ss << padding("", 51) << "  PRE> " << m.debug.translation << endl;
-		++count;
+			ss << endl;
+		}	
+		// stop hexing!
+		cout << dec;
 	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+	
+	ss << endl << endl;
+	ss << "User variables:" << endl;
+	outSpacer();
+	ss << "IDX | NAME                   | INIT" << endl;
+	outSpacer();
+	if (macro.vars.userVars.size())
+	{
+		for (auto& v : macro.vars.userVars)
+		{
+			ss << padding(v.index, 3, true) << " | ";
+			ss << padding(v.actual, 20, false, ' ') << " | " << (v.startingValue == NONE ? "null" : v.startingValue);
+			ss << endl;
+		}
+	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+	
+	ss << endl << endl;
+	ss << "Table Column Map (in script or aggregates):" << endl;
+	outSpacer();
+	ss << "IDX | COLIDX | NAME                 | TYPE      | NOTE" << endl;
+	outSpacer();
+	if (macro.vars.tableVars.size())
+	{
+		for (auto& v : macro.vars.tableVars)
+		{
+			ss << padding(v.index, 3, true) << " | ";
+			ss << padding(v.schemaColumn, 6, true) << " | ";
+			ss << padding(v.actual, 20, false) << " | ";
+
+			std::string type;
+			switch (v.schemaType)
+			{
+				case columnTypes_e::freeColumn: 
+					type = "err(1)";
+				break;
+				case columnTypes_e::intColumn: 
+					type = "int";
+				break;
+				case columnTypes_e::doubleColumn: 
+					type = "double";
+				break;
+				case columnTypes_e::boolColumn: 
+					type = "bool";
+				break;
+				case columnTypes_e::textColumn: 
+					type = "text";
+				break;
+				default: 
+					type = "err(2)";
+				;
+			}
+
+			ss << padding(type, 9, false) << " | ";
+
+			if (v.actual == "__uuid")
+				ss << "actual for 'person' or 'people'";
+			else if (v.actual == "__action")
+				ss << "actual for 'action'";
+			else if (v.actual == "__stamp")
+				ss << "actual for 'stamp'";
+			else if (v.actual == "__session")
+				ss << "actual for 'session'";
+			ss << endl;
+		}
+	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+
+	ss << endl << endl;
+	ss << "Aggregates:" << endl;
+	outSpacer();
+	ss << "AGGIDX | TBLIDX | AGG    | NAME                 | ALIAS                | NOTE" << endl;
+	outSpacer();
+	if (macro.vars.columnVars.size())
+	{
+		for (auto& v : macro.vars.columnVars)
+		{
+			ss << padding(v.index, 6, true) << " | ";
+			ss << padding(v.column, 6, true) << " | ";
+			ss << padding(ModifierDebugStrings.find(v.modifier)->second, 6, false) << " | ";
+			if (v.column == -1)
+				ss << "  NA  | ";
+			else
+			ss << padding(v.actual, 20, false) << " | ";
+			ss << padding(v.alias, 20, false) << " | ";
+
+			if (v.actual == "__uuid")
+				ss << "from 'person' or 'people'  ";
+			else if (v.actual == "__action")
+				ss << "from 'action'  ";
+			else if (v.actual == "__stamp")
+				ss << "from 'stamp'  ";
+			else if (v.actual == "__session")
+				ss << "from 'session'  ";
+
+			if (v.distinctColumnName != v.actual)
+				ss << "distinct: " << v.distinctColumnName;
+
+			ss << endl;
+		}
+	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+
+	ss << endl << endl;
+	ss << "PyQL Marshals:" << endl;
+	outSpacer();
+	ss << "FUNC# | MARSHAL" << endl;
+	outSpacer();
+	if (macro.marshalsReferenced.size())
+	{
+		auto getMarshalName = [](Marshals_e marshalCode)->std::string
+		{
+			for (auto &m : Marshals)
+				if (m.second == marshalCode)
+					return m.first;
+			return "__MISSING__";
+		};
+
+		for (auto& m : macro.marshalsReferenced)
+		{
+			ss << padding(static_cast<int64_t>(m), 5, true) << " | ";
+			ss << getMarshalName(m) << endl;
+		}
+	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+
+	ss << endl << endl;
+	ss << "User Functions:" << endl;
+	outSpacer();
+	ss << " OFS | NAME" << endl;
+	outSpacer();
+	if (macro.vars.functions.size())
+	{
+		for (auto& f : macro.vars.functions)
+		{
+			ss << padding(f.execPtr, 4, true, '0') << " | ";
+			ss << f.name;
+			ss << endl;
+		}
+
+		ss << endl;
+	}
+	else
+		ss << "NONE" << endl;
+	outSpacer();
+
 
 	for (auto& pair : macro.indexes)
 	{
 		auto& index = pair.second;
 
-		ss << endl;
-		ss << "index stack: \"" + pair.first + "\"" << endl;
-		ss << "--------------------------------" << endl;
-		for (auto& i : index)
+		ss << endl << endl;
+		ss << "Index Macros:" << endl;
+		outSpacer();
+		ss << "OP             | COLUMN               | VALUE" << endl;
+		outSpacer();
+		if (index.size())
 		{
-			const auto op = HintOperatorsDebug.find(i.op)->second;
-			ss << padding(op, 14, false);
-
-			switch (i.op)
+			for (auto& i : index)
 			{
+				const auto op = HintOperatorsDebug.find(i.op)->second;
+				ss << padding(op, 14, false) << " | ";
+
+				switch (i.op)
+				{
 				case HintOp_e::PUSH_EQ:
 				case HintOp_e::PUSH_NEQ:
 				case HintOp_e::PUSH_GT:
 				case HintOp_e::PUSH_GTE:
 				case HintOp_e::PUSH_LT:
 				case HintOp_e::PUSH_LTE:
-					ss << padding(i.column, 32, false);
+					ss << padding(i.column, 20, false) << " | ";
 					if (i.numeric)
 						ss << to_string(i.intValue);
 					else
@@ -4210,26 +4338,53 @@ string openset::query::MacroDbg(Macro_s& macro)
 					break;
 
 				case HintOp_e::PUSH_PRESENT:
-					ss << padding(i.column, 32, false);
+					ss << padding(i.column, 20, false) << " | ";
 					break;
-				default: ;
+				default:
+					ss << "                     |";
+				}
+
+				ss << endl;
 			}
-
-			ss << endl;
 		}
+		else
+			ss << "NONE - EVAL*" << endl;
+		outSpacer();
 	}
 
-	ss << endl;
-	ss << "functions" << endl;
-	ss << "---------" << endl;
-	for (auto& f : macro.vars.functions)
+	ss << endl << endl;
+	ss << "Assembly:" << endl;
+	outSpacer();
+	ss << "OFS  | OP           |           VAL |      IDX |      EXT | LINE | CODE" << endl;
+	outSpacer();
+	auto count = 0;
+	for (auto& m: macro.code)
 	{
-		ss << padding(f.execPtr, 4, true, '0') << "  ";
-		ss << f.name;
+		const auto opString = OpDebugStrings.find(m.op)->second;
+		ss << padding(count, 4, true, '0') << " | ";
+		ss << padding(opString, 12, false) << " | ";
+		ss << ((m.value == 9999999) ? padding("INF", 13, left) : padding(m.value, 13, left)) << " | ";
+		ss << padding(m.index, 8, left) << " | ";
+		ss << padding(m.extra, 8, left) << " | ";
+		ss << ((m.debug.number == -1) ? "    " : padding( "#" + to_string(m.debug.number), 4)) << " | ";
+		ss << m.debug.text;
 		ss << endl;
+		if (m.debug.translation.length())
+		{
+			std::string spaces = "";
+			auto it = m.debug.text.begin();
+			while (*it == ' ')
+			{
+				spaces += ' ';
+				++it;
+			}
+			ss << "     |              |               |          |          | ";
+			ss << "   > | " << spaces << m.debug.translation << endl;
+		}
+		++count;
 	}
-
-	ss << endl;
+	outSpacer();
+	
 	return ss.str();
 }
 

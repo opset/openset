@@ -181,10 +181,10 @@ void Table::deserializeTable(cjson* doc)
 	// load the PK
 	zOrderStrings.clear();
 	zOrderInts.clear();
-	auto pkNode = doc->xPath("/pk");
+	const auto pkNode = doc->xPath("/z_order");
 
 	// list of keys
-	if (pkNode->type() == cjsonType::ARRAY)
+	if (pkNode && pkNode->type() == cjsonType::ARRAY)
 	{
 		
 		auto nodes = pkNode->getNodes();
@@ -211,7 +211,7 @@ void Table::deserializeTable(cjson* doc)
 	columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
 
 	// load the columns
-	auto columnNode = doc->xPath("/columns");
+	const auto columnNode = doc->xPath("/columns");
 
 	if (columnNode)
 	{
@@ -223,8 +223,6 @@ void Table::deserializeTable(cjson* doc)
 
 void Table::deserializeTriggers(cjson* doc)
 {
-	auto count = 0;
-
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)
 	{
@@ -247,9 +245,6 @@ void Table::deserializeTriggers(cjson* doc)
 
 		Logger::get().info("initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
 	}
-
-	Logger::get().info("added " + to_string(count) + " columns to table '" + name + "'");
-
 }
 
 void Table::loadConfig()

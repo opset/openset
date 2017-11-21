@@ -11,6 +11,7 @@
 #include <cstdio>
 #include "../file/file.h"
 #include "../sba/sba.h"
+#include <string>
 
 /*
 enum class utf8Masks_e : uint8_t
@@ -158,6 +159,34 @@ cjson::~cjson()
 	// our allocations
 	if (selfConstructed)
 		delete mem;
+}
+
+cjson& cjson::operator=(cjson&& other) noexcept
+{
+	mem = other.mem;
+	nodeType = other.nodeType;
+	nodeName = other.nodeName;
+	nodeData = other.nodeData;
+	membersHead = other.membersHead;
+	membersTail = other.membersTail;
+	memberCount = other.memberCount;
+	siblingPrev = other.siblingPrev;
+	siblingNext = other.siblingNext;
+	parentNode = other.parentNode;
+	rootNode = other.rootNode;
+	selfConstructed = other.selfConstructed;
+
+	other.selfConstructed = false;
+	other.mem = nullptr;
+	other.membersHead = nullptr;
+	other.membersTail = nullptr;
+	other.siblingNext = nullptr;
+	other.siblingPrev = nullptr;
+	other.parentNode = nullptr;
+	other.rootNode = nullptr;
+	other.nodeType = cjsonType::VOIDED;
+
+	return *this;
 };
 
 cjsonType cjson::type() const

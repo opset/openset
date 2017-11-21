@@ -6,9 +6,7 @@
 #include "config.h"
 #include "logger.h"
 #include "var/var.h"
-
 #include "../test/unittests.h"
-
 #include <string>
 
 #ifdef _MSC_VER
