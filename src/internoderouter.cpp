@@ -44,7 +44,7 @@ void openset::mapping::Mapper::addRoute(const std::string routeName, const int64
 
 	// name if first	
 	if (auto name = names.find(routeId); name == names.end())
-		names.insert({ routeId, routeName }); // new name
+		names.emplace(routeId, routeName); // new name
 	else
 		name->second = routeName; // replace name
 		

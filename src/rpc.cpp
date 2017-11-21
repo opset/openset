@@ -115,7 +115,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 
 	openset::globals::async->resumeAsync();
 
-	Logger::get().info("configured for " + to_string(partitionMax) + " partitions.");
+	Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
 
 	cjson response;
 	response.set("configured", true);
@@ -394,12 +394,33 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
 	}
 	else // if it's an error, reply with generic "something bad happened" type error
 	{
-		RpcError(
-			openset::errors::Error{
-			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::route_error,
-			"potential node failure - please re-issue the request" },
-			message);
+
+        auto nodeFail = false;
+
+        // try to capture a json error that has perculated up from the forked call.
+        if (result.responses[0].first &&
+            result.responses[0].second &&
+            result.responses[0].first[0] == '{')
+        {
+            cjson error(std::string(result.responses[0].first, result.responses[0].second), result.responses[0].second);
+
+            if (error.xPath("/error"))
+                message->reply(openset::http::StatusCode::client_error_bad_request, error);
+            else
+                nodeFail = true;
+        }
+        else
+            nodeFail = true;
+
+        if (nodeFail)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::route_error,
+                "potential node failure - please re-issue the request" },
+                message);
+        }
 	}
 
 	openset::globals::mapper->releaseResponses(result);
@@ -457,12 +478,10 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
 
 	partitions->mapPartitionsToAsyncWorkers();
 
-	cjson response;
+	Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
 
-	const auto logLine = globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.";
-	Logger::get().info(logLine);
-	response.set("server_name", globals::running->nodeName);
-	response.set("message", logLine);	
+    cjson response;
+    response.set("server_name", globals::running->nodeName);
 	
 	// routes are broadcast to nodes, we use the external host and port
 	// so that nodes can find each other in containered situations where
@@ -741,6 +760,49 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
 
 	auto sourceColumnsList = sourceColumns->getNodes();
 
+    // validate column names and types
+    for (auto n: sourceColumnsList)
+    {
+        auto name = n->xPathString("/name", "");
+        auto type = n->xPathString("/type", "");
+
+        if (!name.size() || !type.size())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "missing column type or name" },
+                message);
+            return;
+        }
+
+        // bad type
+        if (openset::db::ColumnTypes.find(type) == openset::db::ColumnTypes.end())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column type: must be int|double|text|bool" },
+                message);
+            return;
+        }
+
+        if (!openset::db::Columns::validColumnName(name))
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
+                message);
+            return;
+        }
+
+    }
+
+
 	globals::async->suspendAsync();
 	auto table = database->newTable(tableName);
 	auto columns = table->getColumns();
@@ -758,19 +820,8 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
 
 	for (auto n: sourceColumnsList)
 	{
-		auto name = n->xPathString("/name", "");
-		auto type = n->xPathString("/type", "");
-
-		if (!name.size() || !type.size())
-		{
-			RpcError(
-				openset::errors::Error{
-				openset::errors::errorClass_e::config,
-				openset::errors::errorCode_e::general_config_error,
-				"primary column name or type" },
-				message);
-			return;
-		}
+	    const auto name = n->xPathString("/name", "");
+	    const auto type = n->xPathString("/type", "");
 
 		columnTypes_e colType;
 
@@ -822,11 +873,11 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
 
 	globals::async->resumeAsync();
 
-	const auto logLine = "table '" + tableName + "' created.";
-	Logger::get().info(logLine);
+	Logger::get().info("table '" + tableName + "' created.");
 
 	cjson response;
-	response.set("message", logLine);
+	response.set("message", "created");
+    response.set("table", tableName);
 	message->reply(http::StatusCode::success_ok, response);
 }
 
@@ -870,8 +921,8 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
 	auto columns = table->getColumns();
 
 	for (auto &c : columns->columns)
-		if (c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
-		{
+		if (c.idx > 6 && c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
+		{            
 			auto columnRecord = columnNodes->pushObject();
 
 			std::string type;
@@ -895,16 +946,11 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
 			}
 
 			columnRecord->set("name", c.name);
-			columnRecord->set("index", cast<int64_t>(c.idx));
 			columnRecord->set("type", type);
-			if (c.deleted)
-				columnRecord->set("deleted", c.deleted);
+            //columnRecord->set("index", cast<int64_t>(c.idx)); not required for describe, possibly confusing
 		}
 
-	const auto logLine = "describe table '" + tableName + "'.";
-	Logger::get().info(logLine);
-	
-	response.set("message", logLine);
+    Logger::get().info("describe table '" + tableName + "'.");	
 	message->reply(http::StatusCode::success_ok, response);
 }
 
@@ -993,11 +1039,10 @@ void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMappi
 
 	columns->setColumn(lowest, columnName, colType, false, false);
 
-	const auto logLine = "added column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info(logLine);
+	Logger::get().info("added column '" + columnName + "' from table '" + tableName + "' created.");
 
 	cjson response;
-	response.set("message", logLine);
+	response.set("message", "added");
 	response.set("table", tableName);
 	response.set("column", columnName);
 	response.set("type", columnType);
@@ -1063,10 +1108,10 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
 	// delete the actual column
 	table->getColumns()->deleteColumn(column);
 
-	const auto logLine = "dropped column '" + columnName + "' from table '" + tableName + "' created.";
-	Logger::get().info(logLine);
+	Logger::get().info("dropped column '" + columnName + "' from table '" + tableName + "' created.");
+
 	cjson response;
-	response.set("message", logLine);	
+	response.set("message", "dropped");	
 	response.set("table", tableName);
 	response.set("column", columnName);
 	message->reply(http::StatusCode::success_ok, response);
@@ -1433,7 +1478,7 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 	}
 
 	cjson response;
-	response.set("message", "thank you.");
+	response.set("message", "yummy");
 	message->reply(http::StatusCode::success_ok, response);
 }
 

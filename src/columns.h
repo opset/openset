@@ -3,6 +3,7 @@
 #include "common.h"
 
 #include <unordered_map>
+#include <unordered_set>
 
 #include "threads/locks.h"
 #include "dbtypes.h"
@@ -13,6 +14,13 @@ namespace openset
 {
 	namespace db
 	{
+        static const unordered_set<std::string> ColumnTypes = {
+            { "int" },
+            { "double" },
+            { "text" },
+            { "bool" }
+        };
+
 		class Columns
 		{
 		public:
@@ -48,7 +56,14 @@ namespace openset
 
 			int getColumnCount() const;
 
-			void setColumn(int index, string name, columnTypes_e type, bool isSet, bool deleted = false);
+			void setColumn(
+                const int index, 
+                const string name, 
+                const columnTypes_e type, 
+                const bool isSet, 
+                const bool deleted = false);
+
+            static bool validColumnName(std::string name);
 
 		};
 	};

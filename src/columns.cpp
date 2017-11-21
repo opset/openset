@@ -1,3 +1,5 @@
+#include <regex>
+
 #include "columns.h"
 #include "config.h"
 #include "cjson/cjson.h"
@@ -44,7 +46,12 @@ int Columns::getColumnCount() const
 	return columnCount;
 }
 
-void Columns::setColumn(int index, string name, columnTypes_e type, bool isSet, bool deleted)
+void Columns::setColumn(
+    const int index, 
+    const string name, 
+    const columnTypes_e type, 
+    const bool isSet, 
+    const bool deleted)
 {
 	csLock _lck(lock);
 
@@ -71,4 +78,17 @@ void Columns::setColumn(int index, string name, columnTypes_e type, bool isSet, 
 	for (auto c : columns)
 		if (c.type != columnTypes_e::freeColumn)
 			++columnCount;
+}
+
+bool Columns::validColumnName(const std::string name)
+{
+    static std::regex nameCapture(R"(^([^ 0-9][a-z0-9_]+)$)");
+
+    std::smatch matches;
+    regex_match(name, matches, nameCapture);
+
+    if (!matches.size() == 2)
+        return false;
+
+    return matches[1] == name;
 }

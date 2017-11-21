@@ -49,7 +49,6 @@ async.series([
                     process.exit(1);
                 }
 
-                var end = Date.now();
                 console.log(data);
 
                 // move to next config step
@@ -101,7 +100,6 @@ async.series([
                     process.exit(1);
                 }
 
-                var end = Date.now();
                 console.log(data);
 
                 // move to next config step

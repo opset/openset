@@ -8,6 +8,8 @@ This turns an unassigned/waiting node into a cluster sentinel. A node that is pa
 
 `partitions` is specifies the number of shards the data will be divided into. Pick a number that is roughly 10-20% higher than the totals number of cores your envision being part of your final cluster. 
 
+Returns a 200 or 400 status code.
+
 > :pushpin:the ideal partition size is the lowest possible number that will fit the size of your cluster in the long run. There is overhead incurred with each partition, but you also want to pick a number that will allow you to grow. Picking a number less than the number of processor cores in your cluster will __not__ allow you to reach peak performance.
 
 #### PUT /v1/cluster/join?host={host|ip}&port={port}
@@ -18,6 +20,7 @@ __query_params:__
 
 This will issue a `/v1/internode/is_cluster_member` request, and if that returns `false` a `/v1/internode/join_to_cluster` request.
 
+Returns a 200 or 400 status code.
 
 ## Table
 
@@ -30,27 +33,91 @@ This will issue a `/v1/internode/is_cluster_member` request, and if that returns
             "name": "{column_name}",
             "type": "{text|int|double|bool}"
         },
-        ...
+        {
+            "name": "{column_name}",
+            "type": "{text|int|double|bool}"
+        },
+        // etc        
     ],
     "z-order": [
         "{event_name}",
         "{event_name}",
-        ...
+        // etc
     ]
 }
 ```
 
+Returns a 200 or 400 status code.
+
 #### GET /v1/table/{table} (describe table)
 
-Returns JSON describing the table
+Returns JSON describing the table.
 
-#### PUT /v1/table/{table}/column/{column}:{type} (add column)
+```JSON
+{
+    "table": "highstreet",
+    "columns": [
+        {
+            "name": "product_name",
+            "type": "text"
+        },
+        {
+            "name": "product_price",
+            "type": "double"
+        },
+        {
+            "name": "product_shipping",
+            "type": "double"
+        },
+        {
+            "name": "shipper",
+            "type": "text"
+        },
+        {
+            "name": "total",
+            "type": "double"
+        },
+        {
+            "name": "shipping",
+            "type": "double"
+        },
+        {
+            "name": "product_tags",
+            "type": "text"
+        },
+        {
+            "name": "product_group",
+            "type": "text"
+        },
+        {
+            "name": "cart_size",
+            "type": "int"
+        }
+    ]
+}
+```
 
-Adds a column to an existing table. Type can be `text|int|double|bool`
+- `type` can be `text|int|double|bool`. 
+- `name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+
+Returns a 200 or 400 status code.
+
+#### PUT /v1/table/{table}/column/{column_name}:{type} (add column)
+
+Adds a column to an existing table. 
+
+- `type` can be `text|int|double|bool`. 
+- `column_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+
+Returns a 200 or 400 status code.
 
 #### DELETE /v1/table/{table}/column/{column} (drop column)
 
 Removes a column from the table. 
+
+- `column_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+
+Returns a 200 or 400 status code.
 
 #### GET /v1/table/{table}/revent/{revent_name}
 
@@ -73,6 +140,8 @@ This will perform an event scanning query by executing the provided `PyQL` scrip
 Available query strings options include:
 - `debug=true` will return the assembly for the query rather than the results
 
+Returns 
+
 #### POST /v1/query/{table}/counts
 
 This will perform an index counting query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
@@ -81,6 +150,8 @@ Unlike the `/events` query, segments created in by the `/counts` query are named
 
 Available query strings options include:
 - `debug=true` will return the assembly for the query rather than the results
+
+Returns a 200 or 400 status code.
 
 ## Internode (internode node chatter)
 

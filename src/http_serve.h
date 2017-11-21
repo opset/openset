@@ -15,12 +15,10 @@ namespace openset
 	}
 }
 
-
 namespace openset
 {
 	namespace http = SimpleWeb;
 }
-
 
 namespace openset::web
 {
