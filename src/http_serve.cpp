@@ -44,12 +44,12 @@ namespace openset::web
 		auto data = static_cast<char*>(PoolMem::getPool().getPtr(length));
 		request->content.read(data, length);
 
-		auto reply = [request, response](const char* data, size_t length)
+		auto reply = [request, response](http::StatusCode status, const char* data, size_t length)
 		{
 			http::CaseInsensitiveMultimap header;
 			header.emplace("Content-Length", to_string(length));
 			header.emplace("Content-Type", "application/json");
-			response->write(http::StatusCode::success_ok, header);
+			response->write(status, header);
 			
 			if (data)
 				response->write(data, length);

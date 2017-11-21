@@ -72,15 +72,15 @@ namespace openset
 			 * \brief 
 			 * \param messageString 
 			 */
-			virtual void reply(string messageString)
+			virtual void reply(const http::StatusCode status, const string messageString)
 			{
-				message->reply(&messageString[0], messageString.length());
+				message->reply(status, &messageString[0], messageString.length());
 				release();
 			}
 
-			virtual void reply(char* data, const int64_t length)
+			virtual void reply(const http::StatusCode status, const char* data, const int64_t length)
 			{
-				message->reply(data, length);
+				message->reply(status, data, length);
 				// Shuttles are always pointers, they must delete themselves
 				release();
 			}

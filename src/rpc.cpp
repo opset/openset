@@ -44,7 +44,7 @@ enum class internodeFunction_e : int32_t
 
 void RpcError(openset::errors::Error error, const openset::web::MessagePtr message)
 {
-	message->reply(error.getErrorJSON());
+	message->reply(openset::http::StatusCode::client_error_bad_request, error.getErrorJSON());
 }
 
 static const unordered_map<string, internodeFunction_e> internodeMap = {
@@ -61,7 +61,7 @@ void RpcInternode::is_member(const openset::web::MessagePtr message, const RpcMa
 {
 	cjson response;
 	response.set("part_of_cluster", globals::running->state != openset::config::nodeState_e::ready_wait);
-	message->reply(response);
+	message->reply(openset::http::StatusCode::success_ok, response);
 }
 
 void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -73,14 +73,8 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 	const auto nodeId = request.xPathInt("/node_id", 0);
 	const auto partitionMax = request.xPathInt("/partition_max", 0);
 
-	auto rpcJson = cjson::Stringify((cjson*)&request);
-	cout << rpcJson << endl;
-
 	// TODO - error check here
-
-	cout << endl;
 	Logger::get().info("Joining cluster as: '" + nodeName + "'.");
-	cout << endl;
 
 	// assign a new node id
 	{
@@ -125,7 +119,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 
 	cjson response;
 	response.set("configured", true);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -157,7 +151,7 @@ void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMap
 
 	cjson response;
 	response.set("response", "thank you.");
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcInternode::transfer_init(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -241,7 +235,7 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
 
 	cjson response;
 	response.set("response", "thank you.");	
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcInternode::transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -286,7 +280,7 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr message, cons
 	// reply when done
 	cjson response;
 	response.set("transferred", true);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
@@ -350,7 +344,7 @@ void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcM
 
 	cjson response;
 	response.set("response", "thank you.");
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
@@ -396,7 +390,7 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
 			&response
 		);
 
-		message->reply(response);
+		message->reply(openset::http::StatusCode::success_ok, response);
 	}
 	else // if it's an error, reply with generic "something bad happened" type error
 	{
@@ -479,7 +473,7 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
 		globals::running->hostExternal, 
 		globals::running->portExternal);
 
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
@@ -491,7 +485,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 		RpcError(
 			openset::errors::Error{
 			openset::errors::errorClass_e::config,
-			openset::errors::errorCode_e::general_config_error,
+			openset::errors::errorCode_e::route_error,
 			"node_not_initialized" },
 			message);
 		return;
@@ -524,7 +518,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
 		cjson responseJson;
 
-		client.request("GET", "/v1/internode/is_member", {}, nullptr, 0, [&error, &ready, &responseJson](bool err, cjson json) mutable
+		client.request("GET", "/v1/internode/is_member", {}, nullptr, 0, [&error, &ready, &responseJson](http::StatusCode status, bool err, cjson json) mutable
 		{
 			error = err;
 
@@ -610,7 +604,13 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
 		// send command that joins remote node to this cluster, this transfers all
 		// config to the remote node.
-		client.request("POST", "/v1/internode/join_to_cluster", {}, &rpcJson[0], rpcJson.length(), [&error, &ready, &responseJson](bool err, cjson json)
+		client.request(
+            "POST", 
+            "/v1/internode/join_to_cluster", 
+            {}, 
+            &rpcJson[0], 
+            rpcJson.length(), 
+            [&error, &ready, &responseJson](http::StatusCode status, bool err, cjson json)
 		{
 			error = err;
 
@@ -684,7 +684,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 	// respond to client
 	cjson response;
 	response.set("node_joined", true);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 
@@ -827,7 +827,7 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
 
 	cjson response;
 	response.set("message", logLine);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -905,7 +905,7 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
 	Logger::get().info(logLine);
 	
 	response.set("message", logLine);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -1001,7 +1001,7 @@ void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMappi
 	response.set("table", tableName);
 	response.set("column", columnName);
 	response.set("type", columnType);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -1069,7 +1069,7 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
 	response.set("message", logLine);	
 	response.set("table", tableName);
 	response.set("column", columnName);
-	message->reply(response);
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -1279,15 +1279,14 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 	const auto tableName = matches.find("table"s)->second;
 	const auto isFork = message->getParamBool("fork");
 
-	const auto onError = [message](const string &error)
-	{
-		message->reply("{\"error\":\"" + error + "\"}");
-	};
-
 	if (!partitions->getPartitionMax())
 	{
-		message->reply("{\"error\":{\"class\":\"run_time\",\"message\":\"initialize_cluster\"}}\n");
-		//message->reply("the rain in spain falls mainly on the plain, over and  again");
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::insert,
+			openset::errors::errorCode_e::route_error,
+			"node_not_initialized" },
+			message);
 		return;
 	}
 
@@ -1295,7 +1294,12 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 
 	if (!table)
 	{
-		onError("missing table"s);
+		RpcError(
+			openset::errors::Error{
+			openset::errors::errorClass_e::insert,
+			openset::errors::errorCode_e::general_error,
+			"missing or invalid table name" },
+			message);
 		return;
 	}
 
@@ -1367,8 +1371,9 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 
 	auto remoteCount = 0;
 
-	const auto thankyouCB = [](bool, char*, size_t)
+	const auto thankyouCB = [](http::StatusCode, bool, char*, size_t)
 	{		
+        // TODO - we should probably handle this horrible possibility somehow.
 		// delete message;
 	};
 
@@ -1427,7 +1432,9 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 				to_string(parts->partition) + ".");
 	}
 
-	message->reply("{\"response\":\"thank you.\"}");
+	cjson response;
+	response.set("message", "thank you.");
+	message->reply(http::StatusCode::success_ok, response);
 }
 
 void Feed::onSub(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -1570,7 +1577,7 @@ shared_ptr<cjson> forkQuery(
 						"Cluster error. Node had empty reply."},
 					message);
 			else
-				message->reply(r.first, r.second);
+				message->reply(openset::http::StatusCode::success_ok, r.first, r.second);
 			return nullptr;
 		}
 	}
@@ -1824,7 +1831,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	if (p.error.inError())
 	{
 		Logger::get().error(p.error.getErrorJSON());
-		message->reply(p.error.getErrorJSON());
+		message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
 		return;
 	}
 
@@ -1842,7 +1849,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 		// TODO - add functions for reply content types and error codes
 
 		// reply as text
-		message->reply(&debugOutput[0], debugOutput.length());
+		message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
 		return;
 	}
 
@@ -1864,7 +1871,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	{
 		const auto json = std::move(forkQuery(table, message, queryMacros));
 		if (json) // if null/empty we had an error
-			message->reply(*json);
+			message->reply(http::StatusCode::success_ok, *json);
 		return;
 	}
 
@@ -1915,7 +1922,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 			queryMacros, table, rows, mergedText, bufferLength);
 
 		// reply will be responsible for buffer
-		message->reply(buffer, bufferLength);
+		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 		return;
 	}
 
@@ -1950,8 +1957,8 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 				{
 					// any error that is recorded should be considered a hard error, so report it
 					auto errorMessage = r.data.error.getErrorJSON();
-					message->reply(errorMessage);
-
+					message->reply(http::StatusCode::client_error_bad_request, errorMessage);
+										
 					// clean up stray resultSets
 					for (auto resultSet : resultSets)
 						delete resultSet;
@@ -1982,7 +1989,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 			auto buffer = ResultMuxDemux::resultSetToInternode(
 				queryMacros, table, rows, mergedText, bufferLength);
 
-			message->reply(buffer, bufferLength);
+			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
 			Logger::get().info("Fork query on " + table->getName());
 
@@ -2119,7 +2126,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 		{
 			cjson response;
 			// FIX error(p.error, &response);
-			message->reply(cjson::Stringify(&response, true));
+			message->reply(http::StatusCode::client_error_bad_request, cjson::Stringify(&response, true));
 			return;
 		}
 
@@ -2159,7 +2166,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 		// TODO - add functions for reply content types and error codes
 
 		// reply as text
-		message->reply(&debugOutput[0], debugOutput.length());
+		message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
 		return;
 	}
 
@@ -2181,7 +2188,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	{
 		const auto json = std::move(forkQuery(table, message, queries.front().second));
 		if (json) // if null/empty we had an error
-			message->reply(*json);
+			message->reply(http::StatusCode::success_ok, *json);
 		return;
 	}
 
@@ -2218,7 +2225,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 			queries.front().second, table, rows, mergedText, bufferLength);
 		
 		// reply is responible for buffer
-		message->reply(buffer, bufferLength);
+		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 		return;
 	}
 
@@ -2241,7 +2248,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 				if (r.data.error.inError())
 				{
 					// any error that is recorded should be considered a hard error, so report it
-					message->reply(r.data.error.getErrorJSON());
+					message->reply(http::StatusCode::client_error_bad_request, r.data.error.getErrorJSON());
 
 					// clean up stray resultSets
 					for (auto resultSet : resultSets)
@@ -2272,7 +2279,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 				queries.front().second, table, rows, mergedText, bufferLength);
 
 			// reply is responsible for buffer
-			message->reply(buffer, bufferLength);
+			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
 			Logger::get().info("Fork count(s) on " + table->getName());
 
@@ -2319,5 +2326,5 @@ void openset::comms::Dispatch(const openset::web::MessagePtr message)
 		}
 	};
 
-	message->reply("rpc not found");
+	message->reply(http::StatusCode::client_error_bad_request, "rpc not found");
 }

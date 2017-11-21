@@ -210,6 +210,8 @@ namespace openset
 
 			middleVariables_s vars;
 
+			MarshalSet marshalsReferenced;
+
 			int blockCounter{ 1 };
 
 			HintList hintNames;
@@ -232,6 +234,8 @@ namespace openset
 			int64_t segmentRefresh{ -1 };
 			mutable int autoCounter{ 0 };
 			bool segmentUseCached{ false };
+
+			std::string rawScript;
 
 			explicit QueryParser(const parseMode_e parseMode = parseMode_e::query);
 			~QueryParser();

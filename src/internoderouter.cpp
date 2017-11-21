@@ -49,11 +49,14 @@ void openset::mapping::Mapper::addRoute(const std::string routeName, const int64
 		name->second = routeName; // replace name
 		
 	// create it if it doesn't exist
-	if (auto rt = routes.find(routeId); rt == routes.end())
+	if (const auto rt = routes.find(routeId); rt == routes.end())
 		if (routeId == globals::running->nodeId)
-			rt = routes.insert({ routeId,{ globals::running->host == "0.0.0.0" ? "127.0.0.1" : globals::running->host, globals::running->port } }).first; // local route answers on local ip:port
+			routes.insert({ routeId,{ globals::running->host == 
+                "0.0.0.0" 
+			        ? "127.0.0.1" 
+			        : globals::running->host, globals::running->port } }).first; // local route answers on local ip:port
 		else
-			rt = routes.insert({ routeId, { ip, port }}).first; // make it
+			routes.insert({ routeId, { ip, port }}).first; // make it
 }
 
 void openset::mapping::Mapper::removeRoute(const int64_t routeId)
@@ -177,7 +180,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	char* resultData;
 	size_t resultSize;
 
-	auto doneCb = [&ready, &nextReady, &resultData, &resultSize](bool error, char* data, size_t size)
+	auto doneCb = [&ready, &nextReady, &resultData, &resultSize](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		resultData = data;
 		resultSize = size;
@@ -256,7 +259,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	Responses result;
 	auto callbackState = new dispatchState();
 
-	auto doneCb = [callbackState, &responseCs, &result, &continueReady](bool error, char* data, size_t size)
+	auto doneCb = [callbackState, &responseCs, &result, &continueReady](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		if (!callbackState->isActive())
 		{
@@ -284,9 +287,9 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 	std::vector<int64_t> cachedRoutes;
 
+    // we copy the routes so that another thread won't corrupt them
 	decltype(routes) tRoutes;
-
-	{
+    	{
 		csLock lock(cs);
 		tRoutes = routes;
 	}
@@ -318,8 +321,9 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 		for (auto r : cachedRoutes)
 			if (!isRoute(r))
 			{
+                // route is missing, meaning it got dumped
+                // during this request
 				result.routeError = true;
-				cout << "**** TOTAL ERROR ****" << endl;
 				break;
 			}
 

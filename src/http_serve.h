@@ -24,7 +24,7 @@ namespace openset
 
 namespace openset::web
 {
-	using ReplyCB = std::function<void(const char*, size_t)>;
+	using ReplyCB = std::function<void(const http::StatusCode status, const char*, const size_t)>;
 
 	class Message
 	{
@@ -127,25 +127,25 @@ namespace openset::web
 			return std::move(json);
 		}
 
-		void reply(char* replyData, const size_t replyLength) const
+		void reply(const http::StatusCode status, const char* replyData, const size_t replyLength) const
 		{
 			if (cb)
-				cb(replyData, replyLength);
+				cb(status, replyData, replyLength);
 		}
 
-		void reply(const std::string& message) const
+		void reply(const http::StatusCode status, const std::string& message) const
 		{
 			if (cb)
-				cb(&message[0], message.length());
+				cb(status, &message[0], message.length());
 		}
 
-		void reply(const cjson& message) const
+		void reply(const http::StatusCode status, const cjson& message) const
 		{
 			if (cb)
 			{
 				int64_t length;
 				const auto buffer = cjson::StringifyCstr(&message, length, false);
-				cb(buffer, length);
+				cb(status, buffer, length);
 				cjson::releaseStringifyPtr(buffer);
 			}
 		}

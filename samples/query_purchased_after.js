@@ -37,14 +37,15 @@ request.post(
 
         var dataLength = data.length;
 
-        console.log('--------------------------------------------\n');
-
         if (args.debug) // if this was a debug query, just print the raw text
             console.log(data);
         else
+        {
+            console.log('--------------------------------------------');
             console.log(JSON.stringify(JSON.parse(data), null, 4));
+            console.log('--------------------------------------------\n');
+        }
 
-        console.log('--------------------------------------------\n');
         console.log( "bytes returned: " + dataLength );
         console.log('\n');
 

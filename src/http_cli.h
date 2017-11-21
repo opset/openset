@@ -16,8 +16,8 @@ namespace openset
 
 namespace openset::web
 {
-	using RestCbJson = std::function<void(bool, cjson)>;
-	using RestCbBin = std::function<void(bool, char*, size_t)>;
+	using RestCbJson = std::function<void(const http::StatusCode, const bool, const cjson)>;
+	using RestCbBin = std::function<void(const http::StatusCode, const bool, char*, const size_t)>;
 	using HttpClient = SimpleWeb::Client<http::HTTP>;
 	using QueryParams = http::CaseInsensitiveMultimap;
 

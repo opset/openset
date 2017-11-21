@@ -30,7 +30,7 @@ namespace openset
 			// map route to HTTP string
 			using Routes = unordered_map<int64_t, std::pair<std::string, int>>;
 
-			using DataBlock = std::pair<char*, size_t>;
+			using DataBlock = std::pair<char*, const size_t>;
 			using DataBlockPtr = shared_ptr<DataBlock>;
 
 			struct Responses_s
