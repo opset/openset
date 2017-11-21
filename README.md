@@ -80,14 +80,68 @@ Load or stream events (app, web, IoT, etc) into OpenSet and extract the history 
 
 ![Segments](docs/img/one-person.svg)
 
-# Examples
+# example using curl
 
-OpenSet uses a Python-like macro language called PyQL to define it's queries. 
+**1**. Let's initialize an OpenSet node:
+```bash
+curl -X PUT http://127.0.0.1:8080/v1/cluster/init?partitions=24 | json_pp
 
-#### Simple query:
+Response:
+{
+   "server_name" : "smiling-donkey"
+}
+```
 
-Lets get  a breakdown by day of week and product name when the product purchased is a kitchen products. For each product  aggregate people, total purchases, and total spent.
+**2**. Let's create the table from the `samples/` folder:
 
+```bash
+curl \
+-X POST  http://127.0.0.1:8080/v1/table/highstreet \
+-d @- << EOF
+{
+    "columns": [
+        {"name": "product_name", "type": "text"}, 
+        {"name": "product_price", "type": "double"}, 
+        {"name": "product_shipping", "type": "double"}, 
+        {"name": "shipper", "type": "text"}, 
+        {"name": "total", "type": "double"}, 
+        {"name": "shipping", "type": "double"}, 
+        {"name": "product_tags", "type": "text"}, 
+        {"name": "product_group", "type": "text"}, 
+        {"name": "cart_size", "type": "int"}
+    ]
+}
+EOF
+
+Response:
+{
+    "message":"created",
+    "table":"highstreet"
+}
+```
+
+**3**. Let's insert some json data from the `samples/data` folder:
+
+```bash
+curl \
+-X POST http://127.0.0.1:8080/v1/insert/highstreet \
+--data-binary @data/highstreet_events.json | json_pp
+
+Response:
+{
+   "message" : "yummy"
+}
+```
+
+**4**.  Let's query some using the pyql query in the `samples/pyql` folder:
+##### query:
+```bash
+curl \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+--data-binary @pyql/simple.pyql | json_pp
+```
+##### simple.pyql:
+OpenSet uses a Python-like macro language called PyQL to define it's queries. Lets get  a breakdown by day of week and product name when the product purchased is a kitchen products. For each product  aggregate people, total purchases, and total spent.
 ```python
 aggregate: # define our output columns
     count person
@@ -100,9 +154,7 @@ match where product_group is 'outdoor':
     # aggregate it's levels
     tally(get_day_of_week(event_time()), product_name)
 ```
-> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
-
-Which might return something like:
+##### result:
 ```javascript
 {
    "_": [
@@ -138,6 +190,7 @@ Which might return something like:
     ]
 }
 ```
+> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
 #### Basic sequence query
 
