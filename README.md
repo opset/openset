@@ -17,7 +17,7 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 ## Links
 *  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
 *  [Docker Images](https://github.com/perple-io/openset/tree/master/docs/docker)
-*  [Sample Code](https://github.com/perple-io/openset/tree/master/samples)
+*  [Sample Code](https://github.com/opset/openset_samples)
 *  [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
 ## Strong Points
@@ -82,7 +82,22 @@ Load or stream events (app, web, IoT, etc) into OpenSet and extract the history 
 
 # example using curl
 
-**1**. Let's initialize an OpenSet node:
+**1**. Clone the Samples:
+```
+cd ~
+git clone https://github.com/opset/openset_samples.git
+```
+
+**2**. Install [Docker](https://www.docker.com/) and start OpenSet:
+```bash
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel
+```
+**3**. Open another console:
+```
+cd ~
+```
+
+**4**. Initialize  OpenSet:
 ```bash
 curl -X PUT http://127.0.0.1:8080/v1/cluster/init?partitions=24 | json_pp
 
@@ -92,7 +107,7 @@ Response:
 }
 ```
 
-**2**. Let's create the table from the `samples/` folder:
+**5**. Create a table:
 
 ```bash
 curl \
@@ -120,12 +135,12 @@ Response:
 }
 ```
 
-**3**. Let's insert some json data from the `samples/data` folder:
+**6**. Let's insert some json data from the `openset_samples/data` folder:
 
 ```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/insert/highstreet \
---data-binary @data/highstreet_events.json | json_pp
+--data-binary @openset_samples/data/highstreet_events.json | json_pp
 
 Response:
 {
@@ -133,12 +148,12 @@ Response:
 }
 ```
 
-**4**.  Let's query some using the pyql query in the `samples/pyql` folder:
+**7**.  Let's query some using the pyql query in the `samples/pyql` folder:
 ##### query:
 ```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/events \
---data-binary @pyql/simple.pyql | json_pp
+--data-binary @openset_samples/pyql/simple.pyql | json_pp
 ```
 ##### simple.pyql:
 OpenSet uses a Python-like macro language called PyQL to define it's queries. Lets get  a breakdown by day of week and product name when the product purchased is a kitchen products. For each product  aggregate people, total purchases, and total spent.

@@ -1,7 +1,0 @@
-aggregate:
-    count person
-    count product_name as purchased
-    sum product_price as total_spent with product_name
-
-match where product_group is 'outdoor':
-    tally(product_tags, product_name)
