@@ -18,9 +18,9 @@ You will find recent versions of these projects under [openset/vendor](https://g
 - CMake 3.6+
 - GCC 7.2+
 - GDB 7+ (optional)
-- Node.js 5+
+- Node.js 5+ (optional for running samples)
 
-> :pushpin: passing `--version` to these tools on the command line will help you verify they are the correct version.  If you need to install these? click [here](https://github.com/perple-io/openset/blob/master/docs/build_install/build_tools.md).
+> :pushpin: passing `--version` to these tools on the command line will help you verify they are the correct version.  If you need to install these please read the **[build tools](https://github.com/perple-io/openset/blob/master/docs/build_install/build_tools.md)** document.
 
 #### Windows requirements
 
@@ -81,7 +81,7 @@ The following command line options can be used
 - `--host'` specifies the ip/hostname to answer on (optional, defaults to 0.0.0.0)
 - `--hostext` specifies an external host name that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs (defaults to the machine name)
 - `--port` specifies the port that to answer on (optional, defaults to http 8080)
-- `--portext` specifies the external port that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs if port mapping is used (defaults to the 2020)
+- `--portext` specifies the external port that will be broadcast to other nodes. This can may be required for multi-node setups using docker and VMs if port mapping is used (defaults to the 8080)
 - `--data` path to data if using commits (optional, defaults to current directory `./`)
 - `--help` shows the help
 

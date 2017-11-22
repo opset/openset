@@ -8,24 +8,10 @@ We cannot guarantee the accuracy of the instructions below. Always check for new
 
 * [GCC, the GNU Compiler Collection](https://gcc.gnu.org/)
 * [CMake](https://cmake.org/)
+* [GDB](https://www.gnu.org/software/gdb/)
 * [Node.js](https://nodejs.org/)
 
 > :pushpin: You may want to consider using a VM or Docker for your build environment. Doing so allows you to isolate your build tools, and start over fresh if things go awry. 
-
-## Node.js - 
-
-Install any semi-recent version of Node.js you like (if you have v4, or v5 installed you are probably fine). Current supported versions are 6.x and the fancy new versions are 8.x.
-
-**6.x**
-```
-curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-**or, 8.x**
-```
-curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
 
 ## CMake 3.6+
 
@@ -57,9 +43,9 @@ sudo apt-get install gcc-7 g++-7
 gcc-7 --version
 ```
 
-## GDB 7.x or 8.x
+## GDB 7.x or 8.x (optional)
 
-The copy of GDB on your favorite Ubuntu install is probably as old as time. We can download and build it also. GDB is now in the 8+ range.
+GDB is optional, but necessary if you wish to debug on Linux.The copy of GDB on your favorite Ubuntu install is probably as old as time. We can download and build it also. GDB is now in the 8+ range.
 
 ```
 mkdir ~/temp 
@@ -76,4 +62,19 @@ gdb --version
 You may need this last step to make it available outside the build directory. From the `gdb-8.0.1` Directory type: 
 ```
 sudo cp gdb/gdb /usr/bin/gdb
+```
+
+## Node.js (optional) 
+
+Node is used to run samples, you can alternately use `curl`. Install any semi-recent version of Node.js you like (if you have v4, or v5 installed you are probably fine). Current supported versions are 6.x and the fancy new versions are 8.x.
+
+**6.x**
+```
+curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+**or, 8.x**
+```
+curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+sudo apt-get install -y nodejs
 ```
