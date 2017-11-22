@@ -148,7 +148,7 @@ Response:
 }
 ```
 
-**7**.  Let's query some using the pyql query in the `samples/pyql` folder:
+**7**.  Let's query using a pyql query from the `openset_samples/pyql` folder:
 ##### query:
 ```bash
 curl \
