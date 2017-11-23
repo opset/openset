@@ -203,7 +203,7 @@ cjson Grid::toJSON(const bool condensed) const
 						rowObj->set(colInfo->name, value);
 						break;
 					case columnTypes_e::doubleColumn:
-						rowObj->set(colInfo->name, value * 10000.0);
+						rowObj->set(colInfo->name, value / 10000.0);
 						break;
 					case columnTypes_e::boolColumn:
 						rowObj->set(colInfo->name, value ? true : false);
@@ -217,139 +217,296 @@ cjson Grid::toJSON(const bool condensed) const
 					}
 				}
 			}
-			else // more than one row... kindof annoying
-			{
-				// pair is pair<column,value>, .second is count
-				unordered_map<std::pair<int64_t, int64_t>, int64_t> counts;
+            else // more than one row... kindof annoying
+            {
+                // pair is pair<column,value>, .second is count
+                unordered_map<std::pair<int64_t, int64_t>, int64_t> counts;
 
-				auto rootObj = rowDoc->pushObject();
-				rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
-				rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
-				rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
+                auto rootObj = rowDoc->pushObject();
+                rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
+                rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
+                rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
 
-				// values that are the same on all rows get put under "attr":{}
-				cjson* attrObj;
-				
-				if (condensed)
-					attrObj = rootObj->setObject("attr");
-				else
-					attrObj = rootObj->setArray("attr");
-				
-				
-				// values that vary at some point across the rows get put under "attr":{"_":[]}
-				
+                // values that are the same on all rows get put under "attr":{}
+                const auto attrObj = rootObj->setObject("attr");
+                
+                // every combination of column:value counted
+                for (auto r : accumulator)
+                    for (auto c = 0; c < columnCount; ++c)
+                        if (r->cols[c] != NONE)
+                        {
+                            const auto key = make_pair(c, r->cols[c]);
+                            if (!counts.count(key))
+                                counts[key] = 1;
+                            else
+                                counts[key]++;
+                        }
 
-				for (auto r : accumulator)
-					for (auto c = 0; c < columnCount; ++c)
-						if (r->cols[c] != NONE)
-						{
-							const auto key = make_pair(c, r->cols[c]);
-							if (!counts.count(key))
-								counts[key] = 1;
-							else
-								counts[key]++;
-						}
+                // these values are the same on all rows in the rowset
+                // these will end up in the root
+                unordered_set<int64_t> sameOnAllRows;
+                for (auto &c : counts)
+                {
+                    if (c.second == accumulator.size())
+                        sameOnAllRows.emplace(c.first.first);
+                }
 
-				// ok, so, if any column/value pair that has a count that is the same
-				// as the number of rows accumulated, they will be inserted directly under
-				// the "attr:{" node
+                // this is the number of variations (in value) a column has
+                unordered_map<int64_t, int> columnCountMap; 
+                for (auto &c : counts)
+                {                    
+                    if (auto found = columnCountMap.find(c.first.first); found != columnCountMap.end())
+                        ++found->second;
+                    else
+                        columnCountMap[c.first.first] = 1;
+                }
 
-				rowObj = attrObj;
+                // this counts the size of common groups in the rewset, for example
+                // product_name and product_price both occur 3 times, the set size is 2 (columns)
+                unordered_map<int64_t, int> setSizes;
+                for (auto &cc : columnCountMap)
+                {
+                    if (auto found = setSizes.find(cc.second); found != setSizes.end())
+                        ++found->second;
+                    else
+                        setSizes[cc.second] = 1;
+                }
 
-				if (condensed)
-					for (auto c = 0; c < columnCount; ++c)
-					{
-						// get the column information
-						const auto colInfo = columns->getColumn(columnMap[c]);
+                // this fills the sorted vector with column id and size of it's set,
+                // ideally we want things that are most together at the front, and things
+                // that are highly variant on the end. We fudge the "sameOnAllRows" columns
+                // to sort to the front
+                vector<std::pair<int64_t, int>> sorted;
+                for (auto &cc : columnCountMap)
+                {
+                    std::pair<int64_t, int> value{ cc.first, 0 };
+                    if (auto t = setSizes.find(cc.second); t != setSizes.end())
+                        value.second = t->second;
+                    if (sameOnAllRows.count(cc.first))
+                       value.second = 999999;
 
-						if (colInfo->idx < 1000) // first 1000 are reserved
-							continue;
+                    sorted.push_back(value);
+                }
 
-						auto value = accumulator[0]->cols[c];
+                // sort the list
+                sort(sorted.begin(), sorted.end(), [](const auto& a, const auto &b) {
+                    return a.second > b.second;                   
+                });
 
-						if (value == NONE)
-							continue;
 
-						// are these all the same on every row in the group? If not, skip
-						if (counts[std::make_pair(c, value)] != accumulator.size())
-							continue;
+                auto setKeyValue = [&](cjson* current, Columns::columns_s* colInfo, int64_t value)
+                {
+                    switch (colInfo->type)
+                    {
+                    case columnTypes_e::freeColumn:
+                        return;
+                    case columnTypes_e::intColumn:
+                        current->set(colInfo->name, value);
+                        break;
+                    case columnTypes_e::doubleColumn:
+                        current->set(colInfo->name, value / 10000.0);
+                        break;
+                    case columnTypes_e::boolColumn:
+                        current->set(colInfo->name, value != 0);
+                        break;
+                    case columnTypes_e::textColumn:
+                    {
+                        // value here is the hashed value							
+                        if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+                            current->set(colInfo->name, text);
+                    }
+                    break;
+                    }
+                };
 
-						switch (colInfo->type)
-						{
-						case columnTypes_e::freeColumn:
-							continue;
-						case columnTypes_e::intColumn:
-							rowObj->set(colInfo->name, value);
-							break;
-						case columnTypes_e::doubleColumn:
-							rowObj->set(colInfo->name, value * 10000.0);
-							break;
-						case columnTypes_e::boolColumn:
-							rowObj->set(colInfo->name, value != 0);
-							break;
-						case columnTypes_e::textColumn:
-						{
-							// value here is the hashed value							
-							if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-								rowObj->set(colInfo->name, text);
-						}
-						break;
-						}
-					}
+                auto isKeyValue = [&](cjson* current, Columns::columns_s* colInfo, int64_t value)->bool
+                {
+                    if (auto t = current->find(colInfo->name); !t)
+                        return false;
+                    else
+                        switch (colInfo->type)
+                        {
+                        case columnTypes_e::freeColumn:
+                            return false;
+                        case columnTypes_e::intColumn:
+                            return (t->getInt() == value);
+                        case columnTypes_e::doubleColumn:
+                            return (t->getDouble() == value / 10000.0);
+                        case columnTypes_e::boolColumn:
+                            return (t->getBool() == (value != 0));
+                        case columnTypes_e::textColumn:
+                            // value here is the hashed value							
+                            if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+                                return (t->getString() == string{ text });
+                            else
+                                return false;
+                        }
+                    return false;
+                };
 
-				// now we will emit the individual sub-rows (under "attr":{"_": [...]} ) 
-				// for rows that had non-consistent values accross the row group
 
-				cjson* variable;
-				if (condensed)
-					variable = attrObj->setArray("_");
-				else
-					variable = attrObj;
+                cjson branch;
 
-				for (auto r : accumulator)
-				{
-					rowObj = variable->pushObject();
+                // This will make an overly verbose tree, there will be way more branches than
+                // required. The recurive `fold` and `tailCondense` lambdas will 
+                // clean this up.
+                for (auto row : accumulator)
+                {
+                    auto lastDepth = 0;
+                    auto current = &branch;
 
-					for (auto c = 0; c < columnCount; ++c)
-					{
-						// get the column information
-						const auto colInfo = columns->getColumn(columnMap[c]);
+                    for (auto c = 0; c < sorted.size(); ++c)
+                    {
+                        const auto ac = sorted[c].first; // actual column
 
-						if (colInfo->idx < 1000) // first 1000 are reserved
-							continue;
+                        const auto colInfo = columns->getColumn(columnMap[ac]);
 
-						auto value = r->cols[c];
+                        if (colInfo->idx < 1000) // first 1000 are reserved
+                            continue;
 
-						if (value == NONE)
-							continue;
+                        auto value = row->cols[ac];
 
-						// are these all the same on every row in the group? If not, skip
-						if (condensed && 
-							counts[std::make_pair(c, value)] == accumulator.size())
-							continue;
+                        if (const auto t = current->find("_"); t)
+                            current = t->membersHead;
+                        else
+                        {
+                            current = current->setArray("_");
+                            current = current->pushObject();
+                        }
 
-						switch (colInfo->type)
-						{
-						case columnTypes_e::freeColumn:
-							continue;
-						case columnTypes_e::intColumn:
-							rowObj->set(colInfo->name, value);
-							break;
-						case columnTypes_e::doubleColumn:
-							rowObj->set(colInfo->name, value * 10000.0);
-							break;
-						case columnTypes_e::boolColumn:
-							rowObj->set(colInfo->name, value != 0);
-							break;
-						case columnTypes_e::textColumn:
-						{							
-							if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-								rowObj->set(colInfo->name, text);
-						}
-						break;
-						}
-					}
-				}
+                        auto nodes = current->parentNode->getNodes();
+
+                        // this "_" array has no objects?
+                        cjson* foundNode = nullptr;
+                        cjson* notFoundNode = nullptr;
+                        for (auto n : nodes)
+                        {
+                            if (isKeyValue(n, colInfo, value))
+                            {
+                                foundNode = n;
+                                break;
+                            }
+                            if (!n->find(colInfo->name))
+                                notFoundNode = n;
+                        }
+
+                        if (foundNode)
+                            current = foundNode;
+                        else
+                        {                           
+                            if (notFoundNode)
+                                current = notFoundNode;
+                            else
+                                current = current->parentNode->pushObject();
+                            
+                            setKeyValue(current, colInfo, value);
+                        }
+
+                    }
+                }
+
+                // this will clean lists of end-nodes (leafs) that
+                // contain just one value by turning them into arrays
+                function<void(cjson*)> tailCondense;
+                tailCondense = [&tailCondense](cjson* current)
+                {
+
+                    if (!current)
+                        return;
+
+                    auto nodes = current->getNodes();
+
+                    unordered_set<string> propCounter;
+
+                    for (auto n: nodes)
+                    {
+                        if (auto tNode = n->find("_"); tNode)
+                            tailCondense(tNode);
+                        auto props = n->getNodes();
+                        for (auto p : props)
+                            if (p->name().length())
+                                propCounter.emplace(p->name());
+                    }
+
+                    if (propCounter.size() == 1)
+                    {
+                        auto propName = *propCounter.begin();
+                        auto newNode = current->parentNode->setArray(propName);
+                        
+                        for (auto n : nodes)
+                        {
+                            auto props = n->getNodes();
+                            for (auto p : props)
+                            {
+                                if (p->name() == propName)
+                                {
+                                    switch (p->type())
+                                    {
+                                        case cjsonType::VOIDED: break;
+                                        case cjsonType::NUL: break;
+                                        case cjsonType::OBJECT: break;
+                                        case cjsonType::ARRAY: break;
+                                        case cjsonType::INT: 
+                                            newNode->push(p->getInt());
+                                        break;
+                                        case cjsonType::DBL: 
+                                            newNode->push(p->getDouble());
+                                        break;
+                                        case cjsonType::STR: 
+                                            newNode->push(p->getString());
+                                        break;
+                                        case cjsonType::BOOL: 
+                                            newNode->push(p->getBool());
+                                        break;
+                                        default: ;
+                                    }
+                                }
+                            }                            
+                        }
+
+                        current->removeNode();
+                    }
+
+                };
+
+                // this will remove all the extra nodes by packing down
+                // nodes with just one member into their parent recursively until
+                // it's done.
+                function<void(cjson*)> fold;
+                fold = [&fold](cjson* current)
+                {
+
+                    if (!current)
+                        return;
+
+                    auto nodes = current->getNodes();
+
+                    for (auto n : nodes)
+                    {
+                        if (auto tNode = n->find("_"); tNode)
+                            fold(tNode);
+                    }
+
+                    if (current->memberCount == 1)
+                    {                       
+                        auto members = current->membersHead->getNodes(); // array then object
+
+                        current->parentNode->find("_")->removeNode();
+                       
+                        for (auto m: members)
+                            current->parentNode->push(m);
+                    }                                                
+
+                };
+
+                // fold and condense
+                fold(branch.find("_"));
+                tailCondense(branch.find("_"));
+
+                // this Parses the `branch` document into the attributes node using
+                // using Stringify (not great, but not overly slow)
+                cjson::Parse(cjson::Stringify(&branch), attrObj, true);
+
 			}
 
 			accumulator.clear();

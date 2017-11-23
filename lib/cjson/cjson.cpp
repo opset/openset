@@ -1302,8 +1302,6 @@ void cjson::Stringify_worker(const cjson* N, HeapStack& writer, int indent, cons
 			break;
 		case cjsonType::ARRAY:
 			{
-				auto Count = N->size();
-
 				if (indent >= 0)
 					emitIndent(writer, indent);
 
@@ -1318,14 +1316,14 @@ void cjson::Stringify_worker(const cjson* N, HeapStack& writer, int indent, cons
 					emitText(writer, (indent >= 0) ? "\": [" : "\":[");
 				}
 
-				auto members = N->getNodes();
-				for (auto i = 0; i < Count; i++)
-				{
-					if (i)
-						emitText(writer, ',');
+                auto members = N->getNodes();
+                for (auto it = members.begin(); it != members.end(); ++it)
+                {
+                    if (it != members.begin())
+                        emitText(writer, ',');
 
 					cjson::Stringify_worker(
-						members[i], 
+						*it, 
 						writer, 
 						(indent >= 0) ? indent + 1 : -1,
 						startNode);
@@ -1340,8 +1338,6 @@ void cjson::Stringify_worker(const cjson* N, HeapStack& writer, int indent, cons
 
 		case cjsonType::OBJECT:
 			{
-				auto Count = N->size();
-
 				if (indent >= 0)
 					emitIndent(writer, indent);
 
@@ -1357,14 +1353,13 @@ void cjson::Stringify_worker(const cjson* N, HeapStack& writer, int indent, cons
 				}
 
 				auto members = N->getNodes();
-
-				for (auto i = 0; i < Count; i++)
+				for (auto it = members.begin(); it != members.end(); ++it)
 				{
-					if (i)
+					if (it != members.begin())
 						emitText(writer, ',');
 
 					cjson::Stringify_worker(
-						members[i], 
+						*it, 
 						writer, 
 						(indent >= 0) ? indent + 1 : -1,
 						startNode);

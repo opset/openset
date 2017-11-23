@@ -110,6 +110,8 @@ set(SOURCE_FILES
         src/oloop_count.h
         src/oloop_insert.cpp
         src/oloop_insert.h
+		src/oloop_person.cpp
+		src/oloop_person.h
         src/oloop_query.cpp
         src/oloop_query.h
         src/oloop_retrigger.cpp

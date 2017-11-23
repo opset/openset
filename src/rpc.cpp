@@ -9,13 +9,16 @@
 #include "oloop_insert.h"
 #include "oloop_query.h"
 #include "oloop_count.h"
+#include "oloop_person.h"
 
 #include "asyncpool.h"
+#include "asyncloop.h"
 #include "config.h"
 #include "sentinel.h"
 #include "querycommon.h"
 #include "queryparser.h"
 #include "trigger.h"
+#include "database.h"
 #include "result.h"
 #include "table.h"
 #include "tablepartitioned.h"
@@ -384,8 +387,8 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
 		cjson response;
 		cjson::Parse(
 			string{
-				result.responses[0].first,
-				static_cast<size_t>(result.responses[0].second)
+				result.responses[0].data,
+				result.responses[0].length
 			},
 			&response
 		);
@@ -398,11 +401,11 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
         auto nodeFail = false;
 
         // try to capture a json error that has perculated up from the forked call.
-        if (result.responses[0].first &&
-            result.responses[0].second &&
-            result.responses[0].first[0] == '{')
+        if (result.responses[0].data &&
+            result.responses[0].length &&
+            result.responses[0].data[0] == '{')
         {
-            cjson error(std::string(result.responses[0].first, result.responses[0].second), result.responses[0].second);
+            cjson error(std::string(result.responses[0].data, result.responses[0].length), result.responses[0].length);
 
             if (error.xPath("/error"))
                 message->reply(openset::http::StatusCode::client_error_bad_request, error);
@@ -1360,9 +1363,27 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 
 	for (auto row : rows)
 	{
-		const auto uuid = row->xPathString("/person", "");
-		const auto uuHash = MakeHash(uuid) % 17783LL;
-		const auto destination = cast<int32_t>(std::abs(uuHash) % partitions->getPartitionMax());
+        const auto personNode = row->xPath("/person");
+        if (!personNode || (personNode->type() != cjsonType::INT && personNode->type() != cjsonType::STR))
+            continue;
+
+       
+        // straight up numeric ID nodes don't need hashing, actually hashing would be very bad.
+        // We can use numeric IDs (i.e. a customer id) directly.
+        int64_t uuid = 0;
+
+        if (personNode->type() == cjsonType::STR)
+        {
+            auto uuString = personNode->getString();
+            toLower(uuString);
+
+            if (uuString.length())
+                uuid = MakeHash(uuString);
+        }
+        else
+            uuid = personNode->getInt(); 
+
+		const auto destination = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
 
 		const auto mapInfo = globals::mapper->partitionMap.getState(destination, globals::running->nodeId);
 		
@@ -1608,13 +1629,13 @@ shared_ptr<cjson> forkQuery(
 
 	for (auto &r : result.responses)
 	{
-		if (ResultMuxDemux::isInternode(r.first, r.second))
-			resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.first, r.second));
+		if (ResultMuxDemux::isInternode(r.data, r.length))
+			resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.data, r.length));
 		else
 		{
 			// there is an error message from one of the participing nodes
 			// TODO - handle error
-			if (!r.second)
+			if (!r.data || !r.length)
 				RpcError(
 					openset::errors::Error{
 						openset::errors::errorClass_e::internode,
@@ -1622,7 +1643,7 @@ shared_ptr<cjson> forkQuery(
 						"Cluster error. Node had empty reply."},
 					message);
 			else
-				message->reply(openset::http::StatusCode::success_ok, r.first, r.second);
+				message->reply(openset::http::StatusCode::success_ok, r.data, r.length);
 			return nullptr;
 		}
 	}
@@ -2347,6 +2368,120 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	});
 
 	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
+}
+
+void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matches)
+{
+    
+    auto uuString = message->getParamString("idstring");
+    auto uuid = message->getParamInt("id");
+
+    if (uuid == 0 && uuString.length())
+    {
+        toLower(uuString);
+        uuid = MakeHash(uuString);
+    }
+
+    // no UUID... so make an error!
+    if (uuid == 0)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "person query must have an id={number} or idstring={text} parameter" },
+            message);
+        return;
+    }
+
+    const auto tableName = matches.find("table"s)->second;
+
+    if (!tableName.length())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "missing or invalid table name" },
+            message);
+        return;
+    }
+
+    auto table = globals::database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "table could not be found" },
+            message);
+        return;
+    }
+
+    const auto partitions = openset::globals::async;
+    const auto targetPartition = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
+    const auto mapper = globals::mapper->getPartitionMap();
+
+    auto owners = mapper->getNodesByPartitionId(targetPartition);
+
+    int64_t targetRoute = -1;
+
+    // find the owner
+    for (auto o : owners)
+        if (mapper->isOwner(targetPartition, o))
+        {
+            targetRoute = o;
+            break;
+        }
+
+    if (targetRoute == -1)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::route_error,
+            "potential node failure - please re-issue the request" },
+            message);
+        return;
+    }
+
+    // this query is local - we will fire up a single async get user task on this node
+    if (targetRoute == globals::running->nodeId)
+    {
+        // lets use the super basic shuttle.
+        const auto shuttle = new Shuttle<int>(message);
+        auto loop = globals::async->getPartition(targetPartition);
+
+        if (!loop)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::route_error,
+                "potential node failure - please re-issue the request" },
+                message);
+            return;
+        }
+        
+        loop->queueCell(new OpenLoopPerson(shuttle, table, uuid));
+
+    }
+    else // remote - we will route to the correct destination node
+    {
+        const auto response = globals::mapper->dispatchSync(
+            targetRoute,
+            message->getMethod(),
+            message->getPath(),
+            message->getQuery(),
+            message->getPayload(),
+            message->getPayloadLength()
+        );
+        
+        message->reply(response->code, response->data, response->length);
+    }
+    
 }
 
 void openset::comms::Dispatch(const openset::web::MessagePtr message)

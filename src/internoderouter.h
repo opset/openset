@@ -3,6 +3,7 @@
 #include <atomic>
 #include "common.h"
 #include "internodemapping.h"
+#include "http_serve.h"
 #include "http_cli.h"
 #include "threads/spinlock.h"
 
@@ -30,7 +31,25 @@ namespace openset
 			// map route to HTTP string
 			using Routes = unordered_map<int64_t, std::pair<std::string, int>>;
 
-			using DataBlock = std::pair<char*, const size_t>;
+			struct DataBlock
+			{
+                char* data{ nullptr };
+                size_t length{ 0 };
+                http::StatusCode code { http::StatusCode::success_ok };
+
+                DataBlock(char* data, const size_t length, const http::StatusCode code):
+                    data(data),
+                    length(length),
+                    code(code)
+                {}
+
+                ~DataBlock()
+                {
+                    if (data)
+                        PoolMem::getPool().freePtr(data);
+                }
+			};
+
 			using DataBlockPtr = shared_ptr<DataBlock>;
 
 			struct Responses_s
