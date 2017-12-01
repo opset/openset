@@ -31,7 +31,7 @@ std::string cleanStr(std::string String, std::string Remove);
 std::string join(const std::vector<std::string>& strings, std::string quotes = "");
 std::string join(const std::unordered_set<std::string>& strings, std::string quotes = "");
 
-inline std::string trim(std::string text, std::string whiteSpace)
+inline std::string trim(std::string text, const std::string whiteSpace = " ")
 {
 	auto end = text.find_last_not_of(whiteSpace);
 

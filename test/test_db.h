@@ -220,7 +220,7 @@ inline Tests test_db()
 				auto json = grid->toJSON(false); // non-condensed
 
 				// NOTE - uncomment if you want to see the results
-				//cout << cjson::Stringify(&json, true) << endl;
+				// cout << cjson::Stringify(&json, true) << endl;
 
 				std::unordered_set<int64_t> timeStamps;
 				std::unordered_set<std::string> referral_sources;
@@ -242,23 +242,17 @@ inline Tests test_db()
 						timeStamps.insert(r->xPath("stamp")->getInt());
 
 					auto attr = r->xPath("attr");
-					
-					vector<cjson*> subRows;
-
-					if (attr->type() == cjsonType::ARRAY)
-						subRows = attr->getNodes(); // get the array of sub-nodes
-					else
-						subRows.push_back(attr); // fill subRows with our one node
-
-					for (auto sr : subRows)
-					{
-						if (sr->find("referral_source"))
-							referral_sources.insert(sr->xPath("referral_source")->getString());
-						if (sr->find("referral_search"))
-							referral_searches.insert(sr->xPath("referral_search")->getString());
-						if (sr->find("page"))
-							pages.insert(sr->xPath("page")->getString());
-					}
+			
+					if (attr->find("referral_source"))
+						referral_sources.insert(attr->xPath("referral_source")->getString());
+                    if (attr->find("referral_search"))
+                    {
+                        auto rsNodes = attr->xPath("referral_search")->getNodes();
+                        for (auto n: rsNodes)
+                            referral_searches.insert(n->getString());
+                    }
+					if (attr->find("page"))
+						pages.insert(attr->xPath("page")->getString());
 				}
 
 				ASSERT(timeStamps.size() == 4);
@@ -340,9 +334,13 @@ inline Tests test_db()
 				cjson resultJSON; 
 
 				// make some JSON
-				auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
-				auto text = merger.mergeText(queryMacros, table, resultSets);
+                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                /*
+				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                merger.mergeMacroLiterals(queryMacros, resultSets);
+				auto text = merger.mergeResultText(resultSets);
 				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+                */
 
 				// NOTE - uncomment if you want to see the results
 				// cout << cjson::Stringify(&resultJSON, true) << endl;
@@ -427,9 +425,13 @@ inline Tests test_db()
 				cjson resultJSON; // we are going to populate this
 
   			    // make some JSON
-				auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
-				auto text = merger.mergeText(queryMacros, table, resultSets);
+                /*
+				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                merger.mergeMacroLiterals(queryMacros, resultSets);
+				auto text = merger.mergeResultText(resultSets);
 				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+                */
+                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
 				// NOTE - uncomment if you want to see the results
 				// cout << cjson::Stringify(&resultJSON, true) << endl;
@@ -515,9 +517,14 @@ inline Tests test_db()
 				openset::result::ResultMuxDemux merger;
 				cjson resultJSON; // we are going to populate this
 								  // make some JSON
-				auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
-				auto text = merger.mergeText(queryMacros, table, resultSets);
+
+                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                /*
+				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                merger.mergeMacroLiterals(queryMacros, resultSets);
+				auto text = merger.mergeResultText(resultSets);
 				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+                */
 
 				// NOTE - uncomment if you want to see the results
 				//cout << cjson::Stringify(&resultJSON, true) << endl;

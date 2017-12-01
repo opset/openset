@@ -46,7 +46,10 @@ namespace openset
                 ~DataBlock()
                 {
                     if (data)
+                    {
                         PoolMem::getPool().freePtr(data);
+                        data = nullptr;
+                    }
                 }
 			};
 

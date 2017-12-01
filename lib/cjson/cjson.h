@@ -500,10 +500,15 @@ public:
 
 	}
 
-	void recurseSort(string nodeName, SortFunction sortLambda) 
+	void recurseSort(const string nodeName, const SortFunction sortLambda) 
 	{
 		__recurseSort(nodeName, this, sortLambda);
 	}
+
+    void recurseTrim(const string nodeName, const int trim)
+    {
+        __recurseTrim(nodeName, this, trim);
+    }
 
 	size_t hashed() const;
 	
@@ -512,7 +517,39 @@ private:
 	// this recurses the tree, it would be possible to make a non-recursive 
 	// version at some point.
 
-	static void __recurseSort(string nodeName, cjson* branch, SortFunction sortLambda)
+    static void __recurseTrim(const string nodeName, cjson* branch, const int trim)
+    {
+
+        if (branch->name() == nodeName && branch->memberCount > trim)
+        {
+            auto member = branch->membersHead;
+            auto count = 1;
+            while (member)
+            {
+                if (count == trim)
+                {
+                    branch->membersTail = member;
+                    member->siblingNext = nullptr;
+                    return;
+                }
+
+                member = member->siblingNext;
+                ++count;
+            }
+        }
+
+        auto it = branch->membersHead;
+
+        while (it)
+        {
+            if (it->nodeType == cjsonType::VOIDED)
+                continue;
+            __recurseTrim(nodeName, it, trim);
+            it = it->siblingNext;
+        }
+    }
+
+	static void __recurseSort(const string nodeName, cjson* branch, const SortFunction sortLambda)
 	{
 
 		if (branch->name() == nodeName)

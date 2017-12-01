@@ -53,11 +53,7 @@ namespace openset
 		// async loop will not be running if this node is not part of a cluster
 		if (async.isRunning()) 
 			async.mapPartitionsToAsyncWorkers();
-
-		async.suspendAsync();
-		db.initializeTables();
-		async.resumeAsync();
-		
+	
 		openset::mapping::Sentinel teamster(&mapper, &db);
 
 		web::HttpServe httpd;	

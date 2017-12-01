@@ -174,7 +174,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	}
 
 	destAttr->text = attr->text;
-	destAttr->ints = newBits->ints;//asList ? 0 : newBits->ints;
+	destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
 	destAttr->comp = compBytes;
 	destAttr->linId = linId;
 
@@ -182,12 +182,23 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	// index to point to it, and free the old one up.
 	// update the Attr pointer directly in the index
 	attrPair->second = destAttr;
-	PoolMem::getPool().freePtr(attr);
+	//PoolMem::getPool().freePtr(attr);
 }
 
 AttributeBlob* Attributes::getBlob() const
 {
 	return blob;
+}
+
+Attributes::AttrListExpanded Attributes::getColumnValues(const int32_t column)
+{
+    Attributes::AttrListExpanded result;
+
+    for (auto &kv : columnIndex)
+        if (kv.first.column == column && kv.first.value != NONE)
+            result.push_back({ kv.first.value, kv.second });
+    
+    return std::move(result);
 }
 
 Attributes::AttrList Attributes::getColumnValues(const int32_t column, const listMode_e mode, const int64_t value)
@@ -239,7 +250,7 @@ Attributes::AttrList Attributes::getColumnValues(const int32_t column, const lis
 		}
 	}
 
-	return result;
+	return std::move(result);
 }
 
 void Attributes::serialize(HeapStack* mem)

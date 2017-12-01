@@ -274,8 +274,11 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 		{
 			csLock lock(responseCs);
-			// store this response in the response object
-			result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ data, size, status });
+			// store this response in the response object, but first
+            // copy data, as data will be destoryed when this callback goes out of scope
+            auto dataCopy = static_cast<char*>(PoolMem::getPool().getPtr(size));
+            memcpy(dataCopy, data, size);
+			result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ dataCopy, size, status });
 
 			if (error)
 				result.routeError = true;
