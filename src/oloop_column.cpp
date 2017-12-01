@@ -169,7 +169,7 @@ void OpenLoopColumn::prepare()
             break;
         case ColumnQueryMode_e::sub:
             if (v.second->text &&
-                string(v.second->text).find(config.filterLow) != string::npos)
+                string(v.second->text).find(config.filterLow.getString()) != string::npos)
                 bucketList.push_back(v.first);
             break;
         case ColumnQueryMode_e::gt:

@@ -331,11 +331,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
 									// insert without quotes if this is a column name
 									if (isTableColumn(k.second))
 										current.text.insert(idx, k.second);
-									// if this is a string containing a number, insert as a number
-									else if (k.second.typeof() == cvar::valueType::STR &&
-										isNumeric(k.second)) // this is a number in a string
-										current.text.insert(idx, k.second);
-									// if this is a string and not a number, insert quoted
+									// if this is a string we insert it with quotes
 									else if (k.second.typeof() == cvar::valueType::STR)
 										current.text.insert(idx, "'" + k.second + "'");
 									// probably an actual number, insert unquoted

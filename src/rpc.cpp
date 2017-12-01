@@ -1847,6 +1847,41 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 
 	openset::query::ParamVars paramVars;
 
+    for (auto p : message->getQuery())
+    {
+        cvar value = p.second;
+        
+        if (p.first.find("str_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value;
+        }
+        else if (p.first.find("int_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getInt64();
+        }
+        else if (p.first.find("dbl_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getDouble();
+        }
+        else if (p.first.find("bool_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getBool();
+        }
+
+    }
+
 	/* TODO let us revist these
 	if (params)
 	{

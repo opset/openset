@@ -189,6 +189,8 @@ inline Tests test_complex_events()
 
 					ASSERT(result->results.size() != 0);
 
+                    result->setAccTypesFromMacros(queryMacros);
+
 					// we are going to sort the list, this is done for merging, but
 					// being we have one partition in this test we won't actually be merging.
 					result->makeSortedList();

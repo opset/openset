@@ -94,9 +94,6 @@ inline Tests test_db()
 		count person
 		count page
 
-	sort:
-		page
-
 	match where page is 'home page':		
 		iter_next()
 		match where iter_within(10 seconds, prev_match):
@@ -519,6 +516,7 @@ inline Tests test_db()
 								  // make some JSON
 
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
                 /*
 				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
                 merger.mergeMacroLiterals(queryMacros, resultSets);
