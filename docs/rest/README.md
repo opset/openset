@@ -164,6 +164,7 @@ Unlike the `/events` query, segments created in by the `/counts` query are named
 A single counts query can contain multiple sections to create multiple segments in one step.
 
 **query parameters:**
+
 | param | values | note |
 | ---- | ---- | ---- |
 |`debug=` | `true/false` |  will return the assembly for the query rather than the results|
@@ -177,6 +178,7 @@ A single counts query can contain multiple sections to create multiple segments 
 The column query allows you to query all the values within a named column in a table as well as perform searches and numeric grouping.
 
 **query parameters:**
+
 | param | values | note |
 | ---- | ---- | ---- |
 | `segments=` | `segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
@@ -203,6 +205,7 @@ Returns the event sequence for an individual.
 > :pushpin: If events contain complex data (i.e. sub values), OpenSet will re-condense the data by folding up data permeations generated on insert. The folded row may be grouped differently than the one provided to `/insert` but will be logically identical. 
 
 **query parameters:**
+
 | param | values  | note |
 | --- | -------- | ------------------- |
 | `sid=` | `string` | If you are using textual IDs use the `sid=` parameter |
