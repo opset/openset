@@ -83,17 +83,17 @@ Load or stream events (app, web, IoT, etc) into OpenSet and extract the history 
 # example using curl
 
 **1**. Clone the Samples:
-```python
+```bash
 cd ~
 git clone https://github.com/opset/openset_samples.git
 ```
 
 **2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
-```python
+```bash
 docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel
 ```
 **3**. Open another console (go to home directory):
-```python
+```bash
 cd ~
 ```
 
@@ -111,7 +111,7 @@ response:
 
 **5**. Create a table:
 
-```python
+```bash
 curl \
 -X POST  http://127.0.0.1:8080/v1/table/highstreet \
 -d @- << EOF
@@ -141,7 +141,7 @@ response:
 
 **6**. Let's insert some json data from the `openset_samples/data` folder:
 
-```python
+```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/insert/highstreet \
 --data-binary @openset_samples/data/highstreet_events.json | json_pp
@@ -160,7 +160,7 @@ response:
 
 This script can be found at `openset_samples/pyql/simple.pyql` folder.
 
-```python
+```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/events \
 --data-binary @- << PYQL | json_pp
@@ -210,15 +210,15 @@ response (counts are people, count product, sum price):
                   "a": [1, 1,99.95] // aggregates
               }
           ]
-      },
-      . . .
+      }
+      // ... more json
     ]
 }
 ```
 
 **8**.  Let's make 4 segments (this script can be found at `openset_samples/pyql/segments.pyql` folder):
 
-```python
+```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/counts \
 --data-binary @- << PYQL | json_pp
@@ -265,7 +265,7 @@ response (counts are people):
          "c" : [2]
       },
       {
-         "g" : "products_yard"        
+         "g" : "products_yard",        
          "c" : [1]
       }
    ]
@@ -274,7 +274,7 @@ response (counts are people):
 
 **9**.  Let's query a column:
 
-```python
+```bash
 curl \
 -X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name' | json_pp
 ```
@@ -330,7 +330,7 @@ response (counts are people):
 ```
 **10**.  Let's query a column in segment compare mode (all `*` against `products_outdoor`:
 
-```python
+```bash
 curl \
 -X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name?segments=*,products_outdoor' | json_pp
 ```
@@ -399,7 +399,7 @@ response (counts are people for each segment):
 
 > :pushpin: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
 
-```python
+```bash
 curl \
 -X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_price?bucket=25' | json_pp
 ```
@@ -435,7 +435,7 @@ response (counts are people):
 
 Let's extract `for each product` the `first` product purchased `immediately after` but `not in the same cart`.
 
-```python
+```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/events \
 --data-binary @- << PYQL | json_pp
