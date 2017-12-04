@@ -26,7 +26,7 @@ Returns a 200 or 400 status code.
 
 #### POST /v1/table/{table} (create table)
 
-```JSON
+```json
 {
     "columns": [
         {
@@ -37,12 +37,12 @@ Returns a 200 or 400 status code.
             "name": "{column_name}",
             "type": "{text|int|double|bool}"
         },
-        // etc        
+        //etc        
     ],
     "z-order": [
         "{event_name}",
         "{event_name}",
-        // etc
+        //etc
     ]
 }
 ```
@@ -53,7 +53,7 @@ Returns a 200 or 400 status code.
 
 Returns JSON describing the table.
 
-```JSON
+```json
 {
     "table": "highstreet",
     "columns": [
@@ -138,13 +138,14 @@ Describe a re-eventing trigger
 This will perform an event scanning query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
 **query parameters:**
+
 | param | values | note |
-|----|----|----|
-|`debug=`|`true|false`| will return the assembly for the query rather than the results|
-| `segments=`|`segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
+| ---- | --- | ---- |
+|`debug=`|`true|false` | will return the assembly for the query rather than the results|
+| `segments=`|`segment, segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
 |`sort=`|`column_name`| sort by column name.|
-|`order=`|`asc|desc`| default is descending order.|
-|`trim=`|`# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`order=`| `asc|desc` | default is descending order.|
+|`trim=`| `# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
 |`str_{var_name}` | `text`   | replace `{{var_name}}` string in script (will be automatically quoted)|
 |`int_{var_name}` | `integer`   | replace `{{var_name}}` numeric value in script|
 |`dbl_{var_name}` | `double` | replace `{{var_name}}` numeric value in script|
@@ -164,8 +165,8 @@ A single counts query can contain multiple sections to create multiple segments 
 
 **query parameters:**
 | param | values | note |
-|----|----|----|
-|`debug=`|`true|false`| will return the assembly for the query rather than the results|
+| ---- | ---- | ---- |
+|`debug=` | `true|false`| will return the assembly for the query rather than the results|
 
 **Return**
 
@@ -177,19 +178,19 @@ The column query allows you to query all the values within a named column in a t
 
 **query parameters:**
 | param | values | note |
-|----|----|----|
-| `segments=`|`segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
-|`order=`|`asc|desc`| default is descending order.|
-|`trim=`|`# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
-|`gt=`|`#`| return values greater than `#`|
-|`gte=`|`#`| return values greater than or equal to `#`|
-|`lt=`|`#`| return values less than `#`|
-|`lte=`|`#`| return values less than or equal to `#`|
-|`eq=`|`#`| return value equal to `#`|
-|`between=` `and=`|`#` and `#`| return value greater than or equal to `#` and less than the second number provided by `and=`|
-|`rx=`|`regular expression`| return values matching an`ECMAScript` style regex expression. Check this great [cheet sheet](http://cpprocks.com/regex-cheatsheet/).|
-|`sub=`|`text`| return value containing the search string in `sub`|
-|`bucket=`|`#`| cluster values by `#`, all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar)|
+| ---- | ---- | ---- |
+| `segments=` | `segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
+|`order=` | `asc|desc`| default is descending order.|
+|`trim=` | `# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`gt=` | `#` | return values greater than `#` |
+|`gte=` | `#` | return values greater than or equal to `#` |
+|`lt=` | `#` | return values less than `#` |
+|`lte=` | `#` | return values less than or equal to `#` |
+|`eq=` | `#` | return value equal to `#` |
+|`between=` `and=` | `#` and `#` | return value greater than or equal to `#` and less than the second number provided by `and=`|
+|`rx=` | `regular expression` | return values matching an`ECMAScript` style regex expression. Check this great [cheet sheet](http://cpprocks.com/regex-cheatsheet/). |
+|`sub=` | `text` | return value containing the search string in `sub` |
+|`bucket=` | `#` |  cluster values by `#`,  all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar) |
 
 **Return**
 
@@ -203,9 +204,9 @@ Returns the event sequence for an individual.
 
 **query parameters:**
 | param |values  | note|
-|----|--------| -------------------|
-| `sid=`|`string`| If you are using textual IDs use the `sid=` parameter|
-|`id=`|`number`| If you are using numeric IDs use the `id=` parameter|
+| --- | -------- | ------------------- |
+| `sid=` | `string`| If you are using textual IDs use the `sid=` parameter |
+|`id=` | `number` | If you are using numeric IDs use the `id=` parameter |
 
 **Return**
 
