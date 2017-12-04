@@ -1,6 +1,6 @@
-## Cluster
+# Cluster
 
-#### PUT /v1/cluster/init?partitions={#}
+## PUT /v1/cluster/init?partitions={#}
 
 Initializes a cluster (a cluster with just **one** node will still need initializing). 
 
@@ -12,7 +12,7 @@ Returns a 200 or 400 status code.
 
 > :pushpin:the ideal partition size is the lowest possible number that will fit the size of your cluster in the long run. There is overhead incurred with each partition, but you also want to pick a number that will allow you to grow. Picking a number less than the number of processor cores in your cluster will __not__ allow you to reach peak performance.
 
-#### PUT /v1/cluster/join?host={host|ip}&port={port}
+## PUT /v1/cluster/join?host={host|ip}&port={port}
 
 __query_params:__
 - host={name | ip}
@@ -24,7 +24,7 @@ Returns a 200 or 400 status code.
 
 ## Table
 
-#### POST /v1/table/{table} (create table)
+## POST /v1/table/{table} (create table)
 
 ```json
 {
@@ -49,7 +49,7 @@ Returns a 200 or 400 status code.
 
 Returns a 200 or 400 status code.
 
-#### GET /v1/table/{table} (describe table)
+## GET /v1/table/{table} (describe table)
 
 Returns JSON describing the table.
 
@@ -102,7 +102,7 @@ Returns JSON describing the table.
 
 Returns a 200 or 400 status code.
 
-#### PUT /v1/table/{table}/column/{column_name}:{type} (add column)
+## PUT /v1/table/{table}/column/{column_name}:{type}
 
 Adds a column to an existing table. 
 
@@ -111,7 +111,7 @@ Adds a column to an existing table.
 
 Returns a 200 or 400 status code.
 
-#### DELETE /v1/table/{table}/column/{column} (drop column)
+## DELETE /v1/table/{table}/column/{column_name} 
 
 Removes a column from the table. 
 
@@ -119,21 +119,21 @@ Removes a column from the table.
 
 Returns a 200 or 400 status code.
 
-#### GET /v1/table/{table}/revent/{revent_name}
+## GET /v1/table/{table}/revent/{revent_name}
 
 Describe a re-eventing trigger
 
-#### POST /v1/table/{table}/revent/{revent_name}
+## POST /v1/table/{table}/revent/{revent_name}
 
 Create a re-eventing trigger.
 
-#### DELETE /v1/table/{table}/revent/{revent_name}
+## DELETE /v1/table/{table}/revent/{revent_name}
 
 Describe a re-eventing trigger
 
-## Query
+# Query
 
-#### POST /v1/query/{table}/events
+## POST /v1/query/{table}/events
 
 This will perform an event scanning query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
@@ -155,7 +155,7 @@ This will perform an event scanning query by executing the provided `PyQL` scrip
 
 200 or 400 status with JSON data or error.
 
-#### POST /v1/query/{table}/counts
+## POST /v1/query/{table}/counts
 
 This will perform an index counting query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
@@ -173,7 +173,7 @@ A single counts query can contain multiple sections to create multiple segments 
 
 200 or 400 status with JSON data or error.
 
-#### GET /v1/query/{table}/column/{column_name}
+## GET /v1/query/{table}/column/{column_name}
 
 The column query allows you to query all the values within a named column in a table as well as perform searches and numeric grouping.
 
@@ -198,7 +198,7 @@ The column query allows you to query all the values within a named column in a t
 
 200 or 400 status with JSON data or error.
 
-#### GET /v1/query/{table}/person
+## GET /v1/query/{table}/person
 
 Returns the event sequence for an individual. 
 
@@ -215,12 +215,12 @@ Returns the event sequence for an individual.
 
 200 or 400 status with JSON data or error.
 
-## Internode (internode node chatter)
+# Internode (internode node chatter)
 
 Don't call these from client code. 
 The `/v1/internode` REST interface is used internally to maintain a proper functioning cluster. 
 
-#### GET /v1/cluster/is_member
+## GET /v1/cluster/is_member
 
 This will return a JSON object informing if the node is already part of a cluster
 
@@ -230,23 +230,23 @@ This will return a JSON object informing if the node is already part of a cluste
 }
 ```
 
-#### POST /v1/internode/join_to_cluster
+## POST /v1/internode/join_to_cluster
 
 Joins an empty node to the cluster. This originates with the `/v1/cluster/join` endpoint. `/v1/cluster/join` will issue a `/v1/interndoe/is_cluster_member` and verify the certificate before this endpoint (`/v1/internode/join_to_cluster`) is called.
 
 This endpoint transfers information about tables, triggers, and partition mapping.
 
-#### POST /v1/internode/add_node
+## POST /v1/internode/add_node
 
 Dispatched to all nodes by ` /v1/cluster/join` to inform all nodes in the cluster that a new node has been joined to the cluster. Nodes receiving `add_node` will adjust their node mapping. 
 
 At this point the node will be empty. The `sentinel` for the elected node will start balancing to this node shortly after this dispatch.
 
-#### POST /v1/internode/map_change
+## POST /v1/internode/map_change
 
 Dispatched by `sentinel` when node mapping and membership have changed. This is the basic mechanism that keeps cluster topology in sync.
 
-#### PUT /v1/internode/transfer?partition={partition_id}&node={dest_node_name}
+## PUT /v1/internode/transfer?partition={partition_id}&node={dest_node_name}
 
 This initiates a partition transfer. The node containing the partition to transfer is contacted directly. It is provided the `partition_id` to transfer and the `dest_node_name` to send it to. 
 
@@ -254,13 +254,13 @@ This will result in potentially several transfers, one for each table using `POS
 
 After a successful transfer the `sentinel` will send a `POST /v1/internode/map_change` request to tell the cluster that the partition is available. 
 
-#### POST /v1/internode/transfer?partition={partition_id}&table={table_name}
+## POST /v1/internode/transfer?partition={partition_id}&table={table_name}
 
 Transfers packed `binary` data for partition. Partition is `partition_id` is passed in URL as an integer.
 
 # Other
 
-#### GET /ping
+## GET /ping
 
 If the node is runing, this will respond with 200 OK and JSON:
 ```json
