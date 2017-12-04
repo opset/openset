@@ -165,6 +165,7 @@ curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/events \
 --data-binary @- << PYQL | json_pp
 # our pyql script
+
 aggregate: # define our output columns
     count person
     count product_name as purchased
@@ -175,6 +176,7 @@ match where product_group is 'outdoor':
     # make a branch /day_of_week/product_name and
     # aggregate it's levels
     tally(get_day_of_week(event_time()), product_name)
+
 #end of pyql script
 PYQL
 ```
