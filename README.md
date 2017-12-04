@@ -182,37 +182,54 @@ PYQL
 response (counts are people, count product, sum price):
 ```json
 {
-   "_": [
+   "_" : [
       {
-          "g": 2, // day_of_week: tuesday
-          "a": [1, 3, 155.93], // aggregates
-          "_": [ // sub-group for product_name
-              {
-                  "g": "triple hook jigger", // product_name
-                  "a": [1, 1,27.99] // aggregates
-              },
-              {
-                  "g": "fly rod", // product_name
-                  "a": [1, 1,99.95] // aggregates
-              },
-              {
-                  "g": "deluxe spinner", // product_name
-                  "a": [1, 1,27.99] // aggregates
-              }
-          ]
+         "g" : 2,         
+         "c" : [1, 3, 155.93],
+         "_" : [
+            {
+               "g" : "triple hook jigger",
+               "c" : [1, 1, 27.99]
+            },
+            {
+               "g" : "fly rod",
+               "c" : [1, 1, 99.95]
+            },
+            {
+               "g" : "deluxe spinner",               
+               "c" : [1, 1, 27.99]
+            }
+         ]
       },
       {
-          "g": 5, // day_of_week: thursday
-          "a": [1, 1, 99.95],
-          "_": [ // sub-group for product_name
-              {
-                  "g": "fly rod", // product_name
-                  "a": [1, 1,99.95] // aggregates
-              }
-          ]
+         "g" : 5,
+         "c" : [1, 1, 99.95],         
+         "_" : [
+            {
+               "g" : "fly rod",
+               "c" : [1, 1, 99.95]
+            }
+         ]
+      },
+      {
+         "g" : 7,
+         "c" : [1, 3, 145.9299],
+         "_" : [
+            {
+               "g" : "gilded spoon",
+               "c" : [1, 1, 27.99]
+            },
+            {
+               "g" : "fly rod",               
+               "c" : [1, 1, 99.95]
+            },
+            {
+               "g" : "double spinner",
+               "c" : [1, 1, 17.9899]
+            }
+         ]
       }
-      // ... more json
-    ]
+   ]
 }
 ```
 

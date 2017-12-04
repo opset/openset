@@ -2871,7 +2871,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matches)
 {
     
-    auto uuString = message->getParamString("idstring");
+    auto uuString = message->getParamString("sid");
     auto uuid = message->getParamInt("id");
 
     if (uuid == 0 && uuString.length())
