@@ -414,13 +414,13 @@ response (counts are people for each segment):
 }
 ```
 
-**11.** Let's query a numeric column and `bucket` the results by `25` dollar increments
+**11.** Let's query a numeric column and `bucket` the results by `50` dollar increments
 
 > :pushpin: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
 
 ```bash
 curl \
--X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_price?bucket=25' | json_pp
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_price?bucket=50' | json_pp
 ```
 
 response (counts are people):
