@@ -6,8 +6,6 @@
 agg: 
     {{things_to_count}}
     ...
-sort:
-    {{aggregate to sort by}}
     
 {{pyqL code}}
 ```

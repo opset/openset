@@ -2,7 +2,7 @@
 
 #### PUT /v1/cluster/init?partitions={#}
 
-Initializes a cluster (even a cluster of 1 needs initializing). 
+Initializes a cluster (a cluster with just **one** node will still need initializing). 
 
 This turns an unassigned/waiting node into a cluster sentinel. A node that is part of a cluster can invite other nodes to join that cluster.
 
@@ -137,10 +137,22 @@ Describe a re-eventing trigger
 
 This will perform an event scanning query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
-Available query strings options include:
-- `debug=true` will return the assembly for the query rather than the results
+**query parameters:**
+| param | values | note |
+|----|----|----|
+|`debug=`|`true|false`| will return the assembly for the query rather than the results|
+| `segments=`|`segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
+|`sort=`|`column_name`| sort by column name.|
+|`order=`|`asc|desc`| default is descending order.|
+|`trim=`|`# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`str_{var_name}` | `text`   | replace `{{var_name}}` string in script (will be automatically quoted)|
+|`int_{var_name}` | `integer`   | replace `{{var_name}}` numeric value in script|
+|`dbl_{var_name}` | `double` | replace `{{var_name}}` numeric value in script|
+|`bool_{var_name}` | `true|false`   | replace `{{var_name}}` boolean value in script|
 
-Returns 
+**Return**
+
+200 or 400 status with JSON data or error.
 
 #### POST /v1/query/{table}/counts
 
@@ -148,15 +160,60 @@ This will perform an index counting query by executing the provided `PyQL` scrip
 
 Unlike the `/events` query, segments created in by the `/counts` query are named and cached and can be used in subsequent `/counts` queries as well as to filter `/events` queries.
 
-Available query strings options include:
-- `debug=true` will return the assembly for the query rather than the results
+A single counts query can contain multiple sections to create multiple segments in one step.
 
-Returns a 200 or 400 status code.
+**query parameters:**
+| param | values | note |
+|----|----|----|
+|`debug=`|`true|false`| will return the assembly for the query rather than the results|
+
+**Return**
+
+200 or 400 status with JSON data or error.
+
+#### GET /v1/query/{table}/column/{column_name}
+
+The column query allows you to query all the values within a named column in a table as well as perform searches and numeric grouping.
+
+**query parameters:**
+| param | values | note |
+|----|----|----|
+| `segments=`|`segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
+|`order=`|`asc|desc`| default is descending order.|
+|`trim=`|`# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`gt=`|`#`| return values greater than `#`|
+|`gte=`|`#`| return values greater than or equal to `#`|
+|`lt=`|`#`| return values less than `#`|
+|`lte=`|`#`| return values less than or equal to `#`|
+|`eq=`|`#`| return value equal to `#`|
+|`between=` `and=`|`#` and `#`| return value greater than or equal to `#` and less than the second number provided by `and=`|
+|`rx=`|`regular expression`| return values matching an`ECMAScript` style regex expression. Check this great [cheet sheet](http://cpprocks.com/regex-cheatsheet/).|
+|`sub=`|`text`| return value containing the search string in `sub`|
+|`bucket=`|`#`| cluster values by `#`, all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar)|
+
+**Return**
+
+200 or 400 status with JSON data or error.
+
+#### GET /v1/query/{table}/person
+
+Returns the event sequence for an individual. 
+
+> :pushpin: If events contain complex data (i.e. sub values), OpenSet will re-condense the data by folding up data permeations generated on insert. The folded row may be grouped differently than the one provided to `/insert` but will be logically identical. 
+
+**query parameters:**
+| param |values  | note|
+|----|--------| -------------------|
+| `sid=`|`string`| If you are using textual IDs use the `sid=` parameter|
+|`id=`|`number`| If you are using numeric IDs use the `id=` parameter|
+
+**Return**
+
+200 or 400 status with JSON data or error.
 
 ## Internode (internode node chatter)
 
-> :pushpin: Don't call these from client code. 
-
+Don't call these from client code. 
 The `/v1/internode` REST interface is used internally to maintain a proper functioning cluster. 
 
 #### GET /v1/cluster/is_member
@@ -197,6 +254,16 @@ After a successful transfer the `sentinel` will send a `POST /v1/internode/map_c
 
 Transfers packed `binary` data for partition. Partition is `partition_id` is passed in URL as an integer.
 
+# Other
+
+#### GET /ping
+
+If the node is runing, this will respond with 200 OK and JSON:
+```json
+{
+  "pong": true
+}
+```
 
 
 
