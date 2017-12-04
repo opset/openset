@@ -139,17 +139,17 @@ This will perform an event scanning query by executing the provided `PyQL` scrip
 
 **query parameters:**
 
-| param | values             | note |
-| ---- | ------------------ | ---- |
-|`debug=`| `true/false`       | will return the assembly for the query rather than the results|
-| `segments=`| `segment, segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
-|`sort=`| `column_name`      | sort by column name.|
-|`order=`| `asc/desc`         | default is descending order.|
-|`trim=`| `# limit`          | clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
-|`str_{var_name}` | `text`             | replace `{{var_name}}` string in script (will be automatically quoted)|
-|`int_{var_name}` | `integer`          | replace `{{var_name}}` numeric value in script|
-|`dbl_{var_name}` | `double`           | replace `{{var_name}}` numeric value in script|
-|`bool_{var_name}` | `true/false`       | replace `{{var_name}}` boolean value in script|
+| param | values            | note |
+| ---- | ----------------- | ---- |
+|`debug=`| `true/false`      | will return the assembly for the query rather than the results|
+| `segments=`| `segment,segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
+|`sort=`| `column_name`     | sort by column name.|
+|`order=`| `asc/desc`        | default is descending order.|
+|`trim=`| `# limit`         | clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`str_{var_name}` | `text`            | replace `{{var_name}}` string in script (will be automatically quoted)|
+|`int_{var_name}` | `integer`         | replace `{{var_name}}` numeric value in script|
+|`dbl_{var_name}` | `double`          | replace `{{var_name}}` numeric value in script|
+|`bool_{var_name}` | `true/false`      | replace `{{var_name}}` boolean value in script|
 
 **Return**
 
@@ -179,20 +179,20 @@ The column query allows you to query all the values within a named column in a t
 
 **query parameters:**
 
-| param | values | note |
-| ---- | ---- | ---- |
-| `segments=` | `segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
-|`order=` | `asc/desc` |  default is descending order. |
-|`trim=` | `# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
-|`gt=` | `#` | return values greater than `#` |
-|`gte=` | `#` | return values greater than or equal to `#` |
-|`lt=` | `#` | return values less than `#` |
-|`lte=` | `#` | return values less than or equal to `#` |
-|`eq=` | `#` | return value equal to `#` |
-|`between=` `and=` | `#` and `#` | return value greater than or equal to `#` and less than the second number provided by `and=`|
-|`rx=` | `regular expression` | return values matching an`ECMAScript` style regex expression. Check this great [cheet sheet](http://cpprocks.com/regex-cheatsheet/). |
-|`sub=` | `text` | return value containing the search string in `sub` |
-|`bucket=` | `#` |  cluster values by `#`,  all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar) |
+| param | values              | note |
+| ---- | --------------------| ---- |
+| `segments=` | `segment,segment`   | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
+|`order=` | `asc/desc`          |  default is descending order. |
+|`trim=` | `# limit`           | clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`gt=` | `#`                 | return values greater than `#` |
+|`gte=` | `#`                 | return values greater than or equal to `#` |
+|`lt=` | `#`                 | return values less than `#` |
+|`lte=` | `#`                 | return values less than or equal to `#` |
+|`eq=` | `#`                 | return value equal to `#` |
+|`between=` `and=` | `#` and `#`         | return value greater than or equal to `#` and less than the second number provided by `and=`|
+|`rx=` | `regular expression`| return values matching an`ECMAScript` style regex expression. Check this great [cheet sheet](http://cpprocks.com/regex-cheatsheet/). |
+|`sub=` | `text`              | return value containing the search string in `sub` |
+|`bucket=` | `#`                 |  cluster values by `#`,  all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar) |
 
 **Return**
 
