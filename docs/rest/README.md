@@ -139,17 +139,17 @@ This will perform an event scanning query by executing the provided `PyQL` scrip
 
 **query parameters:**
 
-| param | values | note |
-| ---- | --- | ---- |
-|`debug=`|`true|false` | will return the assembly for the query rather than the results|
-| `segments=`|`segment, segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
-|`sort=`|`column_name`| sort by column name.|
-|`order=`| `asc|desc` | default is descending order.|
-|`trim=`| `# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
-|`str_{var_name}` | `text`   | replace `{{var_name}}` string in script (will be automatically quoted)|
-|`int_{var_name}` | `integer`   | replace `{{var_name}}` numeric value in script|
-|`dbl_{var_name}` | `double` | replace `{{var_name}}` numeric value in script|
-|`bool_{var_name}` | `true|false`   | replace `{{var_name}}` boolean value in script|
+| param | values             | note |
+| ---- | ------------------ | ---- |
+|`debug=`| `true/false`       | will return the assembly for the query rather than the results|
+| `segments=`| `segment, segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
+|`sort=`| `column_name`      | sort by column name.|
+|`order=`| `asc/desc`         | default is descending order.|
+|`trim=`| `# limit`          | clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`str_{var_name}` | `text`             | replace `{{var_name}}` string in script (will be automatically quoted)|
+|`int_{var_name}` | `integer`          | replace `{{var_name}}` numeric value in script|
+|`dbl_{var_name}` | `double`           | replace `{{var_name}}` numeric value in script|
+|`bool_{var_name}` | `true/false`       | replace `{{var_name}}` boolean value in script|
 
 **Return**
 
@@ -166,7 +166,7 @@ A single counts query can contain multiple sections to create multiple segments 
 **query parameters:**
 | param | values | note |
 | ---- | ---- | ---- |
-|`debug=` | `true|false`| will return the assembly for the query rather than the results|
+|`debug=` | `true/false` |  will return the assembly for the query rather than the results|
 
 **Return**
 
@@ -179,8 +179,8 @@ The column query allows you to query all the values within a named column in a t
 **query parameters:**
 | param | values | note |
 | ---- | ---- | ---- |
-| `segments=` | `segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people.|
-|`order=` | `asc|desc`| default is descending order.|
+| `segments=` | `segment, segment`| comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
+|`order=` | `asc/desc` |  default is descending order. |
 |`trim=` | `# limit`| clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
 |`gt=` | `#` | return values greater than `#` |
 |`gte=` | `#` | return values greater than or equal to `#` |
@@ -203,9 +203,9 @@ Returns the event sequence for an individual.
 > :pushpin: If events contain complex data (i.e. sub values), OpenSet will re-condense the data by folding up data permeations generated on insert. The folded row may be grouped differently than the one provided to `/insert` but will be logically identical. 
 
 **query parameters:**
-| param |values  | note|
+| param | values  | note |
 | --- | -------- | ------------------- |
-| `sid=` | `string`| If you are using textual IDs use the `sid=` parameter |
+| `sid=` | `string` | If you are using textual IDs use the `sid=` parameter |
 |`id=` | `number` | If you are using numeric IDs use the `id=` parameter |
 
 **Return**
