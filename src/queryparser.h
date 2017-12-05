@@ -203,8 +203,6 @@ namespace openset
 				VarMap tableVars;
 				VarMap columnVars;
 				VarMap groupVars;
-				SortList sortOrder;
-				SegmentList segmentNames;
 				LiteralsMap literals;
 			};
 

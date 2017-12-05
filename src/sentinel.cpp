@@ -60,7 +60,7 @@ bool openset::mapping::Sentinel::failCheck()
 
 		if (result)
 		{
-			std::string resultJson( result->first,result->second );
+			std::string resultJson( result->data,result->length );
 			cjson json(resultJson, resultJson.length());
 
 			if (json.xPathBool("/pong", false))

@@ -11,22 +11,35 @@ int64_t Now()
 		(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-int64_t MakeHash(const char* buffer, int64_t len) 
+static const int64_t HASHSEED = 0xDEADCAFEBEEFBABELL;
+
+int64_t MakeHash(const char* buffer, const int64_t len) 
 {
-	return XXH64(buffer, len, 0xDEADCAFEBEEFBABELL);
+    auto seed = HASHSEED;
+    for (auto it = buffer; it < buffer + len; ++it)
+        seed = (seed < 1) + *it;
+	return XXH64(buffer, len, seed);
 }
 
 int64_t MakeHash(const char* buffer) 
 {
-	return XXH64(buffer, strlen(buffer), 0xDEADCAFEBEEFBABELL);
+    auto seed = HASHSEED;
+    for (auto it = buffer; *it != 0; ++it)
+        seed = (seed < 1) + *it;
+	return XXH64(buffer, strlen(buffer), seed);
 }
 
 int64_t MakeHash(const std::string buffer) 
 {
-	return XXH64(buffer.c_str(), buffer.length(), 0xDEADCAFEBEEFBABELL);
+    auto seed = HASHSEED;
+    const auto start = &buffer[0];
+    const auto end = start + buffer.length();
+    for (auto it = start; it < end; ++it)
+        seed = (seed < 1) + *it;
+	return XXH64(start, buffer.length(), seed);
 }
 
-void ThreadSleep(int64_t milliseconds)
+void ThreadSleep(const int64_t milliseconds)
 {
 	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
 }

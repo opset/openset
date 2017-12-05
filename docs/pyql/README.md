@@ -81,7 +81,5 @@ This little PyQL script will be compiled and distributed across all your nodes a
 
 > :fearful: Wait a second, what is `match`? Earlier we mentioned that PyQL is an iteration language. The match statement `match` is a fancy event iterator that combines an optional limiter and the functionality of an SQL where clause. `match` iterators can contain conditions and date ranges, and can be nested, continued and broken like regular iterators.
 
-#### Query Structure
-
 
 

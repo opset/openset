@@ -274,9 +274,10 @@ inline Tests test_sessions()
 				cjson resultJSON;
 
 				// make some JSON
-				auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
-				auto text = merger.mergeText(queryMacros, table, resultSets);
-				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+				//auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                //merger.mergeMacroLiterals(queryMacros, resultSets);
+				//auto text = merger.mergeResultText(resultSets);
+				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
 				// NOTE - uncomment if you want to see the results
 				//cout << cjson::Stringify(&resultJSON, true) << endl;

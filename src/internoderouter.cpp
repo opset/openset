@@ -179,11 +179,13 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 
 	char* resultData;
 	size_t resultSize;
+    http::StatusCode resultStatus;
 
-	auto doneCb = [&ready, &nextReady, &resultData, &resultSize](const http::StatusCode status, const bool error, char* data, const size_t size)
+	auto doneCb = [&ready, &nextReady, &resultData, &resultSize, &resultStatus](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		resultData = data;
 		resultSize = size;
+        resultStatus = status;
 		ready = true;
 		// assign then notify
 		nextReady.notify_one();
@@ -201,7 +203,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 		});
 	}
 
-	return std::make_shared<DataBlock>(resultData, resultSize);
+	return std::make_shared<DataBlock>(resultData, resultSize, resultStatus);
 }
 
 openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
@@ -272,8 +274,11 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 		{
 			csLock lock(responseCs);
-			// store this response in the response object
-			result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ data, size });
+			// store this response in the response object, but first
+            // copy data, as data will be destoryed when this callback goes out of scope
+            auto dataCopy = static_cast<char*>(PoolMem::getPool().getPtr(size));
+            memcpy(dataCopy, data, size);
+			result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ dataCopy, size, status });
 
 			if (error)
 				result.routeError = true;
@@ -357,10 +362,6 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 void openset::mapping::Mapper::releaseResponses(Responses& responseSet)
 {
-	for (const auto r : responseSet.responses)
-		if (r.first)
-			PoolMem::getPool().freePtr(r.first);
-
 	responseSet.responses.clear();
 }
 

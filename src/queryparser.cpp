@@ -331,11 +331,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
 									// insert without quotes if this is a column name
 									if (isTableColumn(k.second))
 										current.text.insert(idx, k.second);
-									// if this is a string containing a number, insert as a number
-									else if (k.second.typeof() == cvar::valueType::STR &&
-										isNumeric(k.second)) // this is a number in a string
-										current.text.insert(idx, k.second);
-									// if this is a string and not a number, insert quoted
+									// if this is a string we insert it with quotes
 									else if (k.second.typeof() == cvar::valueType::STR)
 										current.text.insert(idx, "'" + k.second + "'");
 									// probably an actual number, insert unquoted
@@ -541,37 +537,6 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 					vars.columnVars[alias].nonDistinct = nonDistinct;
 				}
 
-				blocks.pop_back();
-			}
-			else if (line.parts[0] == "sort")
-			{
-				for (auto& c : capture)
-				{
-					if (!c.parts.size())
-						continue;
-
-					auto order = sortOrder_e::descending;
-
-					if (c.parts.size() > 1 &&
-						(c.parts[1] == "asc" ||
-							c.parts[1] == "ascending"))
-						order = sortOrder_e::ascending;
-
-					vars.sortOrder.emplace_back(
-						c.parts[0],
-						order);
-				}
-				blocks.pop_back();
-			}
-			else if (line.parts[0] == "segments")
-			{
-				for (auto& c : capture)
-				{
-					if (!c.parts.size())
-						continue;
-
-					vars.segmentNames.emplace_back(c.parts[0]);
-				}
 				blocks.pop_back();
 			}
 			else if (line.parts[0] == "def")
@@ -1074,11 +1039,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 	while (i < lines.size())
 	{
-		if (lines[i].parts[0] == "sort")
-		{
-			// skip this, handled in initial pass
-		}
-		else if (lines[i].parts[0] == "@flags")
+        if (lines[i].parts[0] == "@flags")
 		{					
 			
 
@@ -3452,23 +3413,6 @@ void QueryParser::build(
 		v.distinctColumn = tableVar->second.column;
 	}
 
-	for (auto& s: vars.sortOrder)
-	{
-		const auto selectVar = vars.columnVars.find(s.name);
-
-		if (selectVar == vars.columnVars.end())
-			throw ParseFail_s{
-				errors::errorClass_e::parse,
-				errors::errorCode_e::column_not_in_table,
-				"select column: " + s.name 
-			};
-
-		s.column = selectVar->second.index;
-		s.name = selectVar->second.actual;
-
-		finVars.sortOrder.push_back(s);
-	}
-
 	// see if this query uses global variables
 	// note: we may want to move this further up in the parser
 	for (auto&s: vars.userVars)
@@ -3907,7 +3851,6 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 		}
 
 		macros.marshalsReferenced = marshalsReferenced;
-		macros.segments = std::move(vars.segmentNames); // move these over, these are evaluated at run-time
 		macros.segmentTTL = segmentTTL;
 		macros.segmentRefresh = segmentRefresh;
 		macros.useCached = segmentUseCached;

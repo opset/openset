@@ -83,25 +83,27 @@ Load or stream events (app, web, IoT, etc) into OpenSet and extract the history 
 # example using curl
 
 **1**. Clone the Samples:
-```
+```bash
 cd ~
 git clone https://github.com/opset/openset_samples.git
 ```
 
-**2**. Install [Docker](https://www.docker.com/) and start OpenSet:
+**2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
 ```bash
 docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel
 ```
-**3**. Open another console:
-```
+**3**. Open another console (go to home directory):
+```bash
 cd ~
 ```
 
 **4**. Initialize  OpenSet:
-```bash
+```python
 curl -X PUT http://127.0.0.1:8080/v1/cluster/init?partitions=24 | json_pp
+```
 
-Response:
+response:
+```json
 {
    "server_name" : "smiling-donkey"
 }
@@ -127,11 +129,13 @@ curl \
     ]
 }
 EOF
+```
 
-Response:
+response:
+```json
 {
-    "message":"created",
-    "table":"highstreet"
+    "message": "created",
+    "table": "highstreet"
 }
 ```
 
@@ -141,23 +145,27 @@ Response:
 curl \
 -X POST http://127.0.0.1:8080/v1/insert/highstreet \
 --data-binary @openset_samples/data/highstreet_events.json | json_pp
+```
 
-Response:
+response:
+```json
 {
-   "message" : "yummy"
+   "message": "yummy"
 }
 ```
 
-**7**.  Let's query using a pyql query from the `openset_samples/pyql` folder:
-##### query:
+> :pushpin:  view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
+
+**7**.  Let's run a PyQL `events` query
+
+This script can be found at `openset_samples/pyql/simple.pyql` folder.
+
 ```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/events \
---data-binary @openset_samples/pyql/simple.pyql | json_pp
-```
-##### simple.pyql:
-OpenSet uses a Python-like macro language called PyQL to define it's queries. Lets get  a breakdown by day of week and product name when the product purchased is a kitchen products. For each product  aggregate people, total purchases, and total spent.
-```python
+--data-binary @- << PYQL | json_pp
+# our pyql script
+
 aggregate: # define our output columns
     count person
     count product_name as purchased
@@ -168,57 +176,294 @@ match where product_group is 'outdoor':
     # make a branch /day_of_week/product_name and
     # aggregate it's levels
     tally(get_day_of_week(event_time()), product_name)
+
+#end of pyql script
+PYQL
 ```
-##### result:
-```javascript
+
+response (counts are people, count product, sum price):
+```json
 {
-   "_": [
+   "_" : [
       {
-          "g": 2, // day_of_week: tuesday
-          "a": [1, 3, 155.93], // aggregates
-          "_": [ // sub-group for product_name
-              {
-                  "g": "triple hook jigger", // product_name
-                  "a": [1, 1,27.99] // aggregates
-              },
-              {
-                  "g": "fly rod", // product_name
-                  "a": [1, 1,99.95] // aggregates
-              },
-              {
-                  "g": "deluxe spinner", // product_name
-                  "a": [1, 1,27.99] // aggregates
-              }
-          ]
+         "g" : 2,         
+         "c" : [1, 3, 155.93],
+         "_" : [
+            {
+               "g" : "triple hook jigger",
+               "c" : [1, 1, 27.99]
+            },
+            {
+               "g" : "fly rod",
+               "c" : [1, 1, 99.95]
+            },
+            {
+               "g" : "deluxe spinner",               
+               "c" : [1, 1, 27.99]
+            }
+         ]
       },
       {
-          "g": 5, // day_of_week: thursday
-          "a": [1, 1, 99.95],
-          "_": [ // sub-group for product_name
-              {
-                  "g": "fly rod", // product_name
-                  "a": [1, 1,99.95] // aggregates
-              }
-          ]
+         "g" : 5,
+         "c" : [1, 1, 99.95],         
+         "_" : [
+            {
+               "g" : "fly rod",
+               "c" : [1, 1, 99.95]
+            }
+         ]
       },
-      ...
-    ]
+      {
+         "g" : 7,
+         "c" : [1, 3, 145.9299],
+         "_" : [
+            {
+               "g" : "gilded spoon",
+               "c" : [1, 1, 27.99]
+            },
+            {
+               "g" : "fly rod",               
+               "c" : [1, 1, 99.95]
+            },
+            {
+               "g" : "double spinner",
+               "c" : [1, 1, 17.9899]
+            }
+         ]
+      }
+   ]
 }
 ```
-> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
-#### Basic sequence query
+**8**.  Let's make 4 segments (this script can be found at `openset_samples/pyql/segments.pyql` folder):
 
-Lets query a sequence. We want to find the products purchased immediately after another purchase. It does so by iterating events and matching `purchase` event, then performs a nested match for another `purchase` event and tallies the product name from second match under the product name from the first match. The aggregators count people, purchase count and total revenue. 
+```bash
+curl \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/counts \
+--data-binary @- << PYQL | json_pp
+# our pyql script
 
-```python
+segment products_home ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
+        tally
+
+segment products_yard ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['basement', 'garage']:
+        tally
+
+segment products_outdoor ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['outdoor', 'angling']:
+        tally
+
+segment products_commercial ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group == 'restaurant':
+        tally
+        
+#end of pyql script
+PYQL
+```
+
+response (counts are people):
+```json
+{
+   "_" : [
+      {
+         "g" : "products_commercial",
+         "c" : [2]
+      },
+      {
+         "g" : "products_home",
+         "c" : [2]
+      },
+      {
+         "g" : "products_outdoor",        
+         "c" : [2]
+      },
+      {
+         "g" : "products_yard",        
+         "c" : [1]
+      }
+   ]
+}
+```
+
+**9**.  Let's query a column:
+
+```bash
+curl \
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name' | json_pp
+```
+
+response (counts are people):
+```json
+{
+   "_" : [
+      {
+         "g" : "product_name",        
+         "c" : [3],
+         "_" : [
+            {
+               "g" : "panini press",
+               "c" : [2]
+            },
+            {
+               "g" : "fly rod",
+               "c" : [2]
+            },
+            {
+               "g" : "shag rug",
+               "c" : [2]
+            },
+            {
+               "g" : "espresso mmachine",
+               "c" : [1]               
+            },
+            {
+               "g" : "triple hook jigger",
+               "c" : [1]               
+            },
+            {
+               "g" : "gilded spoon",
+               "c" : [1]               
+            },
+            {
+               "g" : "double spinner",
+               "c" : [1]               
+            },
+            {
+               "g" : "deluxe spinner",
+               "c" : [1]
+            },
+            {
+               "g" : "grommet",              
+               "c" : [1]
+            }
+         ]
+      }
+   ]
+}
+```
+**10**.  Let's query a column in segment compare mode (all `*` against `products_outdoor`:
+
+```bash
+curl \
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name?segments=*,products_outdoor' | json_pp
+```
+
+response (counts are people for each segment):
+```json
+{
+   "g" : "product_name",
+   "c" : [3],
+   "c2" : [2],
+   "_" : [
+      {
+         "_" : [
+            {
+               "g" : "panini press",              
+               "c" : [2],              
+               "c2" : [1]
+            },
+            {
+               "g" : "fly rod",              
+               "c" : [2],              
+               "c2" : [2]
+            },
+            {
+               "g" : "shag rug",
+               "c" : [2],              
+               "c2" : [1]
+            },
+            {
+               "g" : "espresso mmachine",
+               "c" : [1],              
+               "c2" : [0]
+            },
+            {
+               "g" : "triple hook jigger",              
+               "c" : [1],
+               "c2" : [1]
+            },
+            {
+               "g" : "gilded spoon",
+               "c" : [1],
+               "c2" : [1]
+            },
+            {
+               "g" : "double spinner",              
+               "c" : [1],            
+               "c2" : [1]
+            },
+            {
+               "g" : "deluxe spinner",
+               "c" : [1],
+               "c2" : [1]
+            },
+            {
+               "g" : "grommet",
+               "c" : [1],               
+               "c2" : [0]
+            }
+         ]
+      }
+   ]
+}
+```
+
+**11.** Let's query a numeric column and `bucket` the results by `50` dollar increments
+
+> :pushpin: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
+
+```bash
+curl \
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_price?bucket=50' | json_pp
+```
+
+response (counts are people):
+```json
+{
+   "g" : "product_price",
+   "c" : [3],
+   "_" : [
+      {
+         "_" : [
+            {
+               "g" : 0,             
+               "c" : [3]
+            },
+            {
+               "g" : 50,
+               "c" : [3]
+            },
+            {
+               "g" : 600,
+               "c" : [1]
+            }
+         ]
+      }
+   ]
+}
+```
+
+
+**12.** Let's do a sequence query.
+
+Let's extract `for each product` the `first` product purchased `immediately after` but `not in the same cart`.
+
+```bash
+curl \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+--data-binary @- << PYQL | json_pp
+# our pyql script
+
 aggregate: # define our output columns
     count person
     count product_name as purchased
     sum product_price as total_revenue with product_name
-
-sort:
-    person # sort using person aggregate
 
 # search for a purchase event
 match where action is 'purchase': # match one
@@ -226,7 +471,7 @@ match where action is 'purchase': # match one
     first_matching_product = product_name
 
     # move to next row in user record. We don't want
-    # match products from the initial purchase
+    # match products in the intial match
     iter_next()
 
     # match 1 row, or only the products in the purchase event
@@ -234,90 +479,116 @@ match where action is 'purchase': # match one
     match 1 where action is 'purchase' and
             product_name is not first_matching_product:
         tally(first_matching_product, product_name)
-
     # loop back to top
-```
-> :pushpin:  Check out the event data for this query [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json).
 
-Which will return a tree of initial products and subsequent products purchased:
-```javascript
+#end of pyql script
+PYQL
+```
+
+response (counts are people, count product, sum price):
+```json
 {
-    "_": [
-        {
-            "g": "shag rug", // initial purchase
-            "c": [2, 4, 885.92], // aggregates sub-branches
-            "_": [
-                {
-                    "g": "panini press", // next purchase
-                    "c": [2, 2, 135.98] // aggregates
-                },
-                {
-                    "g": "espresso mmachine", // next purchase
-                    "c": [1, 1, 649.99] // aggregates
-                },
-                {
-                    "g": "fly rod", // next purchase
-                    "c": [1, 1, 99.95] // aggregates
-                }
-            ]
-        },
-        {
-            "g": "fly rod", // initial purchase
-            "c": [1, 2, 45.9799], // aggregates sub-branches
-            "_": [
-                {
-                    "g": "gilded spoon", // next purchase
-                    "c": [1, 1,27.99] // aggregates
-                },
-                {
-                    "g": "double spinner", // next purchase
-                    "c": [1, 1, 17.9899] // aggregates
-                }
-            ]
-        },
-        ... // more data
-    ]
+   "_": [
+      {
+         "g": "shag rug",         
+         "c": [2, 4, 885.92],
+         "_": [
+            {
+               "g": "panini press",
+               "c": [2, 2, 135.98]
+            },
+            {
+               "g": "espresso mmachine",               
+               "c": [1, 1, 649.99]
+            },
+            {
+               "g": "fly rod",
+               "c": [1, 1, 99.95]
+            }
+         ]
+      },
+      {
+         "g": "panini press",
+         "c": [1, 3, 145.9299],         
+         "_": [
+            {
+               "g": "gilded spoon",
+               "c": [1, 1, 27.99]
+            },
+            {
+               "g": "fly rod",               
+               "c": [1, 1, 99.95]
+            },
+            {
+               "g": "double spinner",
+               "c": [1, 1, 17.9899]
+            }
+         ]
+      },
+      {
+         "g": "fly rod",
+         "c": [1, 2, 45.9799],         
+         "_": [
+            {
+               "g": "gilded spoon",
+               "c": [1, 1, 27.99]
+            },
+            {
+               "g": "double spinner",
+               "c": [1, 1, 17.9899]
+            }
+         ]
+      },
+      {
+         "g": "grommet",
+         "c": [1, 2, 717.98],         
+         "_": [
+            {
+               "g": "espresso mmachine",               
+               "c": [1, 1, 649.99]
+            },
+            {
+               "g": "panini press",
+               "c": [1, 1, 67.99]
+            }
+         ]
+      }
+   ]
 }
 ```
 
-> :pushpin: more sample code can be found here [here](https://github.com/perple-io/openset/tree/master/samples).
+**How does the sequence query work?**
+
+Event queries use row iteration. Internally rows pertaining to a person are grouped and sorted with that person making sequence extraction easy.
+
+In this case we want to find the products purchased immediately after another purchase. We do so by iterating events and matching the `purchase` event. When we match we perform a nested match for another `purchase` event and `tally` the `product_name` from second match under the `product_name` from the first match. The aggregators count `people` and `product_name` and sum `product_price`.
+
 
 # RoadMap
 
-OpenSet is pre-alpha. There are many items on the wish list, then there are things that need to be done so we can move to an alpha release:
-
-- user properties (allow for storage and querying of non-event user data, i.e. name) 
-- more error handling
-- consistent behavior _during_ failover events
-- internal rebalancing of nodes (cluster balancing works well)
-- better handling of event emitters during failover/rebalance.
-- commit to disk. This is partially written, as it relies on the code that serializes data for rebalancing and redistribution of nodes, but as of right now, you cannot commit the database (meaning, for now, if you stop it, you must re-load your data).
-- HTTP/HTTPS API proxy. 
-- refactoring (add more consts, more member initialization, tidy up some ugly stuff)
+OpenSet is pre-alpha. There are many items on the wish list, then there are things that need to be done so we can move to an alpha release. Follow this repo to watch the action.
 
 # Inspiration
 
-Hello, my name Seth.
-
-I've written commercial software my entire life. 
+My name Seth Hamilton, I've written commercial software my entire life. 
 
 My first product was released in 1992  ---  a graphical BBS product called RoboBOARD. After that came web analytics (DeepMetrix) and network monitoring (ipMonitor). My last startup (rare.io) did marketing automation. In all I've founded three startups, and I've been involved in two major acquisition --- by all measures I have had an exciting career. 
 
-However, in 2015 I found myself writing my first resume and came to a realization. Despite writing millions of LOC, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point in time. 
+However, in 2015 I found myself writing my first resume and came to a realization. Despite writing millions of lines of code, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point in time. 
 
-I love programming, I've been doing it since I was kid, and I especially love C++, and extra love messing with data. So, I thought this unique data solution written in C++ might be a good project to give back to the community.
+I love programming, I've been doing it since I was kid, and I especially love C++ (C++11 and beyond are game changing), and extra love messing with data (who doesn't). So, I thought this useful solution might be a good project to give back to the community.
 
-#### Origin of the idea...
+**So, why does this even exist?**
 
-Way back in 2005 I came across an interesting problem while at DeepMetrix. We produced an excellent little product called LiveStats. Everyday over a million websites got their metrics using our software.
+Way back in 2005 I came across an interesting problem while at DeepMetrix. We produced an excellent little product called LiveStats. Everyday a million websites got their metrics using our software.
 
-LiveStats created around 40 reports. The reports were predefined and continuously updated using data from weblogs and page-scripts.
+LiveStats created roughly 40 reports. The reports were predefined and continuously updated using data from weblogs and page-scripts.
 
-This approach seemed perfect... until one day Anheuser-Busch called (they make a famous beer). They wanted to drill into their data, and they wanted to see their data was grouped and tabulated as saw fit, and they wanted this all in real-time. It was a compelling problem and they were willing to pay handsomely if we could solve it.
+This approach seemed perfect... until one day Anheuser-Busch called (they make a beer you've probably heard of). Bud wanted to drill into their data, and they wanted to see their data grouped and tabulated as saw fit, and they wanted this all in real-time. It was a compelling problem and they were willing to pay handsomely if we could solve it.
 
-Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone. 
+Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone today... and... our stack was SQL.
 
-Failure got me thinking.
+Failure got me thinking, and here we are today.
 
 # Licensing
 

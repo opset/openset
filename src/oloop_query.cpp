@@ -1,6 +1,5 @@
 #include "oloop_query.h"
 #include "indexbits.h"
-#include "columns.h"
 #include "asyncpool.h"
 #include "tablepartitioned.h"
 #include "internoderouter.h"
@@ -18,7 +17,7 @@ OpenLoopQuery::OpenLoopQuery(
 	int instance) :
 
 	OpenLoop(oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
-	macros(macros),
+	macros(std::move(macros)),
 	shuttle(shuttle),
 	table(table),
 	parts(nullptr),
@@ -47,8 +46,6 @@ OpenLoopQuery::~OpenLoopQuery()
 
 void OpenLoopQuery::prepare()
 {
-	auto prepStart = Now();	
-
 	parts = table->getPartitionObjects(loop->partition);
 	maxLinearId = parts->people.peopleCount();
 
@@ -57,8 +54,6 @@ void OpenLoopQuery::prepare()
 	bool countable;
 	index = indexing.getIndex("_", countable);
 	population = index->population(maxLinearId);
-
-	//Logger::get().info(' ', to_string(loop->partition) + " has " + to_string(population) + " stop @ " + to_string(maxLinearId));
 
 	interpreter = new Interpreter(macros);
 	interpreter->setResultObject(result);
@@ -70,11 +65,20 @@ void OpenLoopQuery::prepare()
 
 		for (const auto segmentName : macros.segments)
 		{
-			auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
-			if (attr)
-				segments.push_back(attr->getBits());
-			else
-				segments.push_back(new IndexBits());
+            if (segmentName == "*")
+            {
+                auto tBits = new IndexBits();
+                tBits->makeBits(maxLinearId, 1);
+                segments.push_back(tBits);
+            }
+            else
+            {
+                auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
+                if (attr)
+                    segments.push_back(attr->getBits());
+                else
+                    segments.push_back(new IndexBits());
+            }
 		}
 
 		interpreter->setCompareSegments(index, segments);
@@ -99,35 +103,19 @@ void OpenLoopQuery::run()
 		if (sliceComplete())
 			break;
 
-		/*		
-		// is the cluster broken?
-		if (!OpenSet::globals::mapper->partitionMap.isClusterComplete(OpenSet::globals::running->partitionMax, { OpenSet::mapping::NodeState_e::active_owner }))
-		{
-			// the cluster is broken, so return an error
-			partitionRemoved();
-			suicide();
-			return; 
-		}
-		*/
-
-		// are we done? This will return the index of the 
+    	// are we done? This will return the index of the 
 		// next set bit until there are no more, or maxLinId is met
 		if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
 		{
-			const auto time = Now() - startTime;
-
 			shuttle->reply(
 				0, 
 				CellQueryResult_s{				
-					//res,
-					time,
-					runCount,
-					population,
-					maxLinearId,
 					instance,
+                    {},
 					interpreter->error,
-					parts
 				});
+
+            result->setAccTypesFromMacros(macros);
 			
 			suicide();
 			return;
@@ -151,17 +139,12 @@ void OpenLoopQuery::partitionRemoved()
 	shuttle->reply(
 		0,
 		CellQueryResult_s{
-		//res,
-		0,
-		0,
-		0,
-		0,
 		instance,
+        {},
 		openset::errors::Error{
 			openset::errors::errorClass_e::run_time,
 			openset::errors::errorCode_e::partition_migrated,
 			"please retry query"
-		},
-		parts
+		}
 	});
 }

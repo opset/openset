@@ -43,11 +43,11 @@ namespace openset
 				openset::result::ResultSet* result,
 				int instance);
 
-			~OpenLoopQuery() override;
+			~OpenLoopQuery() final;
 
-			void prepare() override;
-			void run() override;
-			void partitionRemoved() override;
+			void prepare() final;
+			void run() final;
+			void partitionRemoved() final;
 		};
 	}
 }

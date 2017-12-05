@@ -31,7 +31,6 @@
 	* The database mirrors the concept of partitions with the multi-tasking
 	engine. Partition X in one is also Partition X in another when it comes
 	to thread isolation. However, functionally they are completely separate.
-
 */
 
 using namespace std;
@@ -103,7 +102,13 @@ namespace openset::comms
 		static void events(const openset::web::MessagePtr message, const RpcMapping& matches);
 		// POST /v1/query/{table}/counts
 		static void counts(const openset::web::MessagePtr message, const RpcMapping& matches);
-		
+		// POST /v1/query/{table}/column/{name}?{various optional query params}
+        static void column(const openset::web::MessagePtr message, const RpcMapping& matches);
+        // GET /v1/query/{table}/person?{id|idstr}={user_id_key}
+        static void person(const openset::web::MessagePtr message, const RpcMapping& matches);
+        // POST /v1/query/{table}/segseg?aseg={segment_a|*}&bseg={segment_b|*}
+        //static void segSeg(const openset::web::MessagePtr message, const RpcMapping& matches);
+
 		//static void person(const openset::web::MessagePtr message, const RpcMapping& matches);		
 	};
 
@@ -133,6 +138,9 @@ namespace openset::comms
 
 		// RpcQuery
 		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/events(\/|\?|\#|)$)"), RpcQuery::events,{ { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/counts(\/|\?|\#|)$)"), RpcQuery::counts,{ { 1, "table" } } },
+        { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person,{ { 1, "table" } } },
+        { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::column,{ { 1, "table" }, { 2, "name" } } },
 
 		// RpcInsert
 		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },

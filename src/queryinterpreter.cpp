@@ -177,7 +177,28 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 				return NONE;
 		}
 	};
-	
+
+    const auto getType = [&](const cvar& value) -> result::ResultTypes_e
+    {
+        switch (value.typeof())
+        {
+        case cvar::valueType::INT32:
+        case cvar::valueType::INT64:
+            return result::ResultTypes_e::Int;
+
+        case cvar::valueType::FLT:
+        case cvar::valueType::DBL:
+            return result::ResultTypes_e::Double;
+
+        case cvar::valueType::STR:
+            return result::ResultTypes_e::Text;
+
+        case cvar::valueType::BOOL:
+            return result::ResultTypes_e::Bool;
+        default:
+            return result::ResultTypes_e::None;
+        }
+    };
 
 	const auto aggColumns = [&](result::Accumulator* resultColumns)
 	{
@@ -191,16 +212,16 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 				 *  this branch in the result at this timestamp, have we ever ran
 				 *  an aggregation? If not, run it, otherwise move on
 				 */ 				
-				
-				distinctKey = ValuesSeenKey{
-					resCol.index,
-					resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-					recast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
-					resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
-				};
 
-				// emplace try will return false if the value exists
-				if (!eventDistinct.emplaceTry(distinctKey, 1))
+				// emplaceTry will return false if the value exists
+				if (!eventDistinct.emplaceTry(
+                    ValuesSeenKey{
+                        resCol.index,
+                        resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
+                        reinterpret_cast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
+                        resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
+                    }, 
+                    1))
 					continue; // we already tabulated this for this key
 			}
 
@@ -247,6 +268,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 						}
 					}
 					break;
+
 				case Modifiers_e::dist_count_person:
 				case Modifiers_e::count:
 					if (columns->cols[resCol.column] != NONE)
@@ -292,6 +314,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 			break;
 
 	    rowKey.key[depth] = fixToInt(item);
+        rowKey.types[depth] = getType(item);
 			
 		//result->setAtDepth(rowKey, set_cb);
 		auto tPair = result->results.get(rowKey);

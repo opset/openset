@@ -1,14 +1,10 @@
 #pragma once
 
-#include "common.h"
-#include "logger.h"
-#include "table.h"
-
-#include "threads/locks.h"
-
 #include <unordered_map>
 
-using namespace std;
+#include "common.h"
+#include "table.h"
+#include "threads/locks.h"
 
 namespace openset
 {
@@ -20,20 +16,15 @@ namespace openset
 
 			CriticalSection cs;
 
-			unordered_map<string, Table*> tables;
+			unordered_map<std::string, Table*> tables;
 
 			explicit Database();
 			~Database();
 
-			openset::db::Table* getTable(string TableName);
-			openset::db::Table* newTable(string TableName);
-
-			void initializeTables();
+			openset::db::Table* getTable(const std::string& tableName);
+			openset::db::Table* newTable(const std::string& tableName);
 
 			void serialize(cjson* doc);
-
-			void loadConfig();
-			void saveConfig();
 		};
 	};
 

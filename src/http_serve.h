@@ -91,6 +91,13 @@ namespace openset::web
 			return query;
 		}
 
+        bool isParam(const std::string name)
+		{
+            if (const auto found = query.find(name); found != query.end())
+                return true;
+            return false;
+		}
+
 		std::string getParamString(const std::string name, const std::string defaultValue = ""s)
 		{
 			if (const auto found = query.find(name); found != query.end())

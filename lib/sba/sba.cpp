@@ -81,7 +81,10 @@ void PoolMem::freePtr(void* ptr)
 {
 	auto alloc = reinterpret_cast<alloc_s*>(static_cast<char*>(ptr) - MemConstants::PoolMemHeaderSize);
 
-	// -1 is a big block that did not fit in a pool
+    if (alloc->poolIndex == -2) // already freed
+        return;
+
+    // -1 is a big block that did not fit in a pool
 	if (alloc->poolIndex == -1)
 	{
 		delete[](static_cast<char*>(ptr) - MemConstants::PoolMemHeaderSize);

@@ -1,6 +1,5 @@
 #include "oloop_insert.h"
 #include "cjson/cjson.h"
-#include "time/epoch.h"
 #include "str/strtools.h"
 
 #include "people.h"
@@ -105,8 +104,8 @@ void OpenLoopInsert::run()
 		// we will take profile or table to specify the table name
 		auto uuidString = row.xPathString("/person", "");
 		toLower(uuidString);
-		
-		auto attr = row.xPath("/attr");
+
+	    const auto attr = row.xPath("/attr");
 
 		// do we have what we need to insert?
 		if (attr && uuidString.length())
@@ -120,7 +119,7 @@ void OpenLoopInsert::run()
 
 	for (auto& uuid : evtByPerson)
 	{
-		auto personData = tablePartitioned->people.getmakePerson(uuid.first);
+	    const auto personData = tablePartitioned->people.getmakePerson(uuid.first);
 		person.mount(personData);
 		person.prepare();
 

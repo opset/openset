@@ -851,21 +851,6 @@ namespace openset
 			descending
 		};
 
-		struct Sort_s
-		{
-			string name;
-			sortOrder_e order;
-			int64_t column;
-
-			Sort_s(const string columnName, const sortOrder_e sortOrder):
-				name(columnName),
-				order(sortOrder),
-				column(-1)
-			{}
-		};
-
-		using SortList = vector<Sort_s>;
-
 		struct Function_s
 		{
 			string name;
@@ -898,7 +883,6 @@ namespace openset
 			VarList tableVars;
 			VarList columnVars;
 			ColumnLambdas columnLambdas;
-			SortList sortOrder;
 			FunctionList functions;
 			LiteralsList literals;
 			CountList countList;

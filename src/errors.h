@@ -51,7 +51,8 @@ namespace openset::errors
 		internode_error,
 		break_depth_to_deep,
 		partition_migrated,
-		route_error
+		route_error,
+        item_not_found
 	};
 };
 
@@ -117,8 +118,8 @@ namespace openset::errors
 		{ errorCode_e::internode_error, "internode_error"},
 		{ errorCode_e::break_depth_to_deep, "break ## to deep for current nest level"},
 		{ errorCode_e::partition_migrated, "parition migrated. Task could not be completed."},
-		{ errorCode_e::route_error, "route not found (node down?)"}
-	
+		{ errorCode_e::route_error, "route not found (node down?)"},
+        { errorCode_e::item_not_found, "item not found"}	
 	};
 
 	class Error

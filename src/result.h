@@ -17,10 +17,32 @@ namespace openset
 	{
 		const int keyDepth = 8;
 
+        enum class ResultTypes_e : int
+        {
+            Int = 0,
+            Double = 1,
+            Bool = 2,
+            Text = 3,
+            None = 4
+        };
+
+        enum class ResultSortOrder_e : int
+        {
+            Asc,
+            Desc
+        };
+
+        enum class ResultSortMode_e : int
+        {
+            key,
+            column
+        };
+
 		struct RowKey
 		{
 			
 			int64_t key[keyDepth];
+            ResultTypes_e types[keyDepth];
 
 			RowKey() 
 			{}
@@ -35,6 +57,14 @@ namespace openset
 				key[5] = NONE;
 				key[6] = NONE;
 				key[7] = NONE;
+                types[0] = ResultTypes_e::Int;
+                types[1] = ResultTypes_e::Int;
+                types[2] = ResultTypes_e::Int;
+                types[3] = ResultTypes_e::Int;
+                types[4] = ResultTypes_e::Int;
+                types[5] = ResultTypes_e::Int;
+                types[6] = ResultTypes_e::Int;
+                types[7] = ResultTypes_e::Int;
 			}
 
 			inline void clearFrom(const int index)
@@ -104,7 +134,7 @@ namespace openset
 	}
 }
 
-// yucky - back out of name space to put this in std
+// back out of name space to put this in std
 namespace std
 {
 	template<>
@@ -178,11 +208,16 @@ namespace openset
 
 			bigRing<int64_t, char*> localText{ ringHint_e::lt_compact }; // text local to result set
 
+            ResultTypes_e accTypes[ACCUMULATOR_DEPTH];
+            query::Modifiers_e accModifiers[ACCUMULATOR_DEPTH];
+
 			ResultSet();
 			ResultSet(ResultSet&& other) noexcept;
 
 			void makeSortedList();
 			void setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb);
+
+            void setAccTypesFromMacros(const openset::query::Macro_s macros);
 
 			// this is a cache of text values local to our partition (thread), blob requires
 			// a lock, whereas this does not, we will merge them after.
@@ -228,54 +263,24 @@ namespace openset
 
 		struct CellQueryResult_s
 		{
-			//OpenSet::result::ResultSet* result;
-			int32_t time;
-			int32_t iterations;
-			int64_t population;
-			int64_t totalPopulation;
-			int32_t instance;			
-			openset::db::TablePartitioned* parts;
+            int32_t instance{ 0 };
+            std::unordered_map<string, int64_t> stats;
 			openset::errors::Error error;
 			
-			CellQueryResult_s(): 
-				//result(nullptr), 
-				time(0), 
-				iterations(0),
-				population(0),
-				totalPopulation(0),
-				instance(0), 
-				parts(nullptr)				
-			{}
-
 			CellQueryResult_s(
-				const int64_t executionTime,
-				const int64_t runCount,
-				const int64_t population,
-				const int64_t totalPopulation,
-				const int64_t instanceId,
-				const openset::errors::Error error,
-				openset::db::TablePartitioned* partitionedObjects) :
-					time(executionTime),
-					iterations(runCount),
-					population(population),
-					totalPopulation(totalPopulation),
-					instance(instanceId),
-					parts(partitionedObjects),
+                const int64_t instanceId,
+                std::unordered_map<string, int64_t> stats,
+				const openset::errors::Error error) :
+                    instance(instanceId),
+                    stats(std::move(stats)),
 					error(error)
 			{}
 			
 			CellQueryResult_s(CellQueryResult_s&& other) noexcept
 			{
-				iterations = other.iterations;
-				population = other.population;
-				totalPopulation = other.totalPopulation;
 				instance = other.instance;
-				error = other.error;
-
-				parts = other.parts;
-				other.parts = nullptr;
-
-				time = other.time;
+				error = std::move(other.error);
+                stats = std::move(other.stats);
 			}
 
 			~CellQueryResult_s()
@@ -283,16 +288,9 @@ namespace openset
 
 			CellQueryResult_s& operator=(CellQueryResult_s&& other) noexcept
 			{
-				time = other.time;
-				iterations = other.iterations;
-				population = other.population;
-				totalPopulation = other.totalPopulation;
 				instance = other.instance;
 				error = other.error;
-
-				parts = other.parts;
-				other.parts = nullptr;
-
+                stats = other.stats;
 				return *this;
 			}
 		};
@@ -304,27 +302,19 @@ namespace openset
 		 */
 		class ResultMuxDemux
 		{
-		public:
 			// merge multiple result sets using a sync-sort technique
 			// retuns a new result set which can be used to serialize to
 			// JSON
-			static bigRing<int64_t, const char*> mergeText(
-				const openset::query::Macro_s macros,
-				openset::db::Table* table,
-				std::vector<openset::result::ResultSet*> resultSets);
+        public:
+            static void mergeMacroLiterals(
+                const openset::query::Macro_s macros,
+                std::vector<openset::result::ResultSet*>& resultSets);
 
-			static ResultSet::RowVector mergeResultSets(
-				const openset::query::Macro_s macros,
-				openset::db::Table* table,
-				std::vector<openset::result::ResultSet*> resultSets);
-
-			// generate a result set from JSON
-			static char* resultSetToInternode(
-				const openset::query::Macro_s macros,
-				openset::db::Table* table,
-				ResultSet::RowVector& rows,
-				bigRing<int64_t, const char*>& mergedText,
-				int64_t &bufferLength);
+            static char* multiSetToInternode(
+                const int resultColumnCount,
+                const int resultSetCount,
+                std::vector<openset::result::ResultSet*>& resultSets,
+                int64_t &bufferLength);
 
 			static bool isInternode(char* data, int64_t blockLength);
 
@@ -332,12 +322,15 @@ namespace openset
 				char* data,
 				int64_t blockLength);
 
-			static void resultSetToJSON(
-				const openset::query::Macro_s macros,
-				openset::db::Table* table,
-				cjson* doc,
-				ResultSet::RowVector& rows,
-				bigRing<int64_t, const char*>& mergedText);
-		};
+            static void resultSetToJson(
+                const int resultColumnCount,
+                const int resultSetCount,
+                std::vector<openset::result::ResultSet*>& resultSets,
+                cjson* doc);
+
+            static void jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column);
+
+            static void jsonResultTrim(cjson* doc, const int trim);
+        };
 	}
 }

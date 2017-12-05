@@ -61,6 +61,7 @@ void OpenLoopCount::storeResult(std::string name, int64_t count) const
 	RowKey rowKey;
 	rowKey.clear();
 	rowKey.key[0] = nameHash;
+    rowKey.types[0] = ResultTypes_e::Text;
 	result->addLocalText(nameHash, name);
 
 	// record this branch
@@ -102,6 +103,7 @@ void OpenLoopCount::storeSegments()
 			// swap our new or existing index entry with some new IndexBits, compress, and store them
 			parts->attributes.swap(COL_SEGMENT, MakeHash(segmentName), bits);
 			delete bits; // we are done with the bits
+
 			resultBits[segmentName] = nullptr; // remove it from the map so it doesn't get deleted in ~OpenLoopCount
 			
 			parts->setSegmentTTL(segmentName, macro.second.segmentTTL);
@@ -266,15 +268,13 @@ void OpenLoopCount::prepare()
 		shuttle->reply(
 			0,
 			CellQueryResult_s{
-			time,
-			runCount,
-			popEvaluated,
-			maxLinearId,
 			instance,
-			error,
-			parts
+            {},
+			error
 		}
 		);
+
+        result->setAccTypesFromMacros(macros);
 
 		this->suicide();
 		return;
@@ -304,13 +304,9 @@ void OpenLoopCount::run()
 			shuttle->reply(
 				0, 
 				CellQueryResult_s{				
-					time,
-					runCount,
-					popEvaluated,
-					maxLinearId,
 					instance,
-					interpreter->error,
-					parts
+                    {},
+					interpreter->error
 				}
 			);
 
@@ -340,15 +336,13 @@ void OpenLoopCount::run()
 				shuttle->reply(
 					0,
 					CellQueryResult_s{
-						time,
-						runCount,
-						popEvaluated,
-						maxLinearId,
 						instance,
-						error,
-						parts
+                        {},
+						error
 					}
 				);
+
+                result->setAccTypesFromMacros(macros);
 
 				suicide();
 				return;
@@ -376,17 +370,13 @@ void OpenLoopCount::partitionRemoved()
 	shuttle->reply(
 		0,
 		CellQueryResult_s{
-		//res,
-		0,
-		0,
-		0,
-		0,
-		instance,
-		openset::errors::Error{
-		openset::errors::errorClass_e::run_time,
-		openset::errors::errorCode_e::partition_migrated,
-		"please retry query"
-	},
-		parts
+		    
+		    instance,
+            {},
+		    openset::errors::Error{
+		    openset::errors::errorClass_e::run_time,
+		    openset::errors::errorCode_e::partition_migrated,
+		    "please retry query"
+	    }
 	});
 }

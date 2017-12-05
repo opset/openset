@@ -9,13 +9,16 @@
 #include "oloop_insert.h"
 #include "oloop_query.h"
 #include "oloop_count.h"
+#include "oloop_person.h"
+#include "oloop_column.h"
 
 #include "asyncpool.h"
+#include "asyncloop.h"
 #include "config.h"
 #include "sentinel.h"
 #include "querycommon.h"
 #include "queryparser.h"
-#include "trigger.h"
+#include "database.h"
 #include "result.h"
 #include "table.h"
 #include "tablepartitioned.h"
@@ -23,6 +26,8 @@
 #include "internoderouter.h"
 #include "names.h"
 #include "http_serve.h"
+
+//#include "trigger.h"
 
 using namespace std;
 using namespace openset::comms;
@@ -46,16 +51,6 @@ void RpcError(openset::errors::Error error, const openset::web::MessagePtr messa
 {
 	message->reply(openset::http::StatusCode::client_error_bad_request, error.getErrorJSON());
 }
-
-static const unordered_map<string, internodeFunction_e> internodeMap = {
-	{ "init_config_node", internodeFunction_e::init_config_node },
-	{ "cluster_member", internodeFunction_e::cluster_member },
-	{ "node_add", internodeFunction_e::node_add},
-	{ "transfer", internodeFunction_e::transfer },
-	{ "map_change", internodeFunction_e::map_change},
-	{ "cluster_lock", internodeFunction_e::cluster_lock },
-	{ "cluster_release", internodeFunction_e::cluster_release },
-};
 
 void RpcInternode::is_member(const openset::web::MessagePtr message, const RpcMapping&)
 {
@@ -384,8 +379,8 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
 		cjson response;
 		cjson::Parse(
 			string{
-				result.responses[0].first,
-				static_cast<size_t>(result.responses[0].second)
+				result.responses[0].data,
+				result.responses[0].length
 			},
 			&response
 		);
@@ -398,11 +393,11 @@ ForwardStatus_e ForwardRequest(const openset::web::MessagePtr message)
         auto nodeFail = false;
 
         // try to capture a json error that has perculated up from the forked call.
-        if (result.responses[0].first &&
-            result.responses[0].second &&
-            result.responses[0].first[0] == '{')
+        if (result.responses[0].data &&
+            result.responses[0].length &&
+            result.responses[0].data[0] == '{')
         {
-            cjson error(std::string(result.responses[0].first, result.responses[0].second), result.responses[0].second);
+            cjson error(std::string(result.responses[0].data, result.responses[0].length), result.responses[0].length);
 
             if (error.xPath("/error"))
                 message->reply(openset::http::StatusCode::client_error_bad_request, error);
@@ -1094,7 +1089,7 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
 
 	const auto column = table->getColumns()->getColumn(columnName);
 
-	if (!column)
+    if (!column && column->type != columnTypes_e::freeColumn)
 	{
 		RpcError(
 			openset::errors::Error{
@@ -1360,9 +1355,27 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 
 	for (auto row : rows)
 	{
-		const auto uuid = row->xPathString("/person", "");
-		const auto uuHash = MakeHash(uuid) % 17783LL;
-		const auto destination = cast<int32_t>(std::abs(uuHash) % partitions->getPartitionMax());
+        const auto personNode = row->xPath("/person");
+        if (!personNode || (personNode->type() != cjsonType::INT && personNode->type() != cjsonType::STR))
+            continue;
+
+       
+        // straight up numeric ID nodes don't need hashing, actually hashing would be very bad.
+        // We can use numeric IDs (i.e. a customer id) directly.
+        int64_t uuid = 0;
+
+        if (personNode->type() == cjsonType::STR)
+        {
+            auto uuString = personNode->getString();
+            toLower(uuString);
+
+            if (uuString.length())
+                uuid = MakeHash(uuString);
+        }
+        else
+            uuid = personNode->getInt(); 
+
+		const auto destination = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
 
 		const auto mapInfo = globals::mapper->partitionMap.getState(destination, globals::running->nodeId);
 		
@@ -1589,10 +1602,17 @@ enum class queryFunction_e : int32_t
 shared_ptr<cjson> forkQuery(
 	Table* table,
 	const openset::web::MessagePtr message,
-	openset::query::Macro_s queryMacros) // errorHandled will be true if an error was happend during the fork
+    const int resultColumnCount,
+    const int resultSetCount,
+    const ResultSortMode_e sortMode = ResultSortMode_e::column,
+    const ResultSortOrder_e sortOrder = ResultSortOrder_e::Desc,
+    const int sortColumn = 0,
+    const int trim = -1) 
 {
 	auto newParams = message->getQuery();
 	newParams.emplace("fork", "true");
+
+    const auto setCount = resultSetCount ? resultSetCount : 1;
 	
 	// call all nodes and gather results - JSON is what's coming back
 	// NOTE - it would be fully possible to flatten results to binary
@@ -1608,13 +1628,13 @@ shared_ptr<cjson> forkQuery(
 
 	for (auto &r : result.responses)
 	{
-		if (ResultMuxDemux::isInternode(r.first, r.second))
-			resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.first, r.second));
+		if (ResultMuxDemux::isInternode(r.data, r.length))
+			resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.data, r.length));
 		else
 		{
 			// there is an error message from one of the participing nodes
 			// TODO - handle error
-			if (!r.second)
+			if (!r.data || !r.length)
 				RpcError(
 					openset::errors::Error{
 						openset::errors::errorClass_e::internode,
@@ -1622,33 +1642,29 @@ shared_ptr<cjson> forkQuery(
 						"Cluster error. Node had empty reply."},
 					message);
 			else
-				message->reply(openset::http::StatusCode::success_ok, r.first, r.second);
+				message->reply(openset::http::StatusCode::success_ok, r.data, r.length);
 			return nullptr;
 		}
 	}
 	
-	auto resultJson = make_shared<cjson>();
+    auto resultJson = make_shared<cjson>();
+    ResultMuxDemux::resultSetToJson(
+        resultColumnCount,
+        setCount,
+        resultSets,
+        resultJson.get());
 
-	// 1. merge the text
-	auto mergedText = ResultMuxDemux::mergeText(
-		queryMacros,
-		table,
-		resultSets);
+    switch (sortMode)
+    {
+        case ResultSortMode_e::key: 
+        break;
+        case ResultSortMode_e::column: 
+            ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn);
+        break;
+        default: ;
+    }
 
-	// 2. merge the rows
-	auto rows = ResultMuxDemux::mergeResultSets(
-		queryMacros, 
-		table, 
-		resultSets);
-
-	// 3. make some JSON
-	ResultMuxDemux::resultSetToJSON(
-		queryMacros, 
-		table, 
-		resultJson.get(), // bare pointer fine here
-		rows,
-		mergedText);
-
+    ResultMuxDemux::jsonResultTrim(resultJson.get(), trim);
 
 	// local function to fill Meta data in result JSON
 	const auto fillMeta = [](const openset::query::VarList& mapping, cjson* jsonArray) {
@@ -1728,7 +1744,7 @@ shared_ptr<cjson> forkQuery(
 	auto metaJson = resultJson->setObject("info");
 
 	auto dataJson = metaJson->setObject("data");
-	fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
+	//fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
 	//fillMeta(queryMacros.vars.groupVars, dataJson->setArray("groups"));
 
 
@@ -1764,6 +1780,18 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 
 	const auto debug = message->getParamBool("debug");
 	const auto isFork = message->getParamBool("fork");
+
+    const auto trimSize = message->getParamInt("trim", -1);
+    const auto sortOrder = message->getParamString("order", "desc") == "asc" ? ResultSortOrder_e::Asc : ResultSortOrder_e::Desc;
+
+    auto sortColumnName = ""s;
+    auto sortMode = ResultSortMode_e::column;
+    if (message->isParam("sort"))
+    {
+        sortColumnName = message->getParamString("sort");
+        if (sortColumnName == "key")
+            sortMode = ResultSortMode_e::key;
+    }
 
 	const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
 	Logger::get().info(log);
@@ -1818,6 +1846,41 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	 */
 
 	openset::query::ParamVars paramVars;
+
+    for (auto p : message->getQuery())
+    {
+        cvar value = p.second;
+        
+        if (p.first.find("str_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value;
+        }
+        else if (p.first.find("int_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getInt64();
+        }
+        else if (p.first.find("dbl_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getDouble();
+        }
+        else if (p.first.find("bool_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getBool();
+        }
+
+    }
 
 	/* TODO let us revist these
 	if (params)
@@ -1880,6 +1943,32 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 		return;
 	}
 
+    if (message->isParam("segments"))
+    {
+        const auto segmentText = message->getParamString("segments");
+        auto parts = split(segmentText, ',');
+
+        queryMacros.segments.clear();
+
+        for (auto p : parts)
+        {
+            p = trim(p);
+            if (p.length())
+                queryMacros.segments.push_back(p);
+        }
+
+        if (!queryMacros.segments.size())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "no segment names specified" },
+                message);
+            return;
+        }
+    }
+
 	// set the sessionTime (timeout) value, this will get relayed 
 	// through the to oloop_query, the person object and finally the grid
 	queryMacros.sessionTime = sessionTime;
@@ -1898,6 +1987,43 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 		return;
 	}
 
+    auto sortColumn = 0;
+
+    if (sortMode != ResultSortMode_e::key && sortColumnName.size())
+    {
+        if (sortColumnName == "person" || sortColumnName == "people")
+            sortColumnName = "__uuid";
+        else if (sortColumnName == "stamp")
+            sortColumnName = "__stamp";
+        else if (sortColumnName == "session")
+            sortColumnName = "__session";
+
+        auto set = false;
+        auto idx = -1;
+        for (auto &c: queryMacros.vars.columnVars)
+        {
+            ++idx;
+            if (c.alias == sortColumnName)
+            {
+                set = true;
+                sortColumn = c.index;
+                break;
+            }
+        }
+
+        if (!set)
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::parse,
+                    openset::errors::errorCode_e::syntax_error,
+                    "sort column not found in query aggregates"
+                },
+                message);
+            return;
+        }
+    }
+    
 	/*  
 	 * We are originating the query.
 	 * 
@@ -1913,8 +2039,20 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	 *
 	 */
 	if (!isFork)
-	{
-		const auto json = std::move(forkQuery(table, message, queryMacros));
+	{               
+
+		const auto json = std::move(
+            forkQuery(
+                table, 
+                message, 
+                queryMacros.vars.columnVars.size(), 
+                queryMacros.segments.size(),
+                sortMode,
+                sortOrder,
+                sortColumn,
+                trimSize)
+        );
+
 		if (json) // if null/empty we had an error
 			message->reply(http::StatusCode::success_ok, *json);
 		return;
@@ -1949,25 +2087,22 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	// nothing active - return an empty set - not an error
 	if (!activeList.size())
 	{
-		// 1. Merge the text hashes together
-		auto mergedText = ResultMuxDemux::mergeText(
-			queryMacros,
-			table,
-			resultSets);
+        // 1. Merge Macro Literals
+        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
 
-		// 2. Merge the rows
-		auto rows = ResultMuxDemux::mergeResultSets(
-			queryMacros,
-			table,
-			resultSets);
-
-		int64_t bufferLength = 0;
-
-		const auto buffer = ResultMuxDemux::resultSetToInternode(
-			queryMacros, table, rows, mergedText, bufferLength);
+        // 2. Merge the rows
+        int64_t bufferLength = 0;
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
+            queryMacros.vars.columnVars.size(),
+            queryMacros.indexes.size(),
+            resultSets,
+            bufferLength);
 
 		// reply will be responsible for buffer
 		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        PoolMem::getPool().freePtr(buffer);
+        
 		return;
 	}
 
@@ -1989,12 +2124,8 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 		[queryMacros, table, resultSets, startTime, queryStart, compileTime]
 			(vector<openset::async::response_s<CellQueryResult_s>> &responses,
 			openset::web::MessagePtr message,
-				voidfunc release_cb)
+				voidfunc release_cb) mutable
 		{ // process the data and respond
-
-			int64_t population = 0;
-			int64_t totalPopulation = 0;
-
 			// check for errors, add up totals
 			for (const auto &r : responses)
 			{
@@ -2007,32 +2138,23 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 					// clean up stray resultSets
 					for (auto resultSet : resultSets)
 						delete resultSet;
-
+                    
 					release_cb();
 
 					return;
 				}
-
-				population += r.data.population;
-				totalPopulation += r.data.totalPopulation;
 			}
 
-			// 1. Merge the text hashes together
-			auto mergedText = ResultMuxDemux::mergeText(
-				queryMacros,
-				table,
-				resultSets);
+            // 1. Merge the Macro Literals in
+            ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
 
-			// 2. Merge the rows
-			auto rows = ResultMuxDemux::mergeResultSets(
-				queryMacros, 
-				table, 
-				resultSets);
-			
-			int64_t bufferLength = 0;
-
-			auto buffer = ResultMuxDemux::resultSetToInternode(
-				queryMacros, table, rows, mergedText, bufferLength);
+            // 2. Merge the rows
+            int64_t bufferLength = 0;
+            const auto buffer = ResultMuxDemux::multiSetToInternode(
+                queryMacros.vars.columnVars.size(),
+                queryMacros.indexes.size(),
+                resultSets,
+                bufferLength);
 
 			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
@@ -2041,6 +2163,8 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 			// clean up all those resultSet*
 			for (auto r : resultSets)
 				delete r;
+
+            PoolMem::getPool().freePtr(buffer);
 
 			release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
 		});
@@ -2231,7 +2355,13 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	*/
 	if (!isFork)
 	{
-		const auto json = std::move(forkQuery(table, message, queries.front().second));
+		const auto json = std::move(
+            forkQuery(
+                table, 
+                message, 
+                queries.front().second.vars.columnVars.size(), 
+                queries.front().second.segments.size())
+        );
 		if (json) // if null/empty we had an error
 			message->reply(http::StatusCode::success_ok, *json);
 		return;
@@ -2252,28 +2382,24 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	// nothing active - return an empty set - not an error
 	if (!activeList.size())
 	{
-		// 1. Merge the text hashes together
-		auto mergedText = ResultMuxDemux::mergeText(
-			queries.front().second,
-			table,
-			resultSets);
+        // 1. Merge Macro Literals
+        ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets);
 
-		// 2. Merge the rows
-		auto rows = ResultMuxDemux::mergeResultSets(
-			queries.front().second,
-			table,
-			resultSets);
-
-		int64_t bufferLength = 0;
-
-		const auto buffer = ResultMuxDemux::resultSetToInternode(
-			queries.front().second, table, rows, mergedText, bufferLength);
+        // 2. Merge the rows
+        int64_t bufferLength = 0;
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
+            queries.front().second.vars.columnVars.size(),
+            queries.front().second.indexes.size(),
+            resultSets,
+            bufferLength);
 		
 		// reply is responible for buffer
 		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        PoolMem::getPool().freePtr(buffer);
+        
 		return;
 	}
-
 
 	auto shuttle = new ShuttleLambda<CellQueryResult_s>(
 		message,
@@ -2281,12 +2407,8 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 			[queries, table, resultSets, startTime, queryStart, compileTime]
 			(const vector<openset::async::response_s<CellQueryResult_s>> &responses,
 			 openset::web::MessagePtr message,
-			 voidfunc release_cb)
+			 voidfunc release_cb) mutable
 		{ 
-			// process the data and respond
-			int64_t population = 0;
-			int64_t totalPopulation = 0;
-
 			// check for errors, add up totals
 			for (const auto &r : responses)
 			{
@@ -2301,30 +2423,23 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 
 					return;
 				}
-
-				population += r.data.population;
-				totalPopulation += r.data.totalPopulation;
 			}
 
-			// 1. Merge the text hashes together
-			auto mergedText = ResultMuxDemux::mergeText(
-				queries.front().second,
-				table,
-				resultSets);
+            // 1. Merge Macro Literals
+            ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets);
 
 			// 2. Merge the rows
-			auto rows = ResultMuxDemux::mergeResultSets(
-				queries.front().second,
-				table,
-				resultSets);
-
-			int64_t bufferLength = 0;
-
-			auto buffer = ResultMuxDemux::resultSetToInternode(
-				queries.front().second, table, rows, mergedText, bufferLength);
+            int64_t bufferLength = 0;
+			const auto buffer = ResultMuxDemux::multiSetToInternode(
+                queries.front().second.vars.columnVars.size(),
+                queries.front().second.indexes.size(),
+				resultSets,
+                bufferLength);
 
 			// reply is responsible for buffer
 			message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+            PoolMem::getPool().freePtr(buffer);
 
 			Logger::get().info("Fork count(s) on " + table->getName());
 
@@ -2349,13 +2464,530 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 
+void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matches)
+{
+    auto database = openset::globals::database;
+    const auto partitions = openset::globals::async;
+
+    const auto tableName = matches.find("table"s)->second;
+    const auto columnName = matches.find("name"s)->second;
+    const auto isFork = message->getParamBool("fork");
+
+    const auto trimSize = message->getParamInt("trim", -1);
+    const auto sortOrder = message->getParamString("order", "desc") == "asc" ? ResultSortOrder_e::Asc : ResultSortOrder_e::Desc;
+
+    if (!tableName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /params/table" },
+            message);
+        return;
+    }
+
+    const auto table = database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "table not found" },
+            message);
+        return;
+    }
+
+    if (!columnName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "invalid column name" },
+            message);
+        return;
+    }
+
+    const auto column = table->getColumns()->getColumn(columnName);
+
+    if (!column && column->type != columnTypes_e::freeColumn)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "column not found" },
+            message);
+        return;
+    }
+
+   
+    // We are a Fork!
+    async::OpenLoopColumn::ColumnQueryConfig_s queryInfo;
+
+    queryInfo.columnName = columnName;
+    queryInfo.columnType = column->type;
+    queryInfo.columnIndex = column->idx;
+
+    if (message->isParam("gt"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::gt;
+        queryInfo.filterLow = message->getParamString("gt");
+    }
+    else if (message->isParam("gte"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::gte;
+        queryInfo.filterLow = message->getParamString("gte");
+    }
+    else if (message->isParam("lt"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::lt;
+        queryInfo.filterLow = message->getParamString("lt");
+    }
+    else if (message->isParam("lte"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::lte;
+        queryInfo.filterLow = message->getParamString("lte");
+    }
+    else if (message->isParam("eq"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::eq;
+        queryInfo.filterLow = message->getParamString("eq");
+    }
+    else if (message->isParam("between"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::between;
+        queryInfo.filterLow = message->getParamString("between");
+        queryInfo.filterHigh = message->getParamString("and");               
+    }
+    else if (message->isParam("rx"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::rx;
+
+        // bad regex blows this thing up... so lets catch any errors
+        auto isError = false;
+        try
+        {
+            queryInfo.rx = std::regex(message->getParamString("rx"));
+        } 
+        catch (const std::runtime_error& ex)
+        {
+            isError = true;
+        }
+        catch (...)
+        {
+            isError = true;
+        }
+
+        if (isError)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "could not compile regular express: " + message->getParamString("rx") },
+                message);
+            return;
+        }
+
+    }
+    else if (message->isParam("sub"))
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::sub;
+        queryInfo.filterLow = message->getParamString("sub");
+    }
+    else
+    {
+        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::all;
+    }
+
+    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all)
+    {
+        if (queryInfo.filterLow.getString().length() == 0)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "column filter requires a value" },
+                message);
+            return;
+        }
+    }
+
+    if (queryInfo.mode == OpenLoopColumn::ColumnQueryMode_e::between)
+    {
+        if (queryInfo.filterHigh.getString().length() == 0)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "column query using 'between' requires an 'and' param" },
+                message);
+            return;
+        }
+    }
+
+    if (message->isParam("bucket"))
+        queryInfo.bucket = message->getParamString("bucket");
+
+    if (message->isParam("segments"))
+    {
+        const auto segmentText = message->getParamString("segments");
+        auto parts = split(segmentText, ',');
+
+        queryInfo.segments.clear();
+
+        for (auto p : parts)
+        {
+            p = trim(p);
+            if (p.length())
+                queryInfo.segments.push_back(p);
+        }
+
+        if (!queryInfo.segments.size())
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "no segment names specified" },
+                message);
+            return;
+        }
+    }
+
+    // here we are going to force typing depending on the column type
+    // note: prior to conversion these will all be strings
+    switch (queryInfo.columnType)
+    {
+        case columnTypes_e::intColumn:
+            queryInfo.bucket = queryInfo.bucket.getInt64();
+            queryInfo.filterLow = queryInfo.filterLow.getInt64();
+            queryInfo.filterHigh = queryInfo.filterHigh.getInt64();
+        break;
+        case columnTypes_e::doubleColumn: 
+            // floating point data in the db is in scaled integers, scale our ranges and buckets
+            queryInfo.bucket = static_cast<int64_t>(queryInfo.bucket.getDouble() * 10000.0);
+            queryInfo.filterLow = static_cast<int64_t>(queryInfo.filterLow.getDouble() * 10000.0);
+            queryInfo.filterHigh = static_cast<int64_t>(queryInfo.filterHigh.getDouble() * 10000.0);
+        break;
+        case columnTypes_e::boolColumn: 
+            queryInfo.filterLow = queryInfo.filterLow.getBool();
+        break;
+        case columnTypes_e::textColumn: 
+            queryInfo.filterLow = queryInfo.filterLow.getString();
+        break;
+        default: ;
+    }
+
+    // now lets make sure the `columnType` and the `mode` make sense together and
+    // return an error if they do not.
+    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all &&
+        queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::eq)
+    {
+        switch (queryInfo.columnType)
+        {
+        case columnTypes_e::intColumn:
+        case columnTypes_e::doubleColumn:
+            if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::between &&
+                queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::gt &&
+                queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::gte &&
+                queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::lt &&
+                queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::lte)
+            {
+                RpcError(
+                    openset::errors::Error{
+                    openset::errors::errorClass_e::query,
+                    openset::errors::errorCode_e::syntax_error,
+                    "specified filter type not compatible with integer or double column" },
+                    message);
+                return;
+            }
+            break;
+        case columnTypes_e::textColumn:
+            if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::rx &&
+                queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::sub)
+            {
+                RpcError(
+                    openset::errors::Error{
+                    openset::errors::errorClass_e::query,
+                    openset::errors::errorCode_e::syntax_error,
+                    "specified filter type not compatible with string column" },
+                    message);
+                return;
+            }
+            break;
+        case columnTypes_e::boolColumn:
+        default:;
+        }
+    }
+
+    /*
+    * We are originating the query.
+    *
+    * At this point in the function we have validated that the
+    * script compiles, maps to the schema, is on a valid table,
+    * etc.
+    *
+    * We will call our forkQuery function.
+    *
+    * forQuery will call all the nodes (including this one) with the
+    * `is_fork` varaible set to true.
+    *
+    *
+    */
+    if (!isFork)
+    {
+        const auto json = std::move(
+            forkQuery(
+                table, 
+                message, 
+                1, 
+                queryInfo.segments.size(),
+                ResultSortMode_e::column,
+                sortOrder,
+                0,
+                trimSize
+            )
+        );
+        if (json) // if null/empty we had an error
+            message->reply(http::StatusCode::success_ok, *json);
+        return;
+    }
+
+
+    // create list of active_owner parititions for factory function
+    auto activeList = openset::globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
+        openset::globals::running->nodeId,
+        {
+            openset::mapping::NodeState_e::active_owner
+        }
+    );
+    
+    // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
+    //      we don't have to worry about locking anything shared between partitions in the same
+    //      thread as they are executed serially, rather than in parallel. 
+    //
+    //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
+    //      as well as generally reduce the number of ResultSets needed (especially when partition
+    //      counts are high).
+    //
+    //      Note: These are heap objects because we lose scope, as this function
+    //            exits before the result objects are used.
+    //
+    std::vector<ResultSet*> resultSets;
+
+    for (auto i = 0; i < partitions->getWorkerCount(); ++i)
+        resultSets.push_back(new openset::result::ResultSet());
+
+    // nothing active - return an empty set - not an error
+    if (!activeList.size())
+    {
+        // 2. Merge the rows
+        int64_t bufferLength = 0;
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
+            2,
+            queryInfo.segments.size(),
+            resultSets,
+            bufferLength);
+
+        // reply will be responsible for buffer
+        message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+        return;
+    }
+    
+    /*
+    *  this Shuttle will gather our result sets roll them up and spit them back
+    *
+    *  note that queryMacros are captured with a copy, this is because a reference
+    *  version will have had it's destructor called when the function exits.
+    *
+    *  Note: ShuttleLamda comes in two versions,
+    */
+
+    const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
+        message,
+        activeList.size(),
+        [table, resultSets, queryInfo]
+    (vector<openset::async::response_s<CellQueryResult_s>> &responses,
+        openset::web::MessagePtr message,
+        voidfunc release_cb) mutable
+    { // process the data and respond
+        // check for errors, add up totals
+        for (const auto &r : responses)
+        {
+            if (r.data.error.inError())
+            {
+                // any error that is recorded should be considered a hard error, so report it
+                auto errorMessage = r.data.error.getErrorJSON();
+                message->reply(http::StatusCode::client_error_bad_request, errorMessage);
+
+                // clean up stray resultSets
+                for (auto resultSet : resultSets)
+                    delete resultSet;
+
+                release_cb();
+
+                return;
+            }
+        }
+
+        // 1. Merge the rows
+        int64_t bufferLength = 0;
+        auto buffer = ResultMuxDemux::multiSetToInternode(
+            1,
+            queryInfo.segments.size(),
+            resultSets,
+            bufferLength);
+
+        message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        Logger::get().info("Fork query on " + table->getName());
+
+        // clean up all those resultSet*
+        for (auto r : resultSets)
+            delete r;
+
+        release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
+    });
+
+    auto instance = 0;
+    // pass factory function (as lambda) to create new cell objects
+    partitions->cellFactory(activeList, [shuttle, table, queryInfo, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
+    {
+        instance++;
+        return new OpenLoopColumn(shuttle, table, queryInfo, resultSets[loop->getWorkerId()], instance);
+    });
+
+
+
+}
+
+void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matches)
+{
+    
+    auto uuString = message->getParamString("sid");
+    auto uuid = message->getParamInt("id");
+
+    if (uuid == 0 && uuString.length())
+    {
+        toLower(uuString);
+        uuid = MakeHash(uuString);
+    }
+
+    // no UUID... so make an error!
+    if (uuid == 0)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "person query must have an id={number} or idstring={text} parameter" },
+            message);
+        return;
+    }
+
+    const auto tableName = matches.find("table"s)->second;
+
+    if (!tableName.length())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "missing or invalid table name" },
+            message);
+        return;
+    }
+
+    const auto table = globals::database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::general_error,
+            "table could not be found" },
+            message);
+        return;
+    }
+
+    const auto partitions = openset::globals::async;
+    const auto targetPartition = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
+    const auto mapper = globals::mapper->getPartitionMap();
+
+    auto owners = mapper->getNodesByPartitionId(targetPartition);
+
+    int64_t targetRoute = -1;
+
+    // find the owner
+    for (auto o : owners)
+        if (mapper->isOwner(targetPartition, o))
+        {
+            targetRoute = o;
+            break;
+        }
+
+    if (targetRoute == -1)
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::query,
+            openset::errors::errorCode_e::route_error,
+            "potential node failure - please re-issue the request" },
+            message);
+        return;
+    }
+
+    // this query is local - we will fire up a single async get user task on this node
+    if (targetRoute == globals::running->nodeId)
+    {
+        // lets use the super basic shuttle.
+        const auto shuttle = new Shuttle<int>(message);
+        auto loop = globals::async->getPartition(targetPartition);
+
+        if (!loop)
+        {
+            RpcError(
+                openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::route_error,
+                "potential node failure - please re-issue the request" },
+                message);
+            return;
+        }
+        
+        loop->queueCell(new OpenLoopPerson(shuttle, table, uuid));
+
+    }
+    else // remote - we will route to the correct destination node
+    {
+        const auto response = globals::mapper->dispatchSync(
+            targetRoute,
+            message->getMethod(),
+            message->getPath(),
+            message->getQuery(),
+            message->getPayload(),
+            message->getPayloadLength()
+        );
+        
+        message->reply(response->code, response->data, response->length);
+    }    
+}
+
 void openset::comms::Dispatch(const openset::web::MessagePtr message)
 {
 	const auto path = message->getPath();
 
-	//for_each(MatchList.begin(),MatchList.end(), [&path, &message](auto &item)
 	for (auto& item: MatchList)
 	{		
+        // the most beautifullest thing...
 		const auto& [method, rx, handler, packing] = item;
 
 		if (std::smatch matches; message->getMethod() == method && regex_match(path, matches, rx))

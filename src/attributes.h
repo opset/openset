@@ -117,7 +117,8 @@ namespace openset::db
 			PRESENT
 		};
 
-		using AttrList = vector<Attr_s*>;
+        using AttrListExpanded = vector<std::pair<int64_t,Attr_s*>>; // pair, value and bits
+    	using AttrList = vector<Attr_s*>;
 
 		// value and attribute info
 		using ColumnIndex = bigRing<attr_key_s, Attr_s*>;
@@ -151,6 +152,7 @@ namespace openset::db
 
 		AttributeBlob* getBlob() const;
 
+        AttrListExpanded getColumnValues(const int32_t column);
 		AttrList getColumnValues(const int32_t column, const listMode_e mode, const int64_t value);
 
 		bool operator==(const Attributes& other) const

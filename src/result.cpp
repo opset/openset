@@ -9,7 +9,13 @@ using namespace openset::result;
 static char NA_TEXT[] = "n/a";
 
 ResultSet::ResultSet()
-{}
+{
+    for (auto &a : accTypes)
+        a = ResultTypes_e::Int;
+
+    for (auto &m : accModifiers)
+        m = query::Modifiers_e::sum;
+}
 
 ResultSet::ResultSet(ResultSet&& other) noexcept:
 	results(std::move(other.results)),
@@ -60,6 +66,128 @@ void ResultSet::setAtDepth(RowKey& key, const function<void(Accumulator*)> set_c
 	set_cb(tPair->second);
 }
 
+void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
+{
+
+    auto dataIndex = -1;
+    for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
+    {
+        ++dataIndex;
+
+        if (g.modifier == query::Modifiers_e::var)
+        {
+            switch (g.value.typeof())
+            {
+                case cvar::valueType::INT32: 
+                case cvar::valueType::INT64: 
+                    accTypes[dataIndex] = ResultTypes_e::Int;
+                break;
+                case cvar::valueType::FLT: 
+                case cvar::valueType::DBL: 
+                    accTypes[dataIndex] = ResultTypes_e::Double;
+                break;
+                case cvar::valueType::STR: 
+                    accTypes[dataIndex] = ResultTypes_e::Text;
+                break;
+                case cvar::valueType::BOOL: 
+                    accTypes[dataIndex] = ResultTypes_e::Bool;
+                break;
+                case cvar::valueType::LIST: 
+                case cvar::valueType::DICT: 
+                case cvar::valueType::SET:
+                case cvar::valueType::REF:
+                default:
+                    accTypes[dataIndex] = ResultTypes_e::None;
+            }
+        }
+        else if (g.modifier == query::Modifiers_e::value)
+        {
+            switch (g.schemaType)
+            {
+
+                case db::columnTypes_e::intColumn: 
+                    accTypes[dataIndex] = ResultTypes_e::Int;
+                break;
+                case db::columnTypes_e::doubleColumn: 
+                    accTypes[dataIndex] = ResultTypes_e::Double;
+                break;
+                case db::columnTypes_e::boolColumn: 
+                    accTypes[dataIndex] = ResultTypes_e::Bool;
+                break;
+                case db::columnTypes_e::textColumn: 
+                    accTypes[dataIndex] = ResultTypes_e::Text;
+                break;
+                case db::columnTypes_e::freeColumn:
+                default: 
+                    accTypes[dataIndex] = ResultTypes_e::None;
+            }
+        }
+        else 
+        {
+            switch (g.schemaType)
+            {
+            case db::columnTypes_e::intColumn:
+                accTypes[dataIndex] = ResultTypes_e::Int;
+                break;
+            case db::columnTypes_e::doubleColumn:
+                accTypes[dataIndex] = ResultTypes_e::Double;
+                break;
+            case db::columnTypes_e::boolColumn:
+                accTypes[dataIndex] = ResultTypes_e::Int;
+                break;
+            case db::columnTypes_e::textColumn:
+                accTypes[dataIndex] = ResultTypes_e::Int;
+                break;
+            case db::columnTypes_e::freeColumn:
+            default:
+                accTypes[dataIndex] = ResultTypes_e::Int;
+            }
+        }
+
+        accModifiers[dataIndex] = g.modifier;
+
+    }
+}
+
+
+void mergeResultTypes(
+    std::vector<openset::result::ResultSet*>& resultSets)
+{
+    ResultTypes_e accTypes[ACCUMULATOR_DEPTH];
+
+    for (auto &a : accTypes)
+        a = ResultTypes_e::Int;
+
+    for (auto s : resultSets)
+    {
+        auto idx = -1;
+        for (auto &a : s->accTypes)
+        {
+            ++idx;
+            if (a != ResultTypes_e::Int)
+                accTypes[idx] = a;
+        }
+    }
+
+    for (auto s : resultSets)
+        memcpy(s->accTypes, accTypes, sizeof(accTypes));
+}
+
+bigRing<int64_t, const char*> mergeResultText(
+    std::vector<openset::result::ResultSet*>& resultSets)
+{
+    // merge all the text between from all the results
+    bigRing<int64_t, const char*> mergedText(ringHint_e::lt_compact);
+
+    // merge all the localText mappings into a merged text mapping
+    for (auto &r : resultSets)
+        for (const auto &t : r->localText)
+            mergedText[t.first] = t.second;
+
+    return mergedText;
+}
+
+
 /* merge
 *
 * merge performs a sync merge on a vector of sorted results.
@@ -83,12 +211,12 @@ void ResultSet::setAtDepth(RowKey& key, const function<void(Accumulator*)> set_c
 * When 'lowestIdx' is equal to end() it means all results passed to merge
 * have been merged.
 */
-
-ResultSet::RowVector ResultMuxDemux::mergeResultSets(
-	const openset::query::Macro_s macros,
-	openset::db::Table* table,
-	std::vector<openset::result::ResultSet*> resultSets)
-{
+ResultSet::RowVector mergeResultSets(
+    const int resultColumnCount,
+    const int resultSetCount,
+	std::vector<openset::result::ResultSet*>& resultSets)
+{      
+    mergeResultTypes(resultSets);
 
 	vector<ResultSet::RowVector*> mergeList;
 
@@ -111,14 +239,19 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 	ResultSet::RowVector merged;
 	merged.reserve(count);
 
+    if (mergeList.size() == 0)
+        return merged;
+
 	vector<ResultSet::RowVector::iterator> iterators;
 
-	const auto shiftIterations = macros.segments.size() ? macros.segments.size() : 1;
-	const auto shiftSize = macros.vars.columnVars.size();
+	const auto shiftIterations = resultSetCount ? resultSetCount : 1;
+    const auto shiftSize = resultColumnCount;
 
 	// get an iterator the beginning of each result in results
 	for (auto r : mergeList)
 		iterators.emplace_back(r->begin());
+
+    auto &modifiers = resultSets[0]->accModifiers;
 
 	while (true)
 	{
@@ -162,7 +295,7 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 
 					for (auto shiftCount = 0, shiftOffset = 0; shiftCount < shiftIterations; ++shiftCount, shiftOffset += shiftSize)
 					{					
-						for (auto columnIndex = 0; columnIndex < macros.vars.columnVars.size(); ++columnIndex)
+						for (auto columnIndex = 0; columnIndex < resultColumnCount; ++columnIndex)
 						{
 							const auto valueIndex = columnIndex + shiftOffset;
 
@@ -176,32 +309,32 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 								else
 								{
 									// we are updating columns here, accumulator rules apply here
-									switch (macros.vars.columnVars[columnIndex].modifier) // WAS TABLEVAR
+									switch (modifiers[columnIndex]) // WAS TABLEVAR
 									{
-									case query::Modifiers_e::min:
+									case openset::query::Modifiers_e::min:
 										if (left->columns[valueIndex].value < right->columns[valueIndex].value)
 										{
 											left->columns[valueIndex].value = right->columns[valueIndex].value;
 											left->columns[valueIndex].count = right->columns[valueIndex].count;
 										}
 										break;
-									case query::Modifiers_e::max:
+									case openset::query::Modifiers_e::max:
 										if (left->columns[valueIndex].value > right->columns[valueIndex].value)
 										{
 											left->columns[valueIndex].value = right->columns[valueIndex].value;
 											left->columns[valueIndex].count = right->columns[valueIndex].count;
 										}
 										break;
-									case query::Modifiers_e::value:
+									case openset::query::Modifiers_e::value:
 
 										left->columns[valueIndex].value = right->columns[valueIndex].value;
 										left->columns[valueIndex].count = right->columns[valueIndex].count;
 										break;
-									case query::Modifiers_e::var:
-									case query::Modifiers_e::avg: // average is determined later
-									case query::Modifiers_e::sum:
-									case query::Modifiers_e::count:
-									case query::Modifiers_e::dist_count_person:
+									case openset::query::Modifiers_e::var:
+									case openset::query::Modifiers_e::avg: // average is determined later
+									case openset::query::Modifiers_e::sum:
+									case openset::query::Modifiers_e::count:
+									case openset::query::Modifiers_e::dist_count_person:
 										left->columns[valueIndex].value += right->columns[valueIndex].value;
 										left->columns[valueIndex].count += right->columns[valueIndex].count;
 										break;
@@ -231,95 +364,95 @@ ResultSet::RowVector ResultMuxDemux::mergeResultSets(
 	return merged;
 }
 
-bigRing<int64_t, const char*> ResultMuxDemux::mergeText(
-	const openset::query::Macro_s macros,
-	openset::db::Table* table,
-	std::vector<openset::result::ResultSet*> resultSets)
+
+void ResultMuxDemux::mergeMacroLiterals(
+    const openset::query::Macro_s macros,
+    std::vector<openset::result::ResultSet*>& resultSets)
 {
-	// merge all the text between from al the results
-	bigRing<int64_t, const char*> mergedText(ringHint_e::lt_compact);
-
-
-	// copy literals from macros into a localtext object
-	for (auto &l : macros.vars.literals)
-		resultSets.front()->addLocalText(l.hashValue, l.value);
-
-	// merge all the localText mappings into a merged text mapping
-	for (auto &r : resultSets)
-		for (const auto &t : r->localText)
-			mergedText[t.first] = t.second;
-
-	return mergedText;
+    // copy literals from macros into a localtext object
+    for (auto &l : macros.vars.literals)
+        resultSets.front()->addLocalText(l.hashValue, l.value);
 }
 
-char* ResultMuxDemux::resultSetToInternode(
-	const openset::query::Macro_s macros,
-	openset::db::Table* table,
-	ResultSet::RowVector& rows,
-	bigRing<int64_t, const char*>& mergedText,
-	int64_t& bufferLength)
+char* ResultMuxDemux::multiSetToInternode(
+    const int resultColumnCount, 
+    const int resultSetCount,
+    std::vector<openset::result::ResultSet*>& resultSets,
+    int64_t &bufferLength)
 {
-	bufferLength = 0;
 
-	// we are going to serialize to a HeapStack object
-	// and flatten it when we are done
-	HeapStack mem;
+    auto mergedText = mergeResultText(resultSets);
+    auto rows = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
 
-	// marker are oldschool pre-emoji happy faces ☺☻ (0x01, 0x02)
-	const auto binaryMarker = reinterpret_cast<uint16_t*>(mem.newPtr(2));
-	const auto binaryMarkerPtr = recast<char*>(binaryMarker);
+    bufferLength = 0;
 
-	binaryMarkerPtr[0] = 0x01; // a hollow happy face
-	binaryMarkerPtr[1] = 0x02; // a filled happy face
+    // we are going to serialize to a HeapStack object
+    // and flatten it when we are done
+    HeapStack mem;
 
-	// first 8 bytes are the sized of the block
-	// Note: this is a pointer to the the first 8 bytes of the block
-	const auto blockCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
-	*blockCount = rows.size();
+    // marker are oldschool pre-emoji happy faces ☺☻ (0x01, 0x02)
+    const auto binaryMarker = reinterpret_cast<uint16_t*>(mem.newPtr(2));
+    const auto binaryMarkerPtr = recast<char*>(binaryMarker);
 
-	// next 8 bytes of block are the offset into the block
-	// where text values are going to be stored. 
-	// Note: this is a pointer to the the second 8 bytes of the block
-	const auto textCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
-	*textCount = mergedText.size();
+    binaryMarkerPtr[0] = 0x01; // a hollow happy face
+    binaryMarkerPtr[1] = 0x02; // a filled happy face
 
-	// iterate the result set
-	for (const auto r: rows)
-	{
-		// make space for a key
-		const auto keyPtr = recast<openset::result::RowKey*>(mem.newPtr(sizeof(openset::result::RowKey)));
-		// make space for the columns
-		const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(sizeof(openset::result::Accumulator)));
+                               // first 8 bytes are the sized of the block
+                               // Note: this is a pointer to the the first 8 bytes of the block
+    const auto blockCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
+    *blockCount = rows.size();
 
-		// copy the values
-		memcpy(keyPtr, r.first.key, sizeof(openset::result::RowKey));
-		memcpy(accumulatorPtr, r.second->columns, sizeof(openset::result::Accumulator));		
-	}
-	
-	// lets encode the text. 
-	// text is stored with the hash value (8 bytes) and
-	// a null terminated c-style string, it can contain UTF-8 or whatever,
-	// we don't really care, it's all just bytes to us.
-	for (const auto t : mergedText)
-	{
-		const auto hash = recast<int64_t*>(mem.newPtr(8)); // get 8 bytes for hash
-		const auto length = recast<int32_t*>(mem.newPtr(4)); // get 4 bytes for length
+    // next 8 bytes of block are the offset into the block
+    // where text values are going to be stored. 
+    // Note: this is a pointer to the the second 8 bytes of the block
+    const auto textCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
+    *textCount = mergedText.size();
 
-		*hash = t.first; // store the hash
-		*length = strlen(t.second); // store the length
+    // record the types and accumulators
+    const auto types = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accTypes)));
+    memcpy(types, resultSets[0]->accTypes, sizeof(ResultSet::accTypes));
 
-		// get buffer for text + 1 for 0x00
-		const auto textBuffer = mem.newPtr(*length + 1);
+    const auto modifiers = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accModifiers)));
+    memcpy(modifiers, resultSets[0]->accModifiers, sizeof(ResultSet::accModifiers));
 
-		memcpy(textBuffer, t.second, *length);
-		textBuffer[*length] = 0; // set null at the last position in the buffer
+    // iterate the result set
+    for (const auto r : rows)
+    {
+        // make space for a key
+        const auto keyPtr = recast<openset::result::RowKey*>(mem.newPtr(sizeof(openset::result::RowKey)));
+        // make space for the columns
+        const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(sizeof(openset::result::Accumulator)));
 
-		// NOTE: when parsing, size of record is 8+4+(length of string)+(1 for null)
-	}
+        // copy the values
+        memcpy(keyPtr, r.first.key, sizeof(openset::result::RowKey));
+        memcpy(accumulatorPtr, r.second->columns, sizeof(openset::result::Accumulator));
+    }
 
-	bufferLength = mem.getBytes();
+    // lets encode the text. 
+    // text is stored with the hash value (8 bytes) and
+    // a null terminated c-style string, it can contain UTF-8 or whatever,
+    // we don't really care, it's all just bytes to us.
+    for (const auto t : mergedText)
+    {
+        const auto hash = recast<int64_t*>(mem.newPtr(8)); // get 8 bytes for hash
+        const auto length = recast<int32_t*>(mem.newPtr(4)); // get 4 bytes for length
 
-	return mem.flatten();
+        *hash = t.first; // store the hash
+        *length = strlen(t.second); // store the length
+
+                                    // get buffer for text + 1 for 0x00
+        const auto textBuffer = mem.newPtr(*length + 1);
+
+        memcpy(textBuffer, t.second, *length);
+        textBuffer[*length] = 0; // set null at the last position in the buffer
+
+                                 // NOTE: when parsing, size of record is 8+4+(length of string)+(1 for null)
+    }
+
+    bufferLength = mem.getBytes();
+
+    return mem.flatten();
+
 }
 
 bool ResultMuxDemux::isInternode(
@@ -359,6 +492,13 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	const auto textCount = *reinterpret_cast<int64_t*>(read);
 	read += 8;
 
+    // record the types and accumulators
+    memcpy(result->accTypes, read, sizeof(ResultSet::accTypes));
+    read += sizeof(ResultSet::accTypes);
+
+    memcpy(result->accModifiers, read, sizeof(ResultSet::accModifiers));
+    read += sizeof(ResultSet::accModifiers);
+    
 	for (auto i = 0; i < blockCount; ++i)
 	{
 		if (read >= end)
@@ -391,44 +531,28 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	return result;
 }
 
-void ResultMuxDemux::resultSetToJSON(
-	const openset::query::Macro_s macros,
-	openset::db::Table* table,
-	cjson* doc,
-	ResultSet::RowVector& rows,
-	bigRing<int64_t, const char*>& mergedText)
+void ResultMuxDemux::resultSetToJson(
+    const int resultColumnCount,
+    const int resultSetCount,
+    std::vector<openset::result::ResultSet*>& resultSets,
+    cjson* doc)
 {
-	auto blob = table->getAttributeBlob();
 
-	const auto shiftIterations = macros.segments.size() ? macros.segments.size() : 1;
-	const auto shiftSize = macros.vars.columnVars.size();
+    auto mergedText = mergeResultText(resultSets);
+    auto rows = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
+
+    const auto shiftIterations = resultSetCount ? resultSetCount : 1;
+    const auto shiftSize = resultColumnCount;
 
 	// this will retrieve either the string literals from the macros,
 	// the merged localText or exorcise a lock and look in the blob
-	const auto getText = [&](int64_t column, int64_t valueHash) -> const char*
+	const auto getText = [&](int64_t valueHash) -> const char*
 	{
 		auto textPair = mergedText.get(valueHash);
 		
 		// if it is already cached return the cached pointer
 		if (textPair)
 			return textPair->second;
-
-		// if no column is found we can't look in the AttributeBlob, so
-		// return NA_TEXT
-		if (column == NONE)
-			return NA_TEXT;
-
-		// look in the blob
-		auto text = blob->getValue(
-			column,
-			valueHash);
-
-		// if we got some text, then return it
-		if (text)
-		{
-			mergedText.set(valueHash, text);
-			return text;
-		}
 
 		// nothing found, NA_TEXT
 		return NA_TEXT;
@@ -449,10 +573,14 @@ void ResultMuxDemux::resultSetToJSON(
 			maxDepth = depth;
 	}
 
-	auto count = -1;
+
+    auto &modifiers = resultSets[0]->accModifiers;
+    auto &types = resultSets[0]->accTypes;
+
+	auto rowCounter = -1;
 	for (auto& r : rows)
 	{
-		++count;
+		++rowCounter;
 
 		// currentKey is r.first if that makes reading this easier :)
 		auto &currentKey = r.first;
@@ -478,12 +606,32 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// set group - this could be text... so, lets see if we cached it (all text 
 		// stored by script will be cached)
-		auto text = getText(NONE, currentKey.key[depth]);
 
-		if (text != NA_TEXT)
-			entry->set("g", text);
-		else
-			entry->set("g", currentKey.key[depth]);
+        switch (currentKey.types[depth])
+        {
+            case ResultTypes_e::Int: 
+                entry->set("g", currentKey.key[depth]);
+                break;
+            case ResultTypes_e::Double: 
+                entry->set("g", currentKey.key[depth] / 10000.0);
+                break;
+            case ResultTypes_e::Bool:
+                entry->set("g", currentKey.key[depth] ? true : false);
+                break;
+            case ResultTypes_e::Text:
+                {
+                auto text = getText(currentKey.key[depth]);
+
+                if (text != NA_TEXT)
+                    entry->set("g", text);
+                else
+                    entry->set("g", currentKey.key[depth]);
+                }
+                break;
+            case ResultTypes_e::None: 
+            default:
+                entry->set("g", "n/a");
+        }
 
 		// set columns
 
@@ -492,67 +640,71 @@ void ResultMuxDemux::resultSetToJSON(
 			auto array = entry->pushArray();
 			// one result columns branch will be "c", if multiple it will be "c", "c2", "c3", "c4"
 			array->setName(!shiftCount ? "c" : "c" + to_string(shiftCount + 1)); 
-
-			auto dataIndex = shiftOffset - 1; // columns in result are side-by-side in groups, we iterate by group offset
-
-			for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
+            			
+            for (auto dataIndex = shiftOffset, colIndex = 0; dataIndex < shiftOffset + shiftSize; ++dataIndex, ++colIndex)
 			{
-				++dataIndex;
+
+                const auto& value = r.second->columns[dataIndex].value;
+                const auto& count = r.second->columns[dataIndex].count;
 
 				// Is this a null, a double, a string or anything else (ints)
-
-				// sorry for all the {} but it makes it easier for me to follow
 				if (r.second->columns[dataIndex].value == NONE)
 				{
-					array->pushNull();
+                    if (types[colIndex] == ResultTypes_e::Double ||
+                        types[colIndex] == ResultTypes_e::Int)
+                        array->push(static_cast<int64_t>(0));
+                    else
+					    array->pushNull();
 				}
 				else
 				{
-					switch (g.modifier)
+					switch (modifiers[colIndex])
 					{
 					case query::Modifiers_e::sum:
 					case query::Modifiers_e::min:
 					case query::Modifiers_e::max:
-						if (g.schemaType == db::columnTypes_e::doubleColumn)
-							array->push(r.second->columns[dataIndex].value / 10000.0);
+						if (types[colIndex] == ResultTypes_e::Double)
+							array->push(value / 10000.0);
 						else
-							array->push(r.second->columns[dataIndex].value);
+							array->push(value);
 						break;
 					case query::Modifiers_e::avg:
-						if (!r.second->columns[dataIndex].count)
+						if (!count)
 							array->pushNull();
-						else if (g.schemaType == db::columnTypes_e::doubleColumn)
-							array->push((r.second->columns[dataIndex].value / 10000.0) / static_cast<double>(r.second->columns[dataIndex].count));
+						else if (types[colIndex] == ResultTypes_e::Double)
+							array->push((value / 10000.0) / static_cast<double>(count));
 						else
-							array->push(r.second->columns[dataIndex].value / static_cast<double>(r.second->columns[dataIndex].count));
+							array->push(value / static_cast<double>(count));
 						break;
 					case query::Modifiers_e::count:
 					case query::Modifiers_e::dist_count_person:
-						array->push(r.second->columns[dataIndex].value);
+						array->push(value);
 						break;
 					case query::Modifiers_e::value:
-						if (g.schemaType == db::columnTypes_e::textColumn)
-							array->push(getText(g.schemaColumn, r.second->columns[dataIndex].value));
-						else if (g.schemaType == db::columnTypes_e::doubleColumn)
-							array->push(r.second->columns[dataIndex].value / 10000.0);
+                        if (types[colIndex] == ResultTypes_e::Text)
+							array->push(getText(value));
+						else if (types[colIndex] == ResultTypes_e::Double)
+							array->push(value / 10000.0);
+                        else if (types[colIndex] == ResultTypes_e::Bool)
+                            array->push(value ? true : false);
 						else
-							array->push(r.second->columns[dataIndex].value);
+							array->push(value);
 						break;
 					case query::Modifiers_e::var:
 					{
-						auto columnText = getText(NONE, r.second->columns[dataIndex].value);
-
-						// TODO - figure out some smart way to say this was a floating point number
-
-						if (columnText != NA_TEXT)
-							array->push(columnText);
-						else
-							array->push(r.second->columns[dataIndex].value);
-					}
+                        if (types[colIndex] == ResultTypes_e::Text)
+                            array->push(getText(value));
+                        else if (types[colIndex] == ResultTypes_e::Double)
+                            array->push(value / 10000.0);
+                        else if (types[colIndex] == ResultTypes_e::Bool)
+                            array->push(value ? true : false);
+                        else
+                            array->push(value);
+                    }
 					break;
 
 					default:
-						array->push(r.second->columns[dataIndex].value);
+						array->push(value);
 					}
 				}
 			}
@@ -560,7 +712,7 @@ void ResultMuxDemux::resultSetToJSON(
 
 		// check to see if the next row is wider (rows[count+1].first is next key)
 		// if it is, lets add a nesting level and set current to that level
-		if (count < rows.size()-1 && rows[count+1].first.getDepth() > currentKey.getDepth())
+		if (rowCounter < rows.size()-1 && rows[rowCounter+1].first.getDepth() > currentKey.getDepth())
 		{
 			current = entry->pushArray();
 			current->setName("_");
@@ -569,31 +721,13 @@ void ResultMuxDemux::resultSetToJSON(
 		lastKey = r.first;
 	}
 
-	
-	doc->recurseSort("_", [&](const cjson* left, const cjson* right) -> bool
-	{
-		auto colLeft = left->xPath("/c");
-		auto colRight = right->xPath("/c");
-
-		for (auto &o : macros.vars.sortOrder)
-		{
-			if (colLeft->at(o.column)->getInt() == colRight->at(o.column)->getInt())
-				continue;
-			if (o.order == openset::query::sortOrder_e::ascending)
-				return (colLeft->at(o.column)->getInt() < colRight->at(o.column)->getInt());
-			else
-				return (colLeft->at(o.column)->getInt() > colRight->at(o.column)->getInt());
-		}
-
-		return false;
-	});
-
+    /*
 	if (macros.isSegment)
 	{
 		// lock the globals while we modify them
 		csLock gLock(*table->getGlobalsLock());
 
-		//
+		// set globals for the table
 		const auto tableGlobals = table->getGlobalsPtr();
 
 		if (!tableGlobals->contains("segment"))
@@ -613,6 +747,50 @@ void ResultMuxDemux::resultSetToJSON(
 					(*tableGlobals)["segment"][segmentName] = columns->at(0)->getInt();
 			}			
 	}
+    */
 }
 
+void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column)
+{
+    doc->recurseSort("_", [&](const cjson* left, const cjson* right) -> bool
+    {
+        auto colLeft = left->xPath("/c");
+        auto colRight = right->xPath("/c");
 
+        switch (colLeft->at(column)->type())
+        {
+            case cjsonType::BOOL: 
+            case cjsonType::INT: 
+                if (sort == ResultSortOrder_e::Asc)
+                    return (colLeft->at(column)->getInt() < colRight->at(column)->getInt());
+                else
+                    return (colLeft->at(column)->getInt() > colRight->at(column)->getInt());
+            case cjsonType::DBL: 
+                if (sort == ResultSortOrder_e::Asc)
+                    return (colLeft->at(column)->getDouble() < colRight->at(column)->getDouble());
+                else
+                    return (colLeft->at(column)->getDouble() > colRight->at(column)->getDouble());
+            case cjsonType::STR: 
+                if (sort == ResultSortOrder_e::Asc)
+                    return (colLeft->at(column)->getString() < colRight->at(column)->getString());
+                else
+                    return (colLeft->at(column)->getString() > colRight->at(column)->getString());
+            break;           
+
+            case cjsonType::OBJECT:
+            case cjsonType::ARRAY: 
+            case cjsonType::VOIDED: 
+            case cjsonType::NUL: 
+            default: 
+                return false;
+        }
+    });
+}
+
+void ResultMuxDemux::jsonResultTrim(cjson* doc, const int trim)
+{
+    if (trim <= 0)
+        return;
+    
+    doc->recurseTrim("_", trim);
+}

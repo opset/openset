@@ -189,6 +189,8 @@ inline Tests test_complex_events()
 
 					ASSERT(result->results.size() != 0);
 
+                    result->setAccTypesFromMacros(queryMacros);
+
 					// we are going to sort the list, this is done for merging, but
 					// being we have one partition in this test we won't actually be merging.
 					result->makeSortedList();
@@ -210,9 +212,13 @@ inline Tests test_complex_events()
 					cjson resultJSON;
 
 					// make some JSON
-					auto rows = merger.mergeResultSets(queryMacros, table, resultSets);
-					auto text = merger.mergeText(queryMacros, table, resultSets);
+                    merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                    /*
+					auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                    merger.mergeMacroLiterals(queryMacros, resultSets);
+					auto text = merger.mergeResultText(resultSets);
 					merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
+                    */
 
 					// NOTE - uncomment if you want to see the results
 					//cout << cjson::Stringify(&resultJSON, true) << endl;
