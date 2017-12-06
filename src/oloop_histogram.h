@@ -17,12 +17,14 @@ namespace openset
 
 	namespace async
 	{
-		class OpenLoopCount : public OpenLoop
+		class OpenLoopHistogram : public OpenLoop
 		{
 		public:
-			query::QueryPairs macrosList;
+			openset::query::Macro_s macros;
 			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
+            std::string groupName;
 			openset::db::Table* table;
+            int64_t bucket; // scaled integater (double * 10000.0)
 			openset::db::TablePartitioned* parts;
 			int64_t maxLinearId;
 			int32_t currentLinId;
@@ -32,35 +34,22 @@ namespace openset
 			int runCount;
 			int64_t startTime;
 			int population;
-			int popEvaluated;
 			openset::query::Indexing indexing;
 			openset::db::IndexBits* index;
 			openset::result::ResultSet* result;
+            // loop locals
+            result::RowKey rowKey;
 
-			std::unordered_set<std::string> segmentWasCached;
-
-			query::QueryPairs::iterator macroIter;
-			query::Macro_s macros;
-
-			openset::query::BitMap resultBits;
-
-			std::string resultName;
-
-			explicit OpenLoopCount(
+			explicit OpenLoopHistogram(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
 				openset::db::Table* table,
-				const query::QueryPairs macros,
+				openset::query::Macro_s macros, 
+                std::string groupName,
+                const int64_t bucket,
 				openset::result::ResultSet* result,
 				const int instance);
 
-			~OpenLoopCount() final;
-
-			void storeResult(std::string name, int64_t count) const;
-
-			// store segments that have a TTL
-			void storeSegments();
-
-			bool nextMacro();
+			~OpenLoopHistogram() final;
 
 			void prepare() final;
 			void run() final;

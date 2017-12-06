@@ -466,7 +466,7 @@ public:
 	static cjson* fromFile(std::string fileName, cjson* root = nullptr);
 	static bool toFile(std::string fileName, cjson* root, bool pretty = true);
 
-	void sortMembers(SortFunction sortLambda)
+	void sortMembers(const SortFunction sortLambda)
 	{
 		if (membersHead == nullptr)
 			return;
@@ -477,9 +477,8 @@ public:
 		auto it = membersHead;
 		while (it)
 		{
-			if (it->nodeType == cjsonType::VOIDED)
-				continue;
-			sortVector.push_back(it);
+			if (it->nodeType != cjsonType::VOIDED)
+    			sortVector.push_back(it);
 			it = it->siblingNext;
 		}
 

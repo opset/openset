@@ -144,6 +144,12 @@ namespace openset
 			// this will always point to the last debug message
 			Debug_s* lastDebug{ nullptr };
 
+            // return values when calling exec with a function
+            // this is a vector because calling with segment will have
+            // multiple return values
+            using Returns = std::vector<cvar>;
+            Returns returns;
+
 			explicit Interpreter(
 				Macro_s& macros,
 				const InterpretMode_e interpretMode = InterpretMode_e::query);
@@ -216,6 +222,9 @@ namespace openset
 			void exec();
 			void exec(const string functionName);
 			void exec(const int64_t functionHash);
+
+            // if you need the result of exec+function this will get it or return value NONE
+            Returns& getLastReturn();
 		};
 	}
 }

@@ -215,6 +215,37 @@ Returns the event sequence for an individual.
 
 200 or 400 status with JSON data or error.
 
+## POST /v1/query/{table}/histogram/{name}
+
+This will generate a histogram using`PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
+
+If `bucket=` is provided in the query, then missing values will be zero-filled. The default is to fill between the min and max value in the set. `min=` can be used to override minimum fill. `max=` can be used to override maximum fill. If `max=` is provided, all values over the max will be totaled into the value of max.
+
+**URL**
+* `table`  is the name of the table to query
+* `name` is the name of the dataset in the resulting JSON.
+
+**query parameters:**
+
+| param | values            | note |
+| ---- | ----------------- | ---- |
+|`debug=`| `true/false`      | will return the assembly for the query rather than the results|
+| `segments=`| `segment,segment` | comma separted segment list. Segment must be created with a `counts` query. The segment `*` represents all people. |
+|`order=`| `asc/desc`        | default is descending order.|
+|`trim=`| `# limit`         | clip long branches at a certain count. Root nodes will still include totals for the entire branch. |
+|`str_{var_name}` | `text`            | replace `{{var_name}}` string in script (will be automatically quoted)|
+|`int_{var_name}` | `integer`         | replace `{{var_name}}` numeric value in script|
+|`dbl_{var_name}` | `double`          | replace `{{var_name}}` numeric value in script|
+|`bool_{var_name}` | `true/false`      | replace `{{var_name}}` boolean value in script|
+|`bucket=` | `#`                 |  cluster values by `#`, all user counts
+|`min=` | `#`                 |  set histogram fill to `min=#`
+|`max=` | `#`                 |  clip histogram fill at `max=#`. The value in max will contain the sum of all nodes `>=` to the `max=` value.
+
+**Return**
+
+200 or 400 status with JSON data or error.
+
+
 # Internode (internode node chatter)
 
 Don't call these from client code. 

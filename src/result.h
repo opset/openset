@@ -328,8 +328,14 @@ namespace openset
                 std::vector<openset::result::ResultSet*>& resultSets,
                 cjson* doc);
 
-            static void jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column);
+            static void jsonResultHistogramFill(
+                cjson* doc, 
+                const int64_t bucket, 
+                const int64_t forceMin = std::numeric_limits<int64_t>::min(),
+                const int64_t forceMax = std::numeric_limits<int64_t>::min());
 
+            static void jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column);
+            static void jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e sort);
             static void jsonResultTrim(cjson* doc, const int trim);
         };
 	}

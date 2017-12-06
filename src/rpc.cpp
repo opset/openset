@@ -11,6 +11,7 @@
 #include "oloop_count.h"
 #include "oloop_person.h"
 #include "oloop_column.h"
+#include "oloop_histogram.h"
 
 #include "asyncpool.h"
 #include "asyncloop.h"
@@ -1607,7 +1608,10 @@ shared_ptr<cjson> forkQuery(
     const ResultSortMode_e sortMode = ResultSortMode_e::column,
     const ResultSortOrder_e sortOrder = ResultSortOrder_e::Desc,
     const int sortColumn = 0,
-    const int trim = -1) 
+    const int trim = -1,
+    const int64_t bucket = 0,
+    const int64_t forceMin = std::numeric_limits<int64_t>::min(),
+    const int64_t forceMax = std::numeric_limits<int64_t>::min())
 {
 	auto newParams = message->getQuery();
 	newParams.emplace("fork", "true");
@@ -1654,9 +1658,13 @@ shared_ptr<cjson> forkQuery(
         resultSets,
         resultJson.get());
 
+    if (bucket)
+        ResultMuxDemux::jsonResultHistogramFill(resultJson.get(), bucket, forceMin, forceMax);
+
     switch (sortMode)
     {
         case ResultSortMode_e::key: 
+            ResultMuxDemux::jsonResultSortByGroup(resultJson.get(), sortOrder);
         break;
         case ResultSortMode_e::column: 
             ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn);
@@ -1741,9 +1749,8 @@ shared_ptr<cjson> forkQuery(
 	};
 
 	// add status nodes to JSON document
-	auto metaJson = resultJson->setObject("info");
-
-	auto dataJson = metaJson->setObject("data");
+	//auto metaJson = resultJson->setObject("info");
+	//auto dataJson = metaJson->setObject("data");
 	//fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
 	//fillMeta(queryMacros.vars.groupVars, dataJson->setArray("groups"));
 
@@ -1789,7 +1796,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
     if (message->isParam("sort"))
     {
         sortColumnName = message->getParamString("sort");
-        if (sortColumnName == "key")
+        if (sortColumnName == "key" || sortColumnName == "g")
             sortMode = ResultSortMode_e::key;
     }
 
@@ -1881,41 +1888,6 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
         }
 
     }
-
-	/* TODO let us revist these
-	if (params)
-	{
-		auto nodes = params->getNodes();
-		for (auto n: nodes)
-		{
-			cvar paramVar;
-			switch (n->type())
-			{
-				case cjsonType::VOIDED: 
-				case cjsonType::NUL:
-					paramVar = NONE;
-				break;
-				case cjsonType::OBJECT: 
-				case cjsonType::ARRAY: 
-					continue;
-				case cjsonType::INT: 
-					paramVar = n->getInt();
-				break;
-				case cjsonType::DBL: 
-					paramVar = n->getDouble();
-				break;
-				case cjsonType::STR: 
-					paramVar = n->getCstr();
-				break;
-				case cjsonType::BOOL: 
-					paramVar = n->getBool();
-				break;
-			}
-
-			paramVars.emplace(n->nameCstr(), paramVar);
-		}
-	}
-	*/
 
 	openset::query::Macro_s queryMacros; // this is our compiled code block
 	openset::query::QueryParser p;
@@ -2864,8 +2836,6 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
         return new OpenLoopColumn(shuttle, table, queryInfo, resultSets[loop->getWorkerId()], instance);
     });
 
-
-
 }
 
 void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matches)
@@ -2979,6 +2949,356 @@ void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matche
         
         message->reply(response->code, response->data, response->length);
     }    
+}
+
+void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& matches)
+{
+    auto database = openset::globals::database;
+    const auto partitions = openset::globals::async;
+
+    const auto request = message->getJSON();
+    const auto tableName = matches.find("table"s)->second;
+    const auto groupName = matches.find("name"s)->second;
+    const auto queryCode = std::string{ message->getPayload(), message->getPayloadLength() };
+
+    const auto debug = message->getParamBool("debug");
+    const auto isFork = message->getParamBool("fork");
+
+    const auto trimSize = message->getParamInt("trim", -1);
+    const auto sortOrder = message->getParamString("order", "desc") == "asc" ? ResultSortOrder_e::Asc : ResultSortOrder_e::Desc;
+
+    const auto sortMode = ResultSortMode_e::key;
+
+    const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+    Logger::get().info(log);
+
+    const auto startTime = Now();
+
+    if (!tableName.length())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "missing or invalid table name" },
+                message);
+        return;
+    }
+
+    if (!queryCode.length())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "missing query code (POST query as text)" },
+                message);
+        return;
+    }
+
+    auto table = database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "table could not be found" },
+                message);
+        return;
+    }
+
+    // override session time if provided, otherwise use table default
+    const auto sessionTime = message->getParamInt("session_time", table->getSessionTime());
+
+    /*
+    * Build a map of variable names and vars that will
+    * become the new default value for variables defined
+    * in a pyql script (under the params headings).
+    *
+    * These will be reset upon each run of the script
+    * to return it's state back to original
+    */
+
+    openset::query::ParamVars paramVars;
+
+    for (auto p : message->getQuery())
+    {
+        cvar value = p.second;
+
+        if (p.first.find("str_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value;
+        }
+        else if (p.first.find("int_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getInt64();
+        }
+        else if (p.first.find("dbl_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getDouble();
+        }
+        else if (p.first.find("bool_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getBool();
+        }
+
+    }
+
+    openset::query::Macro_s queryMacros; // this is our compiled code block
+    openset::query::QueryParser p;
+
+    try
+    {
+        p.compileQuery(queryCode.c_str(), table->getColumns(), queryMacros, &paramVars);
+    }
+    catch (const std::runtime_error &ex)
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::parse,
+                openset::errors::errorCode_e::syntax_error,
+                std::string{ ex.what() }
+            },
+            message);
+        return;
+    }
+
+    if (p.error.inError())
+    {
+        Logger::get().error(p.error.getErrorJSON());
+        message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
+        return;
+    }
+
+    // Histogram querys must call tally
+    if (queryMacros.marshalsReferenced.count(query::Marshals_e::marshal_tally))
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::parse,
+                openset::errors::errorCode_e::syntax_error,
+                "histogram queries should not call 'tally'. They should 'return' the value to store."
+            },
+            message);
+        return;
+    }
+
+    if (message->isParam("segments"))
+    {
+        const auto segmentText = message->getParamString("segments");
+        auto parts = split(segmentText, ',');
+
+        queryMacros.segments.clear();
+
+        for (auto& part : parts)
+            if (part = trim(part); part.length())
+                queryMacros.segments.push_back(part);
+
+        if (!queryMacros.segments.size())
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::query,
+                    openset::errors::errorCode_e::syntax_error,
+                    "no segment names specified" },
+                    message);
+            return;
+        }
+    }
+
+    // set the sessionTime (timeout) value, this will get relayed 
+    // through the to oloop_query, the person object and finally the grid
+    queryMacros.sessionTime = sessionTime;
+
+    const auto compileTime = Now() - startTime;
+    const auto queryStart = Now();
+
+    if (debug)
+    {
+        auto debugOutput = openset::query::MacroDbg(queryMacros);
+
+        // TODO - add functions for reply content types and error codes
+
+        // reply as text
+        message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
+        return;
+    }
+
+    int64_t bucket = 0;
+    if (message->isParam("bucket"))
+        bucket = static_cast<int64_t>(stod(message->getParamString("bucket", "0")) * 10000.0);
+
+    auto forceMin = std::numeric_limits<int64_t>::min();
+    if (message->isParam("min"))
+        forceMin = static_cast<int64_t>(stod(message->getParamString("min", "0")) * 10000.0);
+
+    auto forceMax = std::numeric_limits<int64_t>::min();
+    if (message->isParam("max"))
+        forceMax = static_cast<int64_t>(stod(message->getParamString("max", "0")) * 10000.0);
+
+    /*
+    * We are originating the query.
+    *
+    * At this point in the function we have validated that the
+    * script compiles, maps to the schema, is on a valid table,
+    * etc.
+    *
+    * We will call our forkQuery function.
+    *
+    * forQuery will call all the nodes (including this one) with the
+    * `is_fork` varaible set to true.
+    *
+    *
+    */
+    if (!isFork)
+    {
+        const auto json = std::move(
+            forkQuery(
+                table,
+                message,
+                1,
+                queryMacros.segments.size(),
+                sortMode,
+                sortOrder,
+                0,
+                trimSize,
+                bucket,
+                forceMin,
+                forceMax
+            )
+        );
+
+        if (json) // if null/empty we had an error
+            message->reply(http::StatusCode::success_ok, *json);
+        return;
+    }
+
+    // We are a Fork!
+
+    // create list of active_owner parititions for factory function
+    auto activeList = openset::globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
+        openset::globals::running->nodeId,
+        {
+            openset::mapping::NodeState_e::active_owner
+        }
+    );
+
+    // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
+    //      we don't have to worry about locking anything shared between partitions in the same
+    //      thread as they are executed serially, rather than in parallel. 
+    //
+    //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
+    //      as well as generally reduce the number of ResultSets needed (especially when partition
+    //      counts are high).
+    //
+    //      Note: These are heap objects because we lose scope, as this function
+    //            exits before the result objects are used.
+    //
+    std::vector<ResultSet*> resultSets;
+
+    for (auto i = 0; i < partitions->getWorkerCount(); ++i)
+        resultSets.push_back(new openset::result::ResultSet());
+
+    // nothing active - return an empty set - not an error
+    if (!activeList.size())
+    {
+        // 1. Merge Macro Literals
+        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
+        // 2. Merge the rows
+        int64_t bufferLength = 0;
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
+            queryMacros.vars.columnVars.size(),
+            queryMacros.indexes.size(),
+            resultSets,
+            bufferLength);
+
+        // reply will be responsible for buffer
+        message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        PoolMem::getPool().freePtr(buffer);
+
+        return;
+    }
+
+    /*
+    *  this Shuttle will gather our result sets roll them up and spit them back
+    *
+    *  note that queryMacros are captured with a copy, this is because a reference
+    *  version will have had it's destructor called when the function exits.
+    *
+    *  Note: ShuttleLamda comes in two versions,
+    */
+    
+    //auto shuttle = new ShuttleLambdaAsync<CellQueryResult_s>(
+    const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
+        message,
+        activeList.size(),
+        [queryMacros, table, resultSets, startTime, queryStart, compileTime]
+    (vector<openset::async::response_s<CellQueryResult_s>> &responses,
+        openset::web::MessagePtr message,
+        voidfunc release_cb) mutable
+    { // process the data and respond
+      // check for errors, add up totals
+        for (const auto &r : responses)
+        {
+            if (r.data.error.inError())
+            {
+                // any error that is recorded should be considered a hard error, so report it
+                auto errorMessage = r.data.error.getErrorJSON();
+                message->reply(http::StatusCode::client_error_bad_request, errorMessage);
+
+                // clean up stray resultSets
+                for (auto resultSet : resultSets)
+                    delete resultSet;
+
+                release_cb();
+
+                return;
+            }
+        }
+                
+        int64_t bufferLength = 0;
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
+            1,
+            queryMacros.indexes.size(),
+            resultSets,
+            bufferLength);
+
+        message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        Logger::get().info("Fork query on " + table->getName());
+
+        // clean up all those resultSet*
+        for (auto r : resultSets)
+            delete r;
+
+        PoolMem::getPool().freePtr(buffer);
+
+        release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
+    });
+
+    auto instance = 0;
+    // pass factory function (as lambda) to create new cell objects
+    partitions->cellFactory(activeList, [=, &instance](AsyncLoop* loop) -> OpenLoop*
+    {
+        instance++;
+        return new OpenLoopHistogram(shuttle, table, queryMacros, groupName, bucket, resultSets[loop->getWorkerId()], instance);
+    });
 }
 
 void openset::comms::Dispatch(const openset::web::MessagePtr message)

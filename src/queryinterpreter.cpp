@@ -2718,6 +2718,7 @@ void openset::query::Interpreter::execReset()
 void openset::query::Interpreter::exec()
 {
 	execReset();
+    returns.clear(); // cannot be cleared in segment loop
 
 	const auto inst = &macros.code.front();
 
@@ -2732,6 +2733,11 @@ void openset::query::Interpreter::exec()
 				if (seg->bitState(linid)) // if the person is in this segment run the ops
 					opRunner(inst, 0);
 
+                if (stackPtr == stack)
+                    returns.push_back(NONE); // return NONE if stack is unwound
+                else
+                    returns.push_back(*(stackPtr - 1)); // capture last value on stack
+
 				// for each segment we offset the results by the number of columns
 				segmentColumnShift += macros.vars.columnVars.size();
 				execReset();
@@ -2741,6 +2747,12 @@ void openset::query::Interpreter::exec()
 		{
 			segmentColumnShift = 0;
 			opRunner(inst, 0);
+
+            if (stackPtr == stack)
+                returns.push_back(NONE); // return NONE if stack is unwound
+            else
+                returns.push_back(*(stackPtr - 1)); // capture last value on stack
+
 		}
 	}
 	catch (const std::runtime_error& ex)
@@ -2773,76 +2785,13 @@ void openset::query::Interpreter::exec()
 
 void openset::query::Interpreter::exec(const string functionName)
 {
-	execReset();
-
-	for (auto& f:macros.vars.functions)
-	{
-		if (f.name == functionName)
-		{
-			const auto inst = &macros.code.front() + f.execPtr;
-
-			try
-			{
-				// if we have segment constraints
-				if (segmentIndexes.size())
-				{
-					segmentColumnShift = 0;
-					for (auto seg : segmentIndexes)
-					{
-						if (seg->bitState(linid)) // if the person is in this segment run the ops
-							opRunner(inst, 0);
-
-						// for each segment we offset the results by the number of columns
-						segmentColumnShift += macros.vars.columnVars.size();
-						execReset();
-					}
-				}
-				else
-				{
-					segmentColumnShift = 0;
-					opRunner(inst, 0);
-				}
-			}
-			catch (const std::runtime_error& ex)
-			{
-				std::string additional = "";
-				if (lastDebug)
-					additional = lastDebug->toStrShort();
-
-				error.set(
-					openset::errors::errorClass_e::run_time,
-					openset::errors::errorCode_e::run_time_exception_triggered,
-					std::string{ ex.what() } +" (2)",
-					additional
-				);
-			}
-			catch (...)
-			{
-				std::string additional = "";
-				if (lastDebug)
-					additional = lastDebug->toStrShort();
-
-				error.set(
-					openset::errors::errorClass_e::run_time,
-					openset::errors::errorCode_e::run_time_exception_triggered,
-					"unknown run-time error (3)",
-					additional
-				);
-			}
-
-			return;
-		}
-	}
-
-	error.set(
-		errors::errorClass_e::run_time,
-		errors::errorCode_e::missing_function_entry_point,
-		"function: " + functionName);
+    exec(MakeHash(functionName));
 }
 
 void openset::query::Interpreter::exec(const int64_t functionHash)
 {
 	execReset();
+    returns.clear(); // cannot be cleared in segment loop
 
 	for (auto& f : macros.vars.functions)
 	{
@@ -2861,6 +2810,11 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 						if (seg->bitState(linid)) // if the person is in this segment run the ops
 							opRunner(inst, 0);
 
+                        if (stackPtr == stack)
+                            returns.push_back(NONE); // return NONE if stack is unwound
+                        else
+                            returns.push_back(*(stackPtr - 1)); // capture last value on stack
+
 						// for each segment we offset the results by the number of columns
 						segmentColumnShift += macros.vars.columnVars.size();
 						execReset();
@@ -2870,6 +2824,11 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 				{
 					segmentColumnShift = 0;
 					opRunner(inst, 0);
+
+                    if (stackPtr == stack)
+                        returns.push_back(NONE); // return NONE if stack is unwound
+                    else
+                        returns.push_back(*(stackPtr - 1)); // capture last value on stack
 				}
 			}
 			catch (const std::runtime_error& ex)
@@ -2908,5 +2867,10 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 		errors::errorClass_e::run_time,
 		errors::errorCode_e::missing_function_entry_point,
 		"function_id: " + to_string(functionHash));
+}
+
+openset::query::Interpreter::Returns& openset::query::Interpreter::getLastReturn()
+{
+    return returns;
 }
 

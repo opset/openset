@@ -1669,6 +1669,18 @@ bool QueryParser::isSplice(LineParts& conditions, const int index)
 	return false;
 }
 
+int QueryParser::search(LineParts& conditions, string value, int startIdx)
+{
+    if (startIdx >= conditions.size())
+        return -1;
+
+    for (; startIdx < conditions.size(); ++startIdx)
+        if (conditions[startIdx] == value)
+            break;
+
+    return (startIdx == conditions.size()) ? -1 : startIdx;
+}
+
 QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, const int startIdx, int& reinsertIdx)
 {
 	LineParts result;
@@ -2014,6 +2026,24 @@ void QueryParser::lineTranslation(FirstPass& lines)
 							line.debug
 						};
 
+
+                    std::string with = "";
+                    if (const auto withIdx = search(conditions, "with", index); withIdx != -1)
+                    {                       
+                        if (withIdx + 1 >= conditions.size())
+                        {
+                            throw ParseFail_s{
+                                errors::errorClass_e::parse,
+                                errors::errorCode_e::syntax_error,
+                                "aggregaator 'with' missing value",
+                                line.debug
+                            };
+                        }
+                        with = conditions[withIdx + 1];                        
+                        conditions.erase(conditions.begin() + withIdx, conditions.begin() + endIdx);
+                        endIdx -= 2;
+                    }
+
 					LineParts aggregate(conditions.begin() + index, conditions.begin() + endIdx);
 					conditions.erase(conditions.begin() + index, conditions.begin() + endIdx);
 
@@ -2025,13 +2055,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
 						line.debug
 					};
 
-					if (aggregate.size() > 2 &&
-						aggregate[2] != "where")
-						throw ParseFail_s{
-						errors::errorClass_e::parse,
-						errors::errorCode_e::syntax_error,
-						"where expected in count aggregator",
-						line.debug
+                    if (aggregate.size() > 2 &&
+                        aggregate[2] != "where")
+                    {
+                        // If no `where` we add one, this allows aggregation without the "where".
+                        aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "none" };
 					};
 
 					const auto agg = aggregate[0];
@@ -2064,11 +2092,19 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					nextWhere.insert(nextWhere.end(), where.begin(), where.end());
 					//nextWhere.push_back("__MARKER__");
 
+                    if (!with.length())
+                        with = variable;
+
 					if (agg == "SUM")
 					{
 						newFunction.insert(
 							newFunction.end(),
 							{
+                                {
+                                    { "__agg_dict", "=", "dict", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
 								{
 									{ "__agg_saved_iter", "=", "iter_get", "(", ")"},
 									lastDebug,
@@ -2084,11 +2120,26 @@ void QueryParser::lineTranslation(FirstPass& lines)
 									lastDebug,
 									1
 								},
-								{ // indent at 2 - under where
-									{"__agg_result", "+=", variable},
-									lastDebug,
-									2
-								}
+                                { // indent at 2 - under where
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    lastDebug,
+                                    2
+                                },
+                                {
+                                    { "if", "__agg_key", "notin", "__agg_dict" },
+                                    lastDebug,
+                                    2
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_dict", "[", "__agg_key", "]", "=", variable },
+                                    lastDebug,
+                                    3
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_result", "+=", variable },
+                                    lastDebug,
+                                    3
+                                },
 							}
 						);
 					}
@@ -2102,33 +2153,52 @@ void QueryParser::lineTranslation(FirstPass& lines)
 									lastDebug,
 									1
 								},
-								{
-									{ "__agg_saved_iter", "=", "iter_get", "(", ")" },
-									lastDebug,
-									1
-								},
-								{
-									{ "iter_move_first", "(", ")" },
-									lastDebug,
-									1
-								},
-								{
-									nextWhere, // match where <conditions>
-									lastDebug,
-									1
-								},
-								{ // indent at 2 - under where
-									{ "__agg_result", "+=", variable },
-									lastDebug,
-									2
-								},
-								{
-									{ "__agg_count", "+=", "1" },
-									lastDebug,
-									2
-								},
-								// back nesting down to 1 - after loop, calculate average
-								{
+                                {
+                                    { "__agg_dict", "=", "dict", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    { "__agg_saved_iter", "=", "iter_get", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    { "iter_move_first", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    nextWhere, // match where <conditions>
+                                    lastDebug,
+                                    1
+                                },
+                                { // indent at 2 - under where
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    lastDebug,
+                                    2
+                                },
+                                {
+                                    { "if", "__agg_key", "notin", "__agg_dict" },
+                                    lastDebug,
+                                    2
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_dict", "[", "__agg_key", "]", "=", variable },
+                                    lastDebug,
+                                    3
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_count", "+=", "1" },
+                                    lastDebug,
+                                    3
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_result", "+=", variable },
+                                    lastDebug,
+                                    3
+                                },                                
+								{ // de-nesting down to 1 - after loop, calculate average
 									{ "__agg_result", "=", "__agg_result", "/", "__agg_count" },
 									lastDebug,
 									1
@@ -2216,27 +2286,47 @@ void QueryParser::lineTranslation(FirstPass& lines)
 						newFunction.insert(
 							newFunction.end(),
 							{
-								{
-									{ "__agg_saved_iter", "=", "iter_get", "(", ")" },
-									lastDebug,
-									1
-								},
-								{
-									{ "iter_move_first", "(", ")" },
-									lastDebug,
-									1
-								},
-								{
-									nextWhere, // match where <conditions>
-									lastDebug,
-									1
-								},
-								{ // indent at 2 - under where
-									{ "__agg_result", "+=", "1" },
-									lastDebug,
-									2
-								}
-							}
+                                {
+                                    { "__agg_dict", "=", "dict", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    { "__agg_saved_iter", "=", "iter_get", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    { "iter_move_first", "(", ")" },
+                                    lastDebug,
+                                    1
+                                },
+                                {
+                                    nextWhere, // match where <conditions>
+                                    lastDebug,
+                                    1
+                                },
+                                { // indent at 2 - under where
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    lastDebug,
+                                    2
+                                },
+                                {
+                                    { "if", "__agg_key", "notin", "__agg_dict" },
+                                    lastDebug,
+                                    2
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_dict", "[", "__agg_key", "]", "=", variable },
+                                    lastDebug,
+                                    3
+                                },
+                                {  // indent at 3 - under if
+                                    { "__agg_result", "+=", "1" },
+                                    lastDebug,
+                                    3
+                                },
+                            }
 						);
 					}
 					else if (agg == "DISTINCT")
@@ -2433,7 +2523,9 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 					int funcEndIdx;
 					extractFunction(conditions, index, funcEndIdx);
-
+                    if (funcEndIdx == -1)
+                        funcEndIdx = conditions.size()-1;
+                    
 					//index += 2; // move past function name to first (
 					LineParts right;
 

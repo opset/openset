@@ -1,5 +1,6 @@
 #pragma once
 
+#include <regex>
 #include "shuttle.h"
 #include "asyncpool.h"
 #include "database.h"
@@ -106,8 +107,8 @@ namespace openset::comms
         static void column(const openset::web::MessagePtr message, const RpcMapping& matches);
         // GET /v1/query/{table}/person?{id|idstr}={user_id_key}
         static void person(const openset::web::MessagePtr message, const RpcMapping& matches);
-        // POST /v1/query/{table}/segseg?aseg={segment_a|*}&bseg={segment_b|*}
-        //static void segSeg(const openset::web::MessagePtr message, const RpcMapping& matches);
+        // POST /v1/query/{table}/histogram/{name}
+        static void histogram(const openset::web::MessagePtr message, const RpcMapping& matches);
 
 		//static void person(const openset::web::MessagePtr message, const RpcMapping& matches);		
 	};
@@ -141,6 +142,7 @@ namespace openset::comms
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/counts(\/|\?|\#|)$)"), RpcQuery::counts,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::column,{ { 1, "table" }, { 2, "name" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/histogram/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::histogram, { { 1, "table" },{ 2, "name" } } },
 
 		// RpcInsert
 		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },

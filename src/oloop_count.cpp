@@ -12,10 +12,10 @@ using namespace openset::result;
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopCount::OpenLoopCount(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
-	Table* table, 
-	QueryPairs macros,
+	Table* table,
+    const QueryPairs macros,
 	openset::result::ResultSet* result,
-	int instance) :
+    const int instance) :
 
 	OpenLoop(),
 	macrosList(macros),
