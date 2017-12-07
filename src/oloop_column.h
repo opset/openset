@@ -48,7 +48,7 @@ namespace openset
 
                 ColumnQueryMode_e mode { ColumnQueryMode_e::all };
 
-                std::vector<std::string> segments{ "*" };
+                std::vector<std::string> segments{ "*" }; // efault is all
 
                 // using cvars because I can put strings, bools, doubles and ints int them and
                 // don't need to break out separate filter and bucket vars for 
@@ -82,8 +82,6 @@ namespace openset
 
             GroupMap groups;
             GroupMap::iterator groupsIter;
-            //db::Attributes::AttrListExpanded valueList;
-            //db::Attributes::AttrListExpanded::iterator valueListIter;
 
         public:
 

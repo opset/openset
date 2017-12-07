@@ -449,8 +449,93 @@ response (counts are people):
 }
 ```
 
+**12.** Let's do a histogram query using an aggregator
 
-**12.** Let's do a sequence query.
+Let's generate a histogram of cart `total`, and bucket by `250` starting at `0` for each person in the database.
+
+The pyql query in the POST body returns a value generated using an inline aggregation function on the database column `table`.
+
+```bash
+curl \
+-X POST 'http://127.0.0.1:8080/v1/query/highstreet/histogram/customer_value?bucket=250&min=0' \
+--data-binary @- << PYQL | json_pp
+# our pyql script
+
+return SUM total where total != None # inline aggregation
+
+#end of pyql script
+PYQL
+```
+response (counts are people):
+
+```json
+{
+   "_" : [
+      {
+         "g" : "customer_value",
+         "c" : [3],         
+         "_" : [
+            {
+               "g" : 750,
+               "c" : [1]
+            },
+            {
+               "g" : 500,
+               "c" : [0]
+            },
+            {
+               "g" : 250,
+               "c" : [1]
+            },
+            {
+               "g" : 0,
+               "c" : [1]
+            }
+         ]
+      }
+   ]
+}
+```
+
+**13.** Let's do a another histogram query using time
+
+Let's generate a histogram breaking down the number of weeks since `last_event` for each person in the database.
+
+```bash
+curl \
+-X POST 'http://127.0.0.1:8080/v1/query/highstreet/histogram/days_since' \
+--data-binary @- << PYQL | json_pp
+# our pyql script
+
+return int(to_days(now - last_event) / 7)
+
+#end of pyql script
+PYQL
+```
+response (counts are people):
+
+```json
+{
+   "_" : [
+      {
+         "g" : "days_since",
+         "c" : [3],      
+         "_" : [
+            {
+               "g" : 48,            
+               "c" : [1]
+            },
+            {
+               "g" : 47,            
+               "c" : [2]
+            }
+         ]
+      }
+   ]
+}
+```
+
+**14.** Let's do a sequence query.
 
 Let's extract `for each product` the `first` product purchased `immediately after` but `not in the same cart`.
 

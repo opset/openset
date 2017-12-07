@@ -18,12 +18,22 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
 	if (MSVC)
-		add_definitions(/std:c++17 /Ox /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+		add_definitions(/std:c++17 /Ox /Debug /Zi /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
 	else()
 		add_definitions(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
 		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 		find_package(Threads REQUIRED)
 	endif()
+
+elseif(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
+	if (MSVC)
+		add_definitions(/std:c++17 /Ox /Debug /Zi /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+	else()
+		add_definitions(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+		find_package(Threads REQUIRED)
+	endif()
+
 endif()
 
 include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simple-web-server)
@@ -110,6 +120,8 @@ set(SOURCE_FILES
         src/oloop_count.h
 		src/oloop_column.cpp
 		src/oloop_column.h
+		src/oloop_histogram.cpp
+        src/oloop_histogram.h
 		src/oloop_insert.cpp
         src/oloop_insert.h
 		src/oloop_person.cpp

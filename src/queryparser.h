@@ -322,7 +322,7 @@ namespace openset
 			// python uses [] and : in a few ways, this to see if this is an arrray/string slice
 			static bool isSplice(LineParts& conditions, const int index); 
 
-
+            static int search(LineParts& conditions, string value, int startIdx = 0);
 			static LineParts extractVariable(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static LineParts extractVariableReverse(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static void extractFunction(LineParts& conditions, int startIdx, int& endIdx);
