@@ -247,6 +247,14 @@ public:
 		value.asInt64 = val;
 	}
 
+#ifndef _MSC_VER
+    cvar(const long long int val) :
+        type(valueType::INT64)
+    {
+        value.asInt64 = static_cast<int64_t>(val);
+    }
+#endif
+
 	cvar(const float val) :
 		type(valueType::FLT)
 	{
@@ -674,6 +682,16 @@ public:
 		value.asInt64 = source;
 		return *this;
 	}
+
+#ifndef _MSC_VER
+    // gcc seems to see long long as not being the same as int64_t
+    cvar& operator=(const long long int& source)
+    {
+        type = valueType::INT64;
+        value.asInt64 = static_cast<int64_t>(source);
+        return *this;
+    }
+#endif
 
 	cvar& operator=(const double& source)
 	{
@@ -1478,6 +1496,15 @@ public:
 		return *this;
 	}
 
+#ifndef _MSC_VER
+    // gcc seems to see long long as not being the same as int64_t
+    cvar& operator+=(const long long int& right)
+    {
+        *this = *this + static_cast<int64_t>(right);
+        return *this;
+    }
+#endif
+
 	cvar& operator+=(const float& right)
 	{
 		*this = *this + right;
@@ -2110,6 +2137,10 @@ public:
 	friend bool operator ==(const cvar& left, const int& right);
 	friend bool operator ==(const int64_t& left, const cvar& right);
 	friend bool operator ==(const cvar& left, const int64_t& right);
+#ifndef _MSC_VER
+    friend bool operator ==(const long long int& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const long long int& right);
+#endif
 	friend bool operator ==(const float& left, const cvar& right);
 	friend bool operator ==(const cvar& left, const float& right);
 	friend bool operator ==(const double& left, const cvar& right);
@@ -2126,6 +2157,10 @@ public:
 	friend bool operator !=(const cvar& left, const int& right);
 	friend bool operator !=(const int64_t& left, const cvar& right);
 	friend bool operator !=(const cvar& left, const int64_t& right);
+#ifndef _MSC_VER
+    friend bool operator !=(const long long int& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const long long int& right);
+#endif
 	friend bool operator !=(const float& left, const cvar& right);
 	friend bool operator !=(const cvar& left, const float& right);
 	friend bool operator !=(const double& left, const cvar& right);
@@ -2323,6 +2358,49 @@ inline bool operator ==(const cvar& left, const int64_t& right)
 	}
 }
 
+#ifndef _MSC_VER
+inline bool operator ==(const long long int& left, const cvar& right)
+{
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return static_cast<int64_t>(left) == right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) == right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return std::to_string(left) == right.valueString;
+    default:
+        return false;
+    }
+}
+
+inline bool operator ==(const cvar& left, const long long int& right)
+{
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left.getInt64() == static_cast<int64_t>(right);
+    case cvar::valueType::FLT:
+        return left.getFloat() == static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() == static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.valueString == std::to_string(right);
+    default:
+        return false;
+    }
+}
+
+#endif
+
 inline bool operator ==(const float& left, const cvar& right)
 {
 	switch (right.type)
@@ -2454,6 +2532,18 @@ inline bool operator !=(const cvar& left, const int64_t& right)
 {
 	return !(left == right);
 }
+
+#ifndef _MSC_VER
+inline bool operator !=(const long long int& left, const cvar& right)
+{
+    return !(static_cast<int64_t>(left) == right);
+}
+
+inline bool operator !=(const cvar& left, const long long int& right)
+{
+    return !(left == static_cast<int64_t>(right));
+}
+#endif
 
 inline bool operator !=(const float& left, const cvar& right)
 {
