@@ -5,6 +5,7 @@
 #include <thread>
 #include <vector>
 #include <string>
+#include <iostream>
 
 #include "time/epoch.h"
 #include "threads/spinlock.h"
