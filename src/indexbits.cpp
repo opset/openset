@@ -118,7 +118,8 @@ void IndexBits::mount(char* compressedData, const int32_t integers, const int32_
 
 	assert(bytes);
 
-	const auto code = LZ4_decompress_fast(compressedData, output, bytes);
+    // TODO - check for int overflow here
+	const auto code = LZ4_decompress_fast(compressedData, output, static_cast<int>(bytes));
 
 	assert(code > 0);
 
@@ -135,7 +136,7 @@ int64_t IndexBits::getSizeBytes() const
 	return ints * sizeof(int64_t);
 }
 
-char* IndexBits::store(int64_t& compressedBytes, int32_t &linId)
+char* IndexBits::store(int64_t& compressedBytes, int64_t &linId)
 {
 	if (!ints)
 		grow(1);
@@ -171,7 +172,7 @@ char* IndexBits::store(int64_t& compressedBytes, int32_t &linId)
 	return compressionBuffer;
 }
 
-void IndexBits::grow(const int32_t required)
+void IndexBits::grow(const int64_t required)
 {
 	if (ints >= required)
 		return;
@@ -199,7 +200,7 @@ void IndexBits::grow(const int32_t required)
 
 void IndexBits::bitSet(const int64_t index)
 {
-	const auto pos = index >> 6ULL; // divide by 8
+    const int64_t pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -209,7 +210,7 @@ void IndexBits::bitSet(const int64_t index)
 
 void IndexBits::lastBit(const int64_t index)
 {
-	const auto pos = index >> 6ULL; // divide by 8
+	const int64_t pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -217,7 +218,7 @@ void IndexBits::lastBit(const int64_t index)
 
 void IndexBits::bitClear(const int64_t index)
 {
-	const auto pos = index >> 6ULL; // divide by 8
+	const int64_t pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		grow(pos + 1);
@@ -227,7 +228,7 @@ void IndexBits::bitClear(const int64_t index)
 
 bool IndexBits::bitState(const int64_t index) const
 {
-	const auto pos = index >> 6ULL; // divide by 8
+	const int64_t pos = index >> 6ULL; // divide by 8
 
 	if (pos >= ints) // is our buffer big enough?
 		return false;
@@ -257,7 +258,7 @@ int64_t IndexBits::population(int stopBit) const
 	auto pSource = bits;
 
 	// truncates to the one we want
-	auto lastInt = stopBit / 64LL;
+	int64_t lastInt = stopBit / 64LL;
 
 	// The stopBit might be beyond the end
 	// if the 'ints' buffer. In which case
@@ -443,7 +444,7 @@ return true if a new linear id is found.
 
 recommend using in a while loop.
 */
-bool IndexBits::linearIter(int32_t& linId, int stopBit) const
+bool IndexBits::linearIter(int64_t& linId, const int64_t stopBit) const
 {
 	++linId;
 
@@ -453,17 +454,17 @@ bool IndexBits::linearIter(int32_t& linId, int stopBit) const
 	{
 		if (bits[currentInt])
 		{
-			const int32_t bitNumber = linId % 64;
+			const int64_t bitNumber = linId % 64;
 
 			//if (bitIndex >= stopBit)
 			if (linId >= stopBit)
 				return false;
 
-			for (auto i = bitNumber; i < 64; i++)
+			for (auto i = bitNumber; i < 64LL; i++)
 			{
 				if (bits[currentInt] & BITMASK[i])
 				{
-					linId = (currentInt * 64) + i;
+					linId = (currentInt * 64LL) + i;
 					return true;
 				}
 			}

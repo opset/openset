@@ -37,9 +37,9 @@ namespace openset
 			// returns a POOL buffer, and the number of bytes
 			// required for the stored data... obviously, and it's a pity
 			// we need to double copy the result.
-			char* store(int64_t& compressedBytes, int32_t &linId);
+			char* store(int64_t& compressedBytes, int64_t &linId);
 
-			void grow(const int32_t required);
+			void grow(const int64_t required);
 
 			void lastBit(const int64_t index);
 			void bitSet(const int64_t index);
@@ -55,7 +55,7 @@ namespace openset
 			void opAndNot(IndexBits& source);
 			void opNot() const;
 
-			bool linearIter(int32_t& linId, int stopBit) const;
+			bool linearIter(int64_t& linId, const int64_t stopBit) const;
 
 			class BitProxy
 			{
@@ -76,7 +76,7 @@ namespace openset
 					cout << "destroyed" << endl;
 				}
 
-				void operator=(int rhs)
+				void operator=(const int rhs)
 				{
 					value = rhs;
 					if (rhs)
@@ -93,14 +93,14 @@ namespace openset
 
 			static string debugBits(const IndexBits& bits, int limit = 64);
 
-			BitProxy operator[](int idx)
+			BitProxy operator[](const int idx)
 			{
 				return BitProxy(this, idx);
 			}
 
 			friend std::ostream& operator<<(std::ostream& os, const openset::db::IndexBits& source)
 			{
-				os << openset::db::IndexBits::debugBits(source, (os.width()) ? os.width() : 128);
+				os << openset::db::IndexBits::debugBits(source, static_cast<int>(os.width() ? os.width() : 128));
 				return os;
 			}
 		};

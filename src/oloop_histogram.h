@@ -29,7 +29,7 @@ namespace openset
             int64_t bucket; // scaled integater (double * 10000.0)
 			openset::db::TablePartitioned* parts;
 			int64_t maxLinearId;
-			int32_t currentLinId;
+			int64_t currentLinId;
 			Person person;
 			openset::query::Interpreter* interpreter;
 			int instance;

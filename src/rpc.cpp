@@ -56,7 +56,7 @@ void RpcError(openset::errors::Error error, const openset::web::MessagePtr messa
 void RpcInternode::is_member(const openset::web::MessagePtr message, const RpcMapping&)
 {
 	cjson response;
-	response.set("part_of_cluster", globals::running->state != openset::config::nodeState_e::ready_wait);
+	response.set("part_of_cluster", globals::running->state != openset::config::NodeState_e::ready_wait);
 	message->reply(openset::http::StatusCode::success_ok, response);
 }
 
@@ -76,7 +76,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
 	{
 		csLock lock(openset::globals::running->cs);
 		globals::running->nodeId = nodeId;
-		globals::running->state = openset::config::nodeState_e::active;
+		globals::running->state = openset::config::NodeState_e::active;
 		globals::running->configVersion = 1;
 		globals::running->partitionMax = partitionMax;
 	}
@@ -458,7 +458,7 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
 	{
 		csLock lock(globals::running->cs);
 		globals::running->setNodeName(openset::config::createName());
-		globals::running->state = openset::config::nodeState_e::active;
+		globals::running->state = openset::config::NodeState_e::active;
 		globals::running->partitionMax = partitionMax;		
 		Logger::get().info("Initialized as: '" + globals::running->nodeName +"'.");
 	}
@@ -495,7 +495,7 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
 void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 
-	if (globals::running->state != openset::config::nodeState_e::active)
+	if (globals::running->state != openset::config::NodeState_e::active)
 	{
 		RpcError(
 			openset::errors::Error{

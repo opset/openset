@@ -40,7 +40,7 @@ PersonData_s* People::getPersonByID(string userIdString)
 	}
 }
 
-PersonData_s* People::getPersonByLIN(int32_t linId)
+PersonData_s* People::getPersonByLIN(const int64_t linId)
 {
 	// check ranges
 	if (linId < 0 || linId >= peopleLinear.size())
@@ -51,8 +51,13 @@ PersonData_s* People::getPersonByLIN(int32_t linId)
 
 PersonData_s* People::getmakePerson(string userIdString)
 {
-	auto hashId = MakeHash(userIdString);
-	auto idLen = userIdString.length();
+    auto idLen = userIdString.length();
+    if (idLen > 64)
+    {
+        idLen = 64;
+        userIdString.erase(userIdString.begin() + idLen);
+    }
+	auto hashId = MakeHash(userIdString);	
 
 	while (true)
 	{

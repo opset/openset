@@ -34,7 +34,7 @@ class Logger
 
 	CriticalSection cs;
 	std::vector<Line> lines;
-	std::atomic<int> backlog;
+	std::atomic<int64_t> backlog;
 
 	bool loggingOn{ true };
 

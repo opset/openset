@@ -108,14 +108,16 @@ namespace openset
 			// personData_s must already be sized, null not required
 			void setIdStr(std::string &idString)
 			{
-				std::memcpy(events, idString.c_str(), idString.length());
-				idBytes = idString.length();
+                const int16_t idMaxLen = (idString.length() > 64) ? 64 : static_cast<int16_t>(idString.length());
+				std::memcpy(events, idString.c_str(), idMaxLen);
+                idBytes = idMaxLen;
 			}
 
 			void setIdStr(char* idString, const int len)
-			{
-				std::memcpy(events, idString, len);
-				idBytes = len;
+		    {
+                const int16_t idMaxLen = (len > 64) ? 64 : static_cast<int16_t>(len);
+				std::memcpy(events, idString, idMaxLen);
+				idBytes = idMaxLen;
 			}
 
 			int64_t flagBytes() const

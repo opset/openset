@@ -991,12 +991,11 @@ public:
 		}
 	}
 
-	operator std::string()
+    operator std::string() const
 	{
-		this->valueString = getString();
-		return this->valueString;
+		return  getString();
 	}
-	
+
 	std::string* getStringPtr()
 	{
 		if (type != valueType::STR)
@@ -1108,7 +1107,7 @@ public:
 		if (type == valueType::SET)
 			return setValue ? static_cast<int>(setValue->size()) : 0;
 		if (type == valueType::STR)
-			return valueString.length();
+			return static_cast<int>(valueString.length());
 		return 0;
 	}
 

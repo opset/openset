@@ -13,9 +13,8 @@ namespace bigConf
 		std::vector<int> powers;
 		int steps() const
 		{
-			return powers.size();
+			return static_cast<int>(powers.size());
 		}
-		//std::vector<int> probing;
 	};
 
 	const std::vector<big_info_s> big_info =

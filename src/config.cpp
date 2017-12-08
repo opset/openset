@@ -36,19 +36,19 @@ Config::Config(openset::config::CommandlineArgs args) :
 	setRootPath(args.path);
 }
 
-void Config::setState(nodeState_e state)
+void Config::setState(NodeState_e state)
 {
 	this->state = state;
 
 	switch (state)
 	{
-		case nodeState_e::ready_wait:
+		case NodeState_e::ready_wait:
 			Logger::get().info("node ready and waiting.");
 			break;
-		case nodeState_e::resume_wait:
+		case NodeState_e::resume_wait:
 			Logger::get().info("node wait waiting to resume.");
 			break;
-		case nodeState_e::active:
+		case NodeState_e::active:
 			Logger::get().info("node is active.");
 			break;
 	}

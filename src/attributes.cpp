@@ -119,7 +119,7 @@ void Attributes::clearDirty()
 		}
 
 		int64_t compBytes = 0; // OUT value via reference
-		int32_t linId;
+		int64_t linId;
 
 		// compress the data, get it back in a pool ptr
 		const auto compData = bits.store(compBytes, linId);
@@ -135,7 +135,7 @@ void Attributes::clearDirty()
 		}
 
 		destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
-		destAttr->comp = compBytes;
+		destAttr->comp = static_cast<int>(compBytes);
 		destAttr->linId = linId;
 
 		// if we made a new destination, we have to update the 
@@ -158,7 +158,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	const auto attr = attrPair->second;
 
 	int64_t compBytes = 0; // OUT value
-	int32_t linId = -1;
+	int64_t linId = -1;
 
 	// compress the data, get it back in a pool ptr, size returned in compBytes
 	const auto compData = newBits->store(compBytes, linId);
@@ -175,7 +175,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 
 	destAttr->text = attr->text;
 	destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
-	destAttr->comp = compBytes;
+	destAttr->comp = static_cast<int32_t>(compBytes); // TODO - check for overflow
 	destAttr->linId = linId;
 
 	// if we made a new destination, we have to update the 

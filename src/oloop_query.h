@@ -25,7 +25,7 @@ namespace openset
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 			int64_t maxLinearId;
-			int32_t currentLinId;
+			int64_t currentLinId;
 			Person person;
 			openset::query::Interpreter* interpreter;
 			int instance;

@@ -11,7 +11,7 @@ namespace openset
 {
 	namespace config
 	{
-		enum class nodeState_e : int
+		enum class NodeState_e : int
 		{
 			ready_wait = 0,
 			resume_wait = 1,
@@ -32,8 +32,7 @@ namespace openset
 				if (!hostExternal.length())
 				{
 					char hostName[256] = { 0 };
-					size_t len = 255;
-					if (gethostname(hostName, len) == -1)
+					if (gethostname(hostName, 255) == -1)
 					{
 						cout << "! could not get hostname" << endl << endl;
 						exit(1);
@@ -64,13 +63,13 @@ namespace openset
 			string nodeName{ "empty" };
 			int64_t nodeId{ 0 };
 
-			nodeState_e state{ nodeState_e::ready_wait };
+			NodeState_e state{ NodeState_e::ready_wait };
 			bool testMode{ false };
 			bool existingConfig{ false };
 			
 			explicit Config(openset::config::CommandlineArgs args);
 
-			void setState(nodeState_e state);
+			void setState(NodeState_e state);
 
 			void setRootPath(string path);;
 

@@ -44,6 +44,9 @@ namespace MemConstants
 class HeapStackBlockPool
 {
 private:
+
+    const size_t MAXPOOLBLOCKS = 16;
+
 	std::vector<void*> pool;
 	CriticalSection poolLock;
 
@@ -65,7 +68,7 @@ public:
 
 			if (!pool.empty())
 			{
-				auto block = pool.back();
+			    const auto block = pool.back();
 				pool.pop_back();
 				return block;
 			}
@@ -76,7 +79,12 @@ public:
 	inline void Put(void* item)
 	{
 		csLock lock(poolLock);
-		pool.push_back(item);
+
+        // cap the number of blocks... not resource friendly
+        if (pool.size() >= MAXPOOLBLOCKS) 
+            delete[] static_cast<char*>(item);
+        else
+		    pool.push_back(item);
 	}
 
 
@@ -126,7 +134,7 @@ private:
 
 public:
 	// newPtr - returns a pointer to a block of memory of "size"
-	inline char* newPtr(int64_t size)
+	inline char* newPtr(const int64_t size)
 	{
 		if (size >= dataSize)
 			newNonpooledBlock(size);

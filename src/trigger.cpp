@@ -11,17 +11,17 @@ using namespace openset::trigger;
 
 Trigger::Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* parts) :
 	settings(settings),
+	lastConfigVersion(settings->configVersion),
 	table(parts->table),
 	parts(parts),
 	interpreter(nullptr),
 	person(nullptr),
-	attr(nullptr),
-	bits(nullptr), 
+	attr(nullptr), 
+	bits(nullptr),
 	currentFunctionHash(0),
 	runCount(0),
 	beforeState(false),
-	inError(false),
-	lastConfigVersion(settings->configVersion)
+	inError(false)
 {
 	init();
 }
@@ -127,7 +127,7 @@ void Trigger::init()
 
 		// flip some bits when we emits - these will get flushed by the 
 		// standard dirty write back on insert
-		auto emitAttr = parts->attributes.getMake(COL_EMIT, emitMessage);
+		parts->attributes.getMake(COL_EMIT, emitMessage);
 		parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
 
 		// queue trigger messages, these are held on a per trigger basis
@@ -147,12 +147,6 @@ void Trigger::init()
 	interpreter->setEmitCB(emit_cb);
 
 	lastConfigVersion = settings->configVersion;
-
-	/*Logger::get().info(
-		' ', 
-		"initialized trigger '" + settings->name + "' on table '" + table->getName() + 
-		"' on partition " + to_string(parts->partition) + ".");
-	*/
 }
 
 void Trigger::flushDirty() 
@@ -168,7 +162,7 @@ void Trigger::flushDirty()
 	*/
 
 	int64_t compBytes = 0; // OUT value via reference filled by ->store
-	int32_t linId = -1;
+	int64_t linId = -1;
 	const auto compData = bits->store(compBytes, linId);
 
 	auto attrPair = parts->attributes.columnIndex.find({ COL_TRIGGERS, settings->id }); // settings.id is this trigger
