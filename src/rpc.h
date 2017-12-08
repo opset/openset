@@ -99,18 +99,18 @@ namespace openset::comms
 	{
 	public:
 
-		// POST /v1/query/{table}/events
-		static void events(const openset::web::MessagePtr message, const RpcMapping& matches);
-		// POST /v1/query/{table}/counts
-		static void counts(const openset::web::MessagePtr message, const RpcMapping& matches);
+		// POST /v1/query/{table}/event
+		static void event(const openset::web::MessagePtr message, const RpcMapping& matches);
+		// POST /v1/query/{table}/segment
+		static void segment(const openset::web::MessagePtr message, const RpcMapping& matches);
 		// POST /v1/query/{table}/column/{name}?{various optional query params}
         static void column(const openset::web::MessagePtr message, const RpcMapping& matches);
         // GET /v1/query/{table}/person?{id|idstr}={user_id_key}
         static void person(const openset::web::MessagePtr message, const RpcMapping& matches);
         // POST /v1/query/{table}/histogram/{name}
         static void histogram(const openset::web::MessagePtr message, const RpcMapping& matches);
-        // POST /v1/query/{table}/job
-        static void job(const openset::web::MessagePtr message, const RpcMapping& matches);
+        // POST /v1/query/{table}/batch
+        static void batch(const openset::web::MessagePtr message, const RpcMapping& matches);
 
 		//static void person(const openset::web::MessagePtr message, const RpcMapping& matches);		
 	};
@@ -140,12 +140,12 @@ namespace openset::comms
 		{ "POST", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_create, { { 1, "table" } } },
 
 		// RpcQuery
-		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/events(\/|\?|\#|)$)"), RpcQuery::events,{ { 1, "table" } } },
-        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/counts(\/|\?|\#|)$)"), RpcQuery::counts,{ { 1, "table" } } },
+		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/event(\/|\?|\#|)$)"), RpcQuery::event,{ { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/sgement(\/|\?|\#|)$)"), RpcQuery::segment,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::column,{ { 1, "table" }, { 2, "name" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/histogram/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::histogram, { { 1, "table" },{ 2, "name" } } },
-        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/job(\/|\?|\#|)$)"), RpcQuery::job,{ { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/batch(\/|\?|\#|)$)"), RpcQuery::batch,{ { 1, "table" } } },
 
 		// RpcInsert
 		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },

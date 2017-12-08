@@ -156,13 +156,13 @@ response:
 
 > :pushpin:  view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
 
-**7**.  Let's run a PyQL `events` query
+**7**.  Let's run a PyQL `event` query
 
 This script can be found at `openset_samples/pyql/simple.pyql` folder.
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/event \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
@@ -239,26 +239,26 @@ response (counts are people, count product, sum price):
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/counts \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/segment \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
-segment products_home ttl=300s use_cached refresh=300s:
+@segment products_home ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
         tally
 
-segment products_yard ttl=300s use_cached refresh=300s:
+@segment products_yard ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['basement', 'garage']:
         tally
 
-segment products_outdoor ttl=300s use_cached refresh=300s:
+@segment products_outdoor ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['outdoor', 'angling']:
         tally
 
-segment products_commercial ttl=300s use_cached refresh=300s:
+@segment products_commercial ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group == 'restaurant':
         tally
@@ -541,7 +541,7 @@ Let's extract `for each product` the `first` product purchased `immediately afte
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/event \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 

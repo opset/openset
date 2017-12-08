@@ -133,7 +133,7 @@ Describe a re-eventing trigger
 
 # Query
 
-## POST /v1/query/{table}/events
+## POST /v1/query/{table}/event
 
 This will perform an event scanning query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
@@ -151,11 +151,11 @@ This will perform an event scanning query by executing the provided `PyQL` scrip
 |`dbl_{var_name}` | `double`          | replace `{{var_name}}` numeric value in script|
 |`bool_{var_name}` | `true/false`      | replace `{{var_name}}` boolean value in script|
 
-**Return**
+**result**
 
 200 or 400 status with JSON data or error.
 
-## POST /v1/query/{table}/counts
+## POST /v1/query/{table}/segment
 
 This will perform an index counting query by executing the provided `PyQL` script in the POST body as `text/plain`. The result will be in JSON and contain results or any errors produced by the query.
 
@@ -169,7 +169,27 @@ A single counts query can contain multiple sections to create multiple segments 
 | ---- | ---- | ---- |
 |`debug=` | `true/false` |  will return the assembly for the query rather than the results|
 
-**Return**
+**post body:**
+
+The post body can include multiple sections. We've borrowed the python `@` decorator to define sections. The example below is using the sample `high_street` sample data to create two segments named `products_home` and `products_outdoor`. 
+
+The `params` on the `@segment` definition tell OpenSet to not-recalculate the segment if it's within the TTL, and that it's ok to use a cached version. It also tells OpenSet to refresh this segment about every 300 seconds.
+
+> :pushpin: These segments can be fully derived by counting indexes and are very fast. Adding sequence or time constraints will result in the segment generator executing the script against the event set (OpenSet will automatically determine if this is required). Event based segments will be slower if they cover a large cross-section of people in the database. Once segments are created they can be used by name in the `segments=` parameter of other queries.
+
+```
+@segment products_home ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
+        tally
+
+@segment products_outdoor ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['outdoor', 'angling']:
+        tally
+```
+
+**result:**
 
 200 or 400 status with JSON data or error.
 
@@ -194,7 +214,7 @@ The column query allows you to query all the values within a named column in a t
 |`sub=` | `text`              | return value containing the search string in `sub` |
 |`bucket=` | `#`                 |  cluster values by `#`,  all user counts will remain distinct for each group. Useful for creating histograms or condensing results (i.e. values to nearest dollar) |
 
-**Return**
+**result**
 
 200 or 400 status with JSON data or error.
 
@@ -211,7 +231,7 @@ Returns the event sequence for an individual.
 | `sid=` | `string` | If you are using textual IDs use the `sid=` parameter |
 |`id=` | `number` | If you are using numeric IDs use the `id=` parameter |
 
-**Return**
+**result**
 
 200 or 400 status with JSON data or error.
 
@@ -241,10 +261,46 @@ If `bucket=` is provided in the query, then missing values will be zero-filled. 
 |`min=` | `#`                 |  set histogram fill to `min=#`
 |`max=` | `#`                 |  clip histogram fill at `max=#`. The value in max will contain the sum of all nodes `>=` to the `max=` value.
 
-**Return**
+**result**
 
 200 or 400 status with JSON data or error.
 
+## POST /v1/query/{table}/batch (experimental)
+
+Run multiple segment, column and histogram queries at once, generate a single result. Including `foreach` on histograms.
+
+Example post data using `highstreet` sample data:
+```python
+@segment products_home ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
+        tally
+
+@segment products_outdoor ttl=300s use_cached refresh=300s:
+    # match one of these
+    match where product_group in ['outdoor', 'angling']:
+        tally
+
+@use products_home,products_outdoor
+
+@column product_name
+
+@column product_group
+
+@column product_price bucket=50
+
+@histogram customer_value bucket=50
+
+    return SUM total
+
+@histogram days_since
+
+    return int(to_days(now - last_event) / 7)
+
+@histogram total_by_shipper foreach=shipper bucket=100 min=0 max=1000
+
+    return SUM total where shipper=each_value # inline aggregation
+```
 
 # Internode (internode node chatter)
 

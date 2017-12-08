@@ -17,7 +17,7 @@ namespace openset
 
 	namespace async
 	{
-		class OpenLoopCount : public OpenLoop
+		class OpenLoopSegment : public OpenLoop
 		{
 		public:
 			query::QueryPairs macrosList;
@@ -46,14 +46,14 @@ namespace openset
 
 			std::string resultName;
 
-			explicit OpenLoopCount(
+			explicit OpenLoopSegment(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
 				openset::db::Table* table,
 				const query::QueryPairs macros,
 				openset::result::ResultSet* result,
 				const int instance);
 
-			~OpenLoopCount() final;
+			~OpenLoopSegment() final;
 
 			void storeResult(std::string name, int64_t count) const;
 

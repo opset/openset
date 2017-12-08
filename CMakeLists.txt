@@ -116,8 +116,6 @@ set(SOURCE_FILES
         src/message_broker.h
         src/oloop.cpp
         src/oloop.h
-        src/oloop_count.cpp
-        src/oloop_count.h
 		src/oloop_column.cpp
 		src/oloop_column.h
 		src/oloop_histogram.cpp
@@ -130,6 +128,8 @@ set(SOURCE_FILES
         src/oloop_query.h
         src/oloop_retrigger.cpp
         src/oloop_retrigger.h
+        src/oloop_segment.cpp
+        src/oloop_segment.h
         src/oloop_seg_refresh.cpp
         src/oloop_seg_refresh.h
         src/people.cpp

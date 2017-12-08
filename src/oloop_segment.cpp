@@ -1,4 +1,4 @@
-#include "oloop_count.h"
+#include "oloop_segment.h"
 #include "indexbits.h"
 #include "columns.h"
 #include "tablepartitioned.h"
@@ -10,7 +10,7 @@ using namespace openset::query;
 using namespace openset::result;
 
 // yes, we are passing queryMacros by value to get a copy
-OpenLoopCount::OpenLoopCount(
+OpenLoopSegment::OpenLoopSegment(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
 	Table* table,
     const QueryPairs macros,
@@ -35,7 +35,7 @@ OpenLoopCount::OpenLoopCount(
 	macroIter(macrosList.begin())
 {}
 
-OpenLoopCount::~OpenLoopCount()
+OpenLoopSegment::~OpenLoopSegment()
 {
 	if (interpreter)
 		delete interpreter;
@@ -45,7 +45,7 @@ OpenLoopCount::~OpenLoopCount()
 			delete rb.second;
 }
 
-void OpenLoopCount::storeResult(std::string name, int64_t count) const
+void OpenLoopSegment::storeResult(std::string name, int64_t count) const
 {
 	const auto nameHash = MakeHash(name);
 
@@ -68,7 +68,7 @@ void OpenLoopCount::storeResult(std::string name, int64_t count) const
 	result->setAtDepth(rowKey, set_cb);
 }
 
-void OpenLoopCount::storeSegments()
+void OpenLoopSegment::storeSegments()
 {
 	/*  resultBits will contain fresh IndexBits objects.
 	 *
@@ -104,7 +104,7 @@ void OpenLoopCount::storeSegments()
 			parts->attributes.swap(COL_SEGMENT, MakeHash(segmentName), bits);
 			delete bits; // we are done with the bits
 
-			resultBits[segmentName] = nullptr; // remove it from the map so it doesn't get deleted in ~OpenLoopCount
+			resultBits[segmentName] = nullptr; // remove it from the map so it doesn't get deleted in ~OpenLoopSegment
 			
 			parts->setSegmentTTL(segmentName, macro.second.segmentTTL);
 			parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
@@ -112,7 +112,7 @@ void OpenLoopCount::storeSegments()
 	}
 }
 
-bool OpenLoopCount::nextMacro()
+bool OpenLoopSegment::nextMacro()
 {
 
 	// lambda callback used by interpretor when executing segment
@@ -243,7 +243,7 @@ bool OpenLoopCount::nextMacro()
 	}
 }
 
-void OpenLoopCount::prepare()
+void OpenLoopSegment::prepare()
 {
 	auto prepStart = Now();
 
@@ -252,7 +252,7 @@ void OpenLoopCount::prepare()
 
 	startTime = Now();
 
-	// Note - OpenLoopCount can return in the prepare if none of the queries
+	// Note - OpenLoopSegment can return in the prepare if none of the queries
 	// require iterating user records (as in were cached, segmentMath, or indexed).
 	if (!nextMacro())
 	{
@@ -282,7 +282,7 @@ void OpenLoopCount::prepare()
 		
 }
 
-void OpenLoopCount::run()
+void OpenLoopSegment::run()
 {
 	openset::db::PersonData_s* personData;
 	while (true)
@@ -365,7 +365,7 @@ void OpenLoopCount::run()
 	}
 }
 
-void OpenLoopCount::partitionRemoved()
+void OpenLoopSegment::partitionRemoved()
 {
 	shuttle->reply(
 		0,

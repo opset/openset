@@ -8,7 +8,7 @@
 #include "sba/sba.h"
 #include "oloop_insert.h"
 #include "oloop_query.h"
-#include "oloop_count.h"
+#include "oloop_segment.h"
 #include "oloop_person.h"
 #include "oloop_column.h"
 #include "oloop_histogram.h"
@@ -1850,7 +1850,7 @@ openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr mess
     return std::move(paramVars);
 }
 
-void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 
 	auto database = openset::globals::database;
@@ -2182,7 +2182,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 }
 
 
-void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 	auto database = openset::globals::database;
 	const auto partitions = openset::globals::async;
@@ -2436,7 +2436,7 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	{
 		++instance;
 		++workers;
-		return new OpenLoopCount(shuttle, table, queries, resultSets[loop->getWorkerId()], instance);
+		return new OpenLoopSegment(shuttle, table, queries, resultSets[loop->getWorkerId()], instance);
 	});
 
 	Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
@@ -3337,7 +3337,7 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
                 path = "/v1/query/" + tableName + "/counts";
                 std::string segline = "@segment " + iter->sectionName + " ";
                 for (auto f : *(iter->flags.getDict()))
-                    segline += f.first + "=" + f.second + " ";
+                    segline += f.first.getString() + "=" + f.second.getString() + " ";
                 segline += "\n";
 
                 payload += segline + std::move(iter->code); // eat it
@@ -3383,7 +3383,7 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
     return std::move(result);
 }
 
-void RpcQuery::job(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
