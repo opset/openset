@@ -233,7 +233,7 @@ ResultSet::RowVector mergeResultSets(
 
 		// add it the merge list
 		mergeList.push_back(&r->sortedResult);
-		count += r->sortedResult.size();
+		count += static_cast<int>(r->sortedResult.size());
 	}
 
 	ResultSet::RowVector merged;
@@ -970,7 +970,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
             leftValue = colLeft->getDouble();
             break;
         case cjsonType::STR:
-            leftValue = colLeft->getString();
+            leftValue = toLowerCase(colLeft->getString());
             break;
         case cjsonType::OBJECT:
         case cjsonType::ARRAY:
@@ -990,7 +990,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
             rightValue = colRight->getDouble();
             break;
         case cjsonType::STR:
-            rightValue = colRight->getString();
+            rightValue = toLowerCase(colRight->getString());
             break;
         case cjsonType::OBJECT:
         case cjsonType::ARRAY:

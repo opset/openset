@@ -997,6 +997,28 @@ void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMappi
 		return;
 	}
 
+    if (!openset::db::Columns::validColumnName(columnName))
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
+                message);
+        return;
+    }
+
+    if (openset::db::ColumnTypes.find(columnType) == openset::db::ColumnTypes.end())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad column type: must be int|double|text|bool" },
+                message);
+        return;
+    }
+    
 	auto columns = table->getColumns();
 
 	int64_t lowest = 999;
@@ -1087,7 +1109,7 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
 
 	const auto column = table->getColumns()->getColumn(columnName);
 
-    if (!column && column->type != columnTypes_e::freeColumn)
+    if (!column || column->type == columnTypes_e::freeColumn)
 	{
 		RpcError(
 			openset::errors::Error{
@@ -2491,7 +2513,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 
     const auto column = table->getColumns()->getColumn(columnName);
 
-    if (!column && column->type != columnTypes_e::freeColumn)
+    if (!column || column->type == columnTypes_e::freeColumn)
     {
         RpcError(
             openset::errors::Error{
@@ -3334,7 +3356,7 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
             if (iter->sectionType == "segment")
             {
                 method = "POST";
-                path = "/v1/query/" + tableName + "/counts";
+                path = "/v1/query/" + tableName + "/segment";
                 std::string segline = "@segment " + iter->sectionName + " ";
                 for (auto f : *(iter->flags.getDict()))
                     segline += f.first.getString() + "=" + f.second.getString() + " ";

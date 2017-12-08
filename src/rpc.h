@@ -141,7 +141,7 @@ namespace openset::comms
 
 		// RpcQuery
 		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/event(\/|\?|\#|)$)"), RpcQuery::event,{ { 1, "table" } } },
-        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/sgement(\/|\?|\#|)$)"), RpcQuery::segment,{ { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/segment(\/|\?|\#|)$)"), RpcQuery::segment,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::column,{ { 1, "table" }, { 2, "name" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/histogram/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::histogram, { { 1, "table" },{ 2, "name" } } },
