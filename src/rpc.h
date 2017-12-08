@@ -109,6 +109,8 @@ namespace openset::comms
         static void person(const openset::web::MessagePtr message, const RpcMapping& matches);
         // POST /v1/query/{table}/histogram/{name}
         static void histogram(const openset::web::MessagePtr message, const RpcMapping& matches);
+        // POST /v1/query/{table}/job
+        static void job(const openset::web::MessagePtr message, const RpcMapping& matches);
 
 		//static void person(const openset::web::MessagePtr message, const RpcMapping& matches);		
 	};
@@ -143,6 +145,7 @@ namespace openset::comms
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person,{ { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::column,{ { 1, "table" }, { 2, "name" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/histogram/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcQuery::histogram, { { 1, "table" },{ 2, "name" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/job(\/|\?|\#|)$)"), RpcQuery::job,{ { 1, "table" } } },
 
 		// RpcInsert
 		{ "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },

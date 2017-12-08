@@ -3,6 +3,7 @@
 #include "querycommon.h"
 #include "columns.h"
 #include "errors.h"
+#include "var/var.h"
 
 using namespace openset::db;
 
@@ -311,6 +312,7 @@ namespace openset
 			static bool isNumeric(const string value);
 			static bool isFloat(const string value);
 			static bool isString(const string value);
+            static bool isBool(const string value);
 			static bool isTextual(const string value);
 			static bool isValue(const string value);
 
@@ -368,7 +370,24 @@ namespace openset
 			// compile a query into a macro_s block
 			bool compileQuery(const char* query, Columns* columnsPtr, Macro_s& macros, ParamVars* templateVars = nullptr);
 
-			static std::vector<std::pair<std::string, std::string>> extractCountQueries(const char* query);
+            // Allows inline code blocks to be indented with the C++ code
+            // this detects the indent level and pulls it out and returns
+            // a new string void of empty lines, tabs expanded and 
+            // de-indented so the pyql parser can process it
+		    static std::string fixIndent(const std::string source);
+            
+            struct SectionDefinition_s
+            {
+                string sectionType;
+                string sectionName;
+                cvar flags{ cvar::valueType::DICT };
+                cvar params{ cvar::valueType::DICT };
+                string code;
+            };
+
+            using SectionDefinitionList = std::vector<SectionDefinition_s>;
+
+			static SectionDefinitionList extractSections(const char* query);
 		};
 
 		string MacroDbg(Macro_s& macro);

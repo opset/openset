@@ -64,7 +64,7 @@ inline Tests test_db()
 	)raw_inserts";
 	
 
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count page
@@ -75,7 +75,7 @@ inline Tests test_db()
 		tally(person, page, referral_source, referral_search)
 	)pyql");
 
-	auto test_pluggable_pyql = fixIndent(R"pyql(
+	auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count {{attr_page}}
@@ -89,7 +89,7 @@ inline Tests test_db()
              {{attr_keyword}})
 	)pyql");
 
-	auto test_within_pyql = fixIndent(R"pyql(
+	auto test_within_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count page

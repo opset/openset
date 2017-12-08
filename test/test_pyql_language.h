@@ -71,7 +71,7 @@ inline Tests test_pyql_language()
 	)raw_inserts";
 
 	// test loop
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -86,7 +86,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test loop with break
-	auto test2_pyql = fixIndent(R"pyql(
+	auto test2_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -102,7 +102,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loop with breaks
-	auto test3_pyql = fixIndent(R"pyql(
+	auto test3_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -128,7 +128,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, break with depth
-	auto test4_pyql = fixIndent(R"pyql(
+	auto test4_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -154,7 +154,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break top'
-	auto test5_pyql = fixIndent(R"pyql(
+	auto test5_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -178,7 +178,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break all'
-	auto test6_pyql = fixIndent(R"pyql(
+	auto test6_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -202,7 +202,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'continue'
-	auto test7_pyql = fixIndent(R"pyql(
+	auto test7_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -230,7 +230,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break ###' to deep
-	auto test8_pyql = fixIndent(R"pyql(
+	auto test8_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -245,7 +245,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test event manipulators
-	auto test9_pyql = fixIndent(R"pyql(
+	auto test9_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -263,7 +263,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test over advance
-	auto test10_pyql = fixIndent(R"pyql(
+	auto test10_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -286,7 +286,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test over advance - silent mainloop exit
-	auto test11_pyql = fixIndent(R"pyql(
+	auto test11_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -308,7 +308,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test container types
-	auto test12_pyql = fixIndent(R"pyql(
+	auto test12_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	
 	someVar = "3.14"
 	debug(someVar == 3.14)
@@ -346,7 +346,7 @@ inline Tests test_pyql_language()
 	// test container type members
 	// Note: we are actually testing that they
 	// get converted into functions
-	auto test13_pyql = fixIndent(R"pyql(
+	auto test13_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	someDict = { 
 		"hello": "goodbye",
@@ -399,7 +399,7 @@ inline Tests test_pyql_language()
 
 
 	// test container iterators
-	auto test14_pyql = fixIndent(R"pyql(
+	auto test14_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	someDict = { 
 		"hello": "goodbye",
@@ -472,7 +472,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test inline accumulators `sum/count/avg/min/max where` 
-	auto test15_pyql = fixIndent(R"pyql(
+	auto test15_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	capture_stuff( 1 + 2, DISTINCT fruit where \
 		fruit is not 'banana', "rain" + " in " + "spain")
@@ -517,7 +517,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test sdk functions (1)
-	auto test16_pyql = fixIndent(R"pyql(
+	auto test16_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	# bucket always rounds to the lower bucket
 	# it is useful when generating distributions
@@ -549,7 +549,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test slicing of strings and arrays
-	auto test17_pyql = fixIndent(R"pyql(
+	auto test17_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
     # test slicing lists
     some_array = ['zero', 'one', 'two', 'three', 'four', 'five']

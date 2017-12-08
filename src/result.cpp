@@ -757,139 +757,158 @@ void ResultMuxDemux::jsonResultHistogramFill(
     const int64_t forceMax)
 {
     auto valuesNode = doc->xPath("/_/0/_");
-
     if (!valuesNode)
         return;
 
-    const auto nodes = valuesNode->getNodes();
+    const auto isDeep = doc->xPath("/_/0/_/0/_") != nullptr;
 
-    if (!nodes.size())
-        return;
+    std::vector<cjson*> rootList;
 
-    const auto countArrays = nodes[0]->memberCount - 1;
-        
-    auto min = std::numeric_limits<int64_t>::max();
-    auto max = std::numeric_limits<int64_t>::min();
-
-    unordered_set<int64_t> knownValues;
-
-    auto isDouble = false;
-
-    for (auto n : nodes)
+    if (isDeep) // this gathers _ arrays one level deeper for for_each histograms
     {
-        const auto gNode = n->find("g");
-        int64_t value = 0;
-
-        switch (gNode->type())
+        auto tlist = doc->xPath("/_/0/_")->getNodes();
+        for (auto tNode : tlist)
         {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
-            value = gNode->getInt() * 10000;
-            isDouble = false;
-            break;
-        case cjsonType::DBL:
-            value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
-            isDouble = true;
-            break;
-        case cjsonType::STR:
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
-        default:
-            value = 0;;
-        }
-
-        knownValues.insert(value);
-
-        if (value > max)
-            max = value;
-        if (value < min)
-            min = value;
-    }
-
-    if (forceMin != std::numeric_limits<int64_t>::min())
-        min = forceMin;
-
-    if (forceMax != std::numeric_limits<int64_t>::min())
-        max = forceMax;
-
-    std::vector<int64_t> overflow = { 0,0,0,0,0,0,0,0 };
-
-    for (auto n : nodes)
-    {
-        const auto gNode = n->find("g");
-        int64_t value = 0;
-
-        switch (gNode->type())
-        {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
-            value = gNode->getInt() * 10000;
-            isDouble = false;
-            break;
-        case cjsonType::DBL:
-            value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
-            isDouble = true;
-            break;
-        case cjsonType::STR:
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
-        default:
-            value = 0;;
-        }
-
-        if (value >= max)
-        {
-            // we are looking for the values in "c": and "c1": etc.
-            // we are storing them in overflow
-            for (auto c = 0; c < countArrays; ++c)
-            {
-                const auto cBranch = n->find(c == 0 ? "c" : "c" + to_string(c + 1));
-                const auto cNodes = cBranch->getNodes();
-                if (cNodes.size())
-                    overflow[c] += cNodes[0]->getInt();
-            }
-
-            n->setType(cjsonType::VOIDED);
-        }
-        else
-        {
-            knownValues.insert(value);
+            if (auto underscore = tNode->find("_"); underscore)
+                rootList.push_back(underscore);
         }
     }
-
-    for (auto i = min; i < max; i += bucket)
-    {
-        if (!knownValues.count(i))
-        {
-            auto newBranch = valuesNode->pushObject();
-            if (isDouble)
-                newBranch->set("g", static_cast<double>(i) / 10000.0);
-            else
-                newBranch->set("g", i / 10000);
-
-            for (auto c = 0; c < countArrays; ++c)
-            {
-                auto cBranch = newBranch->setArray( c == 0 ? "c" : "c" + to_string(c+1));
-                cBranch->push(static_cast<int64_t>(0));
-            }
-        }
-    }
-
-    // re-inject the max branch
-    auto newBranch = valuesNode->pushObject();
-    if (isDouble)
-        newBranch->set("g", static_cast<double>(max) / 10000.0);
     else
-        newBranch->set("g", max / 10000);
+        rootList = { valuesNode };
 
-    for (auto c = 0; c < countArrays; ++c)
+    for (auto root : rootList)
     {
-        auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
-        cBranch->push(static_cast<int64_t>(overflow[c]));
+        const auto nodes = root->getNodes();
+
+        if (!nodes.size())
+            return;
+
+        const auto countArrays = nodes[0]->memberCount - 1;
+
+        auto min = std::numeric_limits<int64_t>::max();
+        auto max = std::numeric_limits<int64_t>::min();
+
+        unordered_set<int64_t> knownValues;
+
+        auto isDouble = false;
+
+        for (auto n : nodes)
+        {
+            const auto gNode = n->find("g");
+            int64_t value = 0;
+
+            switch (gNode->type())
+            {
+            case cjsonType::BOOL:
+            case cjsonType::INT:
+                value = gNode->getInt() * 10000;
+                isDouble = false;
+                break;
+            case cjsonType::DBL:
+                value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
+                isDouble = true;
+                break;
+            case cjsonType::STR:
+            case cjsonType::OBJECT:
+            case cjsonType::ARRAY:
+            case cjsonType::VOIDED:
+            case cjsonType::NUL:
+            default:
+                value = 0;;
+            }
+
+            knownValues.insert(value);
+
+            if (value > max)
+                max = value;
+            if (value < min)
+                min = value;
+        }
+
+        if (forceMin != std::numeric_limits<int64_t>::min())
+            min = forceMin;
+
+        if (forceMax != std::numeric_limits<int64_t>::min())
+            max = forceMax;
+
+        std::vector<int64_t> overflow = { 0,0,0,0,0,0,0,0 };
+
+        for (auto n : nodes)
+        {
+            const auto gNode = n->find("g");
+            int64_t value = 0;
+
+            switch (gNode->type())
+            {
+            case cjsonType::BOOL:
+            case cjsonType::INT:
+                value = gNode->getInt() * 10000;
+                isDouble = false;
+                break;
+            case cjsonType::DBL:
+                value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
+                isDouble = true;
+                break;
+            case cjsonType::STR:
+            case cjsonType::OBJECT:
+            case cjsonType::ARRAY:
+            case cjsonType::VOIDED:
+            case cjsonType::NUL:
+            default:
+                value = 0;;
+            }
+
+            if (value >= max)
+            {
+                // we are looking for the values in "c": and "c1": etc.
+                // we are storing them in overflow
+                for (auto c = 0; c < countArrays; ++c)
+                {
+                    const auto cBranch = n->find(c == 0 ? "c" : "c" + to_string(c + 1));
+                    const auto cNodes = cBranch->getNodes();
+                    if (cNodes.size())
+                        overflow[c] += cNodes[0]->getInt();
+                }
+
+                n->setType(cjsonType::VOIDED);
+            }
+            else
+            {
+                knownValues.insert(value);
+            }
+        }
+
+        for (auto i = min; i < max; i += bucket)
+        {
+            if (!knownValues.count(i))
+            {
+                auto newBranch = root->pushObject();
+                if (isDouble)
+                    newBranch->set("g", static_cast<double>(i) / 10000.0);
+                else
+                    newBranch->set("g", i / 10000);
+
+                for (auto c = 0; c < countArrays; ++c)
+                {
+                    auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
+                    cBranch->push(static_cast<int64_t>(0));
+                }
+            }
+        }
+
+        // re-inject the max branch
+        auto newBranch = root->pushObject();
+        if (isDouble)
+            newBranch->set("g", static_cast<double>(max) / 10000.0);
+        else
+            newBranch->set("g", max / 10000);
+
+        for (auto c = 0; c < countArrays; ++c)
+        {
+            auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
+            cBranch->push(static_cast<int64_t>(overflow[c]));
+        }
+
     }
 
 }

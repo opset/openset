@@ -111,7 +111,7 @@ inline Tests test_sessions()
 	]
 	)raw_inserts";
 	
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count session

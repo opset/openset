@@ -40,6 +40,12 @@ bool QueryParser::isString(const string value)
 	return (value[0] == '"' || value[0] == '\'');
 }
 
+bool QueryParser::isBool(const string value)
+{
+    return (value == "True" || value == "true" || value == "False" || value == "false");
+}
+
+
 bool QueryParser::isTextual(const string value)
 {
 	return ((value[0] >= 'a' && value[0] <= 'z') ||
@@ -4023,9 +4029,55 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 	
 }
 
-vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
+std::string QueryParser::fixIndent(const std::string source)
 {
-	vector<pair<string, string>> result;
+    std::vector<string> res;
+
+    auto parts = split(source, '\n');
+
+    auto indent = -1;
+
+    for (auto p : parts)
+    {
+        int t;
+        // replace tabs
+        while ((t = p.find('\t')) != -1)
+        {
+            p.erase(t, 1);
+            p.insert(t, "    ");
+        }
+
+        // skip empty lines or lines with just whitespace
+        if (trim(p, " ").size() == 0)
+            continue;
+
+        if (indent == -1)
+        {
+            indent = 0;
+            for (auto i = 0; i < p.length(); ++i)
+            {
+                indent = i;
+                if (p[i] != ' ')
+                    break;
+            }
+        }
+
+        p = p.erase(0, indent);
+
+        res.push_back(p);
+    }
+
+    std::string outputString;
+
+    for (const auto r : res)
+        outputString += r + "\n";
+
+    return outputString;
+}
+
+QueryParser::SectionDefinitionList QueryParser::extractSections(const char* query)
+{
+	vector<QueryParser::SectionDefinition_s> result;
 
 	vector<string> accumulatedLines;
 	string current;
@@ -4033,6 +4085,41 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 
 	auto c = query; // cursor
 	const auto end = query + strlen(query) + 1;
+
+    cvar params(cvar::valueType::DICT);
+    cvar flags(cvar::valueType::DICT);
+    
+    std::string sectionType;
+    std::string sectionName;
+
+    auto storeSection = [&]()
+    {
+        string code;
+
+        for (auto& s : accumulatedLines)
+            code += s + '\n';
+        code += '\n';
+
+        // this allows you to indent the code under the @section if preferred
+        code = fixIndent(code);
+
+        accumulatedLines.clear();
+
+        result.emplace_back(SectionDefinition_s{
+            sectionType,
+            sectionName,
+            flags,
+            params,
+            code
+            });
+
+
+        sectionName = "";
+        sectionType = "";
+        params.dict(); // clear them
+        flags.dict();
+    };
+
 
 	while (c < end)
 	{
@@ -4073,34 +4160,42 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 						for (auto i = 0; i < tabDepth - 1; ++i)
 							current = "    " + current;
 
-					if (current.find("segment") == 0)
+					if (current[0] == '@')
 					{
-						// if we have a function name, join up the accumulated
-						// lines and stuff them in the result
-						if (functionName.length())
-						{
-							string joined;
 
-							for (auto& s : accumulatedLines)
-								joined += s + '\n';
+                        if (sectionName.length())
+                            storeSection();
 
-							joined += '\n';
 
-							accumulatedLines.clear();
+                        auto sectionParts = split(current.substr(1), ' ');
 
-							result.emplace_back(pair<string, string>{functionName, joined});
-						}
+                        if (sectionParts.size() >= 2)
+                        {
+                            sectionType = sectionParts[0];
+                            sectionName = sectionParts[1];
 
-						// get our next function name
-						functionName = current.substr(8, current.length() - 9);
+                            for (auto idx = 2; idx < sectionParts.size(); ++idx)
+                            {
+                                auto keyVal = split(sectionParts[idx], '=');
+                                
+                                if (keyVal.size() == 1)
+                                    keyVal.push_back("True");
 
-						const auto spacePos = functionName.find(' ');
-						if (spacePos != string::npos)
-						{
-							const auto flags = "@flags " + functionName.substr(spacePos + 1);
-							functionName = functionName.substr(0, spacePos);
-							accumulatedLines.push_back(flags);
-						}
+                                if (keyVal[0] == "ttl" || keyVal[0] == "refresh") // these are special and allow for time appends like 's' or 'm', or 'd'
+                                    flags[keyVal[0]] = expandTime(keyVal[1]) * 1000;
+                                else if (keyVal[0] == "use_cached")
+                                    flags["use_cached"] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                else if (isFloat(keyVal[1]))
+                                    params[keyVal[0]] = stod(keyVal[1]);
+                                else if (isNumeric(keyVal[1]))
+                                    params[keyVal[0]] = stoll(keyVal[1]);
+                                else if (isBool(keyVal[1]))
+                                    params[keyVal[0]] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                else 
+                                    params[keyVal[0]] = stripQuotes(keyVal[1]);
+                            }
+
+                        }
 					}
 					else
 					{
@@ -4119,17 +4214,8 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 		++c;
 	}
 
-	if (functionName.length())
-	{
-		string joined;
-
-		for (auto& s : accumulatedLines)
-			joined += s + '\n';
-
-		joined += '\n';
-
-		result.emplace_back(pair<string, string>{functionName, joined});
-	}
+    if (sectionName.length())
+        storeSection();
 
 	return result;
 }

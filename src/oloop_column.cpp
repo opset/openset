@@ -51,9 +51,26 @@ void OpenLoopColumn::prepare()
             {
                 auto attr = parts->attributes.get(db::COL_SEGMENT, MakeHash(segmentName));
                 if (attr)
+                {
                     segments.push_back(attr->getBits());
+                }
                 else
-                    segments.push_back(new db::IndexBits());
+                {
+                    shuttle->reply(
+                        0,
+                        result::CellQueryResult_s{
+                            instance,
+                        {},
+                        openset::errors::Error{
+                            openset::errors::errorClass_e::run_time,
+                            openset::errors::errorCode_e::item_not_found,
+                            "missing segment '" + segmentName + "'"
+                        }
+                        }
+                    );
+                    suicide();
+                    return;
+                }
             }
         }
     }

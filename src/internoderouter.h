@@ -37,6 +37,16 @@ namespace openset
                 size_t length{ 0 };
                 http::StatusCode code { http::StatusCode::success_ok };
 
+                DataBlock(DataBlock&& other) noexcept
+                {
+                    data = other.data;
+                    length = other.length;
+                    code = other.code;
+
+                    other.data = nullptr;
+                    other.length = 0;
+                }
+
                 DataBlock(char* data, const size_t length, const http::StatusCode code):
                     data(data),
                     length(length),

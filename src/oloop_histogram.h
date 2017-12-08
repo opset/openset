@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "columns.h"
 #include "oloop.h"
 #include "shuttle.h"
 #include "querycommon.h"
@@ -23,6 +24,7 @@ namespace openset
 			openset::query::Macro_s macros;
 			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
             std::string groupName;
+            std::string eachColumn;
 			openset::db::Table* table;
             int64_t bucket; // scaled integater (double * 10000.0)
 			openset::db::TablePartitioned* parts;
@@ -40,11 +42,16 @@ namespace openset
             // loop locals
             result::RowKey rowKey;
 
+            openset::db::Columns::columns_s* colInfo{ nullptr };
+            int eachVarIdx = { -1 };
+            Attributes::AttrListExpanded valueList;
+
 			explicit OpenLoopHistogram(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
 				openset::db::Table* table,
 				openset::query::Macro_s macros, 
                 std::string groupName,
+                std::string eachColumn,
                 const int64_t bucket,
 				openset::result::ResultSet* result,
 				const int instance);

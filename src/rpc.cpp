@@ -603,10 +603,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 		// make a node called cluster, serialize the partitionMap under it
 		openset::globals::mapper->getPartitionMap()->serializePartitionMap(configBlock.setObject("cluster"));
 
-
 		auto rpcJson = cjson::Stringify(&configBlock);
-
-		cout << rpcJson << endl;
 
 		Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
@@ -1629,6 +1626,7 @@ shared_ptr<cjson> forkQuery(
 		true);
 
 	std::vector<openset::result::ResultSet*> resultSets;
+  
 
 	for (auto &r : result.responses)
 	{
@@ -1645,10 +1643,38 @@ shared_ptr<cjson> forkQuery(
 						openset::errors::errorCode_e::internode_error,
 						"Cluster error. Node had empty reply."},
 					message);
-			else
-				message->reply(openset::http::StatusCode::success_ok, r.data, r.length);
-			return nullptr;
-		}
+			else if (r.code != openset::http::StatusCode::success_ok)
+            {
+                // try to capture a json error that has perculated up from the forked call.
+                if (r.data &&
+                    r.length &&
+                    r.data[0] == '{')
+                {
+                    cjson error(std::string(r.data, r.length), r.length);
+
+                    if (error.xPath("/error"))
+                    {
+                        message->reply(openset::http::StatusCode::client_error_bad_request, error);
+                        return nullptr;
+                    }
+                    else
+                        result.routeError = true;
+                }
+                else
+                    result.routeError = true; // this will trigger the next error
+            }
+        }
+
+        if (result.routeError)
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::config,
+                    openset::errors::errorCode_e::route_error,
+                    "potential node failure - please re-issue the request" },
+                    message);
+            return nullptr;
+        }
 	}
 	
     auto resultJson = make_shared<cjson>();
@@ -1774,6 +1800,55 @@ shared_ptr<cjson> forkQuery(
 	return std::move(resultJson);
 }
 
+openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr message)
+{
+    /*
+    * Build a map of variable names and vars that will
+    * become the new default value for variables defined
+    * in a pyql script (under the params headings).
+    *
+    * These will be reset upon each run of the script
+    * to return it's state back to original
+    */
+    openset::query::ParamVars paramVars;
+
+    for (auto p : message->getQuery())
+    {
+        cvar value = p.second;
+
+        if (p.first.find("str_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value;
+        }
+        else if (p.first.find("int_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getInt64();
+        }
+        else if (p.first.find("dbl_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getDouble();
+        }
+        else if (p.first.find("bool_") != string::npos)
+        {
+            auto name = trim(p.first.substr(4));
+
+            if (name.length())
+                paramVars[name] = value.getBool();
+        }
+
+    }
+
+    return std::move(paramVars);
+}
 
 void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
@@ -1843,52 +1918,7 @@ void RpcQuery::events(const openset::web::MessagePtr message, const RpcMapping& 
 	// override session time if provided, otherwise use table default
 	const auto sessionTime = message->getParamInt("session_time", table->getSessionTime());
 
-	/*
-	 * Build a map of variable names and vars that will
-	 * become the new default value for variables defined
-	 * in a pyql script (under the params headings).
-	 * 
-	 * These will be reset upon each run of the script
-	 * to return it's state back to original
-	 */
-
-	openset::query::ParamVars paramVars;
-
-    for (auto p : message->getQuery())
-    {
-        cvar value = p.second;
-        
-        if (p.first.find("str_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value;
-        }
-        else if (p.first.find("int_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getInt64();
-        }
-        else if (p.first.find("dbl_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getDouble();
-        }
-        else if (p.first.find("bool_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getBool();
-        }
-
-    }
-
+    openset::query::ParamVars paramVars = getInlineVaraibles(message);
 	openset::query::Macro_s queryMacros; // this is our compiled code block
 	openset::query::QueryParser p;
 
@@ -2203,55 +2233,11 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 			message);
 		return;
 	}
-	
-	/*
-	* Build a map of variable names and vars that will
-	* become the new default value for variables defined
-	* in a pyql script (under the params headings).
-	*
-	* These will be reset upon each run of the script
-	* to return it's state back to original
-	*/
 
-	openset::query::ParamVars paramVars;
 
-	/*
-	if (params)
-	{
-		auto nodes = params->getNodes();
-		for (auto n : nodes)
-		{
-			cvar paramVar;
-			switch (n->type())
-			{
-			case cjsonType::VOIDED:
-			case cjsonType::NUL:
-				paramVar = NONE;
-				break;
-			case cjsonType::OBJECT:
-			case cjsonType::ARRAY:
-				continue;
-			case cjsonType::INT:
-				paramVar = n->getInt();
-				break;
-			case cjsonType::DBL:
-				paramVar = n->getDouble();
-				break;
-			case cjsonType::STR:
-				paramVar = n->getCstr();
-				break;
-			case cjsonType::BOOL:
-				paramVar = n->getBool();
-				break;
-			}
-
-			paramVars.emplace(n->nameCstr(), paramVar);
-		}
-	}
-	*/
-
+    openset::query::ParamVars paramVars = getInlineVaraibles(message);
 	// get the functions extracted and de-indented as named code blocks
-	auto subQueries = openset::query::QueryParser::extractCountQueries(queryCode.c_str());
+	auto subQueries = openset::query::QueryParser::extractSections(queryCode.c_str());
 
 	openset::query::QueryPairs queries;
 
@@ -2259,9 +2245,12 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	for (auto r: subQueries)
 	{
 
+        if (r.sectionType != "segment")
+            continue;
+
 		openset::query::Macro_s queryMacros; // this is our compiled code block
 		openset::query::QueryParser p;
-		p.compileQuery(r.second.c_str(), table->getColumns(), queryMacros, &paramVars);
+		p.compileQuery(r.code.c_str(), table->getColumns(), queryMacros, &paramVars);
 
 		if (p.error.inError())
 		{
@@ -2271,15 +2260,21 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 			return;
 		}
 
-		if (queryMacros.segmentTTL != -1)
-			table->setSegmentTTL(r.first, queryMacros.segmentTTL);
+        if (r.flags.contains("ttl"))
+        {
+            queryMacros.segmentTTL = r.flags["ttl"];
+            table->setSegmentTTL(r.sectionName, r.flags["ttl"]);
+        }
 
-		if (queryMacros.segmentRefresh != -1)
-			table->setSegmentRefresh(r.first, queryMacros, queryMacros.segmentRefresh);
+        if (r.flags.contains("refresh"))
+        {
+            queryMacros.segmentRefresh = r.flags["refresh"];
+            table->setSegmentRefresh(r.sectionName, queryMacros, r.flags["refresh"]);
+        }
 
 		queryMacros.isSegment = true;
 
-		queries.emplace_back(std::pair<std::string, openset::query::Macro_s>{r.first, queryMacros});
+		queries.emplace_back(std::pair<std::string, openset::query::Macro_s>{r.sectionName, queryMacros});
 	}
 
 	// Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
@@ -2325,6 +2320,17 @@ void RpcQuery::counts(const openset::web::MessagePtr message, const RpcMapping& 
 	*
 	*
 	*/
+    if (!queries.size())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::syntax_error,
+                "no @segment sections could be found" },
+                message);
+        return;
+    }
+    
 	if (!isFork)
 	{
 		const auto json = std::move(
@@ -3011,53 +3017,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
 
     // override session time if provided, otherwise use table default
     const auto sessionTime = message->getParamInt("session_time", table->getSessionTime());
-
-    /*
-    * Build a map of variable names and vars that will
-    * become the new default value for variables defined
-    * in a pyql script (under the params headings).
-    *
-    * These will be reset upon each run of the script
-    * to return it's state back to original
-    */
-
-    openset::query::ParamVars paramVars;
-
-    for (auto p : message->getQuery())
-    {
-        cvar value = p.second;
-
-        if (p.first.find("str_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value;
-        }
-        else if (p.first.find("int_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getInt64();
-        }
-        else if (p.first.find("dbl_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getDouble();
-        }
-        else if (p.first.find("bool_") != string::npos)
-        {
-            auto name = trim(p.first.substr(4));
-
-            if (name.length())
-                paramVars[name] = value.getBool();
-        }
-
-    }
-
+    openset::query::ParamVars paramVars = getInlineVaraibles(message);     
     openset::query::Macro_s queryMacros; // this is our compiled code block
     openset::query::QueryParser p;
 
@@ -3297,8 +3257,302 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     partitions->cellFactory(activeList, [=, &instance](AsyncLoop* loop) -> OpenLoop*
     {
         instance++;
-        return new OpenLoopHistogram(shuttle, table, queryMacros, groupName, bucket, resultSets[loop->getWorkerId()], instance);
+        return new OpenLoopHistogram(
+            shuttle, 
+            table, 
+            queryMacros, 
+            groupName, 
+            message->isParam("foreach") ? message->getParamString("foreach") : "",
+            bucket, 
+            resultSets[loop->getWorkerId()], 
+            instance);
     });
+}
+
+openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset::query::SegmentList segments, openset::query::QueryParser::SectionDefinitionList queries)
+{
+    const auto runMax = 4; // maximum concurrent queries allowed.
+
+    CriticalSection cs;
+    auto iter = queries.begin();
+    auto doneSending = false;
+
+    auto receivedCount = 0;
+    auto sendCount = 0; // number of queries sent
+    auto running = 0; // number currently running
+
+    std::function<void()> sendOne;
+
+    openset::mapping::Mapper::Responses result;
+
+    auto completeCallback = [&](const openset::http::StatusCode status, const bool, char* data, const size_t size)
+    {
+        {
+            csLock lock(cs);
+            auto dataCopy = static_cast<char*>(PoolMem::getPool().getPtr(size));
+            memcpy(dataCopy, data, size);
+            result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ dataCopy, size, status });
+            --running;
+            ++receivedCount;
+        }
+
+        sendOne();
+    };
+    
+    sendOne = [&]()
+    {
+        std::string method = "GET";
+        std::string path;
+        openset::web::QueryParams params;
+        std::string payload;
+
+        {
+            csLock lock(cs);
+
+            if (running > runMax) // send up to RunMax, fill any that are complete
+                return;
+
+            if (iter == queries.end())
+            {
+                doneSending = true;
+                return;
+            }
+
+            ++running;
+            ++sendCount;
+
+            // convert captures in Section Defintion to REST params
+            for (auto p : *(iter->params.getDict()))
+                if (p.first.getString() != "each") // missing a char* != ???
+                    params.emplace(p.first.getString(), p.second.getString());
+
+            // add a segments param
+            if (segments.size())
+                params.emplace("segments"s, join(segments));
+
+            // make queries
+            if (iter->sectionType == "segment")
+            {
+                method = "POST";
+                path = "/v1/query/" + tableName + "/counts";
+                std::string segline = "@segment " + iter->sectionName + " ";
+                for (auto f : *(iter->flags.getDict()))
+                    segline += f.first + "=" + f.second + " ";
+                segline += "\n";
+
+                payload += segline + std::move(iter->code); // eat it
+            }
+            else if (iter->sectionType == "column")
+            {
+                path = "/v1/query/" + tableName + "/column/" + iter->sectionName;
+                payload = std::move(iter->code); // eat it
+            }
+            else if (iter->sectionType == "histogram")
+            {
+                method = "POST";
+                path = "/v1/query/" + tableName + "/histogram/" + iter->sectionName;
+                payload = std::move(iter->code); // eat it
+            }
+
+            ++iter;
+        }
+
+        // fire these queries off
+        auto success = openset::globals::mapper->dispatchAsync(
+            openset::globals::running->nodeId, // fork to self
+            method,
+            path,
+            params,
+            payload,
+            completeCallback
+        );
+
+        if (!success)
+            result.routeError = true;
+
+        sendOne();
+    };
+
+    sendOne();
+
+    while (!doneSending && sendCount != receivedCount)
+    {
+        ThreadSleep(50); // replace with semaphore
+    }
+
+    return std::move(result);
+}
+
+void RpcQuery::job(openset::web::MessagePtr message, const RpcMapping& matches)
+{
+    auto database = openset::globals::database;
+    const auto partitions = openset::globals::async;
+
+    const auto request = message->getJSON();
+    const auto tableName = matches.find("table"s)->second;
+    const auto queryCode = std::string{ message->getPayload(), message->getPayloadLength() };
+
+    const auto debug = message->getParamBool("debug");
+
+    const auto startTime = Now();
+
+    Logger::get().info("Inbound multi query"s);
+
+    if (!tableName.length())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "missing or invalid table name" },
+                message);
+        return;
+    }
+
+    if (!queryCode.length())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "missing query code (POST query as text)" },
+                message);
+        return;
+    }
+
+    const auto table = database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::query,
+                openset::errors::errorCode_e::general_error,
+                "table could not be found" },
+                message);
+        return;
+    }
+    
+    thread runner([=]() {
+
+        openset::query::ParamVars paramVars = getInlineVaraibles(message);
+        // get the functions extracted and de-indented as named code blocks
+        auto subQueries = openset::query::QueryParser::extractSections(queryCode.c_str());
+
+
+        query::QueryParser::SectionDefinitionList segmentList;
+        query::QueryParser::SectionDefinitionList queryList;
+        query::QueryParser::SectionDefinition_s useSection;
+        query::SegmentList segments;
+
+        // extract the 
+        for (auto &s : subQueries)
+            if (s.sectionType == "segment")
+                segmentList.push_back(s);
+            else if (s.sectionType == "use")
+                useSection = s;
+            else
+                queryList.push_back(s);
+
+        if (useSection.sectionType == "use" && useSection.sectionName.length())
+            segments = split(useSection.sectionName, ',');
+
+        if (segmentList.size())
+        {
+            auto results = queryDispatch(tableName, segments, segmentList);
+
+            for (auto &r : results.responses)
+            {
+                if (r.code != http::StatusCode::success_ok)
+                {
+                    // try to capture a json error that has perculated up from the forked call.
+                    if (r.data &&
+                        r.length &&
+                        r.data[0] == '{')
+                    {
+                        cjson error(std::string(r.data, r.length), r.length);
+
+                        if (error.xPath("/error"))
+                        {
+                            message->reply(openset::http::StatusCode::client_error_bad_request, error);
+                            return;
+                        }
+                        else
+                            results.routeError = true;
+                    }
+                    else
+                        results.routeError = true; // this will trigger the next error
+                }
+            }
+
+            if (results.routeError)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::route_error,
+                        "potential node failure - please re-issue the request" },
+                        message);
+                return;
+            }            
+        }
+        
+        if (queryList.size())
+        {
+            auto results = queryDispatch(tableName, segments, queryList);
+            
+            for (auto &r : results.responses)
+            {
+                if (r.code != http::StatusCode::success_ok)
+                {
+                    // try to capture a json error that has perculated up from the forked call.
+                    if (r.data &&
+                        r.length &&
+                        r.data[0] == '{')
+                    {
+                        cjson error(std::string(r.data, r.length), r.length);
+
+                        if (error.xPath("/error"))
+                        {
+                            message->reply(openset::http::StatusCode::client_error_bad_request, error);
+                            return;
+                        }
+                        else
+                            results.routeError = true;
+                    }
+                    else
+                        results.routeError = true; // this will trigger the next error
+                }
+            }
+
+            if (results.routeError)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::route_error,
+                        "potential node failure - please re-issue the request" },
+                        message);
+                return;
+            }
+
+            cjson responseJson;
+            auto resultBranch = responseJson.setArray("_");
+
+            for (auto &r : results.responses)
+            {
+                auto insertAt = resultBranch->pushObject();
+                cjson resultItemJson{ std::string{ r.data, r.length }, r.length };
+                               
+                if (auto item = resultItemJson.xPath("/_/0"); item)
+                    cjson::Parse(cjson::Stringify(item), insertAt, true);
+            }
+
+            message->reply(openset::http::StatusCode::success_ok, responseJson);
+        }
+    });
+
+    runner.detach();
 }
 
 void openset::comms::Dispatch(const openset::web::MessagePtr message)
