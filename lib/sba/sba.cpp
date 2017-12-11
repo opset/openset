@@ -40,6 +40,11 @@ PoolMem::~PoolMem()
 
 void* PoolMem::getPtr(int64_t size)
 {
+
+    return reinterpret_cast<void*>(new char[size]);
+
+
+
 	// give us the starting bucket for iteration
 	int64_t bucket = std::sqrt(size);
 
@@ -79,7 +84,11 @@ void* PoolMem::getPtr(int64_t size)
 
 void PoolMem::freePtr(void* ptr)
 {
-	auto alloc = reinterpret_cast<alloc_s*>(static_cast<char*>(ptr) - MemConstants::PoolMemHeaderSize);
+    delete[] reinterpret_cast<char*>(ptr);
+
+    return;
+
+    const auto alloc = reinterpret_cast<alloc_s*>(static_cast<char*>(ptr) - MemConstants::PoolMemHeaderSize);
 
     if (alloc->poolIndex == -2) // already freed
         return;

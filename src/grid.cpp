@@ -737,6 +737,7 @@ PersonData_s* Grid::commit()
 		cout << "no rows" << endl;
 	}
 
+    /*
 	// calculate space needed
 	auto bytesNeeded = 0;
 	for (auto r : rows)
@@ -751,16 +752,20 @@ PersonData_s* Grid::commit()
 		}
 		bytesNeeded += sizeOfCastHeader; // row end
 	}
+    */
 
-	//TODO - technically we can predict the maximum size without iteration and counting... hmmm..
+    // this is the worst case scenario temp buffer size for this data.
+    const auto tempBufferSize = (rows.size() * (this->columnCount * sizeOfCast)) + (rows.size() * sizeOfCastHeader);
 
 	// make an intermediate buffer that is fully uncompresed
-	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(bytesNeeded));
+	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
+
 	// copy over header and ID text
-	memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
+	//memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
 
 	auto write = intermediateBuffer;
 	Cast_s* cursor;
+    auto bytesNeeded = 0;
 
 	for (auto r : rows)
 	{
@@ -776,6 +781,7 @@ PersonData_s* Grid::commit()
 			cursor->columnNum = columnMap[c];
 			cursor->val64 = r->cols[c];
 			write += sizeOfCast;
+            bytesNeeded += sizeOfCast;
 		}
 
 		cursor = recast<Cast_s*>(write);
@@ -783,6 +789,7 @@ PersonData_s* Grid::commit()
 		// END OF ROW - write a "row" marker at the end of the row
 		cursor->columnNum = -1;
 		write += sizeOfCastHeader;
+        bytesNeeded += sizeOfCastHeader;
 	}
 
 	const auto maxBytes = LZ4_compressBound(bytesNeeded);
@@ -796,7 +803,7 @@ PersonData_s* Grid::commit()
 		maxBytes,
 		2);
 
-	const auto newPersonSize = rawData->size() - oldCompBytes + newCompBytes;
+	const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes; // size() includes data, we adjust
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
@@ -813,7 +820,7 @@ PersonData_s* Grid::commit()
 	// copy old props
 	if (rawData->propBytes)
 		memcpy(newPerson->getProps(), rawData->getProps(), static_cast<size_t>(rawData->propBytes));
-	// copy old compressed events
+	// copy NEW compressed events
 	if (newCompBytes)
 		memcpy(newPerson->getComp(), compBuffer, static_cast<size_t>(newCompBytes));
 

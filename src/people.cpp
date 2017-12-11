@@ -61,7 +61,7 @@ PersonData_s* People::getmakePerson(string userIdString)
 
 	while (true)
 	{
-		auto person = getPersonByID(hashId);
+	    const auto person = getPersonByID(hashId);
 
 		if (!person) // not found, lets create
 		{

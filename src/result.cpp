@@ -2,25 +2,27 @@
 #include <algorithm>
 #include <sstream>
 #include "cjson/cjson.h"
+#include "mem/bigring.h"
 #include "tablepartitioned.h"
 
 using namespace openset::result;
 
 static char NA_TEXT[] = "n/a";
 
-ResultSet::ResultSet()
+ResultSet::ResultSet(const int64_t resultWidth) :
+    resultWidth(resultWidth)
 {
-    for (auto &a : accTypes)
-        a = ResultTypes_e::Int;
-
-    for (auto &m : accModifiers)
-        m = query::Modifiers_e::sum;
+    accTypes.resize(resultWidth, ResultTypes_e::Int);
+    accModifiers.resize(resultWidth, query::Modifiers_e::sum);
 }
 
 ResultSet::ResultSet(ResultSet&& other) noexcept:
 	results(std::move(other.results)),
 	mem(std::move(other.mem)),
-	localText(std::move(other.localText))
+	localText(std::move(other.localText)),
+    resultWidth(other.resultWidth),
+    accTypes(std::move(other.accTypes)),
+    accModifiers(std::move(other.accModifiers))
 {
 	cout << "result move constructor" << endl;
 }
@@ -53,21 +55,13 @@ void ResultSet::makeSortedList()
 		});
 }
 
-void ResultSet::setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb)
-{
-	auto tPair = results.get(key);
-
-	if (!tPair)
-	{
-		const auto t = new (mem.newPtr(sizeof(Accumulator))) Accumulator();
-		tPair = results.set(key, t);
-	}
-
-	set_cb(tPair->second);
-}
-
 void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 {
+
+    const auto resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
+
+    accTypes.resize(resultWidth, ResultTypes_e::Int);
+    accModifiers.resize(resultWidth, query::Modifiers_e::sum);
 
     auto dataIndex = -1;
     for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
@@ -149,11 +143,25 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
     }
 }
 
+Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
+{
+    auto tPair = results.get(key);
+
+    if (!tPair)
+    {
+        const auto resultBytes = resultWidth * sizeof(Accumulation_s);
+        const auto t = new (mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
+        tPair = results.set(key, t);
+    }
+        
+    return tPair->second;
+}
 
 void mergeResultTypes(
     std::vector<openset::result::ResultSet*>& resultSets)
 {
-    ResultTypes_e accTypes[ACCUMULATOR_DEPTH];
+    const size_t resultWidth = resultSets[0]->resultWidth;
+    std::vector<ResultTypes_e> accTypes(resultWidth);
 
     for (auto &a : accTypes)
         a = ResultTypes_e::Int;
@@ -170,7 +178,7 @@ void mergeResultTypes(
     }
 
     for (auto s : resultSets)
-        memcpy(s->accTypes, accTypes, sizeof(accTypes));
+        s->accTypes = accTypes;
 }
 
 bigRing<int64_t, const char*> mergeResultText(
@@ -384,6 +392,8 @@ char* ResultMuxDemux::multiSetToInternode(
     auto mergedText = mergeResultText(resultSets);
     auto rows = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
 
+    const size_t resultWidth = resultColumnCount * (resultSetCount ? resultSetCount : 1);
+
     bufferLength = 0;
 
     // we are going to serialize to a HeapStack object
@@ -399,6 +409,11 @@ char* ResultMuxDemux::multiSetToInternode(
 
                                // first 8 bytes are the sized of the block
                                // Note: this is a pointer to the the first 8 bytes of the block
+
+
+    const auto resultWidthPtr = reinterpret_cast<int64_t*>(mem.newPtr(8));
+    *resultWidthPtr = resultWidth;
+
     const auto blockCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
     *blockCount = rows.size();
 
@@ -408,12 +423,14 @@ char* ResultMuxDemux::multiSetToInternode(
     const auto textCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
     *textCount = mergedText.size();
 
-    // record the types and accumulators
-    const auto types = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accTypes)));
-    memcpy(types, resultSets[0]->accTypes, sizeof(ResultSet::accTypes));
+    // record the types and accumulators (only resultWidth count)
+    const auto types = reinterpret_cast<char*>(mem.newPtr(sizeof(result::ResultTypes_e) * resultWidth));
+    memcpy(types, &resultSets[0]->accTypes[0], sizeof(result::ResultTypes_e) * resultWidth);
 
-    const auto modifiers = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accModifiers)));
-    memcpy(modifiers, resultSets[0]->accModifiers, sizeof(ResultSet::accModifiers));
+    const auto modifiers = reinterpret_cast<char*>(mem.newPtr(sizeof(query::Modifiers_e) * resultWidth));
+    memcpy(modifiers, &resultSets[0]->accModifiers[0], sizeof(query::Modifiers_e) * resultWidth);
+
+    const auto accumulatorSize = resultWidth * sizeof(Accumulation_s);
 
     // iterate the result set
     for (const auto r : rows)
@@ -421,11 +438,11 @@ char* ResultMuxDemux::multiSetToInternode(
         // make space for a key
         const auto keyPtr = recast<openset::result::RowKey*>(mem.newPtr(sizeof(openset::result::RowKey)));
         // make space for the columns
-        const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(sizeof(openset::result::Accumulator)));
+        const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(accumulatorSize));
 
         // copy the values
         memcpy(keyPtr, r.first.key, sizeof(openset::result::RowKey));
-        memcpy(accumulatorPtr, r.second->columns, sizeof(openset::result::Accumulator));
+        memcpy(accumulatorPtr, r.second->columns, accumulatorSize);
     }
 
     // lets encode the text. 
@@ -470,16 +487,9 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	char* data,
 	const int64_t blockLength)
 {
-	// we are going to make a sorta-bogus result object.
-	// the actual 
-	auto result = new openset::result::ResultSet();
-
-	// we are making a partial result set, just sorteResult vector filled
-	result->isPremerged = true; 
-
 	// empty result
-	if (!isInternode(data, blockLength))
-		return result;
+    if (!isInternode(data, blockLength))
+        return new openset::result::ResultSet(1);
 
 	auto read = data;
 	const auto end = data + blockLength;
@@ -487,17 +497,32 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	read += 2; // move passed binary marker
 
 	// more naughty C'ish looking stuff
+    const auto resultWidth = *reinterpret_cast<int64_t*>(read);
+    read += 8;
 	const auto blockCount = *reinterpret_cast<int64_t*>(read);
 	read += 8;
 	const auto textCount = *reinterpret_cast<int64_t*>(read);
 	read += 8;
 
-    // record the types and accumulators
-    memcpy(result->accTypes, read, sizeof(ResultSet::accTypes));
-    read += sizeof(ResultSet::accTypes);
+    // we are going to make a sorta-bogus result object.
+    // the actual 
+    auto result = new openset::result::ResultSet(resultWidth);
 
-    memcpy(result->accModifiers, read, sizeof(ResultSet::accModifiers));
-    read += sizeof(ResultSet::accModifiers);
+    // we are making a partial result set, just sorteResult vector filled
+    result->isPremerged = true;
+    
+    // record the types and accumulators
+    result->accTypes.resize(resultWidth, ResultTypes_e::Int);
+    auto bytes = sizeof(ResultTypes_e) * resultWidth;
+    memcpy(&result->accTypes[0], read, bytes);
+    read += bytes;
+
+    result->accModifiers.resize(resultWidth, query::Modifiers_e::sum);
+    bytes = sizeof(query::Modifiers_e) * resultWidth;
+    memcpy(&result->accModifiers[0], read, bytes);
+    read += bytes;
+    
+    const auto accumulatorSize = resultWidth * sizeof(Accumulation_s);
     
 	for (auto i = 0; i < blockCount; ++i)
 	{
@@ -508,7 +533,7 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 		read += sizeof(openset::result::RowKey);
 
 		auto accumulatorPtr = recast<openset::result::Accumulator*>(read);
-		read += sizeof(openset::result::Accumulator);
+		read += accumulatorSize;
 
 		result->sortedResult.emplace_back(
 			openset::result::ResultSet::RowPair{ *keyPtr, accumulatorPtr });
@@ -788,7 +813,7 @@ void ResultMuxDemux::jsonResultHistogramFill(
         auto min = std::numeric_limits<int64_t>::max();
         auto max = std::numeric_limits<int64_t>::min();
 
-        unordered_set<int64_t> knownValues;
+        std::unordered_set<int64_t> knownValues;
 
         auto isDouble = false;
 

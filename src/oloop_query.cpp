@@ -101,10 +101,8 @@ void OpenLoopQuery::prepare()
 		interpreter->setCompareSegments(index, segments);
 	}
 
-
+    // map table, partition and select schema columns to the Person object
 	auto mappedColumns = interpreter->getReferencedColumns();
-
-	// map table, partition and select schema columns to the Person object
 	person.mapTable(table, loop->partition, mappedColumns);
 	person.setSessionTime(macros.sessionTime);
 	
@@ -113,7 +111,6 @@ void OpenLoopQuery::prepare()
 
 void OpenLoopQuery::run()
 {
-	auto count = 0;
 	openset::db::PersonData_s* personData;
 	while (true)
 	{
@@ -124,6 +121,8 @@ void OpenLoopQuery::run()
 		// next set bit until there are no more, or maxLinId is met
 		if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
 		{
+            result->setAccTypesFromMacros(macros);
+
 			shuttle->reply(
 				0, 
 				CellQueryResult_s{				
@@ -131,8 +130,6 @@ void OpenLoopQuery::run()
                     {},
 					interpreter->error,
 				});
-
-            result->setAccTypesFromMacros(macros);
 			
 			suicide();
 			return;
@@ -146,8 +143,6 @@ void OpenLoopQuery::run()
 			interpreter->mount(&person);
 			interpreter->exec(); // run the script on this person - do some magic
 		}
-
-		++count;
 	}
 }
 

@@ -100,5 +100,5 @@ PersonData_s* Person::commit()
 {
 	data = grid.commit();
 	people->replacePersonRecord(data);
-	return data;
+	return data;    
 }

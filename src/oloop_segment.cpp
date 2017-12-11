@@ -64,8 +64,8 @@ void OpenLoopSegment::storeResult(std::string name, int64_t count) const
     rowKey.types[0] = ResultTypes_e::Text;
 	result->addLocalText(nameHash, name);
 
-	// record this branch
-	result->setAtDepth(rowKey, set_cb);
+    auto aggs = result->getMakeAccumulator(rowKey);
+    set_cb(aggs);
 }
 
 void OpenLoopSegment::storeSegments()
@@ -265,6 +265,8 @@ void OpenLoopSegment::prepare()
 
 		storeSegments();
 
+        result->setAccTypesFromMacros(macros);
+
 		shuttle->reply(
 			0,
 			CellQueryResult_s{
@@ -273,8 +275,6 @@ void OpenLoopSegment::prepare()
 			error
 		}
 		);
-
-        result->setAccTypesFromMacros(macros);
 
 		this->suicide();
 		return;

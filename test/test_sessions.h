@@ -222,7 +222,7 @@ inline Tests test_sessions()
 				// mount the compiled query to an interpretor
 				auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet;
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			

@@ -1478,7 +1478,8 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 
 			auto jsonText = cjson::Stringify(&json);
 
-			openset::globals::mapper->dispatchAsync( 
+
+             openset::globals::mapper->dispatchAsync( 
 				targetNode,
 				"POST",
 				"/v1/insert/" + tableName,
@@ -1486,6 +1487,7 @@ void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping&
 				jsonText.c_str(),
 				jsonText.length(),
 				thankyouCB);
+
 		}
 
 	// FLOW CONTROL - check for backlogging, delay the 
@@ -2106,7 +2108,11 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 	std::vector<ResultSet*> resultSets;
 
 	for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-		resultSets.push_back(new openset::result::ResultSet());
+		resultSets.push_back(
+            new openset::result::ResultSet(
+                queryMacros.vars.columnVars.size() * (queryMacros.segments.size() ? queryMacros.segments.size() : 1)
+            )
+        );
 
 	// nothing active - return an empty set - not an error
 	if (!activeList.size())
@@ -2377,7 +2383,9 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
 	);
 
 	for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-		resultSets.push_back(new openset::result::ResultSet());
+		resultSets.push_back(
+            new openset::result::ResultSet(1)
+        );
 
 	// nothing active - return an empty set - not an error
 	if (!activeList.size())
@@ -2388,8 +2396,8 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
         // 2. Merge the rows
         int64_t bufferLength = 0;
         const auto buffer = ResultMuxDemux::multiSetToInternode(
-            queries.front().second.vars.columnVars.size(),
-            queries.front().second.indexes.size(),
+            1,
+            1,
             resultSets,
             bufferLength);
 		
@@ -2783,7 +2791,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
     std::vector<ResultSet*> resultSets;
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-        resultSets.push_back(new openset::result::ResultSet());
+        resultSets.push_back(new openset::result::ResultSet(1 * (queryInfo.segments.size() ? queryInfo.segments.size() : 1)));
 
     // nothing active - return an empty set - not an error
     if (!activeList.size())
@@ -2791,7 +2799,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
         // 2. Merge the rows
         int64_t bufferLength = 0;
         const auto buffer = ResultMuxDemux::multiSetToInternode(
-            2,
+            1,
             queryInfo.segments.size(),
             resultSets,
             bufferLength);
@@ -3193,7 +3201,11 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     std::vector<ResultSet*> resultSets;
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-        resultSets.push_back(new openset::result::ResultSet());
+        resultSets.push_back(
+            new openset::result::ResultSet(
+                queryMacros.vars.columnVars.size() * (queryMacros.segments.size() ? queryMacros.segments.size() : 1)
+            )
+        );
 
     // nothing active - return an empty set - not an error
     if (!activeList.size())

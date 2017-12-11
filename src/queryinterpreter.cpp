@@ -317,15 +317,8 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
         rowKey.types[depth] = getType(item);
 			
 		//result->setAtDepth(rowKey, set_cb);
-		auto tPair = result->results.get(rowKey);
-
-		if (!tPair)
-		{
-			const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-			tPair = result->results.set(rowKey, t);
-		}
-
-		aggColumns(tPair->second);
+        const auto aggs = result->getMakeAccumulator(rowKey);
+		aggColumns(aggs);
 
 	    ++depth;
 	}

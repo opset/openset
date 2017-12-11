@@ -263,47 +263,32 @@ void OpenLoopHistogram::run()
                         rowKey.key[1] = NONE;
                         rowKey.key[2] = NONE;
 
-                        auto tPair = result->results.get(rowKey);
-                        if (!tPair)
-                        {
-                            const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                            tPair = result->results.set(rowKey, t);
-                        }
+                        auto aggs = result->getMakeAccumulator(rowKey);
 
-                        if (tPair->second->columns[idx].value == NONE)
-                            tPair->second->columns[idx].value = 1;
+                        if (aggs->columns[idx].value == NONE)
+                            aggs->columns[idx].value = 1;
                         else
-                            ++tPair->second->columns[idx].value;
+                            ++aggs->columns[idx].value;
 
                         rowKey.key[1] = key1Value;
                         rowKey.key[2] = NONE;
 
-                        tPair = result->results.get(rowKey);
-                        if (!tPair)
-                        {
-                            const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                            tPair = result->results.set(rowKey, t);
-                        }
+                        aggs = result->getMakeAccumulator(rowKey);
 
-                        if (tPair->second->columns[idx].value == NONE)
-                            tPair->second->columns[idx].value = 1;
+                        if (aggs->columns[idx].value == NONE)
+                            aggs->columns[idx].value = 1;
                         else
-                            ++tPair->second->columns[idx].value;
+                            ++aggs->columns[idx].value;
 
                         // set the key
                         rowKey.key[2] = value;
 
-                        tPair = result->results.get(rowKey);
-                        if (!tPair)
-                        {
-                            const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                            tPair = result->results.set(rowKey, t);
-                        }
+                        aggs = result->getMakeAccumulator(rowKey);
 
-                        if (tPair->second->columns[idx].value == NONE)
-                            tPair->second->columns[idx].value = 1;
+                        if (aggs->columns[idx].value == NONE)
+                            aggs->columns[idx].value = 1;
                         else
-                            ++tPair->second->columns[idx].value;
+                            ++aggs->columns[idx].value;
                     }
 
                 }
@@ -331,32 +316,20 @@ void OpenLoopHistogram::run()
 
                     rowKey.key[1] = NONE;
 
-                    auto tPair = result->results.get(rowKey);
-                    if (!tPair)
-                    {
-                        const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                        tPair = result->results.set(rowKey, t);
-                    }
-
-                    if (tPair->second->columns[idx].value == NONE)
-                        tPair->second->columns[idx].value = 1;
+                    auto aggs = result->getMakeAccumulator(rowKey);
+                    if (aggs->columns[idx].value == NONE)
+                        aggs->columns[idx].value = 1;
                     else
-                        ++tPair->second->columns[idx].value;
+                        ++aggs->columns[idx].value;
 
                     // set the key
                     rowKey.key[1] = value;
 
-                    tPair = result->results.get(rowKey);
-                    if (!tPair)
-                    {
-                        const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                        tPair = result->results.set(rowKey, t);
-                    }
-
-                    if (tPair->second->columns[idx].value == NONE)
-                        tPair->second->columns[idx].value = 1;
+                    aggs = result->getMakeAccumulator(rowKey);
+                    if (aggs->columns[idx].value == NONE)
+                        aggs->columns[idx].value = 1;
                     else
-                        ++tPair->second->columns[idx].value;
+                        ++aggs->columns[idx].value;
                 }
 
             }

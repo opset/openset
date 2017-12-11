@@ -160,31 +160,35 @@ namespace openset
 {
 	namespace result
 	{
+#pragma pack(push, 1)
 		struct Accumulation_s
 		{
 			int64_t value;
 			int32_t count;
 		};
+#pragma pack(pop)
 
-		const int ACCUMULATOR_DEPTH = 16;
+		//const int ACCUMULATOR_DEPTH = 16;
 
 		struct Accumulator
 		{
-			Accumulation_s columns[ACCUMULATOR_DEPTH];
-
-			Accumulator()
+#pragma pack(push, 1)
+            // overlay width, these are made with exact nubmer of columns by 
+            // getMakeAccumulator
+			Accumulation_s columns[256]; 
+#pragma pack(pop)
+			Accumulator(const int64_t resultWidth)
 			{
-				clear();
+				clear(resultWidth);
 			}
 
-			void clear()
+			void clear(const int64_t resultWidth)
 			{
-				for (auto &i : columns)
-				{
-					//i.distinctId = NONE;
-					i.value = NONE;
-					i.count = 0;
-				}
+                for (auto i = 0; i < resultWidth; ++i)
+                {
+                    columns[i].value = NONE;
+                    columns[i].count = 0;
+                }
 			}
 		};
 
@@ -197,6 +201,7 @@ namespace openset
 			using RowVector = vector<RowPair>;
 			vector<RowPair> sortedResult;			
 			HeapStack mem;
+            int64_t resultWidth{ 1 };
 
 			CriticalSection cs;
 
@@ -208,16 +213,17 @@ namespace openset
 
 			bigRing<int64_t, char*> localText{ ringHint_e::lt_compact }; // text local to result set
 
-            ResultTypes_e accTypes[ACCUMULATOR_DEPTH];
-            query::Modifiers_e accModifiers[ACCUMULATOR_DEPTH];
+            std::vector<ResultTypes_e> accTypes;
+            std::vector<query::Modifiers_e> accModifiers;
 
-			ResultSet();
+			ResultSet(const int64_t resultWidth);
 			ResultSet(ResultSet&& other) noexcept;
 
 			void makeSortedList();
-			void setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb);
 
             void setAccTypesFromMacros(const openset::query::Macro_s macros);
+
+            Accumulator* getMakeAccumulator(RowKey&key);
 
 			// this is a cache of text values local to our partition (thread), blob requires
 			// a lock, whereas this does not, we will merge them after.
