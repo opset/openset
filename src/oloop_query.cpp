@@ -111,7 +111,7 @@ void OpenLoopQuery::prepare()
 
 void OpenLoopQuery::run()
 {
-	openset::db::PersonData_s* personData;
+	
 	while (true)
 	{
 		if (sliceComplete())
@@ -135,7 +135,7 @@ void OpenLoopQuery::run()
 			return;
 		}
 
-		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
 		{
 			++runCount;
 			person.mount(personData);

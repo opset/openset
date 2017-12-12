@@ -317,13 +317,30 @@ public:
 
 	~cvar()
 	{
-		if (listValue)
-			delete listValue;
-		if (dictValue)
-			delete dictValue;
-		if (setValue)
-			delete setValue;
+        clear();
 	}		
+
+    void clear()
+	{
+        if (listValue)
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
+        if (dictValue)
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
+        if (setValue)
+        {
+            delete setValue;
+            setValue = nullptr;
+        }
+        type = valueType::INT64;
+        value.asInt64 = 0;
+        reference = nullptr;
+	}
 
 	// makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
 	void none()
@@ -385,7 +402,7 @@ public:
 		if (!dictValue)
 			dictValue = new Dict();
 		else
-			(*dictValue).clear();
+			dictValue->clear();
 	}
 
 	// turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
@@ -406,7 +423,7 @@ public:
 		if (!setValue)
 			setValue = new Set();
 		else
-			(*setValue).clear();
+			setValue->clear();
 	}
 
 	// turns cvar into empty List like python/js: some_list = [] or some_list = list()
@@ -427,7 +444,7 @@ public:
 		if (!listValue)
 			listValue = new List();
 		else
-			(*listValue).clear();
+			listValue->clear();
 	}
 
 	Dict* getDict() const
@@ -474,9 +491,9 @@ public:
 			return false;
 		}
 		if (type == valueType::DICT)
-			return dictValue ? (*dictValue).count(key) != 0 : false;
+			return dictValue ? dictValue->count(key) : false;
 		if (type == valueType::SET)
-			return setValue ? (*setValue).count(key) != 0 : false;
+			return setValue ? setValue->count(key) : false;
 
 		throw std::runtime_error("not a dictionary/list/set");
 	}
@@ -598,6 +615,7 @@ public:
 
 	void copy(const cvar &source)
 	{
+        clear();
 		this->type = source.type;
 		this->value = source.value;
 		this->valueString = source.valueString;
@@ -641,6 +659,8 @@ public:
 
 	cvar& operator=(cvar&& source) noexcept
 	{
+        clear();
+
 		this->type = source.type;
 		this->value = source.value;
 		this->valueString = std::move(source.valueString);
@@ -752,7 +772,6 @@ public:
 		}
 
 		list();
-
 		*listValue = source;
 
 		return *this;

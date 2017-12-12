@@ -130,8 +130,8 @@ namespace openset
 			/* Add a cell to every the loop object in every partition
 			 * calls back to a factory function that builds the cell
 			 */
-			void cellFactory(std::vector<int> partitionList, function<OpenLoop*(AsyncLoop*)> factory);
-			void cellFactory(function<OpenLoop*(AsyncLoop*)> factory);
+			void cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)> factory);
+			void cellFactory(const function<OpenLoop*(AsyncLoop*)> factory);
 
 			int32_t count();
 

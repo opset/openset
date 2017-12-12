@@ -70,7 +70,20 @@ void OpenLoopHistogram::prepare()
 
         if (!colInfo)
         {
-            // throw an error out there
+            shuttle->reply(
+                0,
+                result::CellQueryResult_s{
+                    instance,
+                {},
+                openset::errors::Error{
+                    openset::errors::errorClass_e::run_time,
+                    openset::errors::errorCode_e::item_not_found,
+                    "missing foreach column '" + eachColumn + "'"
+                }
+                }
+            );
+            suicide();
+            return;
         }
 
         valueList = parts->attributes.getColumnValues(colInfo->idx);
@@ -81,7 +94,21 @@ void OpenLoopHistogram::prepare()
 
         if (eachVarIdx == -1)
         {
-            // throw an erroer out there
+            shuttle->reply(
+                0,
+                result::CellQueryResult_s{
+                    instance,
+                {},
+                openset::errors::Error{
+                    openset::errors::errorClass_e::run_time,
+                    openset::errors::errorCode_e::item_not_found,
+                    "the 'each_value' variable was not found."
+                }
+                }
+            );
+            suicide();
+            return;
+
         }
     }
 
@@ -173,8 +200,6 @@ void OpenLoopHistogram::prepare()
 
 void OpenLoopHistogram::run()
 {
-	auto count = 0;
-	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())
@@ -196,7 +221,7 @@ void OpenLoopHistogram::run()
 			return;
 		}
 
-		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
 		{
 			++runCount;
 
@@ -204,10 +229,8 @@ void OpenLoopHistogram::run()
 			person.prepare();
 			interpreter->mount(&person);
 
-
             if (valueList.size())
             {
-
                 int64_t key1Value;
 
                 for (auto& itemValue : valueList)
@@ -295,7 +318,6 @@ void OpenLoopHistogram::run()
             }
             else
             {
-
 			    interpreter->exec(); // run the script on this person - do some magic
                 auto returns = interpreter->getLastReturn();
 
@@ -312,8 +334,7 @@ void OpenLoopHistogram::run()
                     // bucket the key if it's non-zero
                     if (bucket)
                         value = (value / bucket) * bucket;
-
-
+                    
                     rowKey.key[1] = NONE;
 
                     auto aggs = result->getMakeAccumulator(rowKey);
@@ -334,8 +355,6 @@ void OpenLoopHistogram::run()
 
             }
 		}
-
-		++count;
 	}
 }
 

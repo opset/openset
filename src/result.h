@@ -177,21 +177,16 @@ namespace openset
             // getMakeAccumulator
 			Accumulation_s columns[256]; 
 #pragma pack(pop)
-			Accumulator(const int64_t resultWidth)
-			{
-				clear(resultWidth);
-			}
 
-			void clear(const int64_t resultWidth)
+			Accumulator(const int64_t resultWidth)
 			{
                 for (auto i = 0; i < resultWidth; ++i)
                 {
                     columns[i].value = NONE;
                     columns[i].count = 0;
                 }
-			}
+            }		
 		};
-
 
 		class ResultSet
 		{

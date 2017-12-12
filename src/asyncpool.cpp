@@ -1,7 +1,6 @@
 #include "common.h"
 #include "asyncpool.h"
 #include "config.h"
-#include "file/file.h"
 #include "internoderouter.h"
 #include <cassert>
 
@@ -155,43 +154,34 @@ void AsyncPool::freePartition(int32_t partition)
 	}
 }
 
-void AsyncPool::cellFactory(std::vector<int> partitionList, function<OpenLoop*(AsyncLoop*)> factory)
+void AsyncPool::cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)> factory)
 {
 	csLock lock(poolLock);
 
 	for (auto pid : partitionList)
 	{
 		auto &p = partitions[pid];
-		if (p)
-		{
-			auto cell = factory(p->ooLoop);
-
-			// factory function can return nullptr if not applicable
-			// i.e. query on a non-owner partition
-			if (cell)
+		// factory function can return nullptr if not applicable
+		// i.e. query on a non-owner partition
+        if (p)
+			if (const auto cell = factory(p->ooLoop); cell)
 				p->ooLoop->queueCell(cell);
-		}
 		else
-		{
 			Logger::get().error("partition missing (" + to_string(pid) + ")");
-		}
 	}
 }
 
-void AsyncPool::cellFactory(function<OpenLoop*(AsyncLoop*)> factory)
+void AsyncPool::cellFactory(const function<OpenLoop*(AsyncLoop*)> factory)
 {
 	csLock lock(poolLock);
 
+    // factory function can return nullptr if not applicable
+    // i.e. query on a non-owner partition
+
 	for (auto& p : partitions)
 		if (p)
-		{
-			auto cell = factory(p->ooLoop);
-
-			// factory function can return nullptr if not applicable
-			// i.e. query on a non-owner partition
-			if (cell) 
+			if (const auto cell = factory(p->ooLoop); cell)
 				p->ooLoop->queueCell(cell);
-		}
 }
 
 int32_t AsyncPool::count()

@@ -1,8 +1,6 @@
 #pragma once
 
-#include "common.h"
 #include "asyncloop.h"
-#include "shuttle.h"
 
 namespace openset
 {

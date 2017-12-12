@@ -23,8 +23,6 @@ namespace openset
 			// where new worker cells get added
 			vector<OpenLoop*> queued;
 			atomic<int32_t> queueSize;
-			// where dead workers go
-			vector<OpenLoop*> completed;
 			// the active worker live
 			vector<OpenLoop*> active;
 			
@@ -54,9 +52,6 @@ namespace openset
 			// and they will be ready queued on the next cycle
 			void scheduleQueued();
 
-			// moves a Cell to the cleanup queue
-			void markForCleanup(OpenLoop* work);
-
 			int64_t getWorkerId() const
 			{
 				return worker;
@@ -70,9 +65,6 @@ namespace openset
 			// this runs one iteration of the main Loop
 			// short, sweet and called frequently
 			bool Run(int64_t &nextRun);
-
-			// clean up 
-			void cleanup();
 		};
 	};
 };

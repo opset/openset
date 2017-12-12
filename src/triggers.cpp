@@ -28,7 +28,7 @@ Triggers::Triggers(openset::db::TablePartitioned* parts):
 	columns(table->getColumns()),
 	loadVersion(table->getLoadVersion())
 {
-	load();
+	//load();
 }
 
 Triggers::~Triggers() 

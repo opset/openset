@@ -98,7 +98,6 @@ namespace openset::comms
 	class RpcQuery
 	{
 	public:
-
 		// POST /v1/query/{table}/event
 		static void event(const openset::web::MessagePtr message, const RpcMapping& matches);
 		// POST /v1/query/{table}/segment
@@ -111,8 +110,6 @@ namespace openset::comms
         static void histogram(const openset::web::MessagePtr message, const RpcMapping& matches);
         // POST /v1/query/{table}/batch
         static void batch(const openset::web::MessagePtr message, const RpcMapping& matches);
-
-		//static void person(const openset::web::MessagePtr message, const RpcMapping& matches);		
 	};
 
 	class RpcInsert

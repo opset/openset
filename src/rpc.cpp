@@ -1651,7 +1651,6 @@ shared_ptr<cjson> forkQuery(
 
 	std::vector<openset::result::ResultSet*> resultSets;
   
-
 	for (auto &r : result.responses)
 	{
 		if (ResultMuxDemux::isInternode(r.data, r.length))
@@ -1679,6 +1678,13 @@ shared_ptr<cjson> forkQuery(
                     if (error.xPath("/error"))
                     {
                         message->reply(openset::http::StatusCode::client_error_bad_request, error);
+
+                        // free up the responses
+                        openset::globals::mapper->releaseResponses(result);
+                        // clean up all those resultSet*
+                        for (auto r : resultSets)
+                            delete r;
+
                         return nullptr;
                     }
                     else
@@ -1697,16 +1703,29 @@ shared_ptr<cjson> forkQuery(
                     openset::errors::errorCode_e::route_error,
                     "potential node failure - please re-issue the request" },
                     message);
+
+            // free up the responses
+            openset::globals::mapper->releaseResponses(result);
+            // clean up all those resultSet*
+            for (auto r : resultSets)
+                delete r;
+
             return nullptr;
         }
 	}
-	
+    
     auto resultJson = make_shared<cjson>();
     ResultMuxDemux::resultSetToJson(
         resultColumnCount,
         setCount,
         resultSets,
         resultJson.get());
+
+    // free up the responses
+    openset::globals::mapper->releaseResponses(result);
+    // clean up all those resultSet*
+    for (auto r : resultSets)
+        delete r;
 
     if (bucket)
         ResultMuxDemux::jsonResultHistogramFill(resultJson.get(), bucket, forceMin, forceMax);
@@ -1794,8 +1813,6 @@ shared_ptr<cjson> forkQuery(
 				}
 			}
 		}
-
-
 	};
 
 	// add status nodes to JSON document
@@ -1813,13 +1830,6 @@ shared_ptr<cjson> forkQuery(
 	//metaJson->set("total_time", elapsed);
 
 	Logger::get().info("RpcQuery on " + table->getName());
-
-	// free up the responses
-	openset::globals::mapper->releaseResponses(result);
-
-	// clean up all those resultSet*
-	for (auto r : resultSets)
-		delete r;
 
 	return std::move(resultJson);
 }
@@ -2132,6 +2142,10 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
         PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
+        for (auto resultSet : resultSets)
+            delete resultSet;
         
 		return;
 	}
@@ -2190,9 +2204,9 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
 			Logger::get().info("Fork query on " + table->getName());
 
-			// clean up all those resultSet*
-			for (auto r : resultSets)
-				delete r;
+            // clean up stray resultSets
+            for (auto resultSet : resultSets)
+                delete resultSet;
 
             PoolMem::getPool().freePtr(buffer);
 
@@ -2405,6 +2419,10 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
 		message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
         PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
+        for (auto resultSet : resultSets)
+            delete resultSet;
         
 		return;
 	}
@@ -2451,9 +2469,9 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
 
 			Logger::get().info("Fork count(s) on " + table->getName());
 
-			// clean up all those resultSet*
-			for (auto r : resultSets)
-				delete r;
+            // clean up stray resultSets
+            for (auto resultSet : resultSets)
+                delete resultSet;
 
 			release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
 
@@ -2806,6 +2824,13 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 
         // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
+        PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
+        for (auto resultSet : resultSets)
+            delete resultSet;
+
         return;
     }
     
@@ -3226,6 +3251,10 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
 
         PoolMem::getPool().freePtr(buffer);
 
+        // clean up stray resultSets
+        for (auto resultSet : resultSets)
+            delete resultSet;
+
         return;
     }
 
@@ -3261,7 +3290,6 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
                     delete resultSet;
 
                 release_cb();
-
                 return;
             }
         }
@@ -3277,18 +3305,21 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
 
         Logger::get().info("Fork query on " + table->getName());
 
-        // clean up all those resultSet*
-        for (auto r : resultSets)
-            delete r;
+        // clean up stray resultSets
+        for (auto resultSet : resultSets)
+            delete resultSet;
 
         PoolMem::getPool().freePtr(buffer);
 
         release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
     });
 
+
+    auto forEach = message->isParam("foreach") ? message->getParamString("foreach") : ""s;
     auto instance = 0;
     // pass factory function (as lambda) to create new cell objects
-    partitions->cellFactory(activeList, [=, &instance](AsyncLoop* loop) -> OpenLoop*
+
+    partitions->cellFactory(activeList, [shuttle, table, queryMacros, resultSets, groupName, bucket, forEach, &instance](AsyncLoop* loop) -> OpenLoop*
     {
         instance++;
         return new OpenLoopHistogram(
@@ -3296,7 +3327,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
             table, 
             queryMacros, 
             groupName, 
-            message->isParam("foreach") ? message->getParamString("foreach") : "",
+            forEach,
             bucket, 
             resultSets[loop->getWorkerId()], 
             instance);

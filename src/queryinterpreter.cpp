@@ -8,12 +8,13 @@
 
 const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
+const int STACK_DEPTH = 64;
 
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode):
 	macros(macros),
 	interpretMode(interpretMode)
 {
-	stack = new cvar[128];
+	stack = new cvar[STACK_DEPTH];
 	stackPtr = stack;
 }
 
@@ -1443,18 +1444,18 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		currentRow = (stackPtr - 1)->getInt64();
 		if (currentRow < 0 || currentRow >= rows->size())
 			throw std::runtime_error("row iterator out of range");
-		rows->begin() + currentRow;
+		//rowIter = rows->begin() + currentRow;
 		--stackPtr;
 		break;
 	case Marshals_e::marshal_iter_move_first:
 		currentRow = 0;
-		rows->begin() + currentRow;
+		//rows->begin() + currentRow;
 		break;
 	case Marshals_e::marshal_iter_move_last:
 		currentRow = rows->size() - 1;
 		if (currentRow < 0)
 			throw std::runtime_error("iter_set_last called on empty set");
-		rows->begin() + currentRow;
+		//rows->begin() + currentRow;
 		break;
 	case Marshals_e::marshal_iter_next:
 	{
@@ -1996,7 +1997,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					--stackPtr;
-					const auto key = std::move(*stackPtr);
+					const auto key = std::move(*stackPtr); // TODO - use ref?
 
 					// this is the value
 					--stackPtr;
@@ -2680,6 +2681,9 @@ void openset::query::Interpreter::execReset()
 	matchStampPrev.clear();
 	eventDistinct.clear();
 
+    for (auto i = 0; i < STACK_DEPTH; ++i)
+        stack[i].clear();
+
 	if (firstRun)
 	{
 		// this script references global cvariables, so
@@ -2710,7 +2714,6 @@ void openset::query::Interpreter::execReset()
 
 void openset::query::Interpreter::exec()
 {
-	execReset();
     returns.clear(); // cannot be cleared in segment loop
 
 	const auto inst = &macros.code.front();
@@ -2723,8 +2726,11 @@ void openset::query::Interpreter::exec()
 			segmentColumnShift = 0;
 			for (auto seg : segmentIndexes)
 			{
-				if (seg->bitState(linid)) // if the person is in this segment run the ops
-					opRunner(inst, 0);
+                if (seg->bitState(linid)) // if the person is in this segment run the ops
+                {
+                    execReset();
+                    opRunner(inst, 0);
+                }
 
                 if (stackPtr == stack)
                     returns.push_back(NONE); // return NONE if stack is unwound
@@ -2732,13 +2738,13 @@ void openset::query::Interpreter::exec()
                     returns.push_back(*(stackPtr - 1)); // capture last value on stack
 
 				// for each segment we offset the results by the number of columns
-				segmentColumnShift += macros.vars.columnVars.size();
-				execReset();
+				segmentColumnShift += macros.vars.columnVars.size();				
 			}
 		}
 		else
 		{
 			segmentColumnShift = 0;
+            execReset();
 			opRunner(inst, 0);
 
             if (stackPtr == stack)
@@ -2783,7 +2789,6 @@ void openset::query::Interpreter::exec(const string functionName)
 
 void openset::query::Interpreter::exec(const int64_t functionHash)
 {
-	execReset();
     returns.clear(); // cannot be cleared in segment loop
 
 	for (auto& f : macros.vars.functions)
@@ -2800,8 +2805,11 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 					segmentColumnShift = 0;
 					for (auto seg : segmentIndexes)
 					{
-						if (seg->bitState(linid)) // if the person is in this segment run the ops
-							opRunner(inst, 0);
+                        if (seg->bitState(linid)) // if the person is in this segment run the ops
+                        {
+                            execReset();
+                            opRunner(inst, 0);
+                        }
 
                         if (stackPtr == stack)
                             returns.push_back(NONE); // return NONE if stack is unwound
@@ -2810,12 +2818,12 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 
 						// for each segment we offset the results by the number of columns
 						segmentColumnShift += macros.vars.columnVars.size();
-						execReset();
 					}
 				}
 				else
 				{
 					segmentColumnShift = 0;
+                    execReset();
 					opRunner(inst, 0);
 
                     if (stackPtr == stack)

@@ -270,6 +270,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 			callbackState->incrResponse();
 			if (callbackState->isComplete())
 				delete callbackState;
+            return;
 		}
 
 		{
