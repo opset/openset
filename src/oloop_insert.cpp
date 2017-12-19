@@ -72,7 +72,7 @@ void OpenLoopInsert::run()
 
 	++runCount;
 
-	auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
+    const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
 	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
 		mapInfo != openset::mapping::NodeState_e::active_clone)
@@ -105,16 +105,11 @@ void OpenLoopInsert::run()
 		auto uuidString = row.xPathString("/person", "");
 		toLower(uuidString);
 
-	    const auto attr = row.xPath("/attr");
+	    const auto attr = row.xPath("/_");
 
 		// do we have what we need to insert?
 		if (attr && uuidString.length())
-		{
-			//if (!evtByPerson.count(uuidString))
-				//evtByPerson.emplace(uuidString, std::vector<cjson>{});
-
 			evtByPerson[uuidString].emplace_back(std::move(row));
-		}
 	}
 
 	for (auto& uuid : evtByPerson)

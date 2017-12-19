@@ -10,7 +10,6 @@ class cjson;
 
 namespace openset
 {
-
 	namespace query
 	{
 		class Interpreter; 	// name spaced forward
@@ -33,7 +32,6 @@ namespace openset
 		class IndexBits;
 		struct Attr_s;
 	};
-
 };
 
 namespace std // hasher for triggerOn_e enum
@@ -48,14 +46,11 @@ namespace std // hasher for triggerOn_e enum
 	};
 };
 
-
 namespace openset
 {
 	namespace trigger
 	{
-
-
-		struct triggerMessage_s
+    	struct triggerMessage_s
 		{
 			int64_t stamp;
 			int64_t id;
@@ -69,7 +64,7 @@ namespace openset
 				message(nullptr)
 			{ }
 
-			triggerMessage_s(int64_t triggerId, std::string triggerMessage, std::string uuidStr)
+			triggerMessage_s(const int64_t triggerId, std::string triggerMessage, std::string uuidStr)
 			{
 				stamp = Now();
 				id = triggerId;
@@ -116,7 +111,6 @@ namespace openset
 			}
 		};
 
-
 		// String to Trigger Mode
 		static const unordered_map<string, triggerOn_e> triggerModes = {
 			{ "changed_true", triggerOn_e::changed_true }
@@ -135,9 +129,6 @@ namespace openset
 
 		class Trigger
 		{
-
-
-		private:
 			triggerSettings_s* settings;
 			int lastConfigVersion; // class copy, used to check against settings version for reload
 
@@ -159,7 +150,6 @@ namespace openset
 			bool inError;
 
 		public:
-
 			std::vector<triggerMessage_s> triggerQueue;
 						
 			explicit Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* parts);
@@ -185,7 +175,6 @@ namespace openset
 			
 			void preInsertTest();
 			void postInsertTest();
-
 			bool runFunction(const int64_t functionHash);
 
 			std::string getName() const

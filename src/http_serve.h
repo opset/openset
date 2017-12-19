@@ -128,6 +128,12 @@ namespace openset::web
 
 		cjson getJSON() const
 		{
+            if (!payload || !payloadLength)
+            {
+                cjson t;
+                return std::move(t);
+            }
+
 			cjson json(string{ payload, payloadLength }, payloadLength);
 			return std::move(json);
 		}

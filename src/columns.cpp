@@ -17,12 +17,12 @@ Columns::~Columns()
 {}
 
 
-Columns::columns_s* Columns::getColumn(int column)
+Columns::Columns_s* Columns::getColumn(int column)
 {
 	return &columns[column];
 }
 
-Columns::columns_s* Columns::getColumn(string name)
+Columns::Columns_s* Columns::getColumn(string name)
 {
 	csLock _lck(lock);
 
@@ -34,7 +34,7 @@ Columns::columns_s* Columns::getColumn(string name)
 		return nullptr;
 }
 
-void Columns::deleteColumn(columns_s* columnInfo)
+void Columns::deleteColumn(Columns_s* columnInfo)
 {
 	columnInfo->deleted = Now();
 	nameMap.erase(columnInfo->name);
@@ -71,11 +71,11 @@ void Columns::setColumn(
 	// update the column
 	columns[index].name = name;
 	columns[index].type = type;
-	columns[index].isProp = isSet;
+	columns[index].isSet = isSet;
 	columns[index].deleted = deleted;
 
 	columnCount = 0;
-	for (auto c : columns)
+	for (const auto c : columns)
 		if (c.type != columnTypes_e::freeColumn)
 			++columnCount;
 }

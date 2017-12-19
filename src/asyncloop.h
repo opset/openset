@@ -2,7 +2,6 @@
 
 #include "common.h"
 #include <vector>
-#include <mutex>
 #include <atomic>
 
 #include "threads/locks.h"
@@ -17,16 +16,12 @@ namespace openset
 
 		class AsyncLoop
 		{
-		private:
-
 			CriticalSection pendLock;
 			// where new worker cells get added
 			vector<OpenLoop*> queued;
 			atomic<int32_t> queueSize;
 			// the active worker live
-			vector<OpenLoop*> active;
-			
-
+			vector<OpenLoop*> active;		
 			int64_t loopCount;
 
 		public:
@@ -36,8 +31,7 @@ namespace openset
 			int partition;
 			int worker;
 
-			AsyncLoop(AsyncPool* asyncPool, int paritionId, int workerId);
-
+			AsyncLoop(AsyncPool* asyncPool, const int paritionId, const int workerId);
 			~AsyncLoop();
 
 			// releases all cells owned by this loop
@@ -64,7 +58,7 @@ namespace openset
 
 			// this runs one iteration of the main Loop
 			// short, sweet and called frequently
-			bool Run(int64_t &nextRun);
+			bool run(int64_t &nextRun);
 		};
 	};
 };

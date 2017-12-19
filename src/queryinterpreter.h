@@ -131,7 +131,7 @@ namespace openset
 			function<IndexBits*(string, bool&)> getSegment_cb{ nullptr };
 
 			// distinct counting structures
-			using ValuesSeenKey = tuple<int32_t, int64_t, int64_t, int64_t>;
+            using ValuesSeenKey = tuple<int32_t, int64_t, int64_t>;
 			using ValuesSeen = bigRing<ValuesSeenKey, int32_t>;
 
 			// distinct counting (with column as key)

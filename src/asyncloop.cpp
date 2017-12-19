@@ -3,7 +3,7 @@
 
 using namespace openset::async;
 
-AsyncLoop::AsyncLoop(AsyncPool* asyncPool, int partitionId, int workerId) :
+AsyncLoop::AsyncLoop(AsyncPool* asyncPool, const int partitionId, const int workerId) :
 	queueSize(0),
 	loopCount(0),
 	asyncPool(asyncPool),
@@ -73,7 +73,7 @@ void AsyncLoop::scheduleQueued()
 }
 
 // this runs one iteration of the main Loop
-bool AsyncLoop::Run(int64_t &nextRun)
+bool AsyncLoop::run(int64_t &nextRun)
 {
 	// actual number of worker cells that did anything
 	auto runCount = 0;	

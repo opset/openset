@@ -20,16 +20,14 @@ namespace openset
 
 	namespace globals
 	{
-		extern openset::async::AsyncPool* async;
+		extern async::AsyncPool* async;
 	}
 
 	namespace async
 	{
 		class OpenLoop;
 
-		const int32_t PARTITION_WORKERS = 40; // default worker count
-		const int32_t IDLE_MAX = 100; // idle if we get this many no-work cells
-
+		const int32_t PARTITION_WORKERS = 256; // max number of workers - max cores + hyperthreads
 
 		class AsyncPool
 		{
@@ -45,7 +43,7 @@ namespace openset
 				bool markedForDeletion;
 				atomic<int32_t> realtimeCells;
 
-				explicit partitionInfo_s(AsyncPool* asyncPool, int instance, int worker) :
+				explicit partitionInfo_s(AsyncPool* asyncPool, const int instance, const int worker) :
 					asyncPool(asyncPool),
 					ooLoop(nullptr),
 					instance(instance),

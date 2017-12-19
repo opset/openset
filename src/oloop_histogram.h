@@ -42,7 +42,7 @@ namespace openset
             // loop locals
             result::RowKey rowKey;
 
-            openset::db::Columns::columns_s* colInfo{ nullptr };
+            openset::db::Columns::Columns_s* colInfo{ nullptr };
             int eachVarIdx = { -1 };
             Attributes::AttrListExpanded valueList;
 

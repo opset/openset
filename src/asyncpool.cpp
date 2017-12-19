@@ -352,7 +352,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 
 			// partitions contain open ended loops
 			// we are going to run those loops here.
-			if (s->ooLoop && s->ooLoop->Run(nextRun))
+			if (s->ooLoop && s->ooLoop->run(nextRun))
 				++runAgain;			
 		}
 

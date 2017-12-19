@@ -5,7 +5,7 @@
 #include "config.h"
 #include "table.h"
 #include "tablepartitioned.h"
-#include "oloop_retrigger.h"
+#include "oloop_revent.h"
 
 using namespace openset::trigger;
 
@@ -22,22 +22,22 @@ using namespace openset::trigger;
  * This allows async reconfiguration within the worker threads.
  */
 
-Triggers::Triggers(openset::db::TablePartitioned* parts):
-	table(parts->table),
-	parts(parts),
-	columns(table->getColumns()),
-	loadVersion(table->getLoadVersion())
+Triggers::Triggers(openset::db::TablePartitioned* parts) :
+    table(parts->table),
+    parts(parts),
+    columns(table->getColumns()),
+    loadVersion(table->getLoadVersion())
 {
-	//load();
+    start();
 }
 
 Triggers::~Triggers() 
 {}
 
 
-void Triggers::load() 
+void Triggers::start() 
 {
-	{
+	{ // scope for lock
 		csLock lock(globals::running->cs);
 
 		// set the config version for this load
@@ -49,7 +49,7 @@ void Triggers::load()
 			beforeNames.insert(t.second->getName());
 
 		// get triggers from tables object
-		auto triggerList = table->getTriggerConf();
+	    const auto triggerList = table->getTriggerConf();
 
 		for (auto &t : *triggerList)
 		{
@@ -58,15 +58,14 @@ void Triggers::load()
 
 			if (!triggers.count(t.second->id))
 			{
-				auto trigger = new Trigger(t.second, parts);
+			    const auto trigger = new Trigger(t.second, parts);
 				triggers[t.second->id] = trigger;
 			}
 		}
 
 		// compare trigger list to before Ids, see if any 
 		// were deleted
-		for (auto t : beforeNames)
-		{
+		for (const auto t : beforeNames)
 			if (triggerList->count(t) == 0)
 			{
 				// DELETE
@@ -77,13 +76,12 @@ void Triggers::load()
 				cout << "this happened on " << parts->partition << endl;
 				// TODO - delete this from the Attributes Object as well
 			}
-		}
 	}
 
-	// schedule the re-trigger job
+	// create the re-trigger job (it will continue to remake itself after)
 	async::OpenLoop* newCell = new async::OpenLoopRetrigger(table);
-	newCell->scheduleFuture(5000); // run this in 15 seconds
-
+    // first run in 5 seconds
+	newCell->scheduleFuture(5000); 
 	// add it to the async loop for this partition
 	parts->asyncLoop->queueCell(newCell);
 }
@@ -95,12 +93,11 @@ void Triggers::dispatchMessages() const
 	auto triggers = parts->triggers->getTriggerMap();
 
 	for (auto &t : triggers)
-		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);
-	
+		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);	
 }
 
 void Triggers::checkForConfigChange()
 {
 	if (loadVersion != table->getLoadVersion())
-		load();
+		start();
 }

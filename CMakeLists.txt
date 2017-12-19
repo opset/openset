@@ -126,8 +126,8 @@ set(SOURCE_FILES
 		src/oloop_person.h
         src/oloop_query.cpp
         src/oloop_query.h
-        src/oloop_retrigger.cpp
-        src/oloop_retrigger.h
+        src/oloop_revent.cpp
+        src/oloop_revent.h
         src/oloop_segment.cpp
         src/oloop_segment.h
         src/oloop_seg_refresh.cpp
@@ -145,6 +145,20 @@ set(SOURCE_FILES
         src/queryparser.h
         src/result.cpp
         src/result.h
+        src/rpc_global.cpp
+        src/rpc_global.h
+        src/rpc_internode.cpp
+        src/rpc_internode.h
+        src/rpc_cluster.cpp
+        src/rpc_cluster.h
+        src/rpc_table.cpp
+        src/rpc_table.h
+		src/rpc_revent.cpp
+		src/rpc_revent.h
+		src/rpc_query.cpp
+		src/rpc_query.h
+		src/rpc_insert.cpp
+		src/rpc_insert.h
         src/rpc.cpp
         src/rpc.h
 		src/sentinel.h

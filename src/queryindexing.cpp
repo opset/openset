@@ -129,7 +129,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 	for (auto& instruction : index)
 	{
-		Columns::columns_s* colInfo;
+		Columns::Columns_s* colInfo;
 		Attributes::AttrList attrList;
 
 		switch (instruction.op)

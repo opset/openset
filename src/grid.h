@@ -43,7 +43,6 @@ namespace openset
 
 		enum class flagType_e : int16_t
 		{
-			feature_eof = 0, // end of list
 			feature_trigger = 1, // trigger
 			future_trigger = 2, // scheduled trigger
 		};
@@ -95,7 +94,7 @@ namespace openset
 			int32_t linId;
 			int32_t bytes; // bytes when uncompressed
 			int32_t comp; // bytes when compressed
-			int32_t propBytes;
+			int32_t setBytes;
 			int16_t idBytes; // number of bytes in id string
 			int16_t flagRecords; // number of flag records
 			char events[1]; // char* (1st byte) of packed event struct
@@ -127,7 +126,7 @@ namespace openset
 
 			int64_t size() const
 			{
-				return sizeof(PersonData_s) + comp + propBytes + idBytes + flagBytes();
+				return sizeof(PersonData_s) + comp + setBytes + idBytes + flagBytes();
 			}
 
 			Flags_s* getFlags() 
@@ -142,16 +141,16 @@ namespace openset
 				return events;
 			}
 
-			char* getProps() 
+			char* getSets() 
 			{
-				if (!propBytes)
+				if (!setBytes)
 					return nullptr;
 				return events + idBytes + flagBytes();
 			}
 
 			char* getComp() 
 			{
-				return events + idBytes + flagBytes() + propBytes;
+				return events + idBytes + flagBytes() + setBytes;
 			}
 		};
 
@@ -163,12 +162,19 @@ namespace openset
 
 		using Rows = vector<Col_s*>;
 
+        struct SetInfo_s
+        {
+            int32_t length;
+            int32_t offset;
+        };
+
 		class Grid
 		{
 		private:
 
 			using LineNodes = vector<cjson*>;
 			using ExpandedRows = vector<LineNodes>;
+            using SetVector = vector<int64_t>;
 
 #pragma pack(push,1)
 			struct Cast_s
@@ -191,6 +197,7 @@ namespace openset
 			// so rows have tight cache affinity 
 			HeapStack mem;
 			Rows rows;
+            SetVector setData;
 			PersonData_s* rawData{ nullptr };
 
 			int32_t columnCount{ 0 };
@@ -278,9 +285,19 @@ namespace openset
 				return &rows;
 			}
 
+            inline const SetVector& getSetData() const
+			{
+                return setData;
+			}
+
 			inline Attributes* getAttributes() const
 			{
 				return attributes;
+			}
+
+            inline PersonData_s* getMeta() const
+			{
+			    return rawData;
 			}
 
 			AttributeBlob* getAttributeBlob() const;

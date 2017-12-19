@@ -82,10 +82,10 @@ namespace openset
 			openset::trigger::MessageBroker messages;
 
 			using zMapStr = std::unordered_map<string, int>;
-			using zMapInt = std::unordered_map<int64_t, int>;
+			using zMapHash = std::unordered_map<int64_t, int>;
 
 			zMapStr zOrderStrings;
-			zMapInt zOrderInts;
+			zMapHash zOrderInts;
 			std::unordered_map<std::string, openset::trigger::triggerSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
@@ -97,14 +97,14 @@ namespace openset
 			int64_t stampCull{ 86'400'000LL * 365LL }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
-			explicit Table(string name, openset::db::Database* database);
+			explicit Table(const string name, openset::db::Database* database);
 
 			~Table();
 
 			void createMissingPartitionObjects();
 
-			TablePartitioned* getPartitionObjects(int32_t partition);
-			void releasePartitionObjects(int32_t partition);
+			TablePartitioned* getPartitionObjects(const int32_t partition);
+			void releasePartitionObjects(const int32_t partition);
 
 			int64_t getSessionTime() const
 			{
@@ -116,7 +116,7 @@ namespace openset
 				return &columns;
 			}
 
-			inline zMapInt* getZOrderInts() 
+			inline zMapHash* getZOrderHashes() 
 			{
 				return &zOrderInts;
 			}
@@ -204,7 +204,7 @@ namespace openset
 				segmentRefresh.emplace(segmentName, SegmentRefresh_s{ segmentName, macros, refreshTime });
 			}
 
-			void setSegmentTTL(std::string segmentName, const int64_t TTL)
+			void setSegmentTtl(std::string segmentName, const int64_t TTL)
 			{
 				csLock lock(segmentCS);
 				segmentTTL.emplace(segmentName, SegmentTtl_s{ segmentName, TTL });
@@ -217,9 +217,6 @@ namespace openset
 
 			void deserializeTable(cjson* doc);
 			void deserializeTriggers(cjson* doc);
-
-			void loadConfig();
-			void saveConfig();	
 		};
 	};
 };

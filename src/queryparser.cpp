@@ -2061,11 +2061,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
 						line.debug
 					};
 
-                    if (aggregate.size() > 2 &&
-                        aggregate[2] != "where")
+                    if (aggregate.size() <= 2 ||
+                       (aggregate.size() > 2 && aggregate[index + 2] != "where"))
                     {
                         // If no `where` we add one, this allows aggregation without the "where".
-                        aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "none" };
+                        aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "None" };
 					};
 
 					const auto agg = aggregate[0];
@@ -2508,7 +2508,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					(conditions[index + 1] == "in" ||
 					 conditions[index + 1] == "notin") &&
 					conditions[index + 2] != "[" && // this forces make_dict to be parsed first
-					conditions[0] != "match" &&
+					//conditions[0] != "match" &&
 					conditions[0] != "for")
 				{
 					// there a three kinds of "in" we care about
@@ -2567,9 +2567,10 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 				
-				if (conditions.size() > index + 1 &&
+				if (conditions.size() > index + 2 &&
 					conditions[index + 1] == "in" &&
-					conditions[0] == "match")
+					conditions[0] == "match" &&
+                    conditions[index + 2] == "[")
 				{
 					const auto var = conditions[index];
 
@@ -3108,6 +3109,9 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	{		
 		const auto opIter = Operators.find(op); 
 
+        if (op == "in")
+            return HintOp_e::PUSH_EQ;
+
 		if (opIter == Operators.end())
 		{
 			auto logIter = LogicalOperators.find(op);
@@ -3149,9 +3153,6 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 			if (isColumnVar(left))
 				left = vars.columnVars.find(left)->second.actual;
-
-			if (left.find("column.") == 0)
-				left = left.substr(left.find('.') + 1);
 
 			if (isNonuserVar(left))
 			{
@@ -3259,9 +3260,6 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 		//else if (isGroupVar(left))
 		//left = vars.groupVars.find(left)->second.actual;
 
-		if (left.find("column.") == 0)
-			left = left.substr(left.find('.') + 1);
-
 		if (isNumeric(right))
 			opList.emplace_back(op, left, stoll(right));
 		else
@@ -3290,8 +3288,8 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				index + 1,
 				false);
 		}
-		else if (LogicalOperators.find(conditions[index]) !=
-			LogicalOperators.end())
+		else if (conditions[index] != "in" && 
+            LogicalOperators.find(conditions[index]) != LogicalOperators.end())
 		{
 			store();
 
@@ -3305,7 +3303,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				conditions,
 				opList,
 				index + 1,
-				false);
+				false); 
 
 			opList.emplace_back(convertOp(conditions[index]));
 			index = newIndex;
@@ -3324,22 +3322,38 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				// with an OP BIT_NOP 
 				auto brackets = 1;
 
-				auto idx = index + 2; // move past function name and (
-				for (; idx < conditions.size(); idx++)
-				{
-					if (conditions[idx] == "(")
-						++brackets;
-					else if (conditions[idx] == ")")
-						--brackets;
+                if (conditions[index] == "__contains")
+                {
+                    accumulate(conditions[index + 2]);
+                    accumulate("in");
+                    accumulate(conditions[index + 4]);
 
-					if (!brackets)
-						break;
-				}
+                    index += 5;
+                }
+                else if (conditions[index] == "__notcontains")
+                {
+                    accumulate(conditions[index + 4]);
+                    index += 5;
+                }
+                else
+                {
+                    auto idx = index + 2; // move past function name and (
+                    for (; idx < conditions.size(); idx++)
+                    {
+                        if (conditions[idx] == "(")
+                            ++brackets;
+                        else if (conditions[idx] == ")")
+                            --brackets;
 
-				index = idx;
+                        if (!brackets)
+                            break;
+                    }
 
-				opList.emplace_back(HintOp_e::PUSH_NOP);
-				accumulation.clear();
+                    index = idx;
+
+                    opList.emplace_back(HintOp_e::PUSH_NOP);
+                    accumulation.clear();
+                }
 				//break;
 			}
 			else
@@ -3442,6 +3456,7 @@ void QueryParser::build(
 		v.second.sortOrder = schemaInfo->idx;
 		v.second.schemaColumn = schemaInfo->idx;
 		v.second.schemaType = schemaInfo->type;
+        v.second.isSet = schemaInfo->isSet;
 		finVars.tableVars.push_back(v.second);
 	}
 

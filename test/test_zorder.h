@@ -194,7 +194,7 @@ inline Tests test_zorder()
 				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false, 0);
 
 				auto zOrderStrings = table->getZOrderStrings();
-				auto zOrderInts = table->getZOrderInts();
+				auto zOrderInts = table->getZOrderHashes();
 				
 				// add zOrdering
 				zOrderStrings->emplace("alpha", 0);

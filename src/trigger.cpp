@@ -40,33 +40,6 @@ openset::errors::Error Trigger::compileTrigger(
 	std::string script,
 	openset::query::Macro_s &targetMacros)
 {
-
-/*
-	auto fileName =
-		cfg::manager->path + "tables/" + table->getName() +
-		"/triggers/" + name + ".pyql";
-
-	auto size = OpenSet::IO::File::FileSize(fileName.c_str());
-
-	auto file = fopen(fileName.c_str(), "rb");
-
-	if (file == nullptr)
-	{
-		OpenSet::errors::Error error;
-		error.set(
-			OpenSet::errors::errorClass_e::config,
-			OpenSet::errors::errorCode_e::could_not_open_trigger,
-			"could not open trigger '" + name + "' for table '" + table->getName() + "'." );
-		return error;
-	}
-
-	auto data = recast<char*>(PoolMem::getPool().getPtr(size + 1));
-
-	fread(data, 1, size, file);
-	fclose(file);
-	data[size] = 0;
-*/
-
 	openset::query::QueryParser p;	
 	p.compileQuery(script.c_str(), table->getColumns(), targetMacros);	
 	return p.error;

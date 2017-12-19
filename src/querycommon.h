@@ -619,7 +619,7 @@ namespace openset
 			{
 					{"and", OpCode_e::LGCAND},
 					{"or", OpCode_e::LGCOR},
-					{"in", OpCode_e::LGCOR},
+					//{"in", OpCode_e::LGCOR},
 					{"nest_and", OpCode_e::LGCNSTAND},
 					{"nest_or", OpCode_e::LGCNSTOR},
 			};
@@ -718,6 +718,7 @@ namespace openset
 			int schemaColumn{-1}; // column in schema
 			int distinctColumn{openset::db::COL_ACTION}; // column containing distinct key
 			db::columnTypes_e schemaType{db::columnTypes_e::freeColumn};
+            bool isSet{ false };
 			int popRefs{0}; // reference counter for pops
 			int pushRefs{0}; // reference counter for pushes
 			int sortOrder{-1}; // used for sorting in column order
@@ -764,6 +765,7 @@ namespace openset
 				schemaColumn = source.schemaColumn;
 
 				schemaType = source.schemaType;
+                isSet = source.isSet;
 				popRefs = source.popRefs;
 				pushRefs = source.pushRefs;
 				sortOrder = source.sortOrder;

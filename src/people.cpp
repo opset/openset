@@ -73,7 +73,7 @@ PersonData_s* People::getmakePerson(string userIdString)
 			newUser->id = hashId;
 			newUser->linId = static_cast<int32_t>(peopleLinear.size());
 			newUser->idBytes = 0;
-			newUser->propBytes = 0;
+			newUser->setBytes = 0;
 			newUser->flagRecords = 0;
 			newUser->bytes = 0;
 			newUser->comp = 0;

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "trigger.h"
 #include "threads/locks.h"
+#include <queue>
 
 namespace openset
 {
@@ -16,35 +17,48 @@ namespace openset
 
 	namespace trigger
 	{
-		struct broker_s
+        class MessageBroker;
+
+		struct Broker_s
 		{
 			std::string triggerName;
 			std::string subscriberName;
+            std::string host;
+            int port;
+            std::string path;
 			int64_t triggerId;
 			int64_t subscriberId;
 			int64_t hold;
 
-			broker_s(
-				std::string triggerName, 
-				std::string subscriberName, 
-				int64_t hold) :
+			Broker_s(
+				const std::string triggerName, 
+				const std::string subscriberName, 
+                const std::string host,
+                const int port,
+                const std::string path,
+				const int64_t hold) :
 				triggerName(triggerName),
 				subscriberName(subscriberName),
+                host(host),
+                port(port),
+                path(path),
 				triggerId(MakeHash(triggerName)),
 				subscriberId(MakeHash(subscriberName)),
 				hold(hold)
 			{}
+
+            void webhookThread(MessageBroker* broker);
 		};
 		
 		// independent queue for each subscriber
-		using Queue = std::queue<triggerMessage_s>;
+		using Queue = queue<triggerMessage_s>;
 		// map of subscriber ID to message queue
 		using Subscriptions = unordered_map<int64_t, Queue>;
 		// map of trigger ids, to subscribers
 		using QueueMap = unordered_map<int64_t, Subscriptions>;
 
 		// subscriber information note: std::pair<triggerName, subscriberName>
-		using SubscriberMap = std::unordered_map<std::pair<std::string, std::string>, broker_s>;
+		using SubscriberMap = std::unordered_map<std::pair<std::string, std::string>, Broker_s>;
 
 		class MessageBroker 
 		{
@@ -58,7 +72,7 @@ namespace openset
 
 		private:
 			// returns a list of all queues regardless of Subscriber
-			std::vector<Queue*> getAllQueues(int64_t triggerId);
+			std::vector<Queue*> getAllQueues(const int64_t triggerId);
 			void backClean();
 
 		public:
@@ -68,18 +82,21 @@ namespace openset
 			// indicates how many milliseconds a message may remain in the queue
 			// before it is discarded
 			void registerSubscriber(
-				std::string triggerName,
-				std::string subscriberName,
-				int64_t hold);
+				const std::string triggerName,
+				const std::string subscriberName,
+                const std::string host,
+                const int port,
+                const std::string path,
+				const int64_t hold);
 
 			void push(
-				std::string trigger, 
+				const std::string trigger, 
 				std::vector<triggerMessage_s>& messages);
 
 			std::vector<triggerMessage_s> pop(
-				std::string triggerName, 
-				std::string subscriberName, 
-				int64_t max);
+				const std::string triggerName, 
+				const std::string subscriberName, 
+				const int64_t max);
 
 			int64_t size(std::string triggerName, std::string subscriberName);
 

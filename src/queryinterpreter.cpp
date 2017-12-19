@@ -219,10 +219,12 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                     ValuesSeenKey{
                         resCol.index,
                         resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-                        reinterpret_cast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
-                        resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
+                        reinterpret_cast<int64_t>(resultColumns) // this pointer is unique to the ResultSet row                        
                     }, 
                     1))
+
+                    // resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
+
 					continue; // we already tabulated this for this key
 			}
 
@@ -1464,18 +1466,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		 * exit any outerloop that it is in. If it is in the
 		 * main body, it will exit the current query silently (without error)
 		 */
-
-		const auto currentGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
-											   // an "event" can contian many rows so,
-											   // watch the group column and iterate 
-											   // until the row group changes
-		while (currentRow < rowCount)
-		{
-			++currentRow;
-			if (currentRow == rowCount ||
-				currentGrp != HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]))
-				break;
-		}
+        ++currentRow;
 
 		if (currentRow == rowCount) // end of set
 		{
@@ -1849,37 +1840,122 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				break;
 			case OpCode_e::PSHTBLCOL:
 				// push a column value
-				switch (macros.vars.tableVars[inst->index].schemaType)
-				{
-					case columnTypes_e::freeColumn:
-						*stackPtr = NONE;
-						break;
-					case columnTypes_e::intColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
-						break;
-					case columnTypes_e::doubleColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column] / 10000.0;
-						break;
-					case columnTypes_e::boolColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column] ? true : false;
-						break;
-					case columnTypes_e::textColumn:
-						{
-							const auto attr = attrs->get(
-								macros.vars.tableVars[inst->index].schemaColumn,
-								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
+            {
+                auto colValue = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
 
-							if (attr && attr->text)
-								*stackPtr = attr->text;
-							else
-								*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
-						}
-						break;
-					default:
-						break;
-				}
+                switch (macros.vars.tableVars[inst->index].schemaType)
+                {
+                case columnTypes_e::freeColumn:
+                    *stackPtr = NONE;
+                    break;
+                case columnTypes_e::intColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
 
-				++stackPtr;
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx]);
+                    }
+                    else
+                        *stackPtr = colValue;
+                    break;
+                case columnTypes_e::doubleColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx] / 10000.0);
+                    }
+                    else
+                        *stackPtr = colValue / 10000.0;
+                    break;
+                case columnTypes_e::boolColumn:
+
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx] ? true : false);
+                    }
+                    else
+                        *stackPtr = colValue ? true : false;
+                    break;
+                case columnTypes_e::textColumn:
+
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                        {
+                            const auto attr = attrs->get(
+                                macros.vars.tableVars[inst->index].schemaColumn, 
+                                setData[idx]);
+
+                            if (attr && attr->text)
+                                stackPtr->getSet()->emplace(std::string(attr->text));
+                        }
+                    }
+                    else
+                    {
+                        const auto attr = attrs->get(
+                            macros.vars.tableVars[inst->index].schemaColumn,
+                            colValue);
+
+                        if (attr && attr->text)
+                            *stackPtr = attr->text;
+                        else
+                            *stackPtr = colValue;
+                    }
+                    break;
+                default:
+                    break;
+                }
+
+                ++stackPtr;
+            }
 				break;
 			case OpCode_e::VARIDX:
 				*stackPtr = inst->index;
@@ -2282,9 +2358,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::ITNEXT:
 				// fancy and strange stuff happens here					
 				{
+                    if (currentRow >= rows->size())
+                        break;
+
+				    const auto savedRow = currentRow;
 					auto iterCount = 0;
 					cvar lambda;
-					auto rowGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
 
 					// enter loop, increment nest 
 					++nestDepth;
@@ -2297,16 +2376,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					     iterCount < inst->value && currentRow < rowCount;
 					     ++currentRow)
 					{
-						//++loopCount;
 
 						if (loopState == LoopState_e::in_exit || error.inError())
 						{
 							*stackPtr = 0;
 							++stackPtr;
 
-							--nestDepth;
-
 							matchStampPrev.pop_back();
+                            --nestDepth;
 							--recursion;
 							return;
 						}
@@ -2344,17 +2421,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							// increment run count
-							if (rowGrp != HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]))
-							{
-								++iterCount;
-								rowGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]);
-							}
-
 							if (iterCount < inst->value)
 								opRunner(
 									&macros.code.front() + inst->index,
 									currentRow);
+
+                            // increment run count
+                            ++iterCount;
+
 						}
 
 						if (loopState == LoopState_e::in_break)
@@ -2384,6 +2458,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					matchStampPrev.pop_back();
+
+                    currentRow = savedRow;
 
 					// out of loop, decrement nest 
 					--nestDepth;
@@ -2718,7 +2794,7 @@ void openset::query::Interpreter::exec()
 
 	const auto inst = &macros.code.front();
 
-	try
+	//try
 	{
 		// if we have segment constraints
 		if (segmentIndexes.size())
@@ -2754,7 +2830,7 @@ void openset::query::Interpreter::exec()
 
 		}
 	}
-	catch (const std::runtime_error& ex)
+	/*catch (const std::runtime_error& ex)
 	{
 		std::string additional = "";
 		if (lastDebug)
@@ -2779,7 +2855,7 @@ void openset::query::Interpreter::exec()
 			"unknown run-time error (3)",
 			additional
 		);
-	}
+	}*/
 }
 
 void openset::query::Interpreter::exec(const string functionName)

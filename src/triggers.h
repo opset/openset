@@ -23,7 +23,6 @@ namespace openset
 
 		class Triggers
 		{
-		private:
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 			openset::db::Columns* columns;
@@ -31,27 +30,24 @@ namespace openset
 			int64_t loadVersion;
 
 		public:
-
 			explicit Triggers(openset::db::TablePartitioned* parts);
 			~Triggers();
 
-			void load();
+			void start();
 
 			std::unordered_map<int64_t, Trigger*>& getTriggerMap()
 			{
 				return triggers;
 			}
 
-			Trigger* getTrigger(int64_t triggerId)
+			Trigger* getTrigger(const int64_t triggerId)
 			{
-				auto iter = triggers.find(triggerId);
+			    const auto iter = triggers.find(triggerId);
 				return (iter == triggers.end()) ? nullptr : iter->second;
 			}			
 
 			void dispatchMessages() const;
-
 			void checkForConfigChange();
-
 		};
 	};
 };

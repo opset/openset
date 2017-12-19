@@ -25,20 +25,20 @@ namespace openset
 		{
 		public:
 
-			struct columns_s
+			struct Columns_s
 			{
 				string name;
 				int32_t idx{0};
 				columnTypes_e type{ columnTypes_e::freeColumn };
-				bool isProp{false};
+				bool isSet{ false };
 				bool deleted{ false };
 			};
 
 			// shared lock (uses spin locks)
 			CriticalSection lock;
 
-			columns_s columns[MAXCOLUMNS];
-			unordered_map<string, columns_s*> nameMap;
+			Columns_s columns[MAXCOLUMNS];
+			unordered_map<string, Columns_s*> nameMap;
 			int columnCount{ 0 };
 
 			Columns();
@@ -46,13 +46,13 @@ namespace openset
 
 			// get a column record, this will always 
 			// return something
-			columns_s* getColumn(int column);
+			Columns_s* getColumn(int column);
 
 			// get a column by name, this will return a nullptr
 			// if none match
-			columns_s* getColumn(string name);
+			Columns_s* getColumn(string name);
 
-			void deleteColumn(columns_s* columnInfo);
+			void deleteColumn(Columns_s* columnInfo);
 
 			int getColumnCount() const;
 

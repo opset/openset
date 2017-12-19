@@ -47,7 +47,7 @@ namespace openset
 
 		private:
 			Grid grid;
-			PersonData_s* data;
+			//PersonData_s* data;
 			Table* table;
 			Attributes* attributes;
 			AttributeBlob* blob;
@@ -97,12 +97,12 @@ namespace openset
 
 			int64_t getUUID() const
 			{
-				return data->id;
+				return grid.getMeta()->id;
 			}
 
 			inline PersonData_s* getMeta() const
 			{
-				return data;
+				return grid.getMeta();
 			}
 
 			/**

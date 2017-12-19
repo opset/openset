@@ -1,4 +1,4 @@
-#include "oloop_retrigger.h"
+#include "oloop_revent.h"
 
 #include "people.h"
 #include "person.h"
@@ -30,12 +30,14 @@ void OpenLoopRetrigger::run()
 {
 	
 	auto parts = table->getPartitionObjects(loop->partition);
-	auto maxLinearId = parts->people.peopleCount();
-	
 
+    parts->triggers->checkForConfigChange();
+
+    const auto maxLinearId = parts->people.peopleCount();
+	
 	openset::db::PersonData_s* personData;
 
-	auto now = Now();
+    const auto now = Now();
 
 	while (true)
 	{
@@ -50,9 +52,9 @@ void OpenLoopRetrigger::run()
 						
 			messages->run(); // do message queue maintenance 
 
-			OpenLoop* newCell = new OpenLoopRetrigger(table);	
-			
-			auto diff = lowestStamp - Now();
+			OpenLoop* newCell = new OpenLoopRetrigger(table);
+
+		    const auto diff = lowestStamp - Now();
 
 			newCell->scheduleFuture(diff > 500 ? 500 : (diff < 100) ? 100 : diff); // run again in 15 seconds
 
@@ -88,18 +90,17 @@ void OpenLoopRetrigger::run()
 					}
 
 					// remove this flag from the person object
-					auto newPerson = person.getGrid()->clearFlag(
+				    const auto replacementRecord = person.getGrid()->clearFlag(
 						flagType_e::future_trigger,
 						flagIter->reference,
 						flagIter->context);
 
-					parts->people.replacePersonRecord(newPerson);
+					parts->people.replacePersonRecord(replacementRecord);
 
 				}
 				else if (flagIter->flagType == flagType_e::future_trigger &&
 					flagIter->value < lowestStamp)
 					lowestStamp = flagIter->value;
-					
 
 				++flagIter;
 			}
