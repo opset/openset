@@ -131,8 +131,6 @@ namespace openset
 
 			Flags_s* getFlags() 
 			{
-				if (!flagRecords)
-					return nullptr;
 				return reinterpret_cast<Flags_s*>(events + idBytes);
 			}
 
@@ -143,8 +141,6 @@ namespace openset
 
 			char* getSets() 
 			{
-				if (!setBytes)
-					return nullptr;
 				return events + idBytes + flagBytes();
 			}
 

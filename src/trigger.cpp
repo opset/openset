@@ -7,9 +7,9 @@
 #include "config.h"
 #include "file/file.h"
 
-using namespace openset::trigger;
+using namespace openset::revent;
 
-Trigger::Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* parts) :
+Revent::Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts) :
 	settings(settings),
 	lastConfigVersion(settings->configVersion),
 	table(parts->table),
@@ -26,7 +26,7 @@ Trigger::Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* par
 	init();
 }
 
-Trigger::~Trigger() 
+Revent::~Revent() 
 {}
 
 /* compileTrigger is a static function called by the Triggers class. 
@@ -34,7 +34,7 @@ Trigger::~Trigger()
  *  Purpose is to compile a trigger so it can be shared amongst instances of the
  *  trigger class.
  */
-openset::errors::Error Trigger::compileTrigger(
+openset::errors::Error Revent::compileTriggers(
 	openset::db::Table* table, 
 	std::string name, 
 	std::string script,
@@ -45,7 +45,7 @@ openset::errors::Error Trigger::compileTrigger(
 	return p.error;
 }
 
-void Trigger::init()
+void Revent::init()
 {
 	// local copy of macros
 	macros = settings->macros;
@@ -70,7 +70,7 @@ void Trigger::init()
 	bits->mount(attr->index, attr->ints, attr->linId);
 
 	// this call back will be called by the 'schedule' marshal in the interpretor
-	auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
+	const auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
 	{
 
 		// clear it if it's already set
@@ -94,6 +94,7 @@ void Trigger::init()
 
 	interpreter->setScheduleCB(schedule_cb);
 
+    /*
 	// this call back will be called by the 'schedule' marshal in the interpretor
 	auto emit_cb = [&](std::string emitMessage) -> bool
 	{
@@ -116,13 +117,14 @@ void Trigger::init()
 
 		return true;
 	};
+    */
 
-	interpreter->setEmitCB(emit_cb);
+	//interpreter->setEmitCB(emit_cb);
 
 	lastConfigVersion = settings->configVersion;
 }
 
-void Trigger::flushDirty() 
+void Revent::flushDirty() 
 {
 	/*
 	*  Unlike regular attributes, triggers keep a local uncompressed bit index
@@ -158,7 +160,7 @@ void Trigger::flushDirty()
 	attr = newAttr;
 }
 
-void Trigger::mount(openset::db::Person* personPtr)
+void Revent::mount(openset::db::Person* personPtr)
 {
 	if (inError)
 		return;
@@ -166,7 +168,7 @@ void Trigger::mount(openset::db::Person* personPtr)
 	interpreter->mount(person);
 }
 
-void Trigger::preInsertTest()
+void Revent::preInsertTest()
 {
 	checkReload();
 
@@ -177,7 +179,7 @@ void Trigger::preInsertTest()
 	beforeState = bits->bitState(person->getMeta()->linId);
 }
 
-void Trigger::postInsertTest()
+void Revent::postInsertTest()
 {
 	checkReload();
 
@@ -189,18 +191,50 @@ void Trigger::postInsertTest()
 
 	currentFunctionHash = settings->entryFunctionHash;
 	interpreter->exec(settings->entryFunctionHash); // call the script 'trigger' function
+    emit(settings->entryFunction);
 
-	if (!beforeState && interpreter->jobState)
-		bits->bitSet(person->getMeta()->linId);
+    // this bit tells us we already ran this function
+    if (!beforeState && interpreter->jobState)
+        bits->bitSet(person->getMeta()->linId);
 }
 
-bool Trigger::runFunction(const int64_t functionHash)
+bool Revent::emit(const std::string& methodName)
+{
+    auto returns = interpreter->getLastReturn();
+
+    if (!returns.size() || returns[0] == NONE)
+        return false;
+
+    const auto emitMessage = returns[0];
+
+    // flip some bits when we emits - these will get flushed by the 
+    // standard dirty write back on insert
+    parts->attributes.getMake(COL_EMIT, emitMessage);
+    parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
+
+    // queue trigger messages, these are held on a per trigger basis
+    // these are shuttled out to a master queue at some point
+
+    // push to a local, lockless queue, they will be batched into
+    // a central queue when oloop_revent is done a cycle
+    triggerQueue.emplace_back(
+        triggerMessage_s{
+            settings->id,
+            emitMessage,
+            methodName,
+            person->getMeta()->getIdStr()
+        });
+
+    return true;
+}
+
+
+bool Revent::runFunction(const int64_t functionHash)
 {
 	checkReload();
 
 	currentFunctionHash = functionHash;
 	interpreter->exec(functionHash);
-
-	return interpreter->jobState;
+    return emit(interpreter->calledFunction);
 }
 

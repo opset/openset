@@ -7,7 +7,7 @@
 #include "tablepartitioned.h"
 #include "oloop_revent.h"
 
-using namespace openset::trigger;
+using namespace openset::revent;
 
 /*
  * Triggers - is a per partition container of individual Trigger objects.
@@ -22,7 +22,7 @@ using namespace openset::trigger;
  * This allows async reconfiguration within the worker threads.
  */
 
-Triggers::Triggers(openset::db::TablePartitioned* parts) :
+ReventManager::ReventManager(openset::db::TablePartitioned* parts) :
     table(parts->table),
     parts(parts),
     columns(table->getColumns()),
@@ -31,11 +31,10 @@ Triggers::Triggers(openset::db::TablePartitioned* parts) :
     start();
 }
 
-Triggers::~Triggers() 
+ReventManager::~ReventManager() 
 {}
 
-
-void Triggers::start() 
+void ReventManager::start() 
 {
 	{ // scope for lock
 		csLock lock(globals::running->cs);
@@ -45,7 +44,7 @@ void Triggers::start()
 
 		// record the IDs we have before config syncing
 		std::unordered_set<std::string> beforeNames;
-		for (auto &t : triggers)
+		for (auto &t : revents)
 			beforeNames.insert(t.second->getName());
 
 		// get triggers from tables object
@@ -56,10 +55,10 @@ void Triggers::start()
 			if (!t.first.size()) // bad name?
 				continue;
 
-			if (!triggers.count(t.second->id))
+			if (!revents.count(t.second->id))
 			{
-			    const auto trigger = new Trigger(t.second, parts);
-				triggers[t.second->id] = trigger;
+			    const auto trigger = new Revent(t.second, parts);
+				revents[t.second->id] = trigger;
 			}
 		}
 
@@ -70,8 +69,8 @@ void Triggers::start()
 			{
 				// DELETE
 				auto id = MakeHash(t);
-				delete triggers[id]; // delete the object
-				triggers.erase(id); // erase if form the hash
+				delete revents[id]; // delete the object
+				revents.erase(id); // erase if form the hash
 
 				cout << "this happened on " << parts->partition << endl;
 				// TODO - delete this from the Attributes Object as well
@@ -86,7 +85,7 @@ void Triggers::start()
 	parts->asyncLoop->queueCell(newCell);
 }
 
-void Triggers::dispatchMessages() const
+void ReventManager::dispatchMessages() const
 {
 	csLock lock(globals::running->cs);
 
@@ -96,7 +95,7 @@ void Triggers::dispatchMessages() const
 		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);	
 }
 
-void Triggers::checkForConfigChange()
+void ReventManager::checkForConfigChange()
 {
 	if (loadVersion != table->getLoadVersion())
 		start();

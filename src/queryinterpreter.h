@@ -141,8 +141,12 @@ namespace openset
 			// used to load global variables into user variable space
 			bool firstRun{ true };
 
+            bool inReturn{ false };
+
 			// this will always point to the last debug message
 			Debug_s* lastDebug{ nullptr };
+
+            string calledFunction;
 
             // return values when calling exec with a function
             // this is a vector because calling with segment will have

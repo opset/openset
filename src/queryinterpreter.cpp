@@ -1536,6 +1536,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		// return will have its params on the stack,
 		// we will just leave these on the stack and
 		// break out of this block... magic!
+        inReturn = true;
 		--recursion;
 		return true;
 	case Marshals_e::marshal_break:
@@ -1809,7 +1810,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 		return;
 	}
 
-	while (loopState == LoopState_e::run && !error.inError())
+    while (loopState == LoopState_e::run && !error.inError() && !inReturn)
 	{
 		// tracks the last known script line number
 		if (inst->debug.number)
@@ -2121,6 +2122,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						&macros.code.front() + inst->index,
 						currentRow);
 
+                    if (inReturn)
+                        return;
+
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
@@ -2152,6 +2156,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						&macros.code.front() + inst->index,
 						currentRow);
 
+                    if (inReturn)
+                        return;
+
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
@@ -2171,6 +2178,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
+
+                if (inReturn)
+                    return;
+
 				break;
 			case OpCode_e::ITFOR:
 				{
@@ -2217,7 +2228,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2269,7 +2280,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2318,7 +2329,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2431,7 +2442,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 						}
 
-						if (loopState == LoopState_e::in_break)
+						if (loopState == LoopState_e::in_break || inReturn)
 						{
 							if (breakDepth == 1 || nestDepth == 1)
 							{
@@ -2676,14 +2687,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				break;
 			case OpCode_e::CALL:
 				// Call a Script Function
+                inReturn = false;
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
+                inReturn = false;
 				break;
-			case OpCode_e::RETURN:
+			case OpCode_e::RETURN: // this is a soft return like END-OF-BLOCK, not like explicit return call
+                //inReturn = true;
 				if (stack == stackPtr)
 				{
-					*stackPtr = 0;
+					*stackPtr = NONE;
 					++stackPtr;
 				}
 				--recursion;
@@ -2692,7 +2706,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				// script is complete, exit all nested
 				// loops
 				loopState = LoopState_e::in_exit;
-				*stackPtr = 0;
+				*stackPtr = NONE;
 				++stackPtr;
 				--recursion;
 				return;
@@ -2701,7 +2715,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 		}
 
 		// move to the next instruction
-		++inst;
+		++inst;            
 	}
 }
 
@@ -2751,6 +2765,7 @@ void openset::query::Interpreter::execReset()
 	loopCount = 0;
 	recursion = 0;
 	eventCount = -1;
+    inReturn = false;
 	jobState = false;
 	loopState = LoopState_e::run;
 	stackPtr = stack;
@@ -2871,6 +2886,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 	{
 		if (f.nameHash == functionHash)
 		{
+            calledFunction = f.name;
 			const auto inst = &macros.code.front() + f.execPtr;
 
 			try

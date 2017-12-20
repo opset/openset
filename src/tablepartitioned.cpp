@@ -7,7 +7,7 @@ using namespace openset::db;
 
 TablePartitioned::TablePartitioned(
 	Table* table, 
-	int partition, 
+	const int partition, 
 	AttributeBlob* attributeBlob, 
 	Columns* schema) :
 		table(table),
@@ -17,7 +17,7 @@ TablePartitioned::TablePartitioned(
 		people(partition),
 		asyncLoop(openset::globals::async->getPartition(partition)),
 		insertBacklog(0),
-		triggers(new openset::trigger::Triggers(this))
+		triggers(new openset::revent::ReventManager(this))
 {	
 	async::OpenLoop* insertCell = new async::OpenLoopInsert(this);
 	insertCell->scheduleFuture(1000); // run this in 1 second

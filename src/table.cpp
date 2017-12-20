@@ -221,7 +221,7 @@ void Table::deserializeTriggers(cjson* doc)
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)
 	{
-		auto trigInfo = new openset::trigger::triggerSettings_s;
+		auto trigInfo = new openset::revent::reventSettings_s;
 
 		trigInfo->name = t->xPathString("/name", "");
 		trigInfo->script = t->xPathString("/script", "");
@@ -230,7 +230,7 @@ void Table::deserializeTriggers(cjson* doc)
 		trigInfo->entryFunctionHash = MakeHash(trigInfo->entryFunction);
 		trigInfo->configVersion = 0;
 
-		auto error = openset::trigger::Trigger::compileTrigger(
+		auto error = openset::revent::Revent::compileTriggers(
 			this,
 			trigInfo->name,
 			trigInfo->script,

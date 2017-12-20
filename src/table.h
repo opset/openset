@@ -15,7 +15,7 @@ namespace openset
 
 	namespace trigger
 	{
-		struct triggerSettings_s;
+		struct reventSettings_s;
 	};
 
 	namespace db
@@ -79,14 +79,14 @@ namespace openset
 
 			// shared objects
 			Columns columns;
-			openset::trigger::MessageBroker messages;
+			openset::revent::MessageBroker messages;
 
 			using zMapStr = std::unordered_map<string, int>;
 			using zMapHash = std::unordered_map<int64_t, int>;
 
 			zMapStr zOrderStrings;
 			zMapHash zOrderInts;
-			std::unordered_map<std::string, openset::trigger::triggerSettings_s*> triggerConf;
+			std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
 			TablePartitioned* partitions[PARTITION_MAX];
@@ -173,7 +173,7 @@ namespace openset
 				return name;
 			}
 
-			inline openset::trigger::MessageBroker* getMessages() 
+			inline openset::revent::MessageBroker* getMessages()
 			{
 				return &messages;
 			}
@@ -193,7 +193,7 @@ namespace openset
 				++loadVersion;
 			}
 
-			std::unordered_map<string, openset::trigger::triggerSettings_s*>* getTriggerConf() 
+			std::unordered_map<string, openset::revent::reventSettings_s*>* getTriggerConf()
 			{
 				return &triggerConf;
 			}

@@ -15,13 +15,13 @@ namespace openset
 		class TablePartitioned;
 	};
 
-	namespace trigger
+	namespace revent
 	{
         class MessageBroker;
 
 		struct Broker_s
 		{
-			std::string triggerName;
+			std::string reventName;
 			std::string subscriberName;
             std::string host;
             int port;
@@ -31,18 +31,18 @@ namespace openset
 			int64_t hold;
 
 			Broker_s(
-				const std::string triggerName, 
+				const std::string reventName, 
 				const std::string subscriberName, 
                 const std::string host,
                 const int port,
                 const std::string path,
 				const int64_t hold) :
-				triggerName(triggerName),
+				reventName(reventName),
 				subscriberName(subscriberName),
                 host(host),
                 port(port),
                 path(path),
-				triggerId(MakeHash(triggerName)),
+				triggerId(MakeHash(reventName)),
 				subscriberId(MakeHash(subscriberName)),
 				hold(hold)
 			{}
@@ -82,7 +82,7 @@ namespace openset
 			// indicates how many milliseconds a message may remain in the queue
 			// before it is discarded
 			void registerSubscriber(
-				const std::string triggerName,
+				const std::string reventName,
 				const std::string subscriberName,
                 const std::string host,
                 const int port,

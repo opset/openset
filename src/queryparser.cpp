@@ -545,8 +545,9 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 
 				blocks.pop_back();
 			}
-			else if (line.parts[0] == "def")
+			else if (line.parts[0] == "def" || line.parts[0] == "@trigger") // cheat on trigger
 			{
+                line.parts[0] = "def";
 				++blockCounter;
 				line.block = extractBlocks(indent + 1, capture, blockList);
 

@@ -23,20 +23,16 @@ void OpenLoopRetrigger::prepare()
 {
 	linearId = 0;
 	person.mapTable(table, loop->partition);
-	lowestStamp = Now() + 15000;
+	lowestStamp = Now() + 90000;
+
+    parts = table->getPartitionObjects(loop->partition);
+    parts->triggers->checkForConfigChange();
+
 }
 
 void OpenLoopRetrigger::run()
 {
-	
-	auto parts = table->getPartitionObjects(loop->partition);
-
-    parts->triggers->checkForConfigChange();
-
     const auto maxLinearId = parts->people.peopleCount();
-	
-	openset::db::PersonData_s* personData;
-
     const auto now = Now();
 
 	while (true)
@@ -56,25 +52,25 @@ void OpenLoopRetrigger::run()
 
 		    const auto diff = lowestStamp - Now();
 
-			newCell->scheduleFuture(diff > 500 ? 500 : (diff < 100) ? 100 : diff); // run again in 15 seconds
+			newCell->scheduleFuture(diff > 30000 ? 30000 : 5000); 
 
 			spawn(newCell);
 			suicide();
 			return;
 		}
 
-		if ((personData = parts->people.getPersonByLIN(linearId)) != nullptr
-			&& personData->flagRecords)		
+        if (auto personData = parts->people.getPersonByLIN(linearId);
+             personData && personData->flagRecords)		
 		{
 			auto flagIter = personData->getFlags();
 
-			for (auto i = 0; i < personData->flagRecords; ++i)
+            for (auto i = 0; i < personData->flagRecords; ++i)
 			{
 				if (flagIter->flagType == flagType_e::future_trigger &&
 					flagIter->value < now) // this is expired!
 				{
 					// get the corresponding trigger object (reference contains trigger Id)
-					auto trigger = parts->triggers->getTrigger(flagIter->reference);
+					auto trigger = parts->triggers->getRevent(flagIter->reference);
 
 					if (trigger)
 					{
@@ -97,6 +93,13 @@ void OpenLoopRetrigger::run()
 
 					parts->people.replacePersonRecord(replacementRecord);
 
+                    // personData has moved
+                    const auto tp = person.getGrid()->getMeta();
+                    if (personData != tp)
+                    {
+                        personData = tp;
+                        flagIter = personData->getFlags() + i;
+                    }
 				}
 				else if (flagIter->flagType == flagType_e::future_trigger &&
 					flagIter->value < lowestStamp)

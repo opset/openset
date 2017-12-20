@@ -5,18 +5,22 @@
 #include "tablepartitioned.h"
 #include "http_cli.h"
 
-void openset::trigger::Broker_s::webhookThread(MessageBroker* broker)
+void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
 {
     thread th([&, broker]()
     {
+
+        const auto MaxMessages = 500;
+        const auto MaxBackoff = 36;
+
         vector<triggerMessage_s> messageList;
 
-        int backOff = 0;
+        auto backOff = 0;
 
         atomic<bool> done = false;
         atomic<bool> retry = false;
 
-        auto done_cb = [&, broker](
+        const auto done_cb = [&, broker](
             const http::StatusCode status, const bool error, char* data, const size_t size)
         {
             done = true;
@@ -29,7 +33,7 @@ void openset::trigger::Broker_s::webhookThread(MessageBroker* broker)
         {
             if (!messageList.size())
             {
-                messageList = broker->pop(triggerName, subscriberName, 500);
+                messageList = broker->pop(reventName, subscriberName, MaxMessages);
             }
 
             if (messageList.size())
@@ -45,25 +49,38 @@ void openset::trigger::Broker_s::webhookThread(MessageBroker* broker)
                     msg->set("stamp_iso", Epoch::EpochToISO8601(m.stamp));
                     msg->set("uid", m.uuid);
                     msg->set("message", m.message);
+                    msg->set("method", m.method);
                 }
-
-                payload.set("remaining", broker->size(triggerName, subscriberName));
 
                 auto buffer = cjson::Stringify(&payload);
 
+                const auto backlog = broker->size(reventName, subscriberName);
+
                 done = false;
                 retry = false;
-                rest->request("POST", path, {}, &buffer[0], buffer.length(), done_cb);
+                rest->request(
+                    "POST", 
+                    path, 
+                    {
+                        { "revent", reventName }, 
+                        { "subscriber", subscriberName },
+                        { "count", to_string(messageList.size())},
+                        { "remaining", to_string(backlog) }
+                    }, 
+                    &buffer[0], 
+                    buffer.length(), 
+                    done_cb);
 
                 while (!done)
-                    ThreadSleep(55); // move to event pump
-
-                if (retry)
+                    ThreadSleep(55); // move to eventing method
+                               
+                if (retry || !backlog)
                 {
-                    if (backOff < 60) // greather than 60 seconds
+                    if (backOff < MaxBackoff) // greather than 60 seconds
                         ++backOff;
                 }
-                else
+
+                if (!retry)
                 {
                     messageList.clear(); // reset the messageList, we got an OK
                     backOff = 0;
@@ -71,24 +88,26 @@ void openset::trigger::Broker_s::webhookThread(MessageBroker* broker)
             }
             else
             {
-                ThreadSleep(500 * backOff);
+                if (backOff < MaxBackoff) // greather than 60 seconds
+                    ++backOff;
             }
 
+            ThreadSleep(100 * backOff);
         }
     });
 
     th.detach();
 }
 
-openset::trigger::MessageBroker::MessageBroker()
+openset::revent::MessageBroker::MessageBroker()
 {}
 
-openset::trigger::MessageBroker::~MessageBroker()
+openset::revent::MessageBroker::~MessageBroker()
 {}
 
-std::vector<openset::trigger::Queue*> openset::trigger::MessageBroker::getAllQueues(const int64_t triggerId)
+std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t triggerId)
 {
-	std::vector<openset::trigger::Queue*> queues;
+	std::vector<openset::revent::Queue*> queues;
 
 	for (auto &q:queueMap)
 	{
@@ -102,8 +121,8 @@ std::vector<openset::trigger::Queue*> openset::trigger::MessageBroker::getAllQue
 	return queues;
 }
 
-void openset::trigger::MessageBroker::registerSubscriber(
-	const std::string triggerName,
+void openset::revent::MessageBroker::registerSubscriber(
+	const std::string reventName,
 	const std::string subscriberName,
     const std::string host,
     const int port,
@@ -112,7 +131,7 @@ void openset::trigger::MessageBroker::registerSubscriber(
 {
 	csLock lock(cs); // scoped lock
 	
-	const auto key = std::make_pair(triggerName, subscriberName);
+	const auto key = std::make_pair(reventName, subscriberName);
 	const auto sub = subscribers.find(key);
 
 	if (sub != subscribers.end()) // found
@@ -124,7 +143,7 @@ void openset::trigger::MessageBroker::registerSubscriber(
 	} 
 	else // not found
 	{
-		auto newSub = subscribers.emplace(key, Broker_s{ triggerName, subscriberName, host, port, path, hold });
+		auto newSub = subscribers.emplace(key, Broker_s{ reventName, subscriberName, host, port, path, hold });
 
 		// emplace returns a goofy pair of pairs, our pair is in .first
 		auto &info = newSub.first->second;
@@ -146,7 +165,7 @@ void openset::trigger::MessageBroker::registerSubscriber(
 	}
 }
 
-void openset::trigger::MessageBroker::backClean()
+void openset::revent::MessageBroker::backClean()
 {
 	// Note - internal function lock from the caller
 	for (auto &sub : subscribers)
@@ -176,7 +195,7 @@ void openset::trigger::MessageBroker::backClean()
 	}
 }
 
-void openset::trigger::MessageBroker::push(
+void openset::revent::MessageBroker::push(
     const std::string trigger, 
 	std::vector<triggerMessage_s>& messages)
 {
@@ -200,12 +219,12 @@ void openset::trigger::MessageBroker::push(
 	backClean();
 }
 
-std::vector<openset::trigger::triggerMessage_s> openset::trigger::MessageBroker::pop(
+std::vector<openset::revent::triggerMessage_s> openset::revent::MessageBroker::pop(
 	const std::string triggerName, 
 	const std::string subscriberName, 
 	const int64_t max)
 {
-	std::vector<openset::trigger::triggerMessage_s> result;
+	std::vector<openset::revent::triggerMessage_s> result;
 
 	csLock lock(cs); // scoped lock
 
@@ -240,7 +259,7 @@ std::vector<openset::trigger::triggerMessage_s> openset::trigger::MessageBroker:
 
 }
 
-int64_t openset::trigger::MessageBroker::size(std::string triggerName, std::string subscriberName)
+int64_t openset::revent::MessageBroker::size(std::string triggerName, std::string subscriberName)
 {
 	csLock lock(cs); // scoped lock
 
@@ -249,8 +268,6 @@ int64_t openset::trigger::MessageBroker::size(std::string triggerName, std::stri
 
 	if (sub != subscribers.end()) // found
 	{
-		
-
         if (auto t = queueMap.find(sub->second.triggerId); t == queueMap.end())
         {
             return 0;
@@ -267,7 +284,7 @@ int64_t openset::trigger::MessageBroker::size(std::string triggerName, std::stri
 	return 0;
 }
 
-void openset::trigger::MessageBroker::run()
+void openset::revent::MessageBroker::run()
 {
 	csLock lock(cs); // scoped lock
 	backClean();

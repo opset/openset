@@ -3,7 +3,6 @@
 #include "common.h"
 #include "querycommon.h"
 #include "sba/sba.h"
-#include "heapstack/heapstack.h"
 #include "errors.h"
 
 class cjson;
@@ -15,7 +14,7 @@ namespace openset
 		class Interpreter; 	// name spaced forward
 	};
 
-	namespace trigger
+	namespace revent
 	{
 		enum class triggerOn_e : int
 		{
@@ -37,9 +36,9 @@ namespace openset
 namespace std // hasher for triggerOn_e enum
 {
 	template<>
-	struct hash<openset::trigger::triggerOn_e>
+	struct hash<openset::revent::triggerOn_e>
 	{
-		size_t operator()(const openset::trigger::triggerOn_e& v) const
+		size_t operator()(const openset::revent::triggerOn_e& v) const
 		{
 			return static_cast<size_t>(v);
 		}
@@ -48,43 +47,38 @@ namespace std // hasher for triggerOn_e enum
 
 namespace openset
 {
-	namespace trigger
+	namespace revent
 	{
     	struct triggerMessage_s
 		{
 			int64_t stamp;
 			int64_t id;
-			char* uuid;
-			char* message;
+			string uuid;
+            string method;
+			string message;
 
 			triggerMessage_s():
 				stamp(0), 
-				id(0),
-				uuid(nullptr),
-				message(nullptr)
-			{ }
+				id(0)
+			{}
 
-			triggerMessage_s(const int64_t triggerId, std::string triggerMessage, std::string uuidStr)
+			triggerMessage_s(const int64_t reventId, std::string triggerMessage, std::string methodName, std::string uuidStr)
 			{
 				stamp = Now();
-				id = triggerId;
+				id = reventId;
 
-				uuid = cast<char*>(PoolMem::getPool().getPtr(uuidStr.length() + 1));
-				message = cast<char*>(PoolMem::getPool().getPtr(triggerMessage.length() + 1));
-
-				strcpy(uuid, uuidStr.c_str());
-				strcpy(message, triggerMessage.c_str());
+                uuid = std::move(uuidStr);
+                method = std::move(methodName);
+                message = std::move(triggerMessage);
 			}
 
 			triggerMessage_s(const triggerMessage_s &other):
 				stamp(other.stamp),
 				id(other.id)
 			{
-				uuid = cast<char*>(PoolMem::getPool().getPtr(strlen(other.uuid) + 1));
-				message = cast<char*>(PoolMem::getPool().getPtr(strlen(other.message) + 1));
-
-				strcpy(uuid, other.uuid);
-				strcpy(message, other.message);
+                uuid = other.uuid;
+                method = other.method;
+                message = other.message;
 			}
 
 			triggerMessage_s(triggerMessage_s&& other) noexcept
@@ -92,23 +86,13 @@ namespace openset
 				this->stamp = other.stamp;
 				this->id = other.id;
 
-				this->uuid = other.uuid;
-				this->message = other.message;
-
-				other.uuid = nullptr;
-				other.message = nullptr;
+                uuid = std::move(other.uuid);
+                method = std::move(other.method);
+                message = std::move(other.message);
 			}
 
-			~triggerMessage_s()
-			{
-				if (uuid)
-				{
-					PoolMem::getPool().freePtr(uuid);
-					PoolMem::getPool().freePtr(message);
-					uuid = nullptr;
-					message = nullptr;
-				}
-			}
+            ~triggerMessage_s()
+            {}
 		};
 
 		// String to Trigger Mode
@@ -116,7 +100,7 @@ namespace openset
 			{ "changed_true", triggerOn_e::changed_true }
 		};
 
-		struct triggerSettings_s
+		struct reventSettings_s
 		{
 			int64_t id;
 			std::string entryFunction;
@@ -127,9 +111,9 @@ namespace openset
 			openset::query::Macro_s macros;
 		};
 
-		class Trigger
+		class Revent
 		{
-			triggerSettings_s* settings;
+			reventSettings_s* settings;
 			int lastConfigVersion; // class copy, used to check against settings version for reload
 
 			openset::db::Table* table;
@@ -152,10 +136,10 @@ namespace openset
 		public:
 			std::vector<triggerMessage_s> triggerQueue;
 						
-			explicit Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* parts);
-			~Trigger();
+			explicit Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts);
+			~Revent();
 
-			static openset::errors::Error compileTrigger(
+			static openset::errors::Error compileTriggers(
 				openset::db::Table* table, 
 				std::string name, 
 				std::string script,
@@ -175,7 +159,10 @@ namespace openset
 			
 			void preInsertTest();
 			void postInsertTest();
-			bool runFunction(const int64_t functionHash);
+
+            bool emit(const std::string& methodName);
+
+            bool runFunction(const int64_t functionHash);
 
 			std::string getName() const
 			{

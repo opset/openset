@@ -601,6 +601,7 @@ void Grid::prepare()
                 read += sizeof(int16_t); // += 2
 
                 const auto count = static_cast<int>(*reinterpret_cast<int16_t*>(read));
+
                 read += sizeof(int16_t); // += 2
 
                 const auto startIdx = setData.size();
@@ -656,13 +657,12 @@ PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, 
 	}
 	else
 	{
-		const auto count = rawData->flagRecords;
 		// copy the old flags to the new flags
-		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s) * (count + 1)));
-		memcpy(newFlags, rawData->getFlags(), sizeof(Flags_s) * count);
+		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s) * (rawData->flagRecords + 1)));
+		memcpy(newFlags, rawData->getFlags(), sizeof(Flags_s) * rawData->flagRecords);
 
 		// index is count
-		idx = count;
+		idx = rawData->flagRecords;
 	}
 
 	// insert our new flag
@@ -723,7 +723,8 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 	// copy flags over to new structure, skip the one we are omitting
 	const auto newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(rawData->flagBytes() - sizeof(Flags_s)));
 
-    const auto newFlagRecords = rawData->flagRecords - 1;
+    // TODO - remove redundant buffer
+    const auto newFlagRecords = rawData->flagRecords - 1; 
 	auto writer = newFlags;
 	for (auto iter = start; iter < end; ++iter)
 	{
