@@ -90,9 +90,6 @@ namespace openset
                 method = std::move(other.method);
                 message = std::move(other.message);
 			}
-
-            ~triggerMessage_s()
-            {}
 		};
 
 		// String to Trigger Mode
@@ -137,12 +134,10 @@ namespace openset
 			std::vector<triggerMessage_s> triggerQueue;
 						
 			explicit Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts);
-			~Revent();
 
 			static openset::errors::Error compileTriggers(
 				openset::db::Table* table, 
-				std::string name, 
-				std::string script,
+				const std::string &script,
 				openset::query::Macro_s &targetMacros);
 
 			void init();

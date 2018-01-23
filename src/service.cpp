@@ -17,9 +17,6 @@
 
 namespace openset
 {
-	void Service::initialize()
-	{}
-
 	bool Service::start()
 	{
 		const auto ip = globals::running->host;

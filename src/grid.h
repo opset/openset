@@ -160,8 +160,13 @@ namespace openset
 
         struct SetInfo_s
         {
-            int32_t length;
-            int32_t offset;
+            int32_t length{0};
+            int32_t offset{0};
+
+            SetInfo_s(const int32_t length, const int32_t offset) :
+                length(length),
+                offset(offset)
+            {}
         };
 
 		class Grid
@@ -184,9 +189,9 @@ namespace openset
 			const static int sizeOfCast = sizeof(Cast_s);
 
 			// mapping
-			int16_t columnMap[MAXCOLUMNS]; // TODO - FIX THIS
-			int16_t reverseMap[MAXCOLUMNS]; // TODO - AND THIS
-			int16_t isSet[MAXCOLUMNS]; // TODO - AND THIS
+			int16_t columnMap[MAXCOLUMNS]{}; // TODO - FIX THIS
+			int16_t reverseMap[MAXCOLUMNS]{}; // TODO - AND THIS
+			int16_t isSet[MAXCOLUMNS]{}; // TODO - AND THIS
 
 			unordered_map<int64_t, int32_t> insertMap;
 			// we will get our memory via stack
@@ -212,7 +217,7 @@ namespace openset
 
 		public:
 			Grid();
-			~Grid();
+			~Grid() = default;
 
 			/**
 			* \brief maps schema to the columnMap
@@ -251,14 +256,9 @@ namespace openset
 				return reverseMap[schemaColumn];
 			}
 
-			inline char* getUUIDcStr() const
-			{
-				return rawData ? rawData->events : nullptr;
-			}
-
 			inline string getUUIDString() const
 			{
-				return rawData ? string{ rawData->events } : "";
+				return rawData ? string{ rawData->events, static_cast<size_t>(rawData->idBytes) } : "";
 			}
 
 			inline int64_t getUUID() const
@@ -303,23 +303,13 @@ namespace openset
 				return table;
 			}
 
-			cjson toJSON(const bool condensed = true) const;
+			cjson toJSON() const;
 
 			// brings object back to zero state
 			void reinit();
 
 		private:
 			Col_s* newRow();
-			/**
-			* \brief reset rows (without resetting mappings)
-			*
-			* \note reset does not reset column mappings, we really
-			*       want to do that once if we are re-using grids (or Person)
-			*       objects.
-			*/
-			ExpandedRows iterate_expand(cjson* json) const;
-
-			// ready object for re-use while maintaining mountings
 			void reset();
 		};
 	};

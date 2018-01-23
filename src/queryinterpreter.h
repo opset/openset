@@ -1,4 +1,11 @@
 #pragma once
+
+#include <array>
+#include <vector>
+#include <unordered_map>
+
+#include "xxhash.h"
+
 #include "querycommon.h"
 #include "person.h"
 #include "grid.h"
@@ -20,6 +27,44 @@ namespace openset
 {
 	namespace query
 	{
+        struct EventDistinct_s // 128bit hash
+        {
+            int64_t hash1{0};
+            int64_t hash2{0};
+
+            EventDistinct_s() = default;
+
+            void set(const int64_t value, const int64_t distinct, const int64_t stamp, const int64_t column)
+            {
+                hash1 = XXH64(&distinct, 8, column);        
+                hash2 = XXH64(&value, 8, stamp);        
+            }
+
+            bool operator ==(const EventDistinct_s& right) const
+            {
+                return (hash1 == right.hash1 && hash2 == right.hash2);
+            }
+        };
+    }
+}
+
+namespace std
+{
+	// hasher for EventDistinct_s
+	template <>
+	struct hash<openset::query::EventDistinct_s>
+	{
+		size_t operator()(const openset::query::EventDistinct_s& v) const
+		{
+			return v.hash1 + v.hash2;
+		}
+	};
+}
+
+namespace openset
+{
+    namespace query
+    {
 		enum class InterpretMode_e: int
 		{
 			query,
@@ -126,14 +171,20 @@ namespace openset
 			int32_t eventCount{ -1 }; // -1 is uninitialized, calculation cached here
 
 			// callbacks to external code (i.e. triggers)
-			function<bool(int64_t functionHash, int seconds)> schedule_cb{ nullptr };
-			function<bool(string emitMessage)> emit_cb{ nullptr };
+			function<void(int64_t functionHash, int seconds)> schedule_cb{ nullptr };
+			function<void(string emitMessage)> emit_cb{ nullptr };
 			function<IndexBits*(string, bool&)> getSegment_cb{ nullptr };
 
 			// distinct counting structures
-            using ValuesSeenKey = tuple<int32_t, int64_t, int64_t>;
+            using ValuesSeenKey = EventDistinct_s;//tuple<int32_t, int64_t, int64_t, int64_t>;
 			using ValuesSeen = bigRing<ValuesSeenKey, int32_t>;
+            using MarshalParams = std::array<cvar, 24>;
 
+            // object global non-heap container for marhal function parameters
+            // regular function local vectors were impacting performance > 6%
+            MarshalParams marshalParams = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};      
+		    
+           
 			// distinct counting (with column as key)
 			ValuesSeen eventDistinct{ ringHint_e::lt_compact }; // distinct to group id
 			ValuesSeenKey distinctKey;
@@ -178,6 +229,8 @@ namespace openset
 
 			SegmentList* getSegmentList() const;
 
+            void extractMarshalParams(const int paramCount);
+
 			void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
 
 			void marshal_schedule(const int paramCount);
@@ -213,9 +266,9 @@ namespace openset
 			bool marshal(Instruction_s* inst, int& currentRow);
 			void opRunner(Instruction_s* inst, int currentRow = 0);
 
-			void setScheduleCB(function<bool(int64_t functionHash, int seconds)> cb);
-			void setEmitCB(function<bool(string emitMessage)> cb);
-			void setGetSegmentCB(function<IndexBits*(string, bool& deleteAfterUsing)> cb);
+			void setScheduleCB(const function<void (int64_t functionHash, int seconds)> &cb);
+			void setEmitCB(const function<void (string emitMessage)> &cb);
+			void setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)> &cb);
 			// where our result bits are going to end up
 			void setBits(IndexBits* indexBits, int maxPopulation);
 			void setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments);
@@ -224,7 +277,7 @@ namespace openset
 			// check for firstrun, check for globals.
 			void execReset();
 			void exec();
-			void exec(const string functionName);
+			void exec(const string &functionName);
 			void exec(const int64_t functionHash);
 
             // if you need the result of exec+function this will get it or return value NONE

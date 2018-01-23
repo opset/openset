@@ -13,9 +13,6 @@ Grid::Grid()
 	rows.reserve(10000);
 }
 
-Grid::~Grid()
-{}
-
 void Grid::reset()
 {
 	rows.clear(); // release the rows - likely to not free vector internals
@@ -32,7 +29,6 @@ void Grid::reinit()
 	memset(columnMap, 0, sizeof(columnMap)); // all zeros
 	memset(isSet, 0, sizeof(isSet)); // all false
 }
-
 
 /**
  * \brief maps schema to the columnMap
@@ -104,7 +100,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 	table = tablePtr;
 	attributes = attributesPtr;
 
-	if (!table || !attributes || !columnNames.size())
+	if (!table || !attributes || columnNames.empty())
 		return false;
 
 	// map the attributes blob (where text and things go) to this object
@@ -121,7 +117,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 
 	auto schema = table->getColumns();
 
-	for (const auto colName: columnNames)
+	for (const auto &colName: columnNames)
 	{
 		const auto s = schema->getColumn(colName);
 
@@ -149,7 +145,7 @@ AttributeBlob* Grid::getAttributeBlob() const
 	return attributes->blob;
 }
 
-cjson Grid::toJSON(const bool condensed) const
+cjson Grid::toJSON() const
 {
 	cjson doc;
 
@@ -160,6 +156,44 @@ cjson Grid::toJSON(const bool condensed) const
 	auto columns = table->getColumns();
 
     std::vector<openset::db::Col_s*> accumulator;
+
+    const auto convertToJSON = [&](cjson* branch, Columns::Columns_s* colInfo, int64_t value, bool isArray)
+    {
+		switch (colInfo->type)
+		{
+		case columnTypes_e::intColumn:
+            if (isArray)
+                branch->push(value);
+            else
+			    branch->set(colInfo->name, value);
+			break;
+		case columnTypes_e::doubleColumn:
+            if (isArray)
+                branch->push(value / 10000.0);
+            else
+			    branch->set(colInfo->name, value / 10000.0);
+			break;
+		case columnTypes_e::boolColumn:
+            if (isArray)
+                branch->push(value != 0);
+            else
+			    branch->set(colInfo->name, value != 0);
+			break;
+		case columnTypes_e::textColumn:
+		    {						
+			    if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+                {
+                    if (isArray)
+                        branch->push(text);
+                    else
+				        branch->set(colInfo->name, text);
+                }
+		    }
+		    break;
+        default:
+            break;
+		}       
+    };
 
 	for (auto iter = rows.begin(); iter != rows.end(); ++iter)
 	{
@@ -178,7 +212,7 @@ cjson Grid::toJSON(const bool condensed) const
 				rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
 				rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
 				rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
-				cjson * rowObj = rootObj->setObject("attr");
+			    auto rowObj = rootObj->setObject("attr");
 
 				for (auto c = 0; c < columnCount; ++c)
 				{
@@ -193,26 +227,18 @@ cjson Grid::toJSON(const bool condensed) const
 					if (value == NONE)
 						continue;
 
-					switch (colInfo->type)
-					{
-					case columnTypes_e::freeColumn:
-						continue;
-					case columnTypes_e::intColumn:
-						rowObj->set(colInfo->name, value);
-						break;
-					case columnTypes_e::doubleColumn:
-						rowObj->set(colInfo->name, value / 10000.0);
-						break;
-					case columnTypes_e::boolColumn:
-						rowObj->set(colInfo->name, value ? true : false);
-						break;
-					case columnTypes_e::textColumn:
-					{						
-						if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-							rowObj->set(colInfo->name, text);
-					}
-					break;
-					}
+                    if (colInfo->isSet)
+                    {
+                        const auto set = rowObj->setArray(colInfo->name);
+                        const auto info = reinterpret_cast<const SetInfo_s*>(&value);
+
+                        for (auto offset = info->offset; offset < info->offset + info->length; ++offset)
+                            convertToJSON(set, colInfo, this->setData[offset], true); 
+                    }
+                    else
+                    {
+                        convertToJSON(rowObj, colInfo, value, false);
+                    }
 				}
 			}
             else // more than one row... kindof annoying
@@ -352,16 +378,15 @@ cjson Grid::toJSON(const bool condensed) const
                 {
                     auto current = &branch;
 
-                    for (auto c = 0; c < sorted.size(); ++c)
+                    for (auto &c : sorted)
                     {
-                        const auto ac = sorted[c].first; // actual column
-
+                        const auto ac = c.first; // actual column
                         const auto colInfo = columns->getColumn(columnMap[ac]);
 
                         if (colInfo->idx < 1000) // first 1000 are reserved
                             continue;
 
-                        auto value = row->cols[ac];
+                        const auto value = row->cols[ac];
 
                         if (const auto t = current->find("_"); t)
                             current = t->membersHead;
@@ -589,7 +614,6 @@ void Grid::prepare()
 			row = newRow();
 			read += sizeOfCastHeader;
 			continue;
-
 		} 
 
 		const auto mappedColumn = reverseMap[cursor->columnNum];
@@ -620,10 +644,7 @@ void Grid::prepare()
                 }
 
                 // let our row use an encoded value for the column.
-                SetInfo_s info;
-                info.length = count;
-                info.offset = startIdx;
-
+                SetInfo_s info{ count, static_cast<int>(startIdx) };
                 *(row->cols + mappedColumn) = *reinterpret_cast<int64_t*>(&info);
             }
             else
@@ -857,23 +878,7 @@ PersonData_s* Grid::commit()
 		write += sizeOfCastHeader;
         bytesNeeded += sizeOfCastHeader;
 	}
-
-    /*
-    // append marker for set array (int16_t = -2) and length (int32_t = number of elements)
-    *reinterpret_cast<int16_t*>(write) = -2; 
-    write += sizeOfCastHeader;
-    bytesNeeded += sizeOfCastHeader;
-    // write number of items in setVector as int32_t
-    *reinterpret_cast<int32_t*>(write) = setData.size(); 
-    write += sizeof(int32_t);
-    bytesNeeded += sizeof(int32_t);
-    */
-
-    //const auto setWrite = reinterpret_cast<int64_t*>(write);
-    //const auto setBytes = setData.size() * sizeof(int64_t);
-    //memcpy(setWrite, &setData[0], setBytes);
-    //bytesNeeded += setBytes;
-
+        
 	const auto maxBytes = LZ4_compressBound(bytesNeeded);
 	const auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
@@ -919,111 +924,6 @@ PersonData_s* Grid::commit()
 	return rawData;
 }
 
-Grid::ExpandedRows Grid::iterate_expand(cjson* json) const
-{
-	auto goodRows = ExpandedRows{ json->getNodes() };
-
-	while (true)
-	{
-		ExpandedRows newRes;
-
-		auto arrayCount = 0;
-		auto objectCount = 0;
-		auto nullCount = 0;
-
-		for (auto row : goodRows)
-		{
-			LineNodes tLine;
-
-			for (auto tNode : row)
-			{
-				if (!tNode)
-				{
-					++nullCount;
-					continue;
-				}
-
-				switch (tNode->type())
-				{
-				case cjsonType::NUL:
-				case cjsonType::INT:
-				case cjsonType::DBL:
-				case cjsonType::STR:
-				case cjsonType::BOOL:
-					tLine.push_back(tNode);
-					break;
-				case cjsonType::OBJECT:
-				{
-					++objectCount;
-					auto objects = tNode->getNodes();
-					for (auto tO : objects)
-						tLine.push_back(tO);
-				}
-				break;
-				case cjsonType::ARRAY:
-					++arrayCount;
-					tLine.push_back(tNode);
-					break;
-				default: 
-					break;
-				}
-			}
-			newRes.push_back(tLine);
-		}
-
-		if (arrayCount)
-		{
-			ExpandedRows unRolled;
-
-			for (auto row : newRes)
-			{
-				auto found = 0;
-				auto idx = -1;
-				for (auto &tNode : row) // walk through attrs in row
-				{
-					++idx;
-					if (tNode->type() == cjsonType::ARRAY)
-					{
-						++found;
-						auto arrayItems = tNode->getNodes();
-						for (auto aI : arrayItems)
-						{
-							auto newLine(row); // copy row
-							if (aI->type() != cjsonType::OBJECT &&
-								tNode->hasName())
-							{
-								newLine[idx] = nullptr;
-								newLine.push_back(aI);
-								newLine.back()->setName(tNode->name());
-							}
-							else
-								newLine[idx] = aI;
-							unRolled.push_back(newLine);
-						}
-						break;
-					}
-				}
-
-				if (!found)
-					unRolled.push_back(LineNodes(row));
-			}
-
-			goodRows = std::move(unRolled);
-			continue;
-		}
-
-		if (objectCount || nullCount)
-		{
-			goodRows = std::move(newRes);
-			continue;
-		}
-
-		if (!arrayCount && !objectCount && !nullCount)
-			return goodRows;
-	}
-}
-
-
 void Grid::insert(cjson* rowData)
 {
 	// ensure we have ms on the time stamp
@@ -1050,7 +950,7 @@ void Grid::insert(cjson* rowData)
 		return;
 
 	// cull on insert
-	if (rowCount > table->rowCull)
+	if (static_cast<int>(rowCount) > table->rowCull)
 	{
 		const auto numToErase = rowCount - table->rowCull;
 		rows.erase(rows.begin(), rows.begin() + numToErase);
@@ -1061,7 +961,9 @@ void Grid::insert(cjson* rowData)
 	attrNode->set("__action", action);
 	auto columns = table->getColumns();
 
-    auto insertRow = newRow();
+    const auto insertRow = newRow();
+
+    insertRow->cols[COL_STAMP] = stamp;
 
     const auto attrColumns = attrNode->getNodes();
 
@@ -1264,10 +1166,7 @@ void Grid::insert(cjson* rowData)
                 }
 
                 // let our row use an encoded value for the column.
-                SetInfo_s info;
-                info.length = setData.size() - startIdx;
-                info.offset = startIdx;
-
+                SetInfo_s info{ static_cast<int>(setData.size() - startIdx), info.offset = startIdx };
                 insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
             }
             continue; // special handler for ARRAY
@@ -1285,9 +1184,9 @@ void Grid::insert(cjson* rowData)
 
             if (colInfo->isSet)
             {
-                insertRow->cols[col] = setData.size();
+                SetInfo_s info{ 1, static_cast<int>(setData.size()) };
+                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
                 setData.push_back(tval);
-                setData.push_back(NONE);
             }
             else
             {
@@ -1300,7 +1199,7 @@ void Grid::insert(cjson* rowData)
         }
     }
 
-    auto getRowHash = [&](Col_s* rowPtr) -> int64_t
+    const auto getRowHash = [&](Col_s* rowPtr) -> int64_t
     {
         int64_t hash = 0;
         for (auto col = 0; col < columnCount; col++)
@@ -1329,7 +1228,7 @@ void Grid::insert(cjson* rowData)
         return hash;
     };
 
-    auto insertHash = getRowHash(insertRow);
+    const auto insertHash = getRowHash(insertRow);
 
     auto insertBefore = -1; // where a new row will be inserted if needed
 
@@ -1338,7 +1237,7 @@ void Grid::insert(cjson* rowData)
 
 	const auto zOrderInts = table->getZOrderHashes();
 
-	auto getZOrder = [&](int64_t value) -> int {
+	const auto getZOrder = [&](int64_t value) -> int {
 		auto iter = zOrderInts->find(value);
 
 		if (iter != zOrderInts->end())
@@ -1347,9 +1246,9 @@ void Grid::insert(cjson* rowData)
 		return 99;
 	};
 
-	auto insertZOrder = getZOrder(hashedAction);
+	const auto insertZOrder = getZOrder(hashedAction);
 
-	auto findInsert = [&]() -> int {
+	const auto findInsert = [&]() -> int {
 		auto first = 0;
 		auto last = static_cast<int>(rowCount - 1);
 		auto mid = last >> 1;
@@ -1374,7 +1273,7 @@ void Grid::insert(cjson* rowData)
 	if (i < 0) // negative value (made positive - 1) is the insert position
 		i = -i - 1;
 
-	if (i != rowCount) // if they are equal skip all this, we are appending
+	if (i != static_cast<int>(rowCount)) // if they are equal skip all this, we are appending
 	{
 		// walk back to the beginning of all rows sharing this time stamp
 		if (rowCount)
@@ -1382,7 +1281,7 @@ void Grid::insert(cjson* rowData)
 				--i;
 
 		// walk forward to find our insertion point
-		for (; i < rowCount; i++)
+		for (; i < static_cast<int>(rowCount); i++)
 		{
 			// we have found rows with same stamp
 			if (rows[i]->cols[0] == stamp)
@@ -1394,7 +1293,7 @@ void Grid::insert(cjson* rowData)
 				{
 					// look this date range and zorder to see if we have a row group
 					// match (as in, we are replacing a row)
-					for (; i < rowCount; i++)
+					for (; i < static_cast<int>(rowCount); i++)
 					{
 						zOrder = getZOrder(rows[i]->cols[COL_ACTION]);
 
@@ -1406,7 +1305,7 @@ void Grid::insert(cjson* rowData)
 							break;
 						}
 
-                        auto currentRowHash = getRowHash(rows[i]);
+                        const auto currentRowHash = getRowHash(rows[i]);
 						// we have a matching row, we will replace this
 						if (insertHash == currentRowHash)
 						{
@@ -1436,10 +1335,10 @@ void Grid::insert(cjson* rowData)
 
 	if (row) // delete the rows that matched, we will be replacing them
 	{
-		for (auto iter = rows.begin() + insertBefore; iter != rows.end();)
+		for (const auto iter = rows.begin() + insertBefore; iter != rows.end();)
             if ((*iter) == row)
             {
-                iter = rows.erase(iter);
+                rows.erase(iter);
                 break;
             }
 	}

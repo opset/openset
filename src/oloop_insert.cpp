@@ -15,16 +15,11 @@ using namespace openset::async;
 using namespace openset::db;
 
 OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
-	OpenLoop(),
 	tablePartitioned(tablePartitioned),
 	runCount(0)
 {
 	Logger::get().info("insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
-
-OpenLoopInsert::~OpenLoopInsert()
-{}
-
 
 void OpenLoopInsert::prepare()
 {
@@ -34,8 +29,8 @@ void OpenLoopInsert::prepare()
 void OpenLoopInsert::run()
 {
 
-	if ((!localQueue.size() || queueIter == localQueue.end()) &&
-		tablePartitioned->insertQueue.size())
+	if ((localQueue.empty() || queueIter == localQueue.end()) &&
+		!tablePartitioned->insertQueue.empty())
 	{
 		if (!tablePartitioned->insertCS.tryLock())
 		{
@@ -96,7 +91,9 @@ void OpenLoopInsert::run()
 	std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
 
 	// now insert without locks
-	for (auto count = 0; queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); ++queueIter, ++count, --tablePartitioned->insertBacklog)
+	for (auto count = 0; 
+        queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); 
+        ++queueIter, ++count, --tablePartitioned->insertBacklog)
 	{
 		cjson row(*queueIter, strlen(*queueIter));		
 		cjson::releaseStringifyPtr(*queueIter);

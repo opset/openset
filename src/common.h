@@ -33,8 +33,12 @@ int64_t Now();
 
 int64_t MakeHash(const char* buffer, int64_t len);
 int64_t MakeHash(const char* buffer);
-int64_t MakeHash(const std::string buffer);
+int64_t MakeHash(const std::string& buffer);
 int64_t HashPair(const int64_t a, const int64_t b);
+
+int64_t AppendHash(int64_t value, int64_t last);
+int64_t AppendHash(int32_t value, int64_t last);
+
 
 void ThreadSleep(int64_t milliseconds);
 

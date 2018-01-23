@@ -174,7 +174,6 @@ set(SOURCE_FILES
         src/trigger.h
         src/triggers.cpp
         src/triggers.h
-        test/test_complex_events.h
         test/test_db.h
         test/test_lib_var.h
         test/test_pyql_language.h

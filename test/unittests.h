@@ -3,7 +3,6 @@
 #include "testing.h"
 #include "test_lib_var.h"
 #include "test_db.h"
-#include "test_complex_events.h"
 #include "test_pyql_language.h"
 #include "test_zorder.h"
 #include "test_sessions.h"
@@ -23,7 +22,6 @@ bool unitTest()
 	// add test for var.h
 	add(test_lib_cvar());
 	add(test_db());
-	add(test_complex_events());
 	add(test_pyql_language());
 	add(test_zorder());
 	add(test_sessions());

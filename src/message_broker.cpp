@@ -11,7 +11,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
     {
 
         const auto MaxMessages = 500;
-        const auto MaxBackoff = 36;
+        const auto MaxBackoff = 20;
 
         vector<triggerMessage_s> messageList;
 

@@ -6,7 +6,7 @@
 #include "table.h"
 #include "columns.h"
 
-const int MAX_EXEC_COUNT = 1'000'000'000;
+//const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
 const int STACK_DEPTH = 64;
 
@@ -127,28 +127,29 @@ openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
 	return &macros.segments;
 }
 
-void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
-
-	if (paramCount <= 0)
-		return;
-
-	vector<cvar> params(paramCount);
-
-	for (auto i = paramCount - 1 ; i >= 0; --i)
+	for (auto i = 1; i <= paramCount; ++i) // PERF
 	{
 		--stackPtr;
 
 		// if any of these params are undefined, exit
 		if (stackPtr->typeof() != cvar::valueType::STR &&
 			*stackPtr == NONE)
-			params[i] = NONE;
+			marshalParams[paramCount - i] = NONE;
 		else
-			params[i] = std::move(*stackPtr);
-	}
+			marshalParams[paramCount - i] = std::move(*stackPtr);
+	}   
+}
 
-	if (!params.size())
+void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+{
+
+	if (paramCount <= 0)
 		return;
+
+    // pop the stack into a pre-allocated array of cvars in reverse order
+    extractMarshalParams(paramCount);
 
 	// strings, doubles, and bools are all ints internally,
 	// this will ensure non-int types are represented as ints
@@ -167,8 +168,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 			case cvar::valueType::STR:
 				{
-					auto hash = MakeHash(value.getString());
-					result->addLocalText(hash, value.getString()); // cache this text
+                    const auto tString = value.getString();
+					const auto hash = MakeHash(tString); 
+					result->addLocalText(hash, tString); // cache this text
 					return hash;
 				}
 
@@ -207,26 +209,37 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 		{
 			if (!resCol.nonDistinct) // if the 'all' flag was NOT used on an aggregater
 			{
-				/* Yikes - a big gnarly tuple (hash can colide, tuple won't)
-				 * 
-				 *  What this is saying is for this column, and this value for
-				 *  this branch in the result at this timestamp, have we ever ran
-				 *  an aggregation? If not, run it, otherwise move on
-				 */ 				
+                // resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
 
-				// emplaceTry will return false if the value exists
-				if (!eventDistinct.emplaceTry(
-                    ValuesSeenKey{
-                        resCol.index,
-                        resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-                        reinterpret_cast<int64_t>(resultColumns) // this pointer is unique to the ResultSet row                        
-                    }, 
-                    1))
+                /*                
+			    NOTE - Visual Studio 2017 compiler crashes on this line, keeping it so it can be used in the future
 
-                    // resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
+                auto& [keyColIndex, keyColValue, KeyDistinctValue, KeyIdentifier] = distinctKey;
+                keyColIndex = resCol.index;
+                keyColValue = resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn];
+                KeyDistinctValue = resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP]);
+                KeyIdentifier = reinterpret_cast<int64_t>(resultColumns);
+                */
 
-					continue; // we already tabulated this for this key
-			}
+                // this version is faster than tryEmplace which uses std::forward with some penalty                
+                /*get<0>(distinctKey) = resCol.index;
+                get<1>(distinctKey) = resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn];
+                get<2>(distinctKey) = resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP];
+                get<3>(distinctKey) = reinterpret_cast<int64_t>(resultColumns);
+                */
+
+                distinctKey.set(
+                    resCol.index,
+                    resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
+                    resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP],
+                    reinterpret_cast<int64_t>(resultColumns)
+                );
+
+                if (eventDistinct.hasKey(distinctKey))
+                    continue;
+
+                eventDistinct.set(distinctKey,1);
+    		}
 
 			auto resultIndex = resCol.index + segmentColumnShift;
 
@@ -289,9 +302,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 				case Modifiers_e::var:
 					if (resultColumns->columns[resultIndex].value == NONE)
-						resultColumns->columns[resultIndex].value = fixToInt(resCol.value);
+						resultColumns->columns[resultIndex].value = 1; //fixToInt(resCol.value);
 					else
-						resultColumns->columns[resultIndex].value += fixToInt(resCol.value);
+						resultColumns->columns[resultIndex].value++; //+= fixToInt(resCol.value);
 					break;
 				default: break;
 			}
@@ -309,11 +322,10 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 	auto depth = 0;
 
-	for (auto item : params)
+	for (const auto &item : marshalParams)
     {
 
-		if (item.typeof() != cvar::valueType::STR &&
-			item == NONE)
+		if (depth == paramCount || (item.typeof() != cvar::valueType::STR && item == NONE))
 			break;
 
 	    rowKey.key[depth] = fixToInt(item);
@@ -371,7 +383,7 @@ void openset::query::Interpreter::marshal_emit(const int paramCount)
 	loopState = LoopState_e::in_exit;
 
 	--stackPtr;
-	auto emitMessage = *stackPtr; // pop
+    const auto emitMessage = *stackPtr; // pop
 
 	if (emit_cb)
 		emit_cb(emitMessage);
@@ -665,8 +677,13 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
 		return;
 	}
 
+    const auto zeros = "0000000000"s;
+
 	--stackPtr;
-	const int64_t places = *stackPtr;
+	int64_t places = *stackPtr;
+
+    if (places > 10) places = 10;
+
 	double value = *(stackPtr - 1);
 
 	const auto negative = value < 0;
@@ -679,8 +696,11 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
 
 	auto str = to_string(rounded);
 
-	while (str.length() <= places)
-		str = "0" + str;
+	if (str.length() <= places)
+    {
+        const auto missingPreZeros = str.length() - places;
+		str = str.substr(0, missingPreZeros) + str;
+    }
 
 	if (places)
 		str.insert(str.end() - places, '.');
@@ -705,7 +725,7 @@ void openset::query::Interpreter::marshal_makeDict(const int paramCount)
 	}
 
 	if (paramCount % 2 == 1)
-		throw("incorrect param count in dictionary");
+		throw  std::runtime_error("incorrect param count in dictionary");
 
 	auto iter = stackPtr - paramCount;
 	for (auto i = 0; i < paramCount; i += 2 , iter += 2)
@@ -763,7 +783,7 @@ void openset::query::Interpreter::marshal_population(const int paramCount)
 	}
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -806,10 +826,10 @@ void openset::query::Interpreter::marshal_intersection(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -869,10 +889,10 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -938,7 +958,7 @@ void openset::query::Interpreter::marshal_compliment(const int paramCount)
 	}
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -982,10 +1002,10 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -1258,7 +1278,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	if (auto slashSlash = url.find("//"); slashSlash != std::string::npos)
 	{
 		slashSlash += 2;
-		const auto endPos = url.find("/", slashSlash);
+		const auto endPos = url.find('/', slashSlash);
 		if (endPos == std::string::npos) // something is ugly
 			return;
 		result["host"] = url.substr(slashSlash, endPos - (slashSlash));
@@ -1267,7 +1287,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	}
 
 	// we have a question mark
-	if (auto qpos = url.find("?", start); qpos != std::string::npos)
+	if (auto qpos = url.find('?', start); qpos != std::string::npos)
 	{
 		result["path"] = url.substr(start, qpos - start);
 		++qpos;
@@ -1278,14 +1298,14 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 
 		while (true)
 		{
-			auto pos = query.find("&", start);
+			auto pos = query.find('&', start);
 
 			if (pos == std::string::npos)
 				pos = query.size();
 
 			auto param = query.substr(start, pos - start);
 
-			if (const auto ePos = param.find("="); ePos != std::string::npos)
+			if (const auto ePos = param.find('='); ePos != std::string::npos)
 			{
 				const auto key = param.substr(0, ePos);
 				const auto value = param.substr(ePos + 1);
@@ -1302,8 +1322,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	else
 		result["path"] = url.substr(start);
 
-	*(stackPtr - 1) == std::move(result);
-	
+	*(stackPtr - 1) = std::move(result);	
 }
 
 string openset::query::Interpreter::getLiteral(const int64_t id) const
@@ -1444,7 +1463,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		break;
 	case Marshals_e::marshal_iter_set:
 		currentRow = (stackPtr - 1)->getInt64();
-		if (currentRow < 0 || currentRow >= rows->size())
+		if (currentRow < 0 || currentRow >= static_cast<int>(rows->size()))
 			throw std::runtime_error("row iterator out of range");
 		//rowIter = rows->begin() + currentRow;
 		--stackPtr;
@@ -1687,7 +1706,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				auto value = var->getDict()->begin();
 				var->getDict()->erase(value);
 				var->dict(); // result is a Dict
-				(*res) = std::move(cvar::o{ value->first, value->second });
+				(*res) = cvar::o{ value->first, value->second };
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
@@ -1735,7 +1754,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			if (var->typeof() == cvar::valueType::DICT)
 			{
 				res->list(); // result is a Dict
-				for (const auto v : *var->getDict())
+				for (const auto &v : *var->getDict())
 					(*res->getList()).push_back(v.first);
 			}
 			else
@@ -1842,6 +1861,15 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::PSHTBLCOL:
 				// push a column value
             {
+
+                // we pop the actual user id in this case
+                if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)
+                {
+                    *stackPtr = this->grid->getUUIDString();
+                    ++stackPtr;
+                    break;
+                }
+
                 auto colValue = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
 
                 switch (macros.vars.tableVars[inst->index].schemaType)
@@ -1962,6 +1990,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				*stackPtr = inst->index;
 				++stackPtr;
 				break;
+			case OpCode_e::COLIDX:
+				*stackPtr = inst->index;
+				++stackPtr;
+				break;
 			case OpCode_e::PSHPAIR:
 				// we are simply going to pop two items off the stack (the key, then the value)
 				// and assign these to a new Dictionary (a dictionary with one pair)
@@ -1969,7 +2001,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					--stackPtr;
 					const auto key = std::move(*stackPtr);
 					--stackPtr;
-					const auto value = std::move(*stackPtr);
+					auto value = std::move(*stackPtr);
 					(*stackPtr).dict();
 					(*stackPtr)[key] = std::move(value);
 					++stackPtr;
@@ -2003,7 +2035,11 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					// this is the value
-					*stackPtr = std::move(tcvar ? *tcvar : cvar{NONE});
+                    if (tcvar)
+					    *stackPtr = std::move(*tcvar);
+                    else 
+                        *stackPtr = NONE;
+
 					++stackPtr;
 				}
 				break;
@@ -2188,6 +2224,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					--stackPtr;
 					const int64_t keyIdx = *stackPtr;
 
+                    // we are going to look back one instruction to see if we 
+			        // are putting values into a user variable or a column variable
+				    const auto isColumn = (inst-1)->op == OpCode_e::COLIDX;
+
 					int64_t valueIdx = 0;
 					if (inst->value == 2)
 					{
@@ -2219,7 +2259,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x.first;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x.first;
+                            else
+							    macros.vars.userVars[keyIdx].value = x.first;
 
 							if (inst->value == 2)
 								macros.vars.userVars[valueIdx].value = x.second;
@@ -2274,7 +2317,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x;
+                            else
+							    macros.vars.userVars[keyIdx].value = x;
 
 							opRunner(
 								&macros.code.front() + inst->index,
@@ -2323,7 +2369,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x;
+                            else
+							    macros.vars.userVars[keyIdx].value = x;
 
 							opRunner(
 								&macros.code.front() + inst->index,
@@ -2369,7 +2418,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::ITNEXT:
 				// fancy and strange stuff happens here					
 				{
-                    if (currentRow >= rows->size())
+                    if (currentRow >= static_cast<int>(rows->size()))
                         break;
 
 				    const auto savedRow = currentRow;
@@ -2384,7 +2433,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 					// user right for count
 					for (const auto rowCount = rows->size();
-					     iterCount < inst->value && currentRow < rowCount;
+					     iterCount < inst->value && currentRow < static_cast<int>(rowCount);
 					     ++currentRow)
 					{
 
@@ -2720,22 +2769,22 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 }
 
 void openset::query::Interpreter::setScheduleCB(
-	function<bool(int64_t functionHash, int seconds)> cb)
+	const function<void(int64_t functionHash, int seconds)> &cb)
 {
 	schedule_cb = cb;
 }
 
-void openset::query::Interpreter::setEmitCB(function<bool(string emitMessage)> cb)
+void openset::query::Interpreter::setEmitCB(const function<void(string emitMessage)> &cb)
 {
 	emit_cb = cb;
 }
 
-void openset::query::Interpreter::setGetSegmentCB(function<IndexBits*(string, bool& deleteAfterUsing)> cb)
+void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)> &cb)
 {
 	getSegment_cb = cb;
 }
 
-void openset::query::Interpreter::setBits(IndexBits* indexBits, int maxPopulation)
+void openset::query::Interpreter::setBits(IndexBits* indexBits, const int maxPopulation)
 {
 	bits = indexBits;
 	maxBitPop = maxPopulation;
@@ -2873,7 +2922,7 @@ void openset::query::Interpreter::exec()
 	}*/
 }
 
-void openset::query::Interpreter::exec(const string functionName)
+void openset::query::Interpreter::exec(const string &functionName)
 {
     exec(MakeHash(functionName));
 }

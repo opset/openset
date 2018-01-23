@@ -41,7 +41,7 @@ namespace openset
 		public:
 
 			explicit OpenLoopInsert(openset::db::TablePartitioned* tablePartitioned);
-			~OpenLoopInsert() final;
+			~OpenLoopInsert() final = default;
 
 			void prepare() final;
 			void run() final;

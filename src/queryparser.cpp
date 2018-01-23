@@ -1222,12 +1222,22 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			for_each(left.rbegin(), left.rend(), [&](auto item)
 		         {
-			         vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
+                    if (isColumnVar(item))
+                    {
+			            block.emplace_back(
+				             OpCode_e::COLIDX, // fancy placeholder, map to index on final pass opcode
+				             item,
+				             lines[i].debug);
+                    }
+                    else
+                    {
+			            vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 
-			         block.emplace_back(
-				         OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
-				         item,
-				         lines[i].debug);
+			            block.emplace_back(
+				             OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
+				             item,
+				             lines[i].debug);
+                    }
 		         });
 
 			block.emplace_back(
@@ -2063,7 +2073,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					};
 
                     if (aggregate.size() <= 2 ||
-                       (aggregate.size() > 2 && aggregate[index + 2] != "where"))
+                       (aggregate.size() > 2 && aggregate[2] != "where"))
                     {
                         // If no `where` we add one, this allows aggregation without the "where".
                         aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "None" };
@@ -3604,6 +3614,14 @@ void QueryParser::build(
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
+							0,
+							0,
+							c.debug);
+						break;
+					case OpCode_e::COLIDX:
+						finCode.emplace_back(
+							c.op,
+							vars.columnVars[c.valueString].index,
 							0,
 							0,
 							c.debug);

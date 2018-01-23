@@ -81,7 +81,7 @@ struct bigRingPage
 	{
 		clear();
 	}
-
+    
 	void clear()
 	{
 		memset(items, 0xff, (size + overflow) * sizeof(item_s));
@@ -100,18 +100,16 @@ private:
 	bigConf::big_info_s conf;
 
 	std::hash<K> hasher;
-	char voidItem[sizeof(Item)];
+	char voidItem[sizeof(Item)]{0};
 
-	RingPage* root;
+	RingPage* root{nullptr};
 
 public:
 	int branchCount;
 	int64_t totalBytes;
 	int64_t distinct;
 
-	explicit bigRing(
-		ringHint_e sizeHint =
-		ringHint_e::gt_25_million) :
+	explicit bigRing(ringHint_e sizeHint = ringHint_e::gt_25_million) :
 		branchCount(0),
 		totalBytes(0),
 		distinct(0)
@@ -141,6 +139,24 @@ public:
 	bigRing(const bigRing &other) = delete;
 	bigRing& operator=(bigRing const&) = delete;
 
+    bigRing& operator=(bigRing&& other) noexcept
+    {
+		root = other.root;
+		conf = other.conf;
+		branchCount = other.branchCount;
+		totalBytes = other.totalBytes;
+		distinct = other.distinct;
+
+		other.branchCount = 0;
+		other.totalBytes = 0;
+		other.distinct = 0;
+		other.root = nullptr;
+
+		memset(&voidItem, 0xFF, sizeof(voidItem));    
+
+        return *this;
+    }
+
 	RingPage* newbig()
 	{
 		const auto elements = (branchCount >= conf.steps()) ? conf.powers[conf.steps() - 1] : conf.powers[branchCount];
@@ -163,7 +179,7 @@ public:
 		return (memcmp(item, &voidItem, sizeof(Item)) == 0);
 	}
 
-	Item* set(const K key, const V value)
+	Item* set(const K key, const V& value)
 	{
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
@@ -207,7 +223,7 @@ public:
 	}
 
 	template <class... Args>
-	Item* emplace(const K key, Args&&... params)
+	Item* emplace(const K& key, Args&&... params)
 	{
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
@@ -289,7 +305,7 @@ public:
 	}
 
 	template <class... Args>
-	bool emplaceTry(const K key, Args&&... params)
+	bool emplaceTry(const K& key, Args&&... params)
 	{
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
@@ -325,7 +341,7 @@ public:
 		}
 	}
 
-	bool get(const K key, V &value) const
+	bool get(const K& key, V &value) const
 	{
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
@@ -343,6 +359,28 @@ public:
 					value = item->second;
 					return true;
 				}
+			}
+
+			current = current->nextRing;
+		}
+		return false;
+	}
+
+    bool hasKey(const K& key) const
+	{
+		RingPage* current = root;
+		const uint64_t keyHash = hasher(key);
+
+		while (current)
+		{
+			auto item = current->items +
+				(keyHash % current->size);
+			auto last = item + current->overflow;
+
+			for (; item < last; ++item)
+			{
+				if (item->first == key)
+					return true;
 			}
 
 			current = current->nextRing;
@@ -569,7 +607,7 @@ public:
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
 		int64_t totalOffset = 0;
-		int depth = 0;
+		auto depth = 0;
 
 		while (current)
 		{
@@ -606,7 +644,9 @@ public:
 			item->second.~V();
 			
 			// set memory to voided value
-			memset(item, 0xff, sizeof(item));
+			//memset(item, 0xff, sizeof(item));
+            *item = voidItem;
+
 			--distinct;
 		}
 
@@ -669,7 +709,10 @@ public:
 				ring->items[index].first.~K();
 				ring->items[index].second.~V();
 				if (ring == root)
-					memset(ring->items + index, 0xff, sizeof ring->items[index]);
+                {
+                    memset(&ring->items[index].first, 0xff, sizeof(K));
+                    memset(&ring->items[index].second, 0xff, sizeof(V));
+                }
 			}
 			++index;
 		}

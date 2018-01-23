@@ -232,7 +232,6 @@ void Table::deserializeTriggers(cjson* doc)
 
 		auto error = openset::revent::Revent::compileTriggers(
 			this,
-			trigInfo->name,
 			trigInfo->script,
 			trigInfo->macros);
 

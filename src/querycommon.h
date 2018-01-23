@@ -60,6 +60,7 @@ namespace openset
 			PSHRESCOL, // push result Column (may be grid, may be variable)
 			//PSHRESGRP, // push group_by (may be grid, may be variable)
 			VARIDX, // placeholder for an index to a variable
+			COLIDX, // placeholder for an index to a column
 			PSHPAIR, // pushes a single pair dict to the stack
 			PSHUSROBJ, // push object with deref
 			PSHUSROREF, // push object with deref
@@ -363,6 +364,7 @@ namespace openset
 					{OpCode_e::PSHTBLCOL, "PSHTBLCOL"},
 					{OpCode_e::PSHRESCOL, "PSHRESCOL"},
 					{OpCode_e::VARIDX, "VARIDX"},
+                    {OpCode_e::COLIDX, "COLIDX"},
 					{OpCode_e::PSHPAIR, "PSHPAIR"},
 				//{opCode_e::PSHRESGRP, "PSHRESGRP"},
 					{OpCode_e::PSHUSROBJ, "PSHUSROBJ"},

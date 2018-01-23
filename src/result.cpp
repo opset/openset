@@ -19,12 +19,24 @@ ResultSet::ResultSet(const int64_t resultWidth) :
 ResultSet::ResultSet(ResultSet&& other) noexcept:
 	results(std::move(other.results)),
 	mem(std::move(other.mem)),
-	localText(std::move(other.localText)),
-    resultWidth(other.resultWidth),
+	resultWidth(other.resultWidth),
+    localText(std::move(other.localText)),
     accTypes(std::move(other.accTypes)),
     accModifiers(std::move(other.accModifiers))
 {
 	cout << "result move constructor" << endl;
+}
+
+ResultSet& ResultSet::operator=(ResultSet&& other) noexcept
+{
+	results = std::move(other.results);
+	mem = std::move(other.mem);
+	resultWidth = other.resultWidth;
+    localText = std::move(other.localText);
+    accTypes = std::move(other.accTypes);
+    accModifiers = std::move(other.accModifiers);
+
+    return *this;    
 }
 
 void ResultSet::makeSortedList()
@@ -251,6 +263,7 @@ ResultSet::RowVector mergeResultSets(
         return merged;
 
 	vector<ResultSet::RowVector::iterator> iterators;
+    iterators.reserve(mergeList.size());
 
 	const auto shiftIterations = resultSetCount ? resultSetCount : 1;
     const auto shiftSize = resultColumnCount;
@@ -535,8 +548,7 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 		auto accumulatorPtr = recast<openset::result::Accumulator*>(read);
 		read += accumulatorSize;
 
-		result->sortedResult.emplace_back(
-			openset::result::ResultSet::RowPair{ *keyPtr, accumulatorPtr });
+		result->sortedResult.emplace_back(*keyPtr, accumulatorPtr);
 	}
 
 	for (auto i = 0; i < textCount; ++i)
@@ -645,12 +657,12 @@ void ResultMuxDemux::resultSetToJson(
                 break;
             case ResultTypes_e::Text:
                 {
-                auto text = getText(currentKey.key[depth]);
+                    const auto text = getText(currentKey.key[depth]);
 
-                if (text != NA_TEXT)
-                    entry->set("g", text);
-                else
-                    entry->set("g", currentKey.key[depth]);
+                    if (text != NA_TEXT)
+                        entry->set("g", text);
+                    else
+                        entry->set("g", currentKey.key[depth]);
                 }
                 break;
             case ResultTypes_e::None: 
@@ -737,7 +749,8 @@ void ResultMuxDemux::resultSetToJson(
 
 		// check to see if the next row is wider (rows[count+1].first is next key)
 		// if it is, lets add a nesting level and set current to that level
-		if (rowCounter < rows.size()-1 && rows[rowCounter+1].first.getDepth() > currentKey.getDepth())
+		if (rowCounter < static_cast<int>(rows.size())-1 && 
+            rows[rowCounter+1].first.getDepth() > currentKey.getDepth())
 		{
 			current = entry->pushArray();
 			current->setName("_");
@@ -781,7 +794,8 @@ void ResultMuxDemux::jsonResultHistogramFill(
     const int64_t forceMin, 
     const int64_t forceMax)
 {
-    auto valuesNode = doc->xPath("/_/0/_");
+    const auto valuesNode = doc->xPath("/_/0/_");
+
     if (!valuesNode)
         return;
 
@@ -799,7 +813,9 @@ void ResultMuxDemux::jsonResultHistogramFill(
         }
     }
     else
+    {
         rootList = { valuesNode };
+    }
 
     for (auto root : rootList)
     {

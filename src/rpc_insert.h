@@ -14,6 +14,6 @@ namespace openset::comms
     {
     public:
         // POST /v1/insert/{table}
-        static void insert(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void insert(const openset::web::MessagePtr& message, const RpcMapping& matches);
     };
 }

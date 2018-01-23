@@ -26,9 +26,6 @@ Revent::Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts)
 	init();
 }
 
-Revent::~Revent() 
-{}
-
 /* compileTrigger is a static function called by the Triggers class. 
  *  
  *  Purpose is to compile a trigger so it can be shared amongst instances of the
@@ -36,8 +33,7 @@ Revent::~Revent()
  */
 openset::errors::Error Revent::compileTriggers(
 	openset::db::Table* table, 
-	std::string name, 
-	std::string script,
+	const std::string &script,
 	openset::query::Macro_s &targetMacros)
 {
 	openset::query::QueryParser p;	

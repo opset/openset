@@ -1,4 +1,3 @@
-#include <stdexcept>
 #include <cinttypes>
 #include <regex>
 
@@ -30,7 +29,7 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
-void RpcInsert::insert(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
     const auto partitions = openset::globals::async;

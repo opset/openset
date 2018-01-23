@@ -52,7 +52,7 @@ void OpenLoopRetrigger::run()
 
 		    const auto diff = lowestStamp - Now();
 
-			newCell->scheduleFuture(diff > 30000 ? 30000 : 5000); 
+			newCell->scheduleFuture(diff > 15000 ? 15000 : 5000); 
 
 			spawn(newCell);
 			suicide();

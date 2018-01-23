@@ -80,7 +80,6 @@ THE SOFTWARE.
 
 */
 
-#include <iostream>
 #include <iomanip>
 #include <string>
 #include <cstdlib>
@@ -273,7 +272,7 @@ public:
 		valueString.assign(val);
 	}
 
-	cvar(const std::string val) :
+	cvar(const std::string& val) :
 		type(valueType::STR)
 	{
 		value.asInt64 = -1;
@@ -286,7 +285,7 @@ public:
 		value.asBool = val;
 	}
 			
-	cvar(const std::vector<cvar> val) :
+	cvar(const std::vector<cvar> &val) :
 		type(valueType::LIST)
 	{
 		listValue = new List();
@@ -308,10 +307,10 @@ public:
 
 	//cvar(const std::initializer_list<cvar>& source);
 
-	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source)
+	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source) : cvar()
 	{
 		dict();
-		for (const auto item : source)
+		for (const auto &item : source)
 			(*dictValue)[cvar{ item.first }] = cvar{ item.second };
 	}
 
@@ -480,7 +479,7 @@ public:
 		return setValue;
 	}
 
-	bool contains(const cvar key) const
+	bool contains(const cvar& key) const
 	{
 		if (type == valueType::LIST)
 			//return (listValue && key.getInt32() < listValue->size()) ? true : false;
@@ -498,10 +497,10 @@ public:
 		throw std::runtime_error("not a dictionary/list/set");
 	}
 
-	cvar* getMemberPtr(cvar key) const
+	cvar* getMemberPtr(cvar& key) const
 	{
 		if (type == valueType::LIST)
-			return (listValue && key.getInt32() < listValue->size()) ? &(*listValue)[key.getInt32()] : nullptr;
+			return (listValue && key.getInt32() < static_cast<int>(listValue->size())) ? &(*listValue)[key.getInt32()] : nullptr;
 		if (type == valueType::DICT)
 			return dictValue ? &(*dictValue)[key] : nullptr;
 		return nullptr;
@@ -528,7 +527,7 @@ private:
 	{
 		const auto len = right.length();
 		size_t idx;
-		while ((idx = left.find(right)) != -1)
+		while ((idx = left.find(right)) != std::string::npos)
 			left.erase(idx, len);
 		return left;
 	}
@@ -536,7 +535,7 @@ private:
 public:
 
 	// subscript operators
-	cvar& operator[](const cvar idx) const
+	cvar& operator[](const cvar& idx) const
 	{
 		if (this->type == valueType::LIST && listValue)
 			return (*listValue)[idx.getInt32()];
@@ -577,9 +576,9 @@ public:
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
-			if (index == (*listValue).size())
+			if (index == static_cast<int>((*listValue).size()))
 				listValue->emplace_back(cvar{});
-			if (index > (*listValue).size())
+			if (index > static_cast<int>((*listValue).size()))
 				throw std::runtime_error("List index greater than list size");
 
 			return (*listValue)[std::stoi(idx)]; // may throw
@@ -599,9 +598,9 @@ public:
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
-			if (index == (*listValue).size())
+			if (index == static_cast<int>((*listValue).size()))
 				listValue->emplace_back(cvar{});
-			if (index > (*listValue).size())
+			if (index > static_cast<int>((*listValue).size()))
 				throw std::runtime_error("List index greater than list size");
 
 			return (*listValue)[std::stoi(idx)]; // may throw

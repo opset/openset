@@ -26,7 +26,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820830,
 			"action" : "purchase", 
-			"attr":{				
+			"_":{				
 				"fruit": "orange",
 				"price": 5.55
 			}
@@ -35,7 +35,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820831,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "apple",
 				"price": 9.95
 			}
@@ -44,7 +44,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820832,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "pear",
 				"price": 12.49
 			}
@@ -53,7 +53,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820833,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "banana",
 				"price": 2.49
 			}
@@ -62,7 +62,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820834,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "orange",
 				"price": 5.55
 			}
@@ -743,13 +743,13 @@ inline Tests test_pyql_language()
 					for (auto e : events)
 					{
 						ASSERT(e->xPathInt("/stamp", 0) != 0);
-						ASSERT(e->xPath("/attr") != nullptr);
+						ASSERT(e->xPath("/_") != nullptr);
 
 						person.insert(e);
 					}
 
 					auto grid = person.getGrid();
-					auto json = grid->toJSON(false); // non-condensed
+					auto json = grid->toJSON(); // non-condensed
 
 					// NOTE - uncomment if you want to see the results
 					// cout << cjson::Stringify(&json, true) << endl;

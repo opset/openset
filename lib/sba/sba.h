@@ -2,7 +2,6 @@
 #include <vector>
 #include <mutex>
 #include "threads/locks.h"
-#include "../heapstack/heapstack.h"
 
 namespace MemConstants
 {
@@ -28,18 +27,15 @@ private:
 	{
 		CriticalSection memLock;
 		int32_t index{ 0 };
-		int64_t allocated{ 0 };
 		const int64_t maxSize;
-		HeapStack heap;
-		vector<alloc_s*> freed;
+		std::vector<alloc_s*> freed;
 
 		memory_s(const int64_t maxSize) :
-			index(0),
 			maxSize(maxSize)
 		{}
 	};
 
-	vector<memory_s> breakPoints = {
+	std::vector<memory_s> breakPoints = {
 		{ 16 },
 		{ 20 },
 		{ 24 },
@@ -62,7 +58,7 @@ private:
 		{ 3136 },
 		{ 3600 },
 		{ 4096 },
-		{ 4624 },
+/*		{ 4624 },
 		{ 5184 },
 		{ 5776 },
 		{ 6400 },
@@ -88,13 +84,13 @@ private:
 		{ 53824 },
 		{ 57600 },
 		{ 61504 },
-		{ 65536 }, 
+		{ 65536 }, */
 	};
 
-	vector<int> bucketLookup;
+	std::vector<int> bucketLookup;
 
 	PoolMem();
-	~PoolMem();
+	~PoolMem() = default; // we never clean anything up, this is forever.
 
 public:
 

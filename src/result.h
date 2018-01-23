@@ -214,6 +214,8 @@ namespace openset
 			ResultSet(const int64_t resultWidth);
 			ResultSet(ResultSet&& other) noexcept;
 
+            ResultSet& operator=(ResultSet&& other) noexcept;
+
 			void makeSortedList();
 
             void setAccTypesFromMacros(const openset::query::Macro_s macros);

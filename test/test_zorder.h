@@ -229,7 +229,7 @@ inline Tests test_zorder()
 				}
 
 				auto grid = person.getGrid();
-				auto json = grid->toJSON(false); // non-condensed
+				auto json = grid->toJSON(); // non-condensed
 
 				// TODO - finish test
 

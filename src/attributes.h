@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <unordered_set>
 #include "mem/bigring.h"
 #include "heapstack/heapstack.h"
 
@@ -84,9 +83,9 @@ namespace openset::db
 		int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
 		int32_t comp{ 0 }; // compressed size in bytes
 		int32_t linId{ -1 };
-		char index[1]; // char* (1st byte) of packed index bits struct
+		char index[1]{ 0 }; // char* (1st byte) of packed index bits struct
 
-		Attr_s() {};		
+		Attr_s() = default;	
 		IndexBits* getBits();
 	};
 #pragma pack(pop)
@@ -134,15 +133,15 @@ namespace openset::db
 		int partition;
 
 		explicit Attributes(const int parition, AttributeBlob* attributeBlob, Columns* columns);
-		~Attributes();
+		~Attributes() = default;
 
 		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);
 
 		Attr_s* getMake(const int32_t column, const int64_t value);
-		Attr_s* getMake(const int32_t column, const string value);
+		Attr_s* getMake(const int32_t column, const string& value);
 
 		Attr_s* get(const int32_t column, const int64_t value) const;
-		Attr_s* get(const int32_t column, const string value) const;
+		Attr_s* get(const int32_t column, const string& value) const;
 
 		void setDirty(const int32_t linId, const int32_t column, const int64_t value);
 		void clearDirty();

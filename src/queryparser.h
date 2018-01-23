@@ -266,22 +266,22 @@ namespace openset
 				return (vars.tableVars.find(name) != vars.tableVars.end());
 			}
 
-			bool isColumnVar(const string name)
+			bool isColumnVar(const string& name)
 			{
 				return (vars.columnVars.find(name) != vars.columnVars.end());
 			}
 
-			bool isUserVar(const string name)
+			bool isUserVar(const string& name)
 			{
 				return (vars.userVars.find(name) != vars.userVars.end());
 			}
 
-			bool isGroupVar(const string name)
+			bool isGroupVar(const string& name)
 			{
 				return (vars.groupVars.find(name) != vars.groupVars.end());
 			}
 
-			bool isNonuserVar(const string name)
+			bool isNonuserVar(const string& name)
 			{
 				if (isTableColumn(name))
 					return true;

@@ -109,7 +109,7 @@ private:
 		block_s* nextBlock{ nullptr };
 		int64_t endOffset{ 0 };
 		bool nonpooled{ false };
-		char data[1]; // fake size, we will be casting this over a buffer
+		char data[1] {0}; // fake size, we will be casting this over a buffer
 	};
 #pragma pack(pop)
 
@@ -126,7 +126,40 @@ private:
 public:
 
 	// constructor, default allocates 4 meg blocks. 
-	HeapStack();
+	HeapStack() = default;
+
+    HeapStack(HeapStack&& other) noexcept
+    {
+        head = other.head;
+        tail = other.tail;
+        blocks = other.blocks;
+        bytes = other.bytes;
+
+        other.head = nullptr;
+        other.tail = nullptr;
+        other.blocks = 0;
+        other.bytes = 0;
+    }
+
+    HeapStack(const HeapStack&) = delete;
+
+    HeapStack& operator=(const HeapStack& other) = delete;
+
+    HeapStack& operator=(HeapStack&& other) noexcept
+    {
+        head = other.head;
+        tail = other.tail;
+        blocks = other.blocks;
+        bytes = other.bytes;
+
+        other.head = nullptr;
+        other.tail = nullptr;
+        other.blocks = 0;
+        other.bytes = 0;
+
+        return *this;
+    }
+
 	~HeapStack();
 
 private:

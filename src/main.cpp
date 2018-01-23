@@ -5,7 +5,6 @@
 #include "service.h"
 #include "config.h"
 #include "logger.h"
-#include "var/var.h"
 #include "../test/unittests.h"
 #include <string>
 
@@ -67,13 +66,8 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 	// initialize our global config object
 	openset::globals::running = new openset::config::Config(args);
 
-	auto service = new openset::Service();
-	// run checks and create objects
-	service->initialize();
-
 	// Fire this bad boy up (main loop)
-	service->start();
-
+	openset::Service::start();
 }
 
 int main(const int argc, char* argv[])
