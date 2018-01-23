@@ -117,7 +117,7 @@ void OpenLoopHistogram::prepare()
 	{
 		std::vector<IndexBits*> segments;
 
-		for (const auto segmentName : macros.segments)
+		for (const auto& segmentName : macros.segments)
 		{
             if (segmentName == "*")
             {
@@ -269,7 +269,7 @@ void OpenLoopHistogram::run()
                     auto returns = interpreter->getLastReturn();
 
                     auto idx = -1;
-                    for (auto r : returns)
+                    for (auto &r : returns)
                     {
                         ++idx;
 
@@ -322,7 +322,7 @@ void OpenLoopHistogram::run()
                 auto returns = interpreter->getLastReturn();
 
                 auto idx = -1;
-                for (auto r : returns)
+                for (auto &r : returns)
                 {
                     ++idx;
 

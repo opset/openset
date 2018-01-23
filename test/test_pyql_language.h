@@ -555,102 +555,137 @@ inline Tests test_pyql_language()
     some_array = ['zero', 'one', 'two', 'three', 'four', 'five']
 
 	new_array = some_array[1:3]
+    # 1
 	debug(len(new_array) == 2 and new_array[0] == 'one' and new_array[1] == 'two')
 
 	new_array = some_array[:2]
+    # 2
 	debug(len(new_array) == 2 and new_array[0] == 'zero' and new_array[1] == 'one')
 
 	new_array = some_array[2:]
+    # 3
 	debug(len(new_array) == 4 and new_array[0] == 'two')
 
 	new_array = some_array[:]
+    # 4
 	debug(len(new_array) == 6 and new_array[0] == 'zero' and new_array[5] == 'five')
 
 	new_array = some_array[-1:]
+    # 5
 	debug(len(new_array) == 1 and new_array[0] == 'five')
 
 	new_array = some_array[-3:-2]
+    # 6
 	debug(len(new_array) == 1 and new_array[0] == 'three')
 
     # test slicing strings
 	some_string = 'the rain in spain'
 
 	new_string = some_string[-5:]
+    # 7
 	debug(new_string == 'spain')
 
 	new_string = some_string[:3]
+    # 8
 	debug(new_string == 'the')
 
 	new_string = some_string[4:8]
+    # 9
 	debug(new_string == 'rain')
 
 	# test find and rfind
     index = some_string.find('rain')
+    # 10
 	debug(index == 4)
 
     index = some_string.find('teeth')
+    # 11
 	debug(index == -1)
 
     index = some_string.find('in', 8)
+    # 12
 	debug(index == 9)
 
     index = some_string.rfind('in', 0)
+    # 13
 	debug(index == 15)
 
     index = some_string.rfind('the')
+    # 14
 	debug(index == 0)
 
     index = some_string.rfind('rain', 8)
+    # 15
 	debug(index == 4)
 
     index = some_string.find('rain', 0, 7)
+    # 16
 	debug(index == -1)
 
 	# test split
 	some_string = 'see spot run'
 	parts = some_string.split(' ')
+    # 17
 	debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
 
 	some_string = 'this::is::fun'
 	parts = some_string.split('::')
+    # 18
 	debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
 
 	some_string = "this won't split"
 	parts = some_string.split('|')
+    # 19
 	debug(parts[0] == some_string)
 
 	# test strip
 
 	some_string = '\t  this is a string \r\n'
 	clean = some_string.strip()
+    # 20
 	debug(clean == 'this is a string')
 
 	some_string = "\t \n \r"
 	clean = some_string.strip()
+    # 21
 	debug(clean == '')
 	
 	some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
 	parts = url_decode(some_url)
 
+    # 22
 	debug(parts['host'] == 'somehost.com')
+    # 23
     debug(parts['path'] == '/this/is/the/path')
+    # 24
 	debug(parts['query'] == 'param1=one&param2=two&param3')
+    # 25
 	debug(len(parts['params']) == 3)
+    # 26
     debug(parts['params']['param1'] == 'one')
+    # 27
     debug(parts['params']['param2'] == 'two')
+    # 28
     debug(parts['params']['param3'] == True)
 
 	some_url = "/this/is/the/path?param1=one"
 	parts = url_decode(some_url)
+    # 29
 	debug(parts['host'] == None)
+    # 30
     debug(parts['path'] == '/this/is/the/path')
+    # 31
     debug(len(parts['params']) == 1)
+    # 32
     debug(parts['params']['param1'] == 'one')
 
 	some_url = "/this/is/the/path"
 	parts = url_decode(some_url)
+    # 34
 	debug(parts['host'] == None)
+    # 35
     debug(parts['path'] == '/this/is/the/path')
+    # 36
     debug(len(parts['params']) == 0)
 
 	)pyql");
@@ -1583,7 +1618,7 @@ inline Tests test_pyql_language()
 					p.compileQuery(test17_pyql.c_str(), table->getColumns(), queryMacros);
 					ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
 
-					//cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+					//cout << openset::query::MacroDbg(queryMacros) << endl;
 
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);

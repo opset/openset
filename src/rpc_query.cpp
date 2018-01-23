@@ -429,11 +429,11 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
         queryMacros.segments.clear();
 
-        for (auto part : parts)
+        for (const auto &part : parts)
         {
-            part = trim(part);
-            if (part.length())
-                queryMacros.segments.push_back(part);
+            const auto trimmedPart = trim(part);
+            if (trimmedPart.length())
+                queryMacros.segments.push_back(trimmedPart);
         }
 
         if (!queryMacros.segments.size())
@@ -519,8 +519,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
     */
     if (!isFork)
     {
-
-        const auto json = std::move(
+        const auto json = 
             forkQuery(
                 table,
                 message,
@@ -529,9 +528,8 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
                 sortMode,
                 sortOrder,
                 sortColumn,
-                trimSize)
-        );
-
+                trimSize);
+        
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
@@ -559,6 +557,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
     //            exits before the result objects are used.
     //
     std::vector<ResultSet*> resultSets;
+    resultSets.reserve(partitions->getWorkerCount());
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
@@ -818,13 +817,13 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
 
     if (!isFork)
     {
-        const auto json = std::move(
+        const auto json = 
             forkQuery(
                 table,
                 message,
                 queries.front().second.vars.columnVars.size(),
-                queries.front().second.segments.size())
-        );
+                queries.front().second.segments.size());
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
@@ -1111,11 +1110,11 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 
         queryInfo.segments.clear();
 
-        for (auto p : parts)
+        for (const auto &part : parts)
         {
-            p = trim(p);
-            if (p.length())
-                queryInfo.segments.push_back(p);
+            const auto trimmedPart = trim(part);
+            if (trimmedPart.length())
+                queryInfo.segments.push_back(trimmedPart);
         }
 
         if (!queryInfo.segments.size())
@@ -1212,7 +1211,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
     */
     if (!isFork)
     {
-        const auto json = std::move(
+        const auto json = 
             forkQuery(
                 table,
                 message,
@@ -1222,8 +1221,8 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
                 sortOrder,
                 0,
                 trimSize
-            )
-        );
+            );
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
@@ -1250,6 +1249,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
     //            exits before the result objects are used.
     //
     std::vector<ResultSet*> resultSets;
+    resultSets.reserve(partitions->getWorkerCount());
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(new openset::result::ResultSet(1 * (queryInfo.segments.size() ? queryInfo.segments.size() : 1)));
@@ -1563,8 +1563,11 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
         queryMacros.segments.clear();
 
         for (auto& part : parts)
-            if (part = trim(part); part.length())
-                queryMacros.segments.push_back(part);
+        {
+            auto trimmedPart = trim(part);
+            if (trimmedPart.length())
+                queryMacros.segments.push_back(trimmedPart);
+        }
 
         if (!queryMacros.segments.size())
         {
@@ -1624,12 +1627,12 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     */
     if (!isFork)
     {
-        const auto json = std::move(
-            forkQuery(
+        const auto json = 
+            forkQuery(  
                 table,
                 message,
                 1,
-                queryMacros.segments.size(),
+                queryMacros.segments.size(), 
                 sortMode,
                 sortOrder,
                 0,
@@ -1637,8 +1640,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
                 bucket,
                 forceMin,
                 forceMax
-            )
-        );
+            );
 
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
@@ -1667,6 +1669,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     //            exits before the result objects are used.
     //
     std::vector<ResultSet*> resultSets;
+    resultSets.reserve(partitions->getWorkerCount());
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
@@ -1676,7 +1679,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
         );
 
     // nothing active - return an empty set - not an error
-    if (!activeList.size())
+    if (activeList.empty())
     {
         // 1. Merge Macro Literals
         ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
@@ -1685,7 +1688,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
         int64_t bufferLength = 0;
         const auto buffer = ResultMuxDemux::multiSetToInternode(
             queryMacros.vars.columnVars.size(),
-            queryMacros.indexes.size(),
+            queryMacros.segments.size(),
             resultSets,
             bufferLength);
 
@@ -1740,7 +1743,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
         int64_t bufferLength = 0;
         const auto buffer = ResultMuxDemux::multiSetToInternode(
             1,
-            queryMacros.indexes.size(),
+            queryMacros.segments.size(),
             resultSets,
             bufferLength);
 
@@ -1960,7 +1963,11 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
                 queryList.push_back(s);
 
         if (useSection.sectionType == "use" && useSection.sectionName.length())
-            segments = split(useSection.sectionName, ',');
+        {
+            segments.push_back(useSection.sectionName);
+            for (const auto& p : *useSection.params.getDict())
+                segments.push_back(p.first);
+        }
 
         if (segmentList.size())
         {

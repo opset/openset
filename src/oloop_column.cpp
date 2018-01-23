@@ -39,7 +39,7 @@ void OpenLoopColumn::prepare()
     // if we are in segment compare mode:
     if (config.segments.size())
     {
-        for (const auto segmentName : config.segments)
+        for (const auto& segmentName : config.segments)
         {
             if (segmentName == "*")
             {

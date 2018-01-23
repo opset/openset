@@ -263,7 +263,8 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
 
             columnRecord->set("name", c.name);
             columnRecord->set("type", type);
-            columnRecord->set("is_set", c.isSet);
+            if (c.isSet)
+                columnRecord->set("is_set", c.isSet);
         }
 
     Logger::get().info("describe table '" + tableName + "'.");

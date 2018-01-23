@@ -31,11 +31,13 @@ Returns a 200 or 400 status code.
     "columns": [
         {
             "name": "{column_name}",
-            "type": "{text|int|double|bool}"
+            "type": "{text|int|double|bool}",           
+            "is_set": {optional: true|false}
         },
         {
             "name": "{column_name}",
-            "type": "{text|int|double|bool}"
+            "type": "{text|int|double|bool}",
+            "is_set": {optional: true|false}
         },
         //etc        
     ],
@@ -83,7 +85,8 @@ Returns JSON describing the table.
         },
         {
             "name": "product_tags",
-            "type": "text"
+            "type": "text",
+            "is_set": true
         },
         {
             "name": "product_group",
@@ -102,11 +105,12 @@ Returns JSON describing the table.
 
 Returns a 200 or 400 status code.
 
-## PUT /v1/table/{table}/column/{column_name}:{type}
+## PUT /v1/table/{table}/column/{column_name}?type={type}&is_set={is_set}
 
 Adds a column to an existing table. 
 
 - `type` can be `text|int|double|bool`. 
+- `is_set` (optional) can be `true|false` and indicates that the column can contain multiple values per row.
 - `column_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
 
 Returns a 200 or 400 status code.
@@ -119,15 +123,19 @@ Removes a column from the table.
 
 Returns a 200 or 400 status code.
 
-## GET /v1/table/{table}/revent/{revent_name}
-
-Describe a re-eventing trigger
-
-## POST /v1/table/{table}/revent/{revent_name}
+## POST /v1/revent/{table}/trigger/{trigger_name}
 
 Create a re-eventing trigger.
 
-## DELETE /v1/table/{table}/revent/{revent_name}
+## GET /v1/revent/{table}/trigger/{trigger_name}
+
+Describe a re-eventing trigger
+
+## GET /v1/revent/{table}/trigger/{trigger_name}/sub/{sub_name}
+
+Subscribe to a trigger (map a web-hook)
+
+# DELETE /v1/revent/{table}/trigger/{trigger_name}
 
 Describe a re-eventing trigger
 

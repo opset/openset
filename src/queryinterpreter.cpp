@@ -698,8 +698,8 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
 
 	if (str.length() <= places)
     {
-        const auto missingPreZeros = str.length() - places;
-		str = str.substr(0, missingPreZeros) + str;
+        const auto missingPreZeros = (places - str.length()) + 1;
+		str = zeros.substr(0, missingPreZeros) + str;
     }
 
 	if (places)
@@ -1321,8 +1321,6 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	}
 	else
 		result["path"] = url.substr(start);
-
-	*(stackPtr - 1) = std::move(result);	
 }
 
 string openset::query::Interpreter::getLiteral(const int64_t id) const
@@ -2036,7 +2034,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 					// this is the value
                     if (tcvar)
-					    *stackPtr = std::move(*tcvar);
+					    *stackPtr = *tcvar; // copy, not move
                     else 
                         *stackPtr = NONE;
 
@@ -2858,7 +2856,7 @@ void openset::query::Interpreter::exec()
 
 	const auto inst = &macros.code.front();
 
-	//try
+	try
 	{
 		// if we have segment constraints
 		if (segmentIndexes.size())
@@ -2894,7 +2892,7 @@ void openset::query::Interpreter::exec()
 
 		}
 	}
-	/*catch (const std::runtime_error& ex)
+	catch (const std::runtime_error& ex)
 	{
 		std::string additional = "";
 		if (lastDebug)
@@ -2919,7 +2917,7 @@ void openset::query::Interpreter::exec()
 			"unknown run-time error (3)",
 			additional
 		);
-	}*/
+	}
 }
 
 void openset::query::Interpreter::exec(const string &functionName)
