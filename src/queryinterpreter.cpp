@@ -209,29 +209,10 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 		{
 			if (!resCol.nonDistinct) // if the 'all' flag was NOT used on an aggregater
 			{
-                // resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
-
-                /*                
-			    NOTE - Visual Studio 2017 compiler crashes on this line, keeping it so it can be used in the future
-
-                auto& [keyColIndex, keyColValue, KeyDistinctValue, KeyIdentifier] = distinctKey;
-                keyColIndex = resCol.index;
-                keyColValue = resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn];
-                KeyDistinctValue = resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP]);
-                KeyIdentifier = reinterpret_cast<int64_t>(resultColumns);
-                */
-
-                // this version is faster than tryEmplace which uses std::forward with some penalty                
-                /*get<0>(distinctKey) = resCol.index;
-                get<1>(distinctKey) = resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn];
-                get<2>(distinctKey) = resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP];
-                get<3>(distinctKey) = reinterpret_cast<int64_t>(resultColumns);
-                */
-
                 distinctKey.set(
                     resCol.index,
                     resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-                    resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP],
+                    resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : currentRow, //columns->cols[COL_STAMP],
                     reinterpret_cast<int64_t>(resultColumns)
                 );
 

@@ -174,7 +174,7 @@ curl \
 aggregate: # define our output columns
     count person
     count product_name as purchased
-    sum product_price as total_spent with product_name
+    sum product_price as total_spent
 
 # iterate events where the product_group set contains 'outdoor'
 match where 'outdoor' in product_group:
