@@ -19,11 +19,12 @@ namespace openset
 
 		class OpenLoopRetrigger : public OpenLoop
 		{
-		private:
 			openset::db::Table* table;
 			openset::db::Person person;
 			int64_t linearId; // used as iterator 
 			int64_t lowestStamp; // lowest non-expired stamp, for reschedule
+
+		    db::TablePartitioned* parts { nullptr };
 
 		public:
 			explicit OpenLoopRetrigger(openset::db::Table* table);

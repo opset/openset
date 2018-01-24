@@ -255,6 +255,12 @@ void toLower(std::string& Text)
 	std::transform(Text.begin(), Text.end(), Text.begin(), ::tolower);
 }
 
+std::string toLowerCase(std::string Text)
+{
+    std::transform(Text.begin(), Text.end(), Text.begin(), ::tolower);
+    return Text;
+}
+
 void toLower(char* str)
 {
 	while (*str != 0)

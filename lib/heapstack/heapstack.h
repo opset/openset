@@ -44,6 +44,9 @@ namespace MemConstants
 class HeapStackBlockPool
 {
 private:
+
+    const size_t MAXPOOLBLOCKS = 256;
+
 	std::vector<void*> pool;
 	CriticalSection poolLock;
 
@@ -65,7 +68,7 @@ public:
 
 			if (!pool.empty())
 			{
-				auto block = pool.back();
+			    const auto block = pool.back();
 				pool.pop_back();
 				return block;
 			}
@@ -76,7 +79,12 @@ public:
 	inline void Put(void* item)
 	{
 		csLock lock(poolLock);
-		pool.push_back(item);
+
+        // cap the number of blocks... not resource friendly
+        if (pool.size() >= MAXPOOLBLOCKS) 
+            delete[] static_cast<char*>(item);
+        else
+		    pool.push_back(item);
 	}
 
 
@@ -101,7 +109,7 @@ private:
 		block_s* nextBlock{ nullptr };
 		int64_t endOffset{ 0 };
 		bool nonpooled{ false };
-		char data[1]; // fake size, we will be casting this over a buffer
+		char data[1] {0}; // fake size, we will be casting this over a buffer
 	};
 #pragma pack(pop)
 
@@ -118,7 +126,40 @@ private:
 public:
 
 	// constructor, default allocates 4 meg blocks. 
-	HeapStack();
+	HeapStack() = default;
+
+    HeapStack(HeapStack&& other) noexcept
+    {
+        head = other.head;
+        tail = other.tail;
+        blocks = other.blocks;
+        bytes = other.bytes;
+
+        other.head = nullptr;
+        other.tail = nullptr;
+        other.blocks = 0;
+        other.bytes = 0;
+    }
+
+    HeapStack(const HeapStack&) = delete;
+
+    HeapStack& operator=(const HeapStack& other) = delete;
+
+    HeapStack& operator=(HeapStack&& other) noexcept
+    {
+        head = other.head;
+        tail = other.tail;
+        blocks = other.blocks;
+        bytes = other.bytes;
+
+        other.head = nullptr;
+        other.tail = nullptr;
+        other.blocks = 0;
+        other.bytes = 0;
+
+        return *this;
+    }
+
 	~HeapStack();
 
 private:
@@ -126,7 +167,7 @@ private:
 
 public:
 	// newPtr - returns a pointer to a block of memory of "size"
-	inline char* newPtr(int64_t size)
+	inline char* newPtr(const int64_t size)
 	{
 		if (size >= dataSize)
 			newNonpooledBlock(size);

@@ -75,19 +75,34 @@ void OpenLoopQuery::prepare()
             {
                 auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
                 if (attr)
+                {
                     segments.push_back(attr->getBits());
+                }
                 else
-                    segments.push_back(new IndexBits());
+                {
+                    shuttle->reply(
+                        0,
+                        result::CellQueryResult_s{
+                            instance,
+                        {},
+                        openset::errors::Error{
+                            openset::errors::errorClass_e::run_time,
+                            openset::errors::errorCode_e::item_not_found,
+                            "missing segment '" + segmentName + "'"
+                        }
+                        }
+                    );
+                    suicide();
+                    return;
+                }
             }
 		}
 
 		interpreter->setCompareSegments(index, segments);
 	}
 
-
+    // map table, partition and select schema columns to the Person object
 	auto mappedColumns = interpreter->getReferencedColumns();
-
-	// map table, partition and select schema columns to the Person object
 	person.mapTable(table, loop->partition, mappedColumns);
 	person.setSessionTime(macros.sessionTime);
 	
@@ -96,8 +111,7 @@ void OpenLoopQuery::prepare()
 
 void OpenLoopQuery::run()
 {
-	auto count = 0;
-	openset::db::PersonData_s* personData;
+	
 	while (true)
 	{
 		if (sliceComplete())
@@ -107,6 +121,8 @@ void OpenLoopQuery::run()
 		// next set bit until there are no more, or maxLinId is met
 		if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
 		{
+            result->setAccTypesFromMacros(macros);
+
 			shuttle->reply(
 				0, 
 				CellQueryResult_s{				
@@ -114,14 +130,12 @@ void OpenLoopQuery::run()
                     {},
 					interpreter->error,
 				});
-
-            result->setAccTypesFromMacros(macros);
 			
 			suicide();
 			return;
 		}
 
-		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
 		{
 			++runCount;
 			person.mount(personData);
@@ -129,8 +143,6 @@ void OpenLoopQuery::run()
 			interpreter->mount(&person);
 			interpreter->exec(); // run the script on this person - do some magic
 		}
-
-		++count;
 	}
 }
 

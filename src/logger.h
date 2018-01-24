@@ -28,13 +28,13 @@ class Logger
 	{
 		level_e level;
 		std::string msg;
-		Line(level_e level, std::string msg) : level(level), msg(msg)
+		Line(const level_e level, const std::string msg) : level(level), msg(msg)
 		{}
 	};
 
 	CriticalSection cs;
 	std::vector<Line> lines;
-	std::atomic<int> backlog;
+	std::atomic<int64_t> backlog;
 
 	bool loggingOn{ true };
 
@@ -92,7 +92,7 @@ public:
 		}
 	}
 
-	void fatal(bool isGood, std::string line) 
+	void fatal(const bool isGood, const std::string line) 
 	{
 		if (!isGood)
 		{
@@ -102,12 +102,12 @@ public:
 		}
 	}
 
-	void fatal(std::string line)
+	void fatal(const std::string line)
 	{
 		fatal(false, line);
 	}
 
-	void suspendLogging(bool suspend)
+	void suspendLogging(const bool suspend)
 	{
 		loggingOn = !suspend;
 	}
@@ -145,13 +145,12 @@ private:
 
 			cs.unlock();
 
-			auto now = std::chrono::duration_cast<std::chrono::seconds>
+		    const auto now = std::chrono::duration_cast<std::chrono::seconds>
 				(std::chrono::system_clock::now().time_since_epoch()).count();
 
 			for (auto line : localLines)
 			{
-
-				std::string level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
+			    const std::string level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
 
 				auto txt = Epoch::EpochToISO8601(now) + " " + level + " " + line.msg + "\n";
 

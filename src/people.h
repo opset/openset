@@ -28,7 +28,7 @@ namespace openset
 
 			PersonData_s* getPersonByID(int64_t userId);
 			PersonData_s* getPersonByID(string userIdString);
-			PersonData_s* getPersonByLIN(int32_t linId);
+			PersonData_s* getPersonByLIN(const int64_t linId);
 
 			// will return a "found" person if one exists
 			// or create a new one

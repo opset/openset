@@ -15,16 +15,11 @@ using namespace openset::async;
 using namespace openset::db;
 
 OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
-	OpenLoop(),
 	tablePartitioned(tablePartitioned),
 	runCount(0)
 {
 	Logger::get().info("insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
-
-OpenLoopInsert::~OpenLoopInsert()
-{}
-
 
 void OpenLoopInsert::prepare()
 {
@@ -34,8 +29,8 @@ void OpenLoopInsert::prepare()
 void OpenLoopInsert::run()
 {
 
-	if ((!localQueue.size() || queueIter == localQueue.end()) &&
-		tablePartitioned->insertQueue.size())
+	if ((localQueue.empty() || queueIter == localQueue.end()) &&
+		!tablePartitioned->insertQueue.empty())
 	{
 		if (!tablePartitioned->insertCS.tryLock())
 		{
@@ -72,7 +67,7 @@ void OpenLoopInsert::run()
 
 	++runCount;
 
-	auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
+    const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
 	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
 		mapInfo != openset::mapping::NodeState_e::active_clone)
@@ -96,7 +91,9 @@ void OpenLoopInsert::run()
 	std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
 
 	// now insert without locks
-	for (auto count = 0; queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); ++queueIter, ++count, --tablePartitioned->insertBacklog)
+	for (auto count = 0; 
+        queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); 
+        ++queueIter, ++count, --tablePartitioned->insertBacklog)
 	{
 		cjson row(*queueIter, strlen(*queueIter));		
 		cjson::releaseStringifyPtr(*queueIter);
@@ -105,16 +102,11 @@ void OpenLoopInsert::run()
 		auto uuidString = row.xPathString("/person", "");
 		toLower(uuidString);
 
-	    const auto attr = row.xPath("/attr");
+	    const auto attr = row.xPath("/_");
 
 		// do we have what we need to insert?
 		if (attr && uuidString.length())
-		{
-			//if (!evtByPerson.count(uuidString))
-				//evtByPerson.emplace(uuidString, std::vector<cjson>{});
-
 			evtByPerson[uuidString].emplace_back(std::move(row));
-		}
 	}
 
 	for (auto& uuid : evtByPerson)

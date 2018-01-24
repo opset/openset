@@ -114,18 +114,23 @@ response:
 ```bash
 curl \
 -X POST  http://127.0.0.1:8080/v1/table/highstreet \
--d @- << EOF
+-d @- << EOF | json_pp
 {
     "columns": [
+        {"name": "order_id", "type": "int"},
         {"name": "product_name", "type": "text"}, 
         {"name": "product_price", "type": "double"}, 
         {"name": "product_shipping", "type": "double"}, 
         {"name": "shipper", "type": "text"}, 
         {"name": "total", "type": "double"}, 
         {"name": "shipping", "type": "double"}, 
-        {"name": "product_tags", "type": "text"}, 
-        {"name": "product_group", "type": "text"}, 
+        {"name": "product_tags", "type": "text", "is_set": true}, 
+        {"name": "product_group", "type": "text", "is_set": true}, 
         {"name": "cart_size", "type": "int"}
+    ],
+    "z_order": [
+      "purchase",
+      "cast_item"
     ]
 }
 EOF
@@ -156,25 +161,25 @@ response:
 
 > :pushpin:  view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
 
-**7**.  Let's run a PyQL `events` query
+**7**.  Let's run a PyQL `event` query
 
 This script can be found at `openset_samples/pyql/simple.pyql` folder.
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/event \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
 aggregate: # define our output columns
     count person
     count product_name as purchased
-    sum product_price as total_spent with product_name
+    sum product_price as total_spent
 
-# iterate events where product_group is 'outdoor'
-match where product_group is 'outdoor':
-    # make a branch /day_of_week/product_name and
-    # aggregate it's levels
+# iterate events where the product_group set contains 'outdoor'
+match where 'outdoor' in product_group:
+    # make a branch: /day_of_week/product_name
+    # and aggregate person, product purchase, and total
     tally(get_day_of_week(event_time()), product_name)
 
 #end of pyql script
@@ -239,26 +244,26 @@ response (counts are people, count product, sum price):
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/counts \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/segment \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
-segment products_home ttl=300s use_cached refresh=300s:
+@segment products_home ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
         tally
 
-segment products_yard ttl=300s use_cached refresh=300s:
+@segment products_yard ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['basement', 'garage']:
         tally
 
-segment products_outdoor ttl=300s use_cached refresh=300s:
+@segment products_outdoor ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['outdoor', 'angling']:
         tally
 
-segment products_commercial ttl=300s use_cached refresh=300s:
+@segment products_commercial ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group == 'restaurant':
         tally
@@ -541,30 +546,55 @@ Let's extract `for each product` the `first` product purchased `immediately afte
 
 ```bash
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/events \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/event \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
 aggregate: # define our output columns
     count person
     count product_name as purchased
-    sum product_price as total_revenue with product_name
+    sum product_price as total_revenue
 
-# search for a purchase event
-match where action is 'purchase': # match one
-    # store the name of the product matched
-    first_matching_product = product_name
+# STEP 1
+# search for a purchase events
+match where action == 'purchase':
+    # store the order_id
+    first_order_id = order_id
 
-    # move to next row in user record. We don't want
-    # match products in the intial match
-    iter_next()
+    # products will hold the product names that
+    # were purchased in STEP 1
+    products = set()
 
-    # match 1 row, or only the products in the purchase event
-    # immediately following the product match above
-    match 1 where action is 'purchase' and
-            product_name is not first_matching_product:
-        tally(first_matching_product, product_name)
-    # loop back to top
+    # STEP 2
+    # gather the product names in the subsequent
+    # 'cart_item' rows that have the same order_id
+    # as the above match
+    match where action == 'cart_item' and
+            order_id == first_order_id:
+        products.add(product_name)
+
+    # STEP 3
+    # find the NEXT purchase
+    match 1 where action == 'purchase' and
+        order_id != first_order_id: # match one
+
+        # store this subsequent
+        subsequent_order_id = order_id
+
+        # STEP 4
+        # for each 'cart_item' row
+        # iterate the products capture in 
+        # Step 2 with the product_name in the row
+        match where action == 'cart_item' and
+                order_id == subsequent_order_id:
+
+            for product in products:
+                # Tally counts for 
+                # sub-sequent product name under name
+                # under product_name in this row
+                tally(product, product_name)
+
+    # loop to top
 
 #end of pyql script
 PYQL
@@ -644,9 +674,9 @@ response (counts are people, count product, sum price):
 
 **How does the sequence query work?**
 
-Event queries use row iteration. Internally rows pertaining to a person are grouped and sorted with that person making sequence extraction easy.
+Event queries use row iteration. Internally each person has a row set. Those row sets are sorted by time. A query is run against each person, iterating through the events in the row set looking for matches.
 
-In this case we want to find the products purchased immediately after another purchase. We do so by iterating events and matching the `purchase` event. When we match we perform a nested match for another `purchase` event and `tally` the `product_name` from second match under the `product_name` from the first match. The aggregators count `people` and `product_name` and sum `product_price`.
+In this case we want to find the products purchased immediately after another purchase. We do so by iterating events and matching the `purchase` event. When we match we perform a nested match for another `purchase` event and `tally` the `product_name`s from second match under the `product_name`s from the first match. The aggregators count `people` and `product_name` and sum `product_price`.
 
 
 # RoadMap

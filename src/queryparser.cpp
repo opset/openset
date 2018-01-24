@@ -40,6 +40,12 @@ bool QueryParser::isString(const string value)
 	return (value[0] == '"' || value[0] == '\'');
 }
 
+bool QueryParser::isBool(const string value)
+{
+    return (value == "True" || value == "true" || value == "False" || value == "false");
+}
+
+
 bool QueryParser::isTextual(const string value)
 {
 	return ((value[0] >= 'a' && value[0] <= 'z') ||
@@ -539,8 +545,9 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 
 				blocks.pop_back();
 			}
-			else if (line.parts[0] == "def")
+			else if (line.parts[0] == "def" || line.parts[0] == "@trigger") // cheat on trigger
 			{
+                line.parts[0] = "def";
 				++blockCounter;
 				line.block = extractBlocks(indent + 1, capture, blockList);
 
@@ -1215,12 +1222,22 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			for_each(left.rbegin(), left.rend(), [&](auto item)
 		         {
-			         vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
+                    if (isColumnVar(item))
+                    {
+			            block.emplace_back(
+				             OpCode_e::COLIDX, // fancy placeholder, map to index on final pass opcode
+				             item,
+				             lines[i].debug);
+                    }
+                    else
+                    {
+			            vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
 
-			         block.emplace_back(
-				         OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
-				         item,
-				         lines[i].debug);
+			            block.emplace_back(
+				             OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
+				             item,
+				             lines[i].debug);
+                    }
 		         });
 
 			block.emplace_back(
@@ -2055,11 +2072,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
 						line.debug
 					};
 
-                    if (aggregate.size() > 2 &&
-                        aggregate[2] != "where")
+                    if (aggregate.size() <= 2 ||
+                       (aggregate.size() > 2 && aggregate[2] != "where"))
                     {
                         // If no `where` we add one, this allows aggregation without the "where".
-                        aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "none" };
+                        aggregate = LineParts{ aggregate[0], aggregate[1], "where", aggregate[1], "!=", "None" };
 					};
 
 					const auto agg = aggregate[0];
@@ -2502,7 +2519,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					(conditions[index + 1] == "in" ||
 					 conditions[index + 1] == "notin") &&
 					conditions[index + 2] != "[" && // this forces make_dict to be parsed first
-					conditions[0] != "match" &&
+					//conditions[0] != "match" &&
 					conditions[0] != "for")
 				{
 					// there a three kinds of "in" we care about
@@ -2561,9 +2578,10 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 				
-				if (conditions.size() > index + 1 &&
+				if (conditions.size() > index + 2 &&
 					conditions[index + 1] == "in" &&
-					conditions[0] == "match")
+					conditions[0] == "match" &&
+                    conditions[index + 2] == "[")
 				{
 					const auto var = conditions[index];
 
@@ -3102,6 +3120,9 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	{		
 		const auto opIter = Operators.find(op); 
 
+        if (op == "in")
+            return HintOp_e::PUSH_EQ;
+
 		if (opIter == Operators.end())
 		{
 			auto logIter = LogicalOperators.find(op);
@@ -3143,9 +3164,6 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 			if (isColumnVar(left))
 				left = vars.columnVars.find(left)->second.actual;
-
-			if (left.find("column.") == 0)
-				left = left.substr(left.find('.') + 1);
 
 			if (isNonuserVar(left))
 			{
@@ -3253,9 +3271,6 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 		//else if (isGroupVar(left))
 		//left = vars.groupVars.find(left)->second.actual;
 
-		if (left.find("column.") == 0)
-			left = left.substr(left.find('.') + 1);
-
 		if (isNumeric(right))
 			opList.emplace_back(op, left, stoll(right));
 		else
@@ -3284,8 +3299,8 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				index + 1,
 				false);
 		}
-		else if (LogicalOperators.find(conditions[index]) !=
-			LogicalOperators.end())
+		else if (conditions[index] != "in" && 
+            LogicalOperators.find(conditions[index]) != LogicalOperators.end())
 		{
 			store();
 
@@ -3299,7 +3314,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				conditions,
 				opList,
 				index + 1,
-				false);
+				false); 
 
 			opList.emplace_back(convertOp(conditions[index]));
 			index = newIndex;
@@ -3318,22 +3333,38 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 				// with an OP BIT_NOP 
 				auto brackets = 1;
 
-				auto idx = index + 2; // move past function name and (
-				for (; idx < conditions.size(); idx++)
-				{
-					if (conditions[idx] == "(")
-						++brackets;
-					else if (conditions[idx] == ")")
-						--brackets;
+                if (conditions[index] == "__contains")
+                {
+                    accumulate(conditions[index + 2]);
+                    accumulate("in");
+                    accumulate(conditions[index + 4]);
 
-					if (!brackets)
-						break;
-				}
+                    index += 5;
+                }
+                else if (conditions[index] == "__notcontains")
+                {
+                    accumulate(conditions[index + 4]);
+                    index += 5;
+                }
+                else
+                {
+                    auto idx = index + 2; // move past function name and (
+                    for (; idx < conditions.size(); idx++)
+                    {
+                        if (conditions[idx] == "(")
+                            ++brackets;
+                        else if (conditions[idx] == ")")
+                            --brackets;
 
-				index = idx;
+                        if (!brackets)
+                            break;
+                    }
 
-				opList.emplace_back(HintOp_e::PUSH_NOP);
-				accumulation.clear();
+                    index = idx;
+
+                    opList.emplace_back(HintOp_e::PUSH_NOP);
+                    accumulation.clear();
+                }
 				//break;
 			}
 			else
@@ -3436,6 +3467,7 @@ void QueryParser::build(
 		v.second.sortOrder = schemaInfo->idx;
 		v.second.schemaColumn = schemaInfo->idx;
 		v.second.schemaType = schemaInfo->type;
+        v.second.isSet = schemaInfo->isSet;
 		finVars.tableVars.push_back(v.second);
 	}
 
@@ -3582,6 +3614,14 @@ void QueryParser::build(
 						finCode.emplace_back(
 							c.op,
 							vars.userVars[c.valueString].index,
+							0,
+							0,
+							c.debug);
+						break;
+					case OpCode_e::COLIDX:
+						finCode.emplace_back(
+							c.op,
+							vars.columnVars[c.valueString].index,
 							0,
 							0,
 							c.debug);
@@ -4023,9 +4063,55 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 	
 }
 
-vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
+std::string QueryParser::fixIndent(const std::string source)
 {
-	vector<pair<string, string>> result;
+    std::vector<string> res;
+
+    auto parts = split(source, '\n');
+
+    auto indent = -1;
+
+    for (auto p : parts)
+    {
+        int t;
+        // replace tabs
+        while ((t = p.find('\t')) != -1)
+        {
+            p.erase(t, 1);
+            p.insert(t, "    ");
+        }
+
+        // skip empty lines or lines with just whitespace
+        if (trim(p, " ").size() == 0)
+            continue;
+
+        if (indent == -1)
+        {
+            indent = 0;
+            for (auto i = 0; i < p.length(); ++i)
+            {
+                indent = i;
+                if (p[i] != ' ')
+                    break;
+            }
+        }
+
+        p = p.erase(0, indent);
+
+        res.push_back(p);
+    }
+
+    std::string outputString;
+
+    for (const auto r : res)
+        outputString += r + "\n";
+
+    return outputString;
+}
+
+QueryParser::SectionDefinitionList QueryParser::extractSections(const char* query)
+{
+	vector<QueryParser::SectionDefinition_s> result;
 
 	vector<string> accumulatedLines;
 	string current;
@@ -4033,6 +4119,41 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 
 	auto c = query; // cursor
 	const auto end = query + strlen(query) + 1;
+
+    cvar params(cvar::valueType::DICT);
+    cvar flags(cvar::valueType::DICT);
+    
+    std::string sectionType;
+    std::string sectionName;
+
+    auto storeSection = [&]()
+    {
+        string code;
+
+        for (auto& s : accumulatedLines)
+            code += s + '\n';
+        code += '\n';
+
+        // this allows you to indent the code under the @section if preferred
+        code = fixIndent(code);
+
+        accumulatedLines.clear();
+
+        result.emplace_back(SectionDefinition_s{
+            sectionType,
+            sectionName,
+            flags,
+            params,
+            code
+            });
+
+
+        sectionName = "";
+        sectionType = "";
+        params.dict(); // clear them
+        flags.dict();
+    };
+
 
 	while (c < end)
 	{
@@ -4073,34 +4194,42 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 						for (auto i = 0; i < tabDepth - 1; ++i)
 							current = "    " + current;
 
-					if (current.find("segment") == 0)
+					if (current[0] == '@')
 					{
-						// if we have a function name, join up the accumulated
-						// lines and stuff them in the result
-						if (functionName.length())
-						{
-							string joined;
 
-							for (auto& s : accumulatedLines)
-								joined += s + '\n';
+                        if (sectionName.length())
+                            storeSection();
 
-							joined += '\n';
 
-							accumulatedLines.clear();
+                        auto sectionParts = split(current.substr(1), ' ');
 
-							result.emplace_back(pair<string, string>{functionName, joined});
-						}
+                        if (sectionParts.size() >= 2)
+                        {
+                            sectionType = sectionParts[0];
+                            sectionName = sectionParts[1];
 
-						// get our next function name
-						functionName = current.substr(8, current.length() - 9);
+                            for (auto idx = 2; idx < sectionParts.size(); ++idx)
+                            {
+                                auto keyVal = split(sectionParts[idx], '=');
+                                
+                                if (keyVal.size() == 1)
+                                    keyVal.push_back("True");
 
-						const auto spacePos = functionName.find(' ');
-						if (spacePos != string::npos)
-						{
-							const auto flags = "@flags " + functionName.substr(spacePos + 1);
-							functionName = functionName.substr(0, spacePos);
-							accumulatedLines.push_back(flags);
-						}
+                                if (keyVal[0] == "ttl" || keyVal[0] == "refresh") // these are special and allow for time appends like 's' or 'm', or 'd'
+                                    flags[keyVal[0]] = expandTime(keyVal[1]) * 1000;
+                                else if (keyVal[0] == "use_cached")
+                                    flags["use_cached"] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                else if (isFloat(keyVal[1]))
+                                    params[keyVal[0]] = stod(keyVal[1]);
+                                else if (isNumeric(keyVal[1]))
+                                    params[keyVal[0]] = stoll(keyVal[1]);
+                                else if (isBool(keyVal[1]))
+                                    params[keyVal[0]] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                else 
+                                    params[keyVal[0]] = stripQuotes(keyVal[1]);
+                            }
+
+                        }
 					}
 					else
 					{
@@ -4119,17 +4248,8 @@ vector<pair<string, string>> QueryParser::extractCountQueries(const char* query)
 		++c;
 	}
 
-	if (functionName.length())
-	{
-		string joined;
-
-		for (auto& s : accumulatedLines)
-			joined += s + '\n';
-
-		joined += '\n';
-
-		result.emplace_back(pair<string, string>{functionName, joined});
-	}
+    if (sectionName.length())
+        storeSection();
 
 	return result;
 }

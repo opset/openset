@@ -18,7 +18,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
 	if (MSVC)
-		add_definitions(/std:c++17 /Ox /Debug /Zi /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+		add_definitions(/std:c++17 /Ox /DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
 	else()
 		add_definitions(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
 		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -116,8 +116,6 @@ set(SOURCE_FILES
         src/message_broker.h
         src/oloop.cpp
         src/oloop.h
-        src/oloop_count.cpp
-        src/oloop_count.h
 		src/oloop_column.cpp
 		src/oloop_column.h
 		src/oloop_histogram.cpp
@@ -128,8 +126,10 @@ set(SOURCE_FILES
 		src/oloop_person.h
         src/oloop_query.cpp
         src/oloop_query.h
-        src/oloop_retrigger.cpp
-        src/oloop_retrigger.h
+        src/oloop_revent.cpp
+        src/oloop_revent.h
+        src/oloop_segment.cpp
+        src/oloop_segment.h
         src/oloop_seg_refresh.cpp
         src/oloop_seg_refresh.h
         src/people.cpp
@@ -145,6 +145,20 @@ set(SOURCE_FILES
         src/queryparser.h
         src/result.cpp
         src/result.h
+        src/rpc_global.cpp
+        src/rpc_global.h
+        src/rpc_internode.cpp
+        src/rpc_internode.h
+        src/rpc_cluster.cpp
+        src/rpc_cluster.h
+        src/rpc_table.cpp
+        src/rpc_table.h
+		src/rpc_revent.cpp
+		src/rpc_revent.h
+		src/rpc_query.cpp
+		src/rpc_query.h
+		src/rpc_insert.cpp
+		src/rpc_insert.h
         src/rpc.cpp
         src/rpc.h
 		src/sentinel.h
@@ -160,7 +174,6 @@ set(SOURCE_FILES
         src/trigger.h
         src/triggers.cpp
         src/triggers.h
-        test/test_complex_events.h
         test/test_db.h
         test/test_lib_var.h
         test/test_pyql_language.h

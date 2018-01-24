@@ -5,18 +5,17 @@
 
 using namespace std;
 
-HeapStack::HeapStack() 
-{}
-
 HeapStack::~HeapStack()
 {
 	Release();
 
 	if (head) // lets not leak the last block left by release
+    {
 		if (head->nonpooled)
 			delete[] reinterpret_cast<char*>(head);
 		else
 			HeapStackBlockPool::getPool().Put(head);
+    }
 }
 
 void HeapStack::Release()
@@ -28,7 +27,7 @@ void HeapStack::Release()
 		while (block)
 		{
 			--blocks;
-			auto t = block->nextBlock;
+			const auto t = block->nextBlock;
 			if (block->nonpooled)
 				delete[] reinterpret_cast<char*>(block);
 			else
@@ -96,7 +95,7 @@ char* HeapStack::flatten() const
 	if (!head || !bytes)
 		return nullptr;
 
-	auto buff = static_cast<char*>(PoolMem::getPool().getPtr(bytes));
+	const auto buff = static_cast<char*>(PoolMem::getPool().getPtr(bytes));
 	auto write = buff;
 
 	auto block = head;
@@ -125,7 +124,7 @@ void HeapStack::releaseFlatPtr(char* flatPtr)
 
 void HeapStack::newBlock()
 {
-	auto block = reinterpret_cast<block_s*>(HeapStackBlockPool::getPool().Get());//reinterpret_cast<block_s*>(__HeapStackBlockPool->Get());
+	const auto block = reinterpret_cast<block_s*>(HeapStackBlockPool::getPool().Get());
 
 	block->nextBlock = nullptr;
 	block->endOffset = 0;
@@ -145,7 +144,7 @@ void HeapStack::newBlock()
 
 void HeapStack::newNonpooledBlock(int64_t size)
 {
-	auto block = reinterpret_cast<block_s*>(new char[size + headerSize]);
+	const auto block = reinterpret_cast<block_s*>(new char[size + headerSize]);
 
 	block->nextBlock = nullptr;
 	block->endOffset = 0;

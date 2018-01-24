@@ -11,7 +11,7 @@
 
 using namespace openset::db;
 
-Table::Table(string name, Database* database):
+Table::Table(const string name, Database* database):
 	name(name),
 	database(database),
 	loadVersion(Now())
@@ -20,10 +20,6 @@ Table::Table(string name, Database* database):
 
 	// initialize the var object as a dictionary
 	globalVars.dict(); 
-
-	// load Config
-	// change - we no longer load last commit
-	//loadConfig();
 
 	// set the default required columns
 	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
@@ -50,7 +46,7 @@ void Table::createMissingPartitionObjects()
 		getPartitionObjects(p);
 }
 
-TablePartitioned* Table::getPartitionObjects(int32_t partition)
+TablePartitioned* Table::getPartitionObjects(const int32_t partition)
 {
 	csLock lock(cs); // scoped lock		
 	if (partitions[partition])
@@ -65,7 +61,7 @@ TablePartitioned* Table::getPartitionObjects(int32_t partition)
 	return partitions[partition];
 }
 
-void Table::releasePartitionObjects(int32_t partition)
+void Table::releasePartitionObjects(const int32_t partition)
 {
 	csLock lock(cs); // lock for read		
 
@@ -124,9 +120,8 @@ void Table::serializeTable(cjson* doc)
 			columnRecord->set("index", cast<int64_t>(c.idx));
 			columnRecord->set("type", type);
 			columnRecord->set("deleted", c.deleted);
-			columnRecord->set("prop", c.isProp);
+			columnRecord->set("prop", c.isSet);
 		}
-
 }
 
 void Table::serializeTriggers(cjson* doc)
@@ -226,7 +221,7 @@ void Table::deserializeTriggers(cjson* doc)
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)
 	{
-		auto trigInfo = new openset::trigger::triggerSettings_s;
+		auto trigInfo = new openset::revent::reventSettings_s;
 
 		trigInfo->name = t->xPathString("/name", "");
 		trigInfo->script = t->xPathString("/script", "");
@@ -235,9 +230,8 @@ void Table::deserializeTriggers(cjson* doc)
 		trigInfo->entryFunctionHash = MakeHash(trigInfo->entryFunction);
 		trigInfo->configVersion = 0;
 
-		auto error = openset::trigger::Trigger::compileTrigger(
+		auto error = openset::revent::Revent::compileTriggers(
 			this,
-			trigInfo->name,
 			trigInfo->script,
 			trigInfo->macros);
 
@@ -247,68 +241,3 @@ void Table::deserializeTriggers(cjson* doc)
 	}
 }
 
-void Table::loadConfig()
-{
-
-	if (globals::running->testMode)
-	{
-		// set default columns for test mode
-		columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
-		columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
-		columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
-		columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
-		columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
-		columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-		columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
-		return;
-	}
-
-	// see if it exists
-	if (!openset::IO::File::FileExists(globals::running->path + "tables/" + name + "/table.json"))
-	{
-		saveConfig();
-		return;
-	}
-
-	// global config lock
-	csLock lock(globals::running->cs);
-
-	// ensure a subdirectory in tables exists for this table
-	openset::IO::Directory::mkdir(globals::running->path + "tables/" + name);
-
-	// open table.json in the table subdirectory
-	cjson tableDoc(globals::running->path + "tables/" + name + "/table.json");
-	// deserialize document
-	deserializeTable(&tableDoc);
-
-	// open triggers.json in the table subdirectory
-	cjson triggerDoc(globals::running->path + "tables/" + name + "/triggers.json");
-	// deserialize triggers
-	deserializeTriggers(&triggerDoc);
-	
-}
-
-void Table::saveConfig()
-{
-	if (globals::running->testMode)
-		return;
-
-	csLock lock(globals::running->cs);
-
-	// ensure a subdirectory in tables exists for this table
-	openset::IO::Directory::mkdir(globals::running->path + "tables/" + name);
-
-	// open columns.conf in the table subdirectory
-	cjson tableDoc;
-	serializeTable(&tableDoc);	
-	// save it out
-	Logger::get().info("config saved for table '" + name + "'");
-	cjson::toFile(globals::running->path + "tables/" + name + "/table.json", &tableDoc, true);
-
-	cjson triggerDoc;
-	serializeTriggers(&triggerDoc);
-	// save it out
-	Logger::get().info("triggers saved for table '" + name + "'");
-	cjson::toFile(globals::running->path + "tables/" + name + "/triggers.json", &triggerDoc, true);
-
-}

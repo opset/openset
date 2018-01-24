@@ -1,4 +1,4 @@
-#include "oloop_retrigger.h"
+#include "oloop_revent.h"
 
 #include "people.h"
 #include "person.h"
@@ -23,19 +23,17 @@ void OpenLoopRetrigger::prepare()
 {
 	linearId = 0;
 	person.mapTable(table, loop->partition);
-	lowestStamp = Now() + 15000;
+	lowestStamp = Now() + 90000;
+
+    parts = table->getPartitionObjects(loop->partition);
+    parts->triggers->checkForConfigChange();
+
 }
 
 void OpenLoopRetrigger::run()
 {
-	
-	auto parts = table->getPartitionObjects(loop->partition);
-	auto maxLinearId = parts->people.peopleCount();
-	
-
-	openset::db::PersonData_s* personData;
-
-	auto now = Now();
+    const auto maxLinearId = parts->people.peopleCount();
+    const auto now = Now();
 
 	while (true)
 	{
@@ -50,29 +48,29 @@ void OpenLoopRetrigger::run()
 						
 			messages->run(); // do message queue maintenance 
 
-			OpenLoop* newCell = new OpenLoopRetrigger(table);	
-			
-			auto diff = lowestStamp - Now();
+			OpenLoop* newCell = new OpenLoopRetrigger(table);
 
-			newCell->scheduleFuture(diff > 500 ? 500 : (diff < 100) ? 100 : diff); // run again in 15 seconds
+		    const auto diff = lowestStamp - Now();
+
+			newCell->scheduleFuture(diff > 15000 ? 15000 : 5000); 
 
 			spawn(newCell);
 			suicide();
 			return;
 		}
 
-		if ((personData = parts->people.getPersonByLIN(linearId)) != nullptr
-			&& personData->flagRecords)		
+        if (auto personData = parts->people.getPersonByLIN(linearId);
+             personData && personData->flagRecords)		
 		{
 			auto flagIter = personData->getFlags();
 
-			for (auto i = 0; i < personData->flagRecords; ++i)
+            for (auto i = 0; i < personData->flagRecords; ++i)
 			{
 				if (flagIter->flagType == flagType_e::future_trigger &&
 					flagIter->value < now) // this is expired!
 				{
 					// get the corresponding trigger object (reference contains trigger Id)
-					auto trigger = parts->triggers->getTrigger(flagIter->reference);
+					auto trigger = parts->triggers->getRevent(flagIter->reference);
 
 					if (trigger)
 					{
@@ -88,18 +86,24 @@ void OpenLoopRetrigger::run()
 					}
 
 					// remove this flag from the person object
-					auto newPerson = person.getGrid()->clearFlag(
+				    const auto replacementRecord = person.getGrid()->clearFlag(
 						flagType_e::future_trigger,
 						flagIter->reference,
 						flagIter->context);
 
-					parts->people.replacePersonRecord(newPerson);
+					parts->people.replacePersonRecord(replacementRecord);
 
+                    // personData has moved
+                    const auto tp = person.getGrid()->getMeta();
+                    if (personData != tp)
+                    {
+                        personData = tp;
+                        flagIter = personData->getFlags() + i;
+                    }
 				}
 				else if (flagIter->flagType == flagType_e::future_trigger &&
 					flagIter->value < lowestStamp)
 					lowestStamp = flagIter->value;
-					
 
 				++flagIter;
 			}

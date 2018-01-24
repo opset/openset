@@ -6,14 +6,15 @@
 #include "table.h"
 #include "columns.h"
 
-const int MAX_EXEC_COUNT = 1'000'000'000;
+//const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
+const int STACK_DEPTH = 64;
 
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode):
 	macros(macros),
 	interpretMode(interpretMode)
 {
-	stack = new cvar[128];
+	stack = new cvar[STACK_DEPTH];
 	stackPtr = stack;
 }
 
@@ -126,28 +127,29 @@ openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
 	return &macros.segments;
 }
 
-void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
-
-	if (paramCount <= 0)
-		return;
-
-	vector<cvar> params(paramCount);
-
-	for (auto i = paramCount - 1 ; i >= 0; --i)
+	for (auto i = 1; i <= paramCount; ++i) // PERF
 	{
 		--stackPtr;
 
 		// if any of these params are undefined, exit
 		if (stackPtr->typeof() != cvar::valueType::STR &&
 			*stackPtr == NONE)
-			params[i] = NONE;
+			marshalParams[paramCount - i] = NONE;
 		else
-			params[i] = std::move(*stackPtr);
-	}
+			marshalParams[paramCount - i] = std::move(*stackPtr);
+	}   
+}
 
-	if (!params.size())
+void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+{
+
+	if (paramCount <= 0)
 		return;
+
+    // pop the stack into a pre-allocated array of cvars in reverse order
+    extractMarshalParams(paramCount);
 
 	// strings, doubles, and bools are all ints internally,
 	// this will ensure non-int types are represented as ints
@@ -166,8 +168,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 			case cvar::valueType::STR:
 				{
-					auto hash = MakeHash(value.getString());
-					result->addLocalText(hash, value.getString()); // cache this text
+                    const auto tString = value.getString();
+					const auto hash = MakeHash(tString); 
+					result->addLocalText(hash, tString); // cache this text
 					return hash;
 				}
 
@@ -206,24 +209,18 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 		{
 			if (!resCol.nonDistinct) // if the 'all' flag was NOT used on an aggregater
 			{
-				/* Yikes - a big gnarly tuple (hash can colide, tuple won't)
-				 * 
-				 *  What this is saying is for this column, and this value for
-				 *  this branch in the result at this timestamp, have we ever ran
-				 *  an aggregation? If not, run it, otherwise move on
-				 */ 				
+                distinctKey.set(
+                    resCol.index,
+                    resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
+                    resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : currentRow, //columns->cols[COL_STAMP],
+                    reinterpret_cast<int64_t>(resultColumns)
+                );
 
-				// emplaceTry will return false if the value exists
-				if (!eventDistinct.emplaceTry(
-                    ValuesSeenKey{
-                        resCol.index,
-                        resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-                        reinterpret_cast<int64_t>(resultColumns), // this pointer is unique to the ResultSet row
-                        resCol.schemaColumn == COL_UUID ? 0 : (resCol.modifier == Modifiers_e::dist_count_person ? 0 : columns->cols[COL_STAMP])
-                    }, 
-                    1))
-					continue; // we already tabulated this for this key
-			}
+                if (eventDistinct.hasKey(distinctKey))
+                    continue;
+
+                eventDistinct.set(distinctKey,1);
+    		}
 
 			auto resultIndex = resCol.index + segmentColumnShift;
 
@@ -286,9 +283,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 				case Modifiers_e::var:
 					if (resultColumns->columns[resultIndex].value == NONE)
-						resultColumns->columns[resultIndex].value = fixToInt(resCol.value);
+						resultColumns->columns[resultIndex].value = 1; //fixToInt(resCol.value);
 					else
-						resultColumns->columns[resultIndex].value += fixToInt(resCol.value);
+						resultColumns->columns[resultIndex].value++; //+= fixToInt(resCol.value);
 					break;
 				default: break;
 			}
@@ -306,26 +303,18 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
 
 	auto depth = 0;
 
-	for (auto item : params)
+	for (const auto &item : marshalParams)
     {
 
-		if (item.typeof() != cvar::valueType::STR &&
-			item == NONE)
+		if (depth == paramCount || (item.typeof() != cvar::valueType::STR && item == NONE))
 			break;
 
 	    rowKey.key[depth] = fixToInt(item);
         rowKey.types[depth] = getType(item);
 			
 		//result->setAtDepth(rowKey, set_cb);
-		auto tPair = result->results.get(rowKey);
-
-		if (!tPair)
-		{
-			const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-			tPair = result->results.set(rowKey, t);
-		}
-
-		aggColumns(tPair->second);
+        const auto aggs = result->getMakeAccumulator(rowKey);
+		aggColumns(aggs);
 
 	    ++depth;
 	}
@@ -375,7 +364,7 @@ void openset::query::Interpreter::marshal_emit(const int paramCount)
 	loopState = LoopState_e::in_exit;
 
 	--stackPtr;
-	auto emitMessage = *stackPtr; // pop
+    const auto emitMessage = *stackPtr; // pop
 
 	if (emit_cb)
 		emit_cb(emitMessage);
@@ -669,8 +658,13 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
 		return;
 	}
 
+    const auto zeros = "0000000000"s;
+
 	--stackPtr;
-	const int64_t places = *stackPtr;
+	int64_t places = *stackPtr;
+
+    if (places > 10) places = 10;
+
 	double value = *(stackPtr - 1);
 
 	const auto negative = value < 0;
@@ -683,8 +677,11 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
 
 	auto str = to_string(rounded);
 
-	while (str.length() <= places)
-		str = "0" + str;
+	if (str.length() <= places)
+    {
+        const auto missingPreZeros = (places - str.length()) + 1;
+		str = zeros.substr(0, missingPreZeros) + str;
+    }
 
 	if (places)
 		str.insert(str.end() - places, '.');
@@ -709,7 +706,7 @@ void openset::query::Interpreter::marshal_makeDict(const int paramCount)
 	}
 
 	if (paramCount % 2 == 1)
-		throw("incorrect param count in dictionary");
+		throw  std::runtime_error("incorrect param count in dictionary");
 
 	auto iter = stackPtr - paramCount;
 	for (auto i = 0; i < paramCount; i += 2 , iter += 2)
@@ -767,7 +764,7 @@ void openset::query::Interpreter::marshal_population(const int paramCount)
 	}
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -810,10 +807,10 @@ void openset::query::Interpreter::marshal_intersection(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -873,10 +870,10 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -942,7 +939,7 @@ void openset::query::Interpreter::marshal_compliment(const int paramCount)
 	}
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -986,10 +983,10 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
 	}
 
 	--stackPtr;
-	auto b = *stackPtr;
+	const auto b = *stackPtr;
 
 	--stackPtr;
-	auto a = *stackPtr;
+	const auto a = *stackPtr;
 
 	// if we acquired IndexBits from getSegment_cb we must
 	// delete them after we are done, or it'll leak
@@ -1262,7 +1259,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	if (auto slashSlash = url.find("//"); slashSlash != std::string::npos)
 	{
 		slashSlash += 2;
-		const auto endPos = url.find("/", slashSlash);
+		const auto endPos = url.find('/', slashSlash);
 		if (endPos == std::string::npos) // something is ugly
 			return;
 		result["host"] = url.substr(slashSlash, endPos - (slashSlash));
@@ -1271,7 +1268,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	}
 
 	// we have a question mark
-	if (auto qpos = url.find("?", start); qpos != std::string::npos)
+	if (auto qpos = url.find('?', start); qpos != std::string::npos)
 	{
 		result["path"] = url.substr(start, qpos - start);
 		++qpos;
@@ -1282,14 +1279,14 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 
 		while (true)
 		{
-			auto pos = query.find("&", start);
+			auto pos = query.find('&', start);
 
 			if (pos == std::string::npos)
 				pos = query.size();
 
 			auto param = query.substr(start, pos - start);
 
-			if (const auto ePos = param.find("="); ePos != std::string::npos)
+			if (const auto ePos = param.find('='); ePos != std::string::npos)
 			{
 				const auto key = param.substr(0, ePos);
 				const auto value = param.substr(ePos + 1);
@@ -1305,9 +1302,6 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
 	}
 	else
 		result["path"] = url.substr(start);
-
-	*(stackPtr - 1) == std::move(result);
-	
 }
 
 string openset::query::Interpreter::getLiteral(const int64_t id) const
@@ -1448,20 +1442,20 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		break;
 	case Marshals_e::marshal_iter_set:
 		currentRow = (stackPtr - 1)->getInt64();
-		if (currentRow < 0 || currentRow >= rows->size())
+		if (currentRow < 0 || currentRow >= static_cast<int>(rows->size()))
 			throw std::runtime_error("row iterator out of range");
-		rows->begin() + currentRow;
+		//rowIter = rows->begin() + currentRow;
 		--stackPtr;
 		break;
 	case Marshals_e::marshal_iter_move_first:
 		currentRow = 0;
-		rows->begin() + currentRow;
+		//rows->begin() + currentRow;
 		break;
 	case Marshals_e::marshal_iter_move_last:
 		currentRow = rows->size() - 1;
 		if (currentRow < 0)
 			throw std::runtime_error("iter_set_last called on empty set");
-		rows->begin() + currentRow;
+		//rows->begin() + currentRow;
 		break;
 	case Marshals_e::marshal_iter_next:
 	{
@@ -1470,18 +1464,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		 * exit any outerloop that it is in. If it is in the
 		 * main body, it will exit the current query silently (without error)
 		 */
-
-		const auto currentGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
-											   // an "event" can contian many rows so,
-											   // watch the group column and iterate 
-											   // until the row group changes
-		while (currentRow < rowCount)
-		{
-			++currentRow;
-			if (currentRow == rowCount ||
-				currentGrp != HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]))
-				break;
-		}
+        ++currentRow;
 
 		if (currentRow == rowCount) // end of set
 		{
@@ -1551,6 +1534,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		// return will have its params on the stack,
 		// we will just leave these on the stack and
 		// break out of this block... magic!
+        inReturn = true;
 		--recursion;
 		return true;
 	case Marshals_e::marshal_break:
@@ -1701,7 +1685,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 				auto value = var->getDict()->begin();
 				var->getDict()->erase(value);
 				var->dict(); // result is a Dict
-				(*res) = std::move(cvar::o{ value->first, value->second });
+				(*res) = cvar::o{ value->first, value->second };
 			}
 			else if (var->typeof() == cvar::valueType::SET)
 			{
@@ -1749,7 +1733,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 			if (var->typeof() == cvar::valueType::DICT)
 			{
 				res->list(); // result is a Dict
-				for (const auto v : *var->getDict())
+				for (const auto &v : *var->getDict())
 					(*res->getList()).push_back(v.first);
 			}
 			else
@@ -1824,7 +1808,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 		return;
 	}
 
-	while (loopState == LoopState_e::run && !error.inError())
+    while (loopState == LoopState_e::run && !error.inError() && !inReturn)
 	{
 		// tracks the last known script line number
 		if (inst->debug.number)
@@ -1855,39 +1839,137 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				break;
 			case OpCode_e::PSHTBLCOL:
 				// push a column value
-				switch (macros.vars.tableVars[inst->index].schemaType)
-				{
-					case columnTypes_e::freeColumn:
-						*stackPtr = NONE;
-						break;
-					case columnTypes_e::intColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
-						break;
-					case columnTypes_e::doubleColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column] / 10000.0;
-						break;
-					case columnTypes_e::boolColumn:
-						*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column] ? true : false;
-						break;
-					case columnTypes_e::textColumn:
-						{
-							const auto attr = attrs->get(
-								macros.vars.tableVars[inst->index].schemaColumn,
-								(*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column]);
+            {
 
-							if (attr && attr->text)
-								*stackPtr = attr->text;
-							else
-								*stackPtr = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
-						}
-						break;
-					default:
-						break;
-				}
+                // we pop the actual user id in this case
+                if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)
+                {
+                    *stackPtr = this->grid->getUUIDString();
+                    ++stackPtr;
+                    break;
+                }
 
-				++stackPtr;
+                auto colValue = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
+
+                switch (macros.vars.tableVars[inst->index].schemaType)
+                {
+                case columnTypes_e::freeColumn:
+                    *stackPtr = NONE;
+                    break;
+                case columnTypes_e::intColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx]);
+                    }
+                    else
+                        *stackPtr = colValue;
+                    break;
+                case columnTypes_e::doubleColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx] / 10000.0);
+                    }
+                    else
+                        *stackPtr = colValue / 10000.0;
+                    break;
+                case columnTypes_e::boolColumn:
+
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx] ? true : false);
+                    }
+                    else
+                        *stackPtr = colValue ? true : false;
+                    break;
+                case columnTypes_e::textColumn:
+
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx = info.offset; idx < end; ++idx)
+                        {
+                            const auto attr = attrs->get(
+                                macros.vars.tableVars[inst->index].schemaColumn, 
+                                setData[idx]);
+
+                            if (attr && attr->text)
+                                stackPtr->getSet()->emplace(std::string(attr->text));
+                        }
+                    }
+                    else
+                    {
+                        const auto attr = attrs->get(
+                            macros.vars.tableVars[inst->index].schemaColumn,
+                            colValue);
+
+                        if (attr && attr->text)
+                            *stackPtr = attr->text;
+                        else
+                            *stackPtr = colValue;
+                    }
+                    break;
+                default:
+                    break;
+                }
+
+                ++stackPtr;
+            }
 				break;
 			case OpCode_e::VARIDX:
+				*stackPtr = inst->index;
+				++stackPtr;
+				break;
+			case OpCode_e::COLIDX:
 				*stackPtr = inst->index;
 				++stackPtr;
 				break;
@@ -1898,7 +1980,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					--stackPtr;
 					const auto key = std::move(*stackPtr);
 					--stackPtr;
-					const auto value = std::move(*stackPtr);
+					auto value = std::move(*stackPtr);
 					(*stackPtr).dict();
 					(*stackPtr)[key] = std::move(value);
 					++stackPtr;
@@ -1932,7 +2014,11 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					// this is the value
-					*stackPtr = std::move(tcvar ? *tcvar : cvar{NONE});
+                    if (tcvar)
+					    *stackPtr = *tcvar; // copy, not move
+                    else 
+                        *stackPtr = NONE;
+
 					++stackPtr;
 				}
 				break;
@@ -2003,7 +2089,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					--stackPtr;
-					const auto key = std::move(*stackPtr);
+					const auto key = std::move(*stackPtr); // TODO - use ref?
 
 					// this is the value
 					--stackPtr;
@@ -2051,6 +2137,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						&macros.code.front() + inst->index,
 						currentRow);
 
+                    if (inReturn)
+                        return;
+
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
@@ -2082,6 +2171,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 						&macros.code.front() + inst->index,
 						currentRow);
 
+                    if (inReturn)
+                        return;
+
 					// fast forward passed subsequent elif/else ops
 					++inst;
 
@@ -2101,11 +2193,19 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
+
+                if (inReturn)
+                    return;
+
 				break;
 			case OpCode_e::ITFOR:
 				{
 					--stackPtr;
 					const int64_t keyIdx = *stackPtr;
+
+                    // we are going to look back one instruction to see if we 
+			        // are putting values into a user variable or a column variable
+				    const auto isColumn = (inst-1)->op == OpCode_e::COLIDX;
 
 					int64_t valueIdx = 0;
 					if (inst->value == 2)
@@ -2138,7 +2238,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x.first;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x.first;
+                            else
+							    macros.vars.userVars[keyIdx].value = x.first;
 
 							if (inst->value == 2)
 								macros.vars.userVars[valueIdx].value = x.second;
@@ -2147,7 +2250,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2193,13 +2296,16 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x;
+                            else
+							    macros.vars.userVars[keyIdx].value = x;
 
 							opRunner(
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2242,13 +2348,16 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							macros.vars.userVars[keyIdx].value = x;
+                            if (isColumn)
+                                macros.vars.columnVars[keyIdx].value = x;
+                            else
+							    macros.vars.userVars[keyIdx].value = x;
 
 							opRunner(
 								&macros.code.front() + inst->index,
 								currentRow);
 
-							if (loopState == LoopState_e::in_break)
+							if (loopState == LoopState_e::in_break || inReturn)
 							{
 								if (breakDepth == 1 || nestDepth == 1)
 								{
@@ -2288,9 +2397,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 			case OpCode_e::ITNEXT:
 				// fancy and strange stuff happens here					
 				{
+                    if (currentRow >= static_cast<int>(rows->size()))
+                        break;
+
+				    const auto savedRow = currentRow;
 					auto iterCount = 0;
 					cvar lambda;
-					auto rowGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]); // use left to hold lastRowId
 
 					// enter loop, increment nest 
 					++nestDepth;
@@ -2300,19 +2412,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 
 					// user right for count
 					for (const auto rowCount = rows->size();
-					     iterCount < inst->value && currentRow < rowCount;
+					     iterCount < inst->value && currentRow < static_cast<int>(rowCount);
 					     ++currentRow)
 					{
-						//++loopCount;
 
 						if (loopState == LoopState_e::in_exit || error.inError())
 						{
 							*stackPtr = 0;
 							++stackPtr;
 
-							--nestDepth;
-
 							matchStampPrev.pop_back();
+                            --nestDepth;
 							--recursion;
 							return;
 						}
@@ -2350,20 +2460,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 								return;
 							}
 
-							// increment run count
-							if (rowGrp != HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]))
-							{
-								++iterCount;
-								rowGrp = HashPair((*rows)[currentRow]->cols[COL_STAMP], (*rows)[currentRow]->cols[COL_ACTION]);
-							}
-
 							if (iterCount < inst->value)
 								opRunner(
 									&macros.code.front() + inst->index,
 									currentRow);
+
+                            // increment run count
+                            ++iterCount;
+
 						}
 
-						if (loopState == LoopState_e::in_break)
+						if (loopState == LoopState_e::in_break || inReturn)
 						{
 							if (breakDepth == 1 || nestDepth == 1)
 							{
@@ -2390,6 +2497,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 					}
 
 					matchStampPrev.pop_back();
+
+                    currentRow = savedRow;
 
 					// out of loop, decrement nest 
 					--nestDepth;
@@ -2606,14 +2715,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				break;
 			case OpCode_e::CALL:
 				// Call a Script Function
+                inReturn = false;
 				opRunner(
 					&macros.code.front() + inst->index,
 					currentRow);
+                inReturn = false;
 				break;
-			case OpCode_e::RETURN:
+			case OpCode_e::RETURN: // this is a soft return like END-OF-BLOCK, not like explicit return call
+                //inReturn = true;
 				if (stack == stackPtr)
 				{
-					*stackPtr = 0;
+					*stackPtr = NONE;
 					++stackPtr;
 				}
 				--recursion;
@@ -2622,7 +2734,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				// script is complete, exit all nested
 				// loops
 				loopState = LoopState_e::in_exit;
-				*stackPtr = 0;
+				*stackPtr = NONE;
 				++stackPtr;
 				--recursion;
 				return;
@@ -2631,27 +2743,27 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 		}
 
 		// move to the next instruction
-		++inst;
+		++inst;            
 	}
 }
 
 void openset::query::Interpreter::setScheduleCB(
-	function<bool(int64_t functionHash, int seconds)> cb)
+	const function<void(int64_t functionHash, int seconds)> &cb)
 {
 	schedule_cb = cb;
 }
 
-void openset::query::Interpreter::setEmitCB(function<bool(string emitMessage)> cb)
+void openset::query::Interpreter::setEmitCB(const function<void(string emitMessage)> &cb)
 {
 	emit_cb = cb;
 }
 
-void openset::query::Interpreter::setGetSegmentCB(function<IndexBits*(string, bool& deleteAfterUsing)> cb)
+void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)> &cb)
 {
 	getSegment_cb = cb;
 }
 
-void openset::query::Interpreter::setBits(IndexBits* indexBits, int maxPopulation)
+void openset::query::Interpreter::setBits(IndexBits* indexBits, const int maxPopulation)
 {
 	bits = indexBits;
 	maxBitPop = maxPopulation;
@@ -2681,11 +2793,15 @@ void openset::query::Interpreter::execReset()
 	loopCount = 0;
 	recursion = 0;
 	eventCount = -1;
+    inReturn = false;
 	jobState = false;
 	loopState = LoopState_e::run;
 	stackPtr = stack;
 	matchStampPrev.clear();
 	eventDistinct.clear();
+
+    for (auto i = 0; i < STACK_DEPTH; ++i)
+        stack[i].clear();
 
 	if (firstRun)
 	{
@@ -2717,7 +2833,6 @@ void openset::query::Interpreter::execReset()
 
 void openset::query::Interpreter::exec()
 {
-	execReset();
     returns.clear(); // cannot be cleared in segment loop
 
 	const auto inst = &macros.code.front();
@@ -2730,8 +2845,11 @@ void openset::query::Interpreter::exec()
 			segmentColumnShift = 0;
 			for (auto seg : segmentIndexes)
 			{
-				if (seg->bitState(linid)) // if the person is in this segment run the ops
-					opRunner(inst, 0);
+                if (seg->bitState(linid)) // if the person is in this segment run the ops
+                {
+                    execReset();
+                    opRunner(inst, 0);
+                }
 
                 if (stackPtr == stack)
                     returns.push_back(NONE); // return NONE if stack is unwound
@@ -2739,13 +2857,13 @@ void openset::query::Interpreter::exec()
                     returns.push_back(*(stackPtr - 1)); // capture last value on stack
 
 				// for each segment we offset the results by the number of columns
-				segmentColumnShift += macros.vars.columnVars.size();
-				execReset();
+				segmentColumnShift += macros.vars.columnVars.size();				
 			}
 		}
 		else
 		{
 			segmentColumnShift = 0;
+            execReset();
 			opRunner(inst, 0);
 
             if (stackPtr == stack)
@@ -2783,20 +2901,20 @@ void openset::query::Interpreter::exec()
 	}
 }
 
-void openset::query::Interpreter::exec(const string functionName)
+void openset::query::Interpreter::exec(const string &functionName)
 {
     exec(MakeHash(functionName));
 }
 
 void openset::query::Interpreter::exec(const int64_t functionHash)
 {
-	execReset();
     returns.clear(); // cannot be cleared in segment loop
 
 	for (auto& f : macros.vars.functions)
 	{
 		if (f.nameHash == functionHash)
 		{
+            calledFunction = f.name;
 			const auto inst = &macros.code.front() + f.execPtr;
 
 			try
@@ -2807,8 +2925,11 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 					segmentColumnShift = 0;
 					for (auto seg : segmentIndexes)
 					{
-						if (seg->bitState(linid)) // if the person is in this segment run the ops
-							opRunner(inst, 0);
+                        if (seg->bitState(linid)) // if the person is in this segment run the ops
+                        {
+                            execReset();
+                            opRunner(inst, 0);
+                        }
 
                         if (stackPtr == stack)
                             returns.push_back(NONE); // return NONE if stack is unwound
@@ -2817,12 +2938,12 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 
 						// for each segment we offset the results by the number of columns
 						segmentColumnShift += macros.vars.columnVars.size();
-						execReset();
 					}
 				}
 				else
 				{
 					segmentColumnShift = 0;
+                    execReset();
 					opRunner(inst, 0);
 
                     if (stackPtr == stack)

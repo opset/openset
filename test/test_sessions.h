@@ -31,7 +31,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1458800000,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 100,
 	            "some_str": "rabbit"
 			}
@@ -40,7 +40,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1458800100,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 101,
 	            "some_str": "train"
 			}
@@ -49,7 +49,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1458800200,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 102,
 	            "some_str": "cat"
 			}
@@ -58,7 +58,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1545220000,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 103,
 	            "some_str": "dog"
 			}
@@ -67,7 +67,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1545220100,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 104,
 	            "some_str": "cat"
 			}
@@ -76,7 +76,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1545220900,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 105,
 	            "some_str": "rabbit"
 			}
@@ -85,7 +85,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1631600000,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 106,
 	            "some_str": "train"
 			}
@@ -94,7 +94,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1631600400,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 107,
 	            "some_str": "plane"
 			}
@@ -103,7 +103,7 @@ inline Tests test_sessions()
 			"uuid": "user1@test.com",
 			"stamp": 1631601200,
 			"action": "some event",
-			"attr":{				
+			"_":{				
 				"some_val": 108,
 	            "some_str": "automobile"
 			}
@@ -111,7 +111,7 @@ inline Tests test_sessions()
 	]
 	)raw_inserts";
 	
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count session
@@ -192,13 +192,13 @@ inline Tests test_sessions()
 				for (auto e : events)
 				{
 					ASSERT(e->xPathInt("/stamp", 0) != 0);
-					ASSERT(e->xPath("/attr") != nullptr);
+					ASSERT(e->xPath("/_") != nullptr);
 
 					person.insert(e);
 				}
 
 				auto grid = person.getGrid();
-				auto json = grid->toJSON(false); // non-condensed
+				auto json = grid->toJSON(); // non-condensed
 
 				person.commit();
 
@@ -222,7 +222,7 @@ inline Tests test_sessions()
 				// mount the compiled query to an interpretor
 				auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet;
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			

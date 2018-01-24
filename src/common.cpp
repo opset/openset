@@ -15,28 +15,26 @@ static const int64_t HASHSEED = 0xDEADCAFEBEEFBABELL;
 
 int64_t MakeHash(const char* buffer, const int64_t len) 
 {
-    auto seed = HASHSEED;
-    for (auto it = buffer; it < buffer + len; ++it)
-        seed = (seed < 1) + *it;
-	return XXH64(buffer, len, seed);
+	return XXH64(buffer, len, HASHSEED);
 }
 
 int64_t MakeHash(const char* buffer) 
 {
-    auto seed = HASHSEED;
-    for (auto it = buffer; *it != 0; ++it)
-        seed = (seed < 1) + *it;
-	return XXH64(buffer, strlen(buffer), seed);
+	return XXH64(buffer, strlen(buffer), HASHSEED);
 }
 
-int64_t MakeHash(const std::string buffer) 
+int64_t MakeHash(const std::string& buffer) 
 {
-    auto seed = HASHSEED;
-    const auto start = &buffer[0];
-    const auto end = start + buffer.length();
-    for (auto it = start; it < end; ++it)
-        seed = (seed < 1) + *it;
-	return XXH64(start, buffer.length(), seed);
+	return XXH64(buffer.c_str(), buffer.length(), HASHSEED);
+}
+int64_t AppendHash(const int64_t value, const int64_t last)
+{
+    return XXH64(reinterpret_cast<const void*>(&value), 8, last);
+}
+
+int64_t AppendHash(const int32_t value, const int64_t last)
+{
+    return XXH64(reinterpret_cast<const void*>(&value), 4, last);    
 }
 
 void ThreadSleep(const int64_t milliseconds)

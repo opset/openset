@@ -16,10 +16,6 @@ Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Column
 	blob(attributeBlob),
 	columns(columns),
 	partition(partition)
-{
-}
-
-Attributes::~Attributes()
 {}
 
 void Attributes::addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state)
@@ -52,7 +48,7 @@ Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
 	}
 }
 
-Attr_s* Attributes::getMake(const int32_t column, const string value)
+Attr_s* Attributes::getMake(const int32_t column, const string& value)
 {
 	const auto valueHash = MakeHash(value);
 
@@ -77,7 +73,7 @@ Attr_s* Attributes::get(const int32_t column, const int64_t value) const
 	return nullptr;
 }
 
-Attr_s* Attributes::get(const int32_t column, const string value) const
+Attr_s* Attributes::get(const int32_t column, const string& value) const
 {
 	if (const auto attrPair = columnIndex.get({ column, MakeHash(value) }); attrPair != nullptr)
 		return attrPair->second;
@@ -119,7 +115,7 @@ void Attributes::clearDirty()
 		}
 
 		int64_t compBytes = 0; // OUT value via reference
-		int32_t linId;
+		int64_t linId;
 
 		// compress the data, get it back in a pool ptr
 		const auto compData = bits.store(compBytes, linId);
@@ -135,7 +131,7 @@ void Attributes::clearDirty()
 		}
 
 		destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
-		destAttr->comp = compBytes;
+		destAttr->comp = static_cast<int>(compBytes);
 		destAttr->linId = linId;
 
 		// if we made a new destination, we have to update the 
@@ -158,7 +154,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	const auto attr = attrPair->second;
 
 	int64_t compBytes = 0; // OUT value
-	int32_t linId = -1;
+	int64_t linId = -1;
 
 	// compress the data, get it back in a pool ptr, size returned in compBytes
 	const auto compData = newBits->store(compBytes, linId);
@@ -175,7 +171,7 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 
 	destAttr->text = attr->text;
 	destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
-	destAttr->comp = compBytes;
+	destAttr->comp = static_cast<int32_t>(compBytes); // TODO - check for overflow
 	destAttr->linId = linId;
 
 	// if we made a new destination, we have to update the 
@@ -198,7 +194,7 @@ Attributes::AttrListExpanded Attributes::getColumnValues(const int32_t column)
         if (kv.first.column == column && kv.first.value != NONE)
             result.push_back({ kv.first.value, kv.second });
     
-    return std::move(result);
+    return result;
 }
 
 Attributes::AttrList Attributes::getColumnValues(const int32_t column, const listMode_e mode, const int64_t value)
@@ -250,7 +246,7 @@ Attributes::AttrList Attributes::getColumnValues(const int32_t column, const lis
 		}
 	}
 
-	return std::move(result);
+	return result;
 }
 
 void Attributes::serialize(HeapStack* mem)

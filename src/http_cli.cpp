@@ -70,7 +70,7 @@ void openset::web::Rest::request(const string method, const string path, const Q
                  [this, cb](shared_ptr<HttpClient::Response> response, const SimpleWeb::error_code& ec)
                  {
                    auto length = response->content.size();
-                   char* data = length ? static_cast<char*>(PoolMem::getPool().getPtr(length)) : nullptr;
+                   auto data = length ? static_cast<char*>(PoolMem::getPool().getPtr(length)) : nullptr;
                    response->content.read(data, length);
                    auto status = response->status_code.length() && response->status_code[0] == '2'
                                    ? http::StatusCode::success_ok

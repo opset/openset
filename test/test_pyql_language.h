@@ -26,7 +26,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820830,
 			"action" : "purchase", 
-			"attr":{				
+			"_":{				
 				"fruit": "orange",
 				"price": 5.55
 			}
@@ -35,7 +35,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820831,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "apple",
 				"price": 9.95
 			}
@@ -44,7 +44,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820832,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "pear",
 				"price": 12.49
 			}
@@ -53,7 +53,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820833,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "banana",
 				"price": 2.49
 			}
@@ -62,7 +62,7 @@ inline Tests test_pyql_language()
 			"person": "user1_@test.com",
 			"stamp": 1458820834,
 			"action" : "purchase", 
-			"attr":{
+			"_":{
 				"fruit": "orange",
 				"price": 5.55
 			}
@@ -71,7 +71,7 @@ inline Tests test_pyql_language()
 	)raw_inserts";
 
 	// test loop
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -86,7 +86,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test loop with break
-	auto test2_pyql = fixIndent(R"pyql(
+	auto test2_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -102,7 +102,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loop with breaks
-	auto test3_pyql = fixIndent(R"pyql(
+	auto test3_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -128,7 +128,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, break with depth
-	auto test4_pyql = fixIndent(R"pyql(
+	auto test4_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -154,7 +154,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break top'
-	auto test5_pyql = fixIndent(R"pyql(
+	auto test5_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -178,7 +178,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break all'
-	auto test6_pyql = fixIndent(R"pyql(
+	auto test6_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -202,7 +202,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'continue'
-	auto test7_pyql = fixIndent(R"pyql(
+	auto test7_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -230,7 +230,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test nested loops, 'break ###' to deep
-	auto test8_pyql = fixIndent(R"pyql(
+	auto test8_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -245,7 +245,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test event manipulators
-	auto test9_pyql = fixIndent(R"pyql(
+	auto test9_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -263,7 +263,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test over advance
-	auto test10_pyql = fixIndent(R"pyql(
+	auto test10_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -286,7 +286,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test over advance - silent mainloop exit
-	auto test11_pyql = fixIndent(R"pyql(
+	auto test11_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 
@@ -308,7 +308,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test container types
-	auto test12_pyql = fixIndent(R"pyql(
+	auto test12_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	
 	someVar = "3.14"
 	debug(someVar == 3.14)
@@ -346,7 +346,7 @@ inline Tests test_pyql_language()
 	// test container type members
 	// Note: we are actually testing that they
 	// get converted into functions
-	auto test13_pyql = fixIndent(R"pyql(
+	auto test13_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	someDict = { 
 		"hello": "goodbye",
@@ -399,7 +399,7 @@ inline Tests test_pyql_language()
 
 
 	// test container iterators
-	auto test14_pyql = fixIndent(R"pyql(
+	auto test14_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	someDict = { 
 		"hello": "goodbye",
@@ -472,7 +472,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test inline accumulators `sum/count/avg/min/max where` 
-	auto test15_pyql = fixIndent(R"pyql(
+	auto test15_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	capture_stuff( 1 + 2, DISTINCT fruit where \
 		fruit is not 'banana', "rain" + " in " + "spain")
@@ -517,7 +517,7 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test sdk functions (1)
-	auto test16_pyql = fixIndent(R"pyql(
+	auto test16_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
 	# bucket always rounds to the lower bucket
 	# it is useful when generating distributions
@@ -549,108 +549,143 @@ inline Tests test_pyql_language()
 	)pyql");
 
 	// test slicing of strings and arrays
-	auto test17_pyql = fixIndent(R"pyql(
+	auto test17_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
     # test slicing lists
     some_array = ['zero', 'one', 'two', 'three', 'four', 'five']
 
 	new_array = some_array[1:3]
+    # 1
 	debug(len(new_array) == 2 and new_array[0] == 'one' and new_array[1] == 'two')
 
 	new_array = some_array[:2]
+    # 2
 	debug(len(new_array) == 2 and new_array[0] == 'zero' and new_array[1] == 'one')
 
 	new_array = some_array[2:]
+    # 3
 	debug(len(new_array) == 4 and new_array[0] == 'two')
 
 	new_array = some_array[:]
+    # 4
 	debug(len(new_array) == 6 and new_array[0] == 'zero' and new_array[5] == 'five')
 
 	new_array = some_array[-1:]
+    # 5
 	debug(len(new_array) == 1 and new_array[0] == 'five')
 
 	new_array = some_array[-3:-2]
+    # 6
 	debug(len(new_array) == 1 and new_array[0] == 'three')
 
     # test slicing strings
 	some_string = 'the rain in spain'
 
 	new_string = some_string[-5:]
+    # 7
 	debug(new_string == 'spain')
 
 	new_string = some_string[:3]
+    # 8
 	debug(new_string == 'the')
 
 	new_string = some_string[4:8]
+    # 9
 	debug(new_string == 'rain')
 
 	# test find and rfind
     index = some_string.find('rain')
+    # 10
 	debug(index == 4)
 
     index = some_string.find('teeth')
+    # 11
 	debug(index == -1)
 
     index = some_string.find('in', 8)
+    # 12
 	debug(index == 9)
 
     index = some_string.rfind('in', 0)
+    # 13
 	debug(index == 15)
 
     index = some_string.rfind('the')
+    # 14
 	debug(index == 0)
 
     index = some_string.rfind('rain', 8)
+    # 15
 	debug(index == 4)
 
     index = some_string.find('rain', 0, 7)
+    # 16
 	debug(index == -1)
 
 	# test split
 	some_string = 'see spot run'
 	parts = some_string.split(' ')
+    # 17
 	debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
 
 	some_string = 'this::is::fun'
 	parts = some_string.split('::')
+    # 18
 	debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
 
 	some_string = "this won't split"
 	parts = some_string.split('|')
+    # 19
 	debug(parts[0] == some_string)
 
 	# test strip
 
 	some_string = '\t  this is a string \r\n'
 	clean = some_string.strip()
+    # 20
 	debug(clean == 'this is a string')
 
 	some_string = "\t \n \r"
 	clean = some_string.strip()
+    # 21
 	debug(clean == '')
 	
 	some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
 	parts = url_decode(some_url)
 
+    # 22
 	debug(parts['host'] == 'somehost.com')
+    # 23
     debug(parts['path'] == '/this/is/the/path')
+    # 24
 	debug(parts['query'] == 'param1=one&param2=two&param3')
+    # 25
 	debug(len(parts['params']) == 3)
+    # 26
     debug(parts['params']['param1'] == 'one')
+    # 27
     debug(parts['params']['param2'] == 'two')
+    # 28
     debug(parts['params']['param3'] == True)
 
 	some_url = "/this/is/the/path?param1=one"
 	parts = url_decode(some_url)
+    # 29
 	debug(parts['host'] == None)
+    # 30
     debug(parts['path'] == '/this/is/the/path')
+    # 31
     debug(len(parts['params']) == 1)
+    # 32
     debug(parts['params']['param1'] == 'one')
 
 	some_url = "/this/is/the/path"
 	parts = url_decode(some_url)
+    # 34
 	debug(parts['host'] == None)
+    # 35
     debug(parts['path'] == '/this/is/the/path')
+    # 36
     debug(len(parts['params']) == 0)
 
 	)pyql");
@@ -743,13 +778,13 @@ inline Tests test_pyql_language()
 					for (auto e : events)
 					{
 						ASSERT(e->xPathInt("/stamp", 0) != 0);
-						ASSERT(e->xPath("/attr") != nullptr);
+						ASSERT(e->xPath("/_") != nullptr);
 
 						person.insert(e);
 					}
 
 					auto grid = person.getGrid();
-					auto json = grid->toJSON(false); // non-condensed
+					auto json = grid->toJSON(); // non-condensed
 
 					// NOTE - uncomment if you want to see the results
 					// cout << cjson::Stringify(&json, true) << endl;
@@ -776,7 +811,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -826,7 +861,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -873,7 +908,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -924,7 +959,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -977,7 +1012,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1030,7 +1065,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1083,7 +1118,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1136,7 +1171,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1183,7 +1218,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1236,7 +1271,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1288,7 +1323,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1339,7 +1374,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1389,7 +1424,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1439,7 +1474,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1489,7 +1524,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1539,7 +1574,7 @@ inline Tests test_pyql_language()
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -1583,12 +1618,12 @@ inline Tests test_pyql_language()
 					p.compileQuery(test17_pyql.c_str(), table->getColumns(), queryMacros);
 					ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
 
-					//cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+					//cout << openset::query::MacroDbg(queryMacros) << endl;
 
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
 
-					openset::result::ResultSet resultSet;
+					openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 					interpreter->setResultObject(&resultSet);
 
 					auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			

@@ -43,7 +43,6 @@ namespace openset
 
 		enum class flagType_e : int16_t
 		{
-			feature_eof = 0, // end of list
 			feature_trigger = 1, // trigger
 			future_trigger = 2, // scheduled trigger
 		};
@@ -95,7 +94,7 @@ namespace openset
 			int32_t linId;
 			int32_t bytes; // bytes when uncompressed
 			int32_t comp; // bytes when compressed
-			int32_t propBytes;
+			int32_t setBytes;
 			int16_t idBytes; // number of bytes in id string
 			int16_t flagRecords; // number of flag records
 			char events[1]; // char* (1st byte) of packed event struct
@@ -108,14 +107,16 @@ namespace openset
 			// personData_s must already be sized, null not required
 			void setIdStr(std::string &idString)
 			{
-				std::memcpy(events, idString.c_str(), idString.length());
-				idBytes = idString.length();
+                const int16_t idMaxLen = (idString.length() > 64) ? 64 : static_cast<int16_t>(idString.length());
+				std::memcpy(events, idString.c_str(), idMaxLen);
+                idBytes = idMaxLen;
 			}
 
 			void setIdStr(char* idString, const int len)
-			{
-				std::memcpy(events, idString, len);
-				idBytes = len;
+		    {
+                const int16_t idMaxLen = (len > 64) ? 64 : static_cast<int16_t>(len);
+				std::memcpy(events, idString, idMaxLen);
+				idBytes = idMaxLen;
 			}
 
 			int64_t flagBytes() const
@@ -125,13 +126,11 @@ namespace openset
 
 			int64_t size() const
 			{
-				return sizeof(PersonData_s) + comp + propBytes + idBytes + flagBytes();
+				return sizeof(PersonData_s) + comp + setBytes + idBytes + flagBytes();
 			}
 
 			Flags_s* getFlags() 
 			{
-				if (!flagRecords)
-					return nullptr;
 				return reinterpret_cast<Flags_s*>(events + idBytes);
 			}
 
@@ -140,16 +139,14 @@ namespace openset
 				return events;
 			}
 
-			char* getProps() 
+			char* getSets() 
 			{
-				if (!propBytes)
-					return nullptr;
 				return events + idBytes + flagBytes();
 			}
 
 			char* getComp() 
 			{
-				return events + idBytes + flagBytes() + propBytes;
+				return events + idBytes + flagBytes() + setBytes;
 			}
 		};
 
@@ -161,12 +158,24 @@ namespace openset
 
 		using Rows = vector<Col_s*>;
 
+        struct SetInfo_s
+        {
+            int32_t length{0};
+            int32_t offset{0};
+
+            SetInfo_s(const int32_t length, const int32_t offset) :
+                length(length),
+                offset(offset)
+            {}
+        };
+
 		class Grid
 		{
 		private:
 
 			using LineNodes = vector<cjson*>;
 			using ExpandedRows = vector<LineNodes>;
+            using SetVector = vector<int64_t>;
 
 #pragma pack(push,1)
 			struct Cast_s
@@ -180,15 +189,16 @@ namespace openset
 			const static int sizeOfCast = sizeof(Cast_s);
 
 			// mapping
-			int16_t columnMap[MAXCOLUMNS]; // TODO - FIX THIS
-			int16_t reverseMap[MAXCOLUMNS]; // TODO - AND THIS
-			int16_t isSet[MAXCOLUMNS]; // TODO - AND THIS
+			int16_t columnMap[MAXCOLUMNS]{}; // TODO - FIX THIS
+			int16_t reverseMap[MAXCOLUMNS]{}; // TODO - AND THIS
+			int16_t isSet[MAXCOLUMNS]{}; // TODO - AND THIS
 
 			unordered_map<int64_t, int32_t> insertMap;
 			// we will get our memory via stack
 			// so rows have tight cache affinity 
 			HeapStack mem;
 			Rows rows;
+            SetVector setData;
 			PersonData_s* rawData{ nullptr };
 
 			int32_t columnCount{ 0 };
@@ -207,7 +217,7 @@ namespace openset
 
 		public:
 			Grid();
-			~Grid();
+			~Grid() = default;
 
 			/**
 			* \brief maps schema to the columnMap
@@ -246,14 +256,9 @@ namespace openset
 				return reverseMap[schemaColumn];
 			}
 
-			inline char* getUUIDcStr() const
-			{
-				return rawData ? rawData->events : nullptr;
-			}
-
 			inline string getUUIDString() const
 			{
-				return rawData ? string{ rawData->events } : "";
+				return rawData ? string{ rawData->events, static_cast<size_t>(rawData->idBytes) } : "";
 			}
 
 			inline int64_t getUUID() const
@@ -276,9 +281,19 @@ namespace openset
 				return &rows;
 			}
 
+            inline const SetVector& getSetData() const
+			{
+                return setData;
+			}
+
 			inline Attributes* getAttributes() const
 			{
 				return attributes;
+			}
+
+            inline PersonData_s* getMeta() const
+			{
+			    return rawData;
 			}
 
 			AttributeBlob* getAttributeBlob() const;
@@ -288,23 +303,13 @@ namespace openset
 				return table;
 			}
 
-			cjson toJSON(const bool condensed = true) const;
+			cjson toJSON() const;
 
 			// brings object back to zero state
 			void reinit();
 
 		private:
 			Col_s* newRow();
-			/**
-			* \brief reset rows (without resetting mappings)
-			*
-			* \note reset does not reset column mappings, we really
-			*       want to do that once if we are re-using grids (or Person)
-			*       objects.
-			*/
-			ExpandedRows iterate_expand(cjson* json) const;
-
-			// ready object for re-use while maintaining mountings
 			void reset();
 		};
 	};

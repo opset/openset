@@ -74,58 +74,6 @@ using Tests = std::vector<TestItem_s>;
 using Fails = std::vector<TestFail_s>;
 
 
-// Allows inline code blocks to be indented with the C++ code
-// this detects the indent level and pulls it out and returns
-// a new string void of empty lines, tabs expanded and 
-// de-indented so the pyql parser can process it
-inline std::string fixIndent(const std::string source)
-{
-
-	std::vector<string> res;
-
-	auto parts = split(source, '\n');
-
-	auto indent = -1;
-
-	for (auto p : parts)
-	{
-		int t;
-		// replace tabs
-		while ((t = p.find('\t')) != -1)
-		{
-			p.erase(t, 1);
-			p.insert(t, "    ");
-		}
-
-		// skip empty lines or lines with just whitespace
-		if (trim(p, " ").size() == 0)
-			continue;
-
-		if (indent == -1)
-		{
-			indent = 0;
-			for (auto i = 0; i < p.length(); ++i)
-			{
-				indent = i;
-				if (p[i] != ' ')
-					break;
-			}
-		}
-
-		p = p.erase(0, indent);
-
-		res.push_back(p);
-	}
-
-	std::string outputString;
-
-	for (auto r : res)
-		outputString += r + "\n";
-
-	return outputString;
-};
-
-
 // test runner
 inline Fails runTests(Tests &tests)
 {

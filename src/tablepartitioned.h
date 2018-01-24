@@ -26,7 +26,7 @@ namespace openset
 			AttributeBlob* attributeBlob;
 			People people;
 			openset::async::AsyncLoop* asyncLoop;
-			openset::trigger::Triggers* triggers;
+			openset::revent::ReventManager* triggers;
 
 			// map of segment names to expire times
 			std::unordered_map<std::string, int64_t> segmentRefresh;
@@ -38,7 +38,7 @@ namespace openset
 			
 			explicit TablePartitioned(
 				Table* table,
-				int partition,
+				const int partition,
 				AttributeBlob* attributeBlob,
 				Columns* schema);
 

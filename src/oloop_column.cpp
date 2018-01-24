@@ -39,7 +39,7 @@ void OpenLoopColumn::prepare()
     // if we are in segment compare mode:
     if (config.segments.size())
     {
-        for (const auto segmentName : config.segments)
+        for (const auto& segmentName : config.segments)
         {
             if (segmentName == "*")
             {
@@ -51,9 +51,26 @@ void OpenLoopColumn::prepare()
             {
                 auto attr = parts->attributes.get(db::COL_SEGMENT, MakeHash(segmentName));
                 if (attr)
+                {
                     segments.push_back(attr->getBits());
+                }
                 else
-                    segments.push_back(new db::IndexBits());
+                {
+                    shuttle->reply(
+                        0,
+                        result::CellQueryResult_s{
+                            instance,
+                        {},
+                        openset::errors::Error{
+                            openset::errors::errorClass_e::run_time,
+                            openset::errors::errorCode_e::item_not_found,
+                            "missing segment '" + segmentName + "'"
+                        }
+                        }
+                    );
+                    suicide();
+                    return;
+                }
             }
         }
     }
@@ -101,19 +118,14 @@ void OpenLoopColumn::prepare()
         default: ;
     }
   
-    auto tPair = result->results.get(rowKey);
-    if (!tPair)
-    {
-        const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-        tPair = result->results.set(rowKey, t);
-    }
+    const auto aggs = result->getMakeAccumulator(rowKey);
 
     auto idx = 0;
     for (auto s : segments)
     {
         auto bits = all->getBits();
         bits->opAnd(*s);
-        tPair->second->columns[idx].value = bits->population(stopBit);
+        aggs->columns[idx].value = bits->population(stopBit);
         delete bits;
 
         ++idx;
@@ -233,12 +245,9 @@ void OpenLoopColumn::run()
                 // here we are setting the key for the bucket,
                 // this is under our root which is the column name
                 rowKey.key[1] = bucket; // value hash (or value)
-                auto tPair = result->results.get(rowKey);
-                if (!tPair)
-                {
-                    const auto t = new (result->mem.newPtr(sizeof(openset::result::Accumulator))) openset::result::Accumulator();
-                    tPair = result->results.set(rowKey, t);
-                }
+
+
+                const auto aggs = result->getMakeAccumulator(rowKey);
 
                 auto sumBits = new db::IndexBits();
 
@@ -258,7 +267,7 @@ void OpenLoopColumn::run()
                 // remove bits not in the segment
                 sumBits->opAnd(*s);
 
-                tPair->second->columns[columnIndex].value = sumBits->population(stopBit);
+                aggs->columns[columnIndex].value = sumBits->population(stopBit);
                 delete sumBits;
 
                 // we are going to handle text a little different here

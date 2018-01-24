@@ -273,7 +273,7 @@ void openset::mapping::Sentinel::runMonitor()
 		// if there are not enough (active) nodes.. or.. we are not part of a cluster...
 		// or not initialized
 		if (routes <= 1 || 
-			globals::running->state != openset::config::nodeState_e::active)
+			globals::running->state != openset::config::NodeState_e::active)
 		{
 			ThreadSleep(100);
 			continue;

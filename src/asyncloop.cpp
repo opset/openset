@@ -3,7 +3,7 @@
 
 using namespace openset::async;
 
-AsyncLoop::AsyncLoop(AsyncPool* asyncPool, int partitionId, int workerId) :
+AsyncLoop::AsyncLoop(AsyncPool* asyncPool, const int partitionId, const int workerId) :
 	queueSize(0),
 	loopCount(0),
 	asyncPool(asyncPool),
@@ -72,15 +72,8 @@ void AsyncLoop::scheduleQueued()
 	queued.clear();	
 }
 
-// moves a Cell to the cleanup queue
-void AsyncLoop::markForCleanup(OpenLoop* work)
-{
-	completed.push_back(work);
-	work->state = oloopState_e::clear;
-}
-
 // this runs one iteration of the main Loop
-bool AsyncLoop::Run(int64_t &nextRun)
+bool AsyncLoop::run(int64_t &nextRun)
 {
 	// actual number of worker cells that did anything
 	auto runCount = 0;	
@@ -90,8 +83,8 @@ bool AsyncLoop::Run(int64_t &nextRun)
 		scheduleQueued();
 
 	// nothing to do
-	if (!active.size())
-		return false;
+    if (!active.size())
+        return false;
 
 	vector<OpenLoop*> rerun;
 
@@ -122,31 +115,16 @@ bool AsyncLoop::Run(int64_t &nextRun)
 			++runCount;
 		}
 
-		if (w->state == oloopState_e::done)
-			markForCleanup(w);
+        if (w->state == oloopState_e::done)
+            delete w;
 		else
 			rerun.push_back(w); // reschedule jobs that have more to do
-
-		//this_thread::yield(); // cooperate
 	}
 
 	// swap rerun queue to active queue
 	active = std::move(rerun);
 
-	// cleanup objects every 10 runs - low tech garbage collection
-	if (++loopCount % 10 == 0 && completed.size())
-		cleanup();
-
 	// nothing to do
 	return (!runCount) ? false : true;
 }
 
-// clean up - run every 50 loops, but could be run 
-// on a timer
-void AsyncLoop::cleanup()
-{
-	for (auto w : completed)
-		delete w;
-
-	completed.clear();
-}

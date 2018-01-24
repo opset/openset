@@ -6,7 +6,6 @@
 using namespace openset::db;
 
 Person::Person():
-	data(nullptr),
 	table(nullptr),
 	attributes(nullptr),
 	blob(nullptr),
@@ -19,7 +18,6 @@ Person::~Person()
 
 void Person::reinit()
 {
-	data = nullptr;
 	table = nullptr;
 	attributes = nullptr;
 	blob = nullptr;
@@ -82,7 +80,6 @@ void Person::mount(PersonData_s* personData)
 #if defined(_DEBUG) || defined(NDEBUG)
 	Logger::get().fatal((table), "mapTable must be called before mount");
 #endif
-	data = personData;
 	grid.mount(personData);
 }
 
@@ -98,7 +95,7 @@ void Person::insert(cjson* rowData)
 
 PersonData_s* Person::commit()
 {
-	data = grid.commit();
+	auto data = grid.commit();
 	people->replacePersonRecord(data);
-	return data;
+	return data;    
 }

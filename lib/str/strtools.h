@@ -80,6 +80,8 @@ void toUpper(std::string& Text);
 // Convert a std::string into uppercase characters
 void toLower(std::string& Text);
 
+std::string toLowerCase(std::string Text);
+
 std::string char2hex(char dec);
 
 void Replace(std::string& Source, std::string Find, std::string Replace);

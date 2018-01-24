@@ -20,8 +20,8 @@ namespace openset
 		public:
 
 			CriticalSection cs;
-			AttributeBlob();
-			~AttributeBlob();
+			AttributeBlob() = default;
+			~AttributeBlob() = default;
 
 			bool isAttribute(const int32_t column, const int64_t valueHash);
 			bool isAttribute(const int32_t column, const string& value);

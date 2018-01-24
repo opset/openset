@@ -48,7 +48,7 @@ void OpenLoopPerson::run()
     person.mount(personData);
     person.prepare(); // this actually decompressed the record and populates the grid
 
-    auto json = person.getGrid()->toJSON(true);
+    auto json = person.getGrid()->toJSON();
     auto jsonString = cjson::Stringify(&json);
 
     shuttle->reply(

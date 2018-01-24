@@ -5,9 +5,9 @@
 #include "config.h"
 #include "table.h"
 #include "tablepartitioned.h"
-#include "oloop_retrigger.h"
+#include "oloop_revent.h"
 
-using namespace openset::trigger;
+using namespace openset::revent;
 
 /*
  * Triggers - is a per partition container of individual Trigger objects.
@@ -22,22 +22,21 @@ using namespace openset::trigger;
  * This allows async reconfiguration within the worker threads.
  */
 
-Triggers::Triggers(openset::db::TablePartitioned* parts):
-	table(parts->table),
-	parts(parts),
-	columns(table->getColumns()),
-	loadVersion(table->getLoadVersion())
+ReventManager::ReventManager(openset::db::TablePartitioned* parts) :
+    table(parts->table),
+    parts(parts),
+    columns(table->getColumns()),
+    loadVersion(table->getLoadVersion())
 {
-	load();
+    start();
 }
 
-Triggers::~Triggers() 
+ReventManager::~ReventManager() 
 {}
 
-
-void Triggers::load() 
+void ReventManager::start() 
 {
-	{
+	{ // scope for lock
 		csLock lock(globals::running->cs);
 
 		// set the config version for this load
@@ -45,62 +44,59 @@ void Triggers::load()
 
 		// record the IDs we have before config syncing
 		std::unordered_set<std::string> beforeNames;
-		for (auto &t : triggers)
+		for (auto &t : revents)
 			beforeNames.insert(t.second->getName());
 
 		// get triggers from tables object
-		auto triggerList = table->getTriggerConf();
+	    const auto triggerList = table->getTriggerConf();
 
 		for (auto &t : *triggerList)
 		{
 			if (!t.first.size()) // bad name?
 				continue;
 
-			if (!triggers.count(t.second->id))
+			if (!revents.count(t.second->id))
 			{
-				auto trigger = new Trigger(t.second, parts);
-				triggers[t.second->id] = trigger;
+			    const auto trigger = new Revent(t.second, parts);
+				revents[t.second->id] = trigger;
 			}
 		}
 
 		// compare trigger list to before Ids, see if any 
 		// were deleted
-		for (auto t : beforeNames)
-		{
+		for (const auto t : beforeNames)
 			if (triggerList->count(t) == 0)
 			{
 				// DELETE
 				auto id = MakeHash(t);
-				delete triggers[id]; // delete the object
-				triggers.erase(id); // erase if form the hash
+				delete revents[id]; // delete the object
+				revents.erase(id); // erase if form the hash
 
 				cout << "this happened on " << parts->partition << endl;
 				// TODO - delete this from the Attributes Object as well
 			}
-		}
 	}
 
-	// schedule the re-trigger job
+	// create the re-trigger job (it will continue to remake itself after)
 	async::OpenLoop* newCell = new async::OpenLoopRetrigger(table);
-	newCell->scheduleFuture(5000); // run this in 15 seconds
-
+    // first run in 5 seconds
+	newCell->scheduleFuture(5000); 
 	// add it to the async loop for this partition
 	parts->asyncLoop->queueCell(newCell);
 }
 
-void Triggers::dispatchMessages() const
+void ReventManager::dispatchMessages() const
 {
 	csLock lock(globals::running->cs);
 
 	auto triggers = parts->triggers->getTriggerMap();
 
 	for (auto &t : triggers)
-		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);
-	
+		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);	
 }
 
-void Triggers::checkForConfigChange()
+void ReventManager::checkForConfigChange()
 {
 	if (loadVersion != table->getLoadVersion())
-		load();
+		start();
 }

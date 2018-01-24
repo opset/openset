@@ -18,40 +18,36 @@ namespace openset
 
 namespace openset
 {
-	namespace trigger
+	namespace revent
 	{
 
-		class Triggers
+		class ReventManager
 		{
-		private:
 			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 			openset::db::Columns* columns;
-			std::unordered_map<int64_t, Trigger*> triggers;
+			std::unordered_map<int64_t, Revent*> revents;
 			int64_t loadVersion;
 
 		public:
+			explicit ReventManager(openset::db::TablePartitioned* parts);
+			~ReventManager();
 
-			explicit Triggers(openset::db::TablePartitioned* parts);
-			~Triggers();
+			void start();
 
-			void load();
-
-			std::unordered_map<int64_t, Trigger*>& getTriggerMap()
+			std::unordered_map<int64_t, Revent*>& getTriggerMap()
 			{
-				return triggers;
+				return revents;
 			}
 
-			Trigger* getTrigger(int64_t triggerId)
+			Revent* getRevent(const int64_t triggerId)
 			{
-				auto iter = triggers.find(triggerId);
-				return (iter == triggers.end()) ? nullptr : iter->second;
+			    const auto iter = revents.find(triggerId);
+				return (iter == revents.end()) ? nullptr : iter->second;
 			}			
 
 			void dispatchMessages() const;
-
 			void checkForConfigChange();
-
 		};
 	};
 };

@@ -2,27 +2,41 @@
 #include <algorithm>
 #include <sstream>
 #include "cjson/cjson.h"
+#include "mem/bigring.h"
 #include "tablepartitioned.h"
 
 using namespace openset::result;
 
 static char NA_TEXT[] = "n/a";
 
-ResultSet::ResultSet()
+ResultSet::ResultSet(const int64_t resultWidth) :
+    resultWidth(resultWidth)
 {
-    for (auto &a : accTypes)
-        a = ResultTypes_e::Int;
-
-    for (auto &m : accModifiers)
-        m = query::Modifiers_e::sum;
+    accTypes.resize(resultWidth, ResultTypes_e::Int);
+    accModifiers.resize(resultWidth, query::Modifiers_e::sum);
 }
 
 ResultSet::ResultSet(ResultSet&& other) noexcept:
 	results(std::move(other.results)),
 	mem(std::move(other.mem)),
-	localText(std::move(other.localText))
+	resultWidth(other.resultWidth),
+    localText(std::move(other.localText)),
+    accTypes(std::move(other.accTypes)),
+    accModifiers(std::move(other.accModifiers))
 {
 	cout << "result move constructor" << endl;
+}
+
+ResultSet& ResultSet::operator=(ResultSet&& other) noexcept
+{
+	results = std::move(other.results);
+	mem = std::move(other.mem);
+	resultWidth = other.resultWidth;
+    localText = std::move(other.localText);
+    accTypes = std::move(other.accTypes);
+    accModifiers = std::move(other.accModifiers);
+
+    return *this;    
 }
 
 void ResultSet::makeSortedList()
@@ -53,21 +67,13 @@ void ResultSet::makeSortedList()
 		});
 }
 
-void ResultSet::setAtDepth(RowKey& key, const function<void(Accumulator*)> set_cb)
-{
-	auto tPair = results.get(key);
-
-	if (!tPair)
-	{
-		const auto t = new (mem.newPtr(sizeof(Accumulator))) Accumulator();
-		tPair = results.set(key, t);
-	}
-
-	set_cb(tPair->second);
-}
-
 void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 {
+
+    const auto resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
+
+    accTypes.resize(resultWidth, ResultTypes_e::Int);
+    accModifiers.resize(resultWidth, query::Modifiers_e::sum);
 
     auto dataIndex = -1;
     for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
@@ -149,11 +155,25 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
     }
 }
 
+Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
+{
+    auto tPair = results.get(key);
+
+    if (!tPair)
+    {
+        const auto resultBytes = resultWidth * sizeof(Accumulation_s);
+        const auto t = new (mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
+        tPair = results.set(key, t);
+    }
+        
+    return tPair->second;
+}
 
 void mergeResultTypes(
     std::vector<openset::result::ResultSet*>& resultSets)
 {
-    ResultTypes_e accTypes[ACCUMULATOR_DEPTH];
+    const size_t resultWidth = resultSets[0]->resultWidth;
+    std::vector<ResultTypes_e> accTypes(resultWidth);
 
     for (auto &a : accTypes)
         a = ResultTypes_e::Int;
@@ -170,7 +190,7 @@ void mergeResultTypes(
     }
 
     for (auto s : resultSets)
-        memcpy(s->accTypes, accTypes, sizeof(accTypes));
+        s->accTypes = accTypes;
 }
 
 bigRing<int64_t, const char*> mergeResultText(
@@ -233,7 +253,7 @@ ResultSet::RowVector mergeResultSets(
 
 		// add it the merge list
 		mergeList.push_back(&r->sortedResult);
-		count += r->sortedResult.size();
+		count += static_cast<int>(r->sortedResult.size());
 	}
 
 	ResultSet::RowVector merged;
@@ -243,6 +263,7 @@ ResultSet::RowVector mergeResultSets(
         return merged;
 
 	vector<ResultSet::RowVector::iterator> iterators;
+    iterators.reserve(mergeList.size());
 
 	const auto shiftIterations = resultSetCount ? resultSetCount : 1;
     const auto shiftSize = resultColumnCount;
@@ -384,6 +405,8 @@ char* ResultMuxDemux::multiSetToInternode(
     auto mergedText = mergeResultText(resultSets);
     auto rows = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
 
+    const size_t resultWidth = resultColumnCount * (resultSetCount ? resultSetCount : 1);
+
     bufferLength = 0;
 
     // we are going to serialize to a HeapStack object
@@ -399,6 +422,11 @@ char* ResultMuxDemux::multiSetToInternode(
 
                                // first 8 bytes are the sized of the block
                                // Note: this is a pointer to the the first 8 bytes of the block
+
+
+    const auto resultWidthPtr = reinterpret_cast<int64_t*>(mem.newPtr(8));
+    *resultWidthPtr = resultWidth;
+
     const auto blockCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
     *blockCount = rows.size();
 
@@ -408,12 +436,14 @@ char* ResultMuxDemux::multiSetToInternode(
     const auto textCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
     *textCount = mergedText.size();
 
-    // record the types and accumulators
-    const auto types = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accTypes)));
-    memcpy(types, resultSets[0]->accTypes, sizeof(ResultSet::accTypes));
+    // record the types and accumulators (only resultWidth count)
+    const auto types = reinterpret_cast<char*>(mem.newPtr(sizeof(result::ResultTypes_e) * resultWidth));
+    memcpy(types, &resultSets[0]->accTypes[0], sizeof(result::ResultTypes_e) * resultWidth);
 
-    const auto modifiers = reinterpret_cast<char*>(mem.newPtr(sizeof(ResultSet::accModifiers)));
-    memcpy(modifiers, resultSets[0]->accModifiers, sizeof(ResultSet::accModifiers));
+    const auto modifiers = reinterpret_cast<char*>(mem.newPtr(sizeof(query::Modifiers_e) * resultWidth));
+    memcpy(modifiers, &resultSets[0]->accModifiers[0], sizeof(query::Modifiers_e) * resultWidth);
+
+    const auto accumulatorSize = resultWidth * sizeof(Accumulation_s);
 
     // iterate the result set
     for (const auto r : rows)
@@ -421,11 +451,11 @@ char* ResultMuxDemux::multiSetToInternode(
         // make space for a key
         const auto keyPtr = recast<openset::result::RowKey*>(mem.newPtr(sizeof(openset::result::RowKey)));
         // make space for the columns
-        const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(sizeof(openset::result::Accumulator)));
+        const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(accumulatorSize));
 
         // copy the values
         memcpy(keyPtr, r.first.key, sizeof(openset::result::RowKey));
-        memcpy(accumulatorPtr, r.second->columns, sizeof(openset::result::Accumulator));
+        memcpy(accumulatorPtr, r.second->columns, accumulatorSize);
     }
 
     // lets encode the text. 
@@ -470,16 +500,9 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	char* data,
 	const int64_t blockLength)
 {
-	// we are going to make a sorta-bogus result object.
-	// the actual 
-	auto result = new openset::result::ResultSet();
-
-	// we are making a partial result set, just sorteResult vector filled
-	result->isPremerged = true; 
-
 	// empty result
-	if (!isInternode(data, blockLength))
-		return result;
+    if (!isInternode(data, blockLength))
+        return new openset::result::ResultSet(1);
 
 	auto read = data;
 	const auto end = data + blockLength;
@@ -487,17 +510,32 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 	read += 2; // move passed binary marker
 
 	// more naughty C'ish looking stuff
+    const auto resultWidth = *reinterpret_cast<int64_t*>(read);
+    read += 8;
 	const auto blockCount = *reinterpret_cast<int64_t*>(read);
 	read += 8;
 	const auto textCount = *reinterpret_cast<int64_t*>(read);
 	read += 8;
 
-    // record the types and accumulators
-    memcpy(result->accTypes, read, sizeof(ResultSet::accTypes));
-    read += sizeof(ResultSet::accTypes);
+    // we are going to make a sorta-bogus result object.
+    // the actual 
+    auto result = new openset::result::ResultSet(resultWidth);
 
-    memcpy(result->accModifiers, read, sizeof(ResultSet::accModifiers));
-    read += sizeof(ResultSet::accModifiers);
+    // we are making a partial result set, just sorteResult vector filled
+    result->isPremerged = true;
+    
+    // record the types and accumulators
+    result->accTypes.resize(resultWidth, ResultTypes_e::Int);
+    auto bytes = sizeof(ResultTypes_e) * resultWidth;
+    memcpy(&result->accTypes[0], read, bytes);
+    read += bytes;
+
+    result->accModifiers.resize(resultWidth, query::Modifiers_e::sum);
+    bytes = sizeof(query::Modifiers_e) * resultWidth;
+    memcpy(&result->accModifiers[0], read, bytes);
+    read += bytes;
+    
+    const auto accumulatorSize = resultWidth * sizeof(Accumulation_s);
     
 	for (auto i = 0; i < blockCount; ++i)
 	{
@@ -508,10 +546,9 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
 		read += sizeof(openset::result::RowKey);
 
 		auto accumulatorPtr = recast<openset::result::Accumulator*>(read);
-		read += sizeof(openset::result::Accumulator);
+		read += accumulatorSize;
 
-		result->sortedResult.emplace_back(
-			openset::result::ResultSet::RowPair{ *keyPtr, accumulatorPtr });
+		result->sortedResult.emplace_back(*keyPtr, accumulatorPtr);
 	}
 
 	for (auto i = 0; i < textCount; ++i)
@@ -620,12 +657,12 @@ void ResultMuxDemux::resultSetToJson(
                 break;
             case ResultTypes_e::Text:
                 {
-                auto text = getText(currentKey.key[depth]);
+                    const auto text = getText(currentKey.key[depth]);
 
-                if (text != NA_TEXT)
-                    entry->set("g", text);
-                else
-                    entry->set("g", currentKey.key[depth]);
+                    if (text != NA_TEXT)
+                        entry->set("g", text);
+                    else
+                        entry->set("g", currentKey.key[depth]);
                 }
                 break;
             case ResultTypes_e::None: 
@@ -712,7 +749,8 @@ void ResultMuxDemux::resultSetToJson(
 
 		// check to see if the next row is wider (rows[count+1].first is next key)
 		// if it is, lets add a nesting level and set current to that level
-		if (rowCounter < rows.size()-1 && rows[rowCounter+1].first.getDepth() > currentKey.getDepth())
+		if (rowCounter < static_cast<int>(rows.size())-1 && 
+            rows[rowCounter+1].first.getDepth() > currentKey.getDepth())
 		{
 			current = entry->pushArray();
 			current->setName("_");
@@ -756,140 +794,162 @@ void ResultMuxDemux::jsonResultHistogramFill(
     const int64_t forceMin, 
     const int64_t forceMax)
 {
-    auto valuesNode = doc->xPath("/_/0/_");
+    const auto valuesNode = doc->xPath("/_/0/_");
 
     if (!valuesNode)
         return;
 
-    const auto nodes = valuesNode->getNodes();
+    const auto isDeep = doc->xPath("/_/0/_/0/_") != nullptr;
 
-    if (!nodes.size())
-        return;
+    std::vector<cjson*> rootList;
 
-    const auto countArrays = nodes[0]->memberCount - 1;
-        
-    auto min = std::numeric_limits<int64_t>::max();
-    auto max = std::numeric_limits<int64_t>::min();
-
-    unordered_set<int64_t> knownValues;
-
-    auto isDouble = false;
-
-    for (auto n : nodes)
+    if (isDeep) // this gathers _ arrays one level deeper for for_each histograms
     {
-        const auto gNode = n->find("g");
-        int64_t value = 0;
-
-        switch (gNode->type())
+        auto tlist = doc->xPath("/_/0/_")->getNodes();
+        for (auto tNode : tlist)
         {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
-            value = gNode->getInt() * 10000;
-            isDouble = false;
-            break;
-        case cjsonType::DBL:
-            value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
-            isDouble = true;
-            break;
-        case cjsonType::STR:
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
-        default:
-            value = 0;;
-        }
-
-        knownValues.insert(value);
-
-        if (value > max)
-            max = value;
-        if (value < min)
-            min = value;
-    }
-
-    if (forceMin != std::numeric_limits<int64_t>::min())
-        min = forceMin;
-
-    if (forceMax != std::numeric_limits<int64_t>::min())
-        max = forceMax;
-
-    std::vector<int64_t> overflow = { 0,0,0,0,0,0,0,0 };
-
-    for (auto n : nodes)
-    {
-        const auto gNode = n->find("g");
-        int64_t value = 0;
-
-        switch (gNode->type())
-        {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
-            value = gNode->getInt() * 10000;
-            isDouble = false;
-            break;
-        case cjsonType::DBL:
-            value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
-            isDouble = true;
-            break;
-        case cjsonType::STR:
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
-        default:
-            value = 0;;
-        }
-
-        if (value >= max)
-        {
-            // we are looking for the values in "c": and "c1": etc.
-            // we are storing them in overflow
-            for (auto c = 0; c < countArrays; ++c)
-            {
-                const auto cBranch = n->find(c == 0 ? "c" : "c" + to_string(c + 1));
-                const auto cNodes = cBranch->getNodes();
-                if (cNodes.size())
-                    overflow[c] += cNodes[0]->getInt();
-            }
-
-            n->setType(cjsonType::VOIDED);
-        }
-        else
-        {
-            knownValues.insert(value);
+            if (auto underscore = tNode->find("_"); underscore)
+                rootList.push_back(underscore);
         }
     }
-
-    for (auto i = min; i < max; i += bucket)
-    {
-        if (!knownValues.count(i))
-        {
-            auto newBranch = valuesNode->pushObject();
-            if (isDouble)
-                newBranch->set("g", static_cast<double>(i) / 10000.0);
-            else
-                newBranch->set("g", i / 10000);
-
-            for (auto c = 0; c < countArrays; ++c)
-            {
-                auto cBranch = newBranch->setArray( c == 0 ? "c" : "c" + to_string(c+1));
-                cBranch->push(static_cast<int64_t>(0));
-            }
-        }
-    }
-
-    // re-inject the max branch
-    auto newBranch = valuesNode->pushObject();
-    if (isDouble)
-        newBranch->set("g", static_cast<double>(max) / 10000.0);
     else
-        newBranch->set("g", max / 10000);
-
-    for (auto c = 0; c < countArrays; ++c)
     {
-        auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
-        cBranch->push(static_cast<int64_t>(overflow[c]));
+        rootList = { valuesNode };
+    }
+
+    for (auto root : rootList)
+    {
+        const auto nodes = root->getNodes();
+
+        if (!nodes.size())
+            return;
+
+        const auto countArrays = nodes[0]->memberCount - 1;
+
+        auto min = std::numeric_limits<int64_t>::max();
+        auto max = std::numeric_limits<int64_t>::min();
+
+        std::unordered_set<int64_t> knownValues;
+
+        auto isDouble = false;
+
+        for (auto n : nodes)
+        {
+            const auto gNode = n->find("g");
+            int64_t value = 0;
+
+            switch (gNode->type())
+            {
+            case cjsonType::BOOL:
+            case cjsonType::INT:
+                value = gNode->getInt() * 10000;
+                isDouble = false;
+                break;
+            case cjsonType::DBL:
+                value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
+                isDouble = true;
+                break;
+            case cjsonType::STR:
+            case cjsonType::OBJECT:
+            case cjsonType::ARRAY:
+            case cjsonType::VOIDED:
+            case cjsonType::NUL:
+            default:
+                value = 0;;
+            }
+
+            knownValues.insert(value);
+
+            if (value > max)
+                max = value;
+            if (value < min)
+                min = value;
+        }
+
+        if (forceMin != std::numeric_limits<int64_t>::min())
+            min = forceMin;
+
+        if (forceMax != std::numeric_limits<int64_t>::min())
+            max = forceMax;
+
+        std::vector<int64_t> overflow = { 0,0,0,0,0,0,0,0 };
+
+        for (auto n : nodes)
+        {
+            const auto gNode = n->find("g");
+            int64_t value = 0;
+
+            switch (gNode->type())
+            {
+            case cjsonType::BOOL:
+            case cjsonType::INT:
+                value = gNode->getInt() * 10000;
+                isDouble = false;
+                break;
+            case cjsonType::DBL:
+                value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
+                isDouble = true;
+                break;
+            case cjsonType::STR:
+            case cjsonType::OBJECT:
+            case cjsonType::ARRAY:
+            case cjsonType::VOIDED:
+            case cjsonType::NUL:
+            default:
+                value = 0;;
+            }
+
+            if (value >= max)
+            {
+                // we are looking for the values in "c": and "c1": etc.
+                // we are storing them in overflow
+                for (auto c = 0; c < countArrays; ++c)
+                {
+                    const auto cBranch = n->find(c == 0 ? "c" : "c" + to_string(c + 1));
+                    const auto cNodes = cBranch->getNodes();
+                    if (cNodes.size())
+                        overflow[c] += cNodes[0]->getInt();
+                }
+
+                n->setType(cjsonType::VOIDED);
+            }
+            else
+            {
+                knownValues.insert(value);
+            }
+        }
+
+        for (auto i = min; i < max; i += bucket)
+        {
+            if (!knownValues.count(i))
+            {
+                auto newBranch = root->pushObject();
+                if (isDouble)
+                    newBranch->set("g", static_cast<double>(i) / 10000.0);
+                else
+                    newBranch->set("g", i / 10000);
+
+                for (auto c = 0; c < countArrays; ++c)
+                {
+                    auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
+                    cBranch->push(static_cast<int64_t>(0));
+                }
+            }
+        }
+
+        // re-inject the max branch
+        auto newBranch = root->pushObject();
+        if (isDouble)
+            newBranch->set("g", static_cast<double>(max) / 10000.0);
+        else
+            newBranch->set("g", max / 10000);
+
+        for (auto c = 0; c < countArrays; ++c)
+        {
+            auto cBranch = newBranch->setArray(c == 0 ? "c" : "c" + to_string(c + 1));
+            cBranch->push(static_cast<int64_t>(overflow[c]));
+        }
+
     }
 
 }
@@ -951,7 +1011,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
             leftValue = colLeft->getDouble();
             break;
         case cjsonType::STR:
-            leftValue = colLeft->getString();
+            leftValue = toLowerCase(colLeft->getString());
             break;
         case cjsonType::OBJECT:
         case cjsonType::ARRAY:
@@ -971,7 +1031,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
             rightValue = colRight->getDouble();
             break;
         case cjsonType::STR:
-            rightValue = colRight->getString();
+            rightValue = toLowerCase(colRight->getString());
             break;
         case cjsonType::OBJECT:
         case cjsonType::ARRAY:

@@ -7,72 +7,41 @@
 #include "config.h"
 #include "file/file.h"
 
-using namespace openset::trigger;
+using namespace openset::revent;
 
-Trigger::Trigger(triggerSettings_s* settings, openset::db::TablePartitioned* parts) :
+Revent::Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts) :
 	settings(settings),
+	lastConfigVersion(settings->configVersion),
 	table(parts->table),
 	parts(parts),
 	interpreter(nullptr),
 	person(nullptr),
-	attr(nullptr),
-	bits(nullptr), 
+	attr(nullptr), 
+	bits(nullptr),
 	currentFunctionHash(0),
 	runCount(0),
 	beforeState(false),
-	inError(false),
-	lastConfigVersion(settings->configVersion)
+	inError(false)
 {
 	init();
 }
-
-Trigger::~Trigger() 
-{}
 
 /* compileTrigger is a static function called by the Triggers class. 
  *  
  *  Purpose is to compile a trigger so it can be shared amongst instances of the
  *  trigger class.
  */
-openset::errors::Error Trigger::compileTrigger(
+openset::errors::Error Revent::compileTriggers(
 	openset::db::Table* table, 
-	std::string name, 
-	std::string script,
+	const std::string &script,
 	openset::query::Macro_s &targetMacros)
 {
-
-/*
-	auto fileName =
-		cfg::manager->path + "tables/" + table->getName() +
-		"/triggers/" + name + ".pyql";
-
-	auto size = OpenSet::IO::File::FileSize(fileName.c_str());
-
-	auto file = fopen(fileName.c_str(), "rb");
-
-	if (file == nullptr)
-	{
-		OpenSet::errors::Error error;
-		error.set(
-			OpenSet::errors::errorClass_e::config,
-			OpenSet::errors::errorCode_e::could_not_open_trigger,
-			"could not open trigger '" + name + "' for table '" + table->getName() + "'." );
-		return error;
-	}
-
-	auto data = recast<char*>(PoolMem::getPool().getPtr(size + 1));
-
-	fread(data, 1, size, file);
-	fclose(file);
-	data[size] = 0;
-*/
-
 	openset::query::QueryParser p;	
 	p.compileQuery(script.c_str(), table->getColumns(), targetMacros);	
 	return p.error;
 }
 
-void Trigger::init()
+void Revent::init()
 {
 	// local copy of macros
 	macros = settings->macros;
@@ -97,7 +66,7 @@ void Trigger::init()
 	bits->mount(attr->index, attr->ints, attr->linId);
 
 	// this call back will be called by the 'schedule' marshal in the interpretor
-	auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
+	const auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
 	{
 
 		// clear it if it's already set
@@ -121,13 +90,14 @@ void Trigger::init()
 
 	interpreter->setScheduleCB(schedule_cb);
 
+    /*
 	// this call back will be called by the 'schedule' marshal in the interpretor
 	auto emit_cb = [&](std::string emitMessage) -> bool
 	{
 
 		// flip some bits when we emits - these will get flushed by the 
 		// standard dirty write back on insert
-		auto emitAttr = parts->attributes.getMake(COL_EMIT, emitMessage);
+		parts->attributes.getMake(COL_EMIT, emitMessage);
 		parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
 
 		// queue trigger messages, these are held on a per trigger basis
@@ -143,19 +113,14 @@ void Trigger::init()
 
 		return true;
 	};
+    */
 
-	interpreter->setEmitCB(emit_cb);
+	//interpreter->setEmitCB(emit_cb);
 
 	lastConfigVersion = settings->configVersion;
-
-	/*Logger::get().info(
-		' ', 
-		"initialized trigger '" + settings->name + "' on table '" + table->getName() + 
-		"' on partition " + to_string(parts->partition) + ".");
-	*/
 }
 
-void Trigger::flushDirty() 
+void Revent::flushDirty() 
 {
 	/*
 	*  Unlike regular attributes, triggers keep a local uncompressed bit index
@@ -168,7 +133,7 @@ void Trigger::flushDirty()
 	*/
 
 	int64_t compBytes = 0; // OUT value via reference filled by ->store
-	int32_t linId = -1;
+	int64_t linId = -1;
 	const auto compData = bits->store(compBytes, linId);
 
 	auto attrPair = parts->attributes.columnIndex.find({ COL_TRIGGERS, settings->id }); // settings.id is this trigger
@@ -191,7 +156,7 @@ void Trigger::flushDirty()
 	attr = newAttr;
 }
 
-void Trigger::mount(openset::db::Person* personPtr)
+void Revent::mount(openset::db::Person* personPtr)
 {
 	if (inError)
 		return;
@@ -199,7 +164,7 @@ void Trigger::mount(openset::db::Person* personPtr)
 	interpreter->mount(person);
 }
 
-void Trigger::preInsertTest()
+void Revent::preInsertTest()
 {
 	checkReload();
 
@@ -210,7 +175,7 @@ void Trigger::preInsertTest()
 	beforeState = bits->bitState(person->getMeta()->linId);
 }
 
-void Trigger::postInsertTest()
+void Revent::postInsertTest()
 {
 	checkReload();
 
@@ -222,18 +187,50 @@ void Trigger::postInsertTest()
 
 	currentFunctionHash = settings->entryFunctionHash;
 	interpreter->exec(settings->entryFunctionHash); // call the script 'trigger' function
+    emit(settings->entryFunction);
 
-	if (!beforeState && interpreter->jobState)
-		bits->bitSet(person->getMeta()->linId);
+    // this bit tells us we already ran this function
+    if (!beforeState && interpreter->jobState)
+        bits->bitSet(person->getMeta()->linId);
 }
 
-bool Trigger::runFunction(const int64_t functionHash)
+bool Revent::emit(const std::string& methodName)
+{
+    auto returns = interpreter->getLastReturn();
+
+    if (!returns.size() || returns[0] == NONE)
+        return false;
+
+    const auto emitMessage = returns[0];
+
+    // flip some bits when we emits - these will get flushed by the 
+    // standard dirty write back on insert
+    parts->attributes.getMake(COL_EMIT, emitMessage);
+    parts->attributes.addChange(COL_EMIT, MakeHash(emitMessage), person->getMeta()->linId, true);
+
+    // queue trigger messages, these are held on a per trigger basis
+    // these are shuttled out to a master queue at some point
+
+    // push to a local, lockless queue, they will be batched into
+    // a central queue when oloop_revent is done a cycle
+    triggerQueue.emplace_back(
+        triggerMessage_s{
+            settings->id,
+            emitMessage,
+            methodName,
+            person->getMeta()->getIdStr()
+        });
+
+    return true;
+}
+
+
+bool Revent::runFunction(const int64_t functionHash)
 {
 	checkReload();
 
 	currentFunctionHash = functionHash;
 	interpreter->exec(functionHash);
-
-	return interpreter->jobState;
+    return emit(interpreter->calledFunction);
 }
 

@@ -28,7 +28,7 @@ inline Tests test_db()
 			"person": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "page_view",
-			"attr":{				
+			"_":{				
 				"page": "blog"
 			}
 		},
@@ -36,17 +36,17 @@ inline Tests test_db()
 			"person": "user1@test.com",
 			"stamp": 1458820840,
 			"action": "page_view",
-			"attr":{				
+			"_":{				
 				"page": "home page",
 				"referral_source": "google.co.uk",
-				"referral_search": ["big", "floppy", "slippers"]
+`				"referral_search": ["big", "floppy", "slippers"]
 			}
 		},
 		{
 			"person": "user1@test.com",
 			"stamp": 1458820841,
 			"action": "page_view",
-			"attr":{				
+			"_":{				
 				"page": "home page",
 				"referral_source": "google.co.uk",
 				"referral_search": ["silly", "floppy", "ears"]
@@ -56,7 +56,7 @@ inline Tests test_db()
 			"person": "user1@test.com",
 			"stamp": 1458820900,
 			"action": "page_view",
-			"attr":{				
+			"_":{				
 				"page": "about"
 			}
 		}
@@ -64,32 +64,29 @@ inline Tests test_db()
 	)raw_inserts";
 	
 
-	auto test1_pyql = fixIndent(R"pyql(
+	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count page
 		count referral_source
-		count referral_search
+		var ref
 
-	match:
-		tally(person, page, referral_source, referral_search)
+	match where page is not None:
+        for ref in referral_search:
+		    tally(person, page, referral_source, ref)
 	)pyql");
 
-	auto test_pluggable_pyql = fixIndent(R"pyql(
+	auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count {{attr_page}}
 		{{attr_ref}}
-		{{attr_keyword}}
 
 	match:
-		tally(person, \
-             {{attr_page}}, \
-             {{attr_ref}}, \
-             {{attr_keyword}})
+		tally(person, {{attr_page}}, {{attr_ref}})
 	)pyql");
 
-	auto test_within_pyql = fixIndent(R"pyql(
+	auto test_within_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count person
 		count page
@@ -159,7 +156,7 @@ inline Tests test_db()
 				columns->setColumn(2000, "page", openset::db::columnTypes_e::textColumn, false);
 				// referral (adding to 3000 range)
 				columns->setColumn(3000, "referral_source", openset::db::columnTypes_e::textColumn, false);
-				columns->setColumn(3001, "referral_search", openset::db::columnTypes_e::textColumn, false);
+				columns->setColumn(3001, "referral_search", openset::db::columnTypes_e::textColumn, true);
 
 				// do we have 10 columns (7 built ins plus 3 we added)
 				ASSERT(table->getColumns()->columnCount == 10);
@@ -207,14 +204,14 @@ inline Tests test_db()
 				for (auto e : events)
 				{
 					ASSERT(e->xPathInt("/stamp", 0) != 0);
-					ASSERT(e->xPath("/attr") != nullptr);
+					ASSERT(e->xPath("/_") != nullptr);
 
 					person.insert(e);
 				}
 
 				auto grid = person.getGrid();
 
-				auto json = grid->toJSON(false); // non-condensed
+				auto json = grid->toJSON(); // non-condensed
 
 				// NOTE - uncomment if you want to see the results
 				// cout << cjson::Stringify(&json, true) << endl;
@@ -274,11 +271,11 @@ inline Tests test_db()
 				// compile this
 				p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
 				ASSERT(!p.error.inError());
-
+                              
 				// mount the compiled query to an interpretor
 				auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet;
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 				
 				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
@@ -351,8 +348,7 @@ inline Tests test_db()
 				auto totalsNode = dataNodes[0]->xPath("/c");				
 				auto values = cjson::Stringify(totalsNode);
 
-				ASSERT(values == "[1,4,2,6]");
-
+				ASSERT(values == "[1,2,2,6]");
 			}
 		},
 		{
@@ -374,16 +370,18 @@ inline Tests test_db()
 				// compile this - passing in the template vars
 				p.compileQuery(test_pluggable_pyql.c_str(), table->getColumns(), queryMacros, &params);
 
+                // cout << openset::query::MacroDbg(queryMacros) << endl;
+
 				// mount the compiled query to an interpretor
 				auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet;
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
 				ASSERT(personRaw != nullptr);
 				auto mappedColumns = interpreter->getReferencedColumns();
-				ASSERT(mappedColumns.size() == 6);
+				ASSERT(mappedColumns.size() == 5);
 
 				Person person; // Person overlay for personRaw;
 				person.mapTable(table, 0, mappedColumns);
@@ -442,7 +440,7 @@ inline Tests test_db()
 				auto totalsNode = dataNodes[0]->xPath("/c");
 				auto values = cjson::Stringify(totalsNode);
 
-				ASSERT(values == "[1,4,2,6]");
+				ASSERT(values == "[1,4,2]");
 
 			}
 		},
@@ -470,7 +468,7 @@ inline Tests test_db()
 				// mount the compiled query to an interpretor
 				auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet;
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			

@@ -485,6 +485,9 @@ public:
 		std::sort(sortVector.begin(), sortVector.end(), sortLambda);
 
 		// relink the nodes in place (where they were allocated)
+        if (!sortVector.size())
+            return;
+
 		membersHead = sortVector.front();
 		cjson* last = nullptr;
 		for (auto n:sortVector)

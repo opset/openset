@@ -80,7 +80,6 @@ THE SOFTWARE.
 
 */
 
-#include <iostream>
 #include <iomanip>
 #include <string>
 #include <cstdlib>
@@ -247,6 +246,14 @@ public:
 		value.asInt64 = val;
 	}
 
+#ifndef _MSC_VER
+    cvar(const long long int val) :
+        type(valueType::INT64)
+    {
+        value.asInt64 = static_cast<int64_t>(val);
+    }
+#endif
+
 	cvar(const float val) :
 		type(valueType::FLT)
 	{
@@ -265,7 +272,7 @@ public:
 		valueString.assign(val);
 	}
 
-	cvar(const std::string val) :
+	cvar(const std::string& val) :
 		type(valueType::STR)
 	{
 		value.asInt64 = -1;
@@ -278,7 +285,7 @@ public:
 		value.asBool = val;
 	}
 			
-	cvar(const std::vector<cvar> val) :
+	cvar(const std::vector<cvar> &val) :
 		type(valueType::LIST)
 	{
 		listValue = new List();
@@ -300,22 +307,39 @@ public:
 
 	//cvar(const std::initializer_list<cvar>& source);
 
-	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source)
+	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source) : cvar()
 	{
 		dict();
-		for (const auto item : source)
+		for (const auto &item : source)
 			(*dictValue)[cvar{ item.first }] = cvar{ item.second };
 	}
 
 	~cvar()
 	{
-		if (listValue)
-			delete listValue;
-		if (dictValue)
-			delete dictValue;
-		if (setValue)
-			delete setValue;
+        clear();
 	}		
+
+    void clear()
+	{
+        if (listValue)
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
+        if (dictValue)
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
+        if (setValue)
+        {
+            delete setValue;
+            setValue = nullptr;
+        }
+        type = valueType::INT64;
+        value.asInt64 = 0;
+        reference = nullptr;
+	}
 
 	// makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
 	void none()
@@ -377,7 +401,7 @@ public:
 		if (!dictValue)
 			dictValue = new Dict();
 		else
-			(*dictValue).clear();
+			dictValue->clear();
 	}
 
 	// turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
@@ -398,7 +422,7 @@ public:
 		if (!setValue)
 			setValue = new Set();
 		else
-			(*setValue).clear();
+			setValue->clear();
 	}
 
 	// turns cvar into empty List like python/js: some_list = [] or some_list = list()
@@ -419,7 +443,7 @@ public:
 		if (!listValue)
 			listValue = new List();
 		else
-			(*listValue).clear();
+			listValue->clear();
 	}
 
 	Dict* getDict() const
@@ -455,7 +479,7 @@ public:
 		return setValue;
 	}
 
-	bool contains(const cvar key) const
+	bool contains(const cvar& key) const
 	{
 		if (type == valueType::LIST)
 			//return (listValue && key.getInt32() < listValue->size()) ? true : false;
@@ -466,17 +490,17 @@ public:
 			return false;
 		}
 		if (type == valueType::DICT)
-			return dictValue ? (*dictValue).count(key) != 0 : false;
+			return dictValue ? dictValue->count(key) : false;
 		if (type == valueType::SET)
-			return setValue ? (*setValue).count(key) != 0 : false;
+			return setValue ? setValue->count(key) : false;
 
 		throw std::runtime_error("not a dictionary/list/set");
 	}
 
-	cvar* getMemberPtr(cvar key) const
+	cvar* getMemberPtr(cvar& key) const
 	{
 		if (type == valueType::LIST)
-			return (listValue && key.getInt32() < listValue->size()) ? &(*listValue)[key.getInt32()] : nullptr;
+			return (listValue && key.getInt32() < static_cast<int>(listValue->size())) ? &(*listValue)[key.getInt32()] : nullptr;
 		if (type == valueType::DICT)
 			return dictValue ? &(*dictValue)[key] : nullptr;
 		return nullptr;
@@ -503,7 +527,7 @@ private:
 	{
 		const auto len = right.length();
 		size_t idx;
-		while ((idx = left.find(right)) != -1)
+		while ((idx = left.find(right)) != std::string::npos)
 			left.erase(idx, len);
 		return left;
 	}
@@ -511,7 +535,7 @@ private:
 public:
 
 	// subscript operators
-	cvar& operator[](const cvar idx) const
+	cvar& operator[](const cvar& idx) const
 	{
 		if (this->type == valueType::LIST && listValue)
 			return (*listValue)[idx.getInt32()];
@@ -552,9 +576,9 @@ public:
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
-			if (index == (*listValue).size())
+			if (index == static_cast<int>((*listValue).size()))
 				listValue->emplace_back(cvar{});
-			if (index > (*listValue).size())
+			if (index > static_cast<int>((*listValue).size()))
 				throw std::runtime_error("List index greater than list size");
 
 			return (*listValue)[std::stoi(idx)]; // may throw
@@ -574,9 +598,9 @@ public:
 
 			if (index < 0)
 				throw std::runtime_error("negative index in List");
-			if (index == (*listValue).size())
+			if (index == static_cast<int>((*listValue).size()))
 				listValue->emplace_back(cvar{});
-			if (index > (*listValue).size())
+			if (index > static_cast<int>((*listValue).size()))
 				throw std::runtime_error("List index greater than list size");
 
 			return (*listValue)[std::stoi(idx)]; // may throw
@@ -590,6 +614,7 @@ public:
 
 	void copy(const cvar &source)
 	{
+        clear();
 		this->type = source.type;
 		this->value = source.value;
 		this->valueString = source.valueString;
@@ -633,6 +658,8 @@ public:
 
 	cvar& operator=(cvar&& source) noexcept
 	{
+        clear();
+
 		this->type = source.type;
 		this->value = source.value;
 		this->valueString = std::move(source.valueString);
@@ -674,6 +701,16 @@ public:
 		value.asInt64 = source;
 		return *this;
 	}
+
+#ifndef _MSC_VER
+    // gcc seems to see long long as not being the same as int64_t
+    cvar& operator=(const long long int& source)
+    {
+        type = valueType::INT64;
+        value.asInt64 = static_cast<int64_t>(source);
+        return *this;
+    }
+#endif
 
 	cvar& operator=(const double& source)
 	{
@@ -734,7 +771,6 @@ public:
 		}
 
 		list();
-
 		*listValue = source;
 
 		return *this;
@@ -973,12 +1009,11 @@ public:
 		}
 	}
 
-	operator std::string()
+    operator std::string() const
 	{
-		this->valueString = getString();
-		return this->valueString;
+		return  getString();
 	}
-	
+
 	std::string* getStringPtr()
 	{
 		if (type != valueType::STR)
@@ -1090,7 +1125,7 @@ public:
 		if (type == valueType::SET)
 			return setValue ? static_cast<int>(setValue->size()) : 0;
 		if (type == valueType::STR)
-			return valueString.length();
+			return static_cast<int>(valueString.length());
 		return 0;
 	}
 
@@ -1477,6 +1512,15 @@ public:
 		*this = *this + right;
 		return *this;
 	}
+
+#ifndef _MSC_VER
+    // gcc seems to see long long as not being the same as int64_t
+    cvar& operator+=(const long long int& right)
+    {
+        *this = *this + static_cast<int64_t>(right);
+        return *this;
+    }
+#endif
 
 	cvar& operator+=(const float& right)
 	{
@@ -2110,6 +2154,10 @@ public:
 	friend bool operator ==(const cvar& left, const int& right);
 	friend bool operator ==(const int64_t& left, const cvar& right);
 	friend bool operator ==(const cvar& left, const int64_t& right);
+#ifndef _MSC_VER
+    friend bool operator ==(const long long int& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const long long int& right);
+#endif
 	friend bool operator ==(const float& left, const cvar& right);
 	friend bool operator ==(const cvar& left, const float& right);
 	friend bool operator ==(const double& left, const cvar& right);
@@ -2126,6 +2174,10 @@ public:
 	friend bool operator !=(const cvar& left, const int& right);
 	friend bool operator !=(const int64_t& left, const cvar& right);
 	friend bool operator !=(const cvar& left, const int64_t& right);
+#ifndef _MSC_VER
+    friend bool operator !=(const long long int& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const long long int& right);
+#endif
 	friend bool operator !=(const float& left, const cvar& right);
 	friend bool operator !=(const cvar& left, const float& right);
 	friend bool operator !=(const double& left, const cvar& right);
@@ -2323,6 +2375,49 @@ inline bool operator ==(const cvar& left, const int64_t& right)
 	}
 }
 
+#ifndef _MSC_VER
+inline bool operator ==(const long long int& left, const cvar& right)
+{
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return static_cast<int64_t>(left) == right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) == right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return std::to_string(left) == right.valueString;
+    default:
+        return false;
+    }
+}
+
+inline bool operator ==(const cvar& left, const long long int& right)
+{
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left.getInt64() == static_cast<int64_t>(right);
+    case cvar::valueType::FLT:
+        return left.getFloat() == static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() == static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.valueString == std::to_string(right);
+    default:
+        return false;
+    }
+}
+
+#endif
+
 inline bool operator ==(const float& left, const cvar& right)
 {
 	switch (right.type)
@@ -2454,6 +2549,18 @@ inline bool operator !=(const cvar& left, const int64_t& right)
 {
 	return !(left == right);
 }
+
+#ifndef _MSC_VER
+inline bool operator !=(const long long int& left, const cvar& right)
+{
+    return !(static_cast<int64_t>(left) == right);
+}
+
+inline bool operator !=(const cvar& left, const long long int& right)
+{
+    return !(left == static_cast<int64_t>(right));
+}
+#endif
 
 inline bool operator !=(const float& left, const cvar& right)
 {

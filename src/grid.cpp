@@ -13,9 +13,6 @@ Grid::Grid()
 	rows.reserve(10000);
 }
 
-Grid::~Grid()
-{}
-
 void Grid::reset()
 {
 	rows.clear(); // release the rows - likely to not free vector internals
@@ -32,7 +29,6 @@ void Grid::reinit()
 	memset(columnMap, 0, sizeof(columnMap)); // all zeros
 	memset(isSet, 0, sizeof(isSet)); // all false
 }
-
 
 /**
  * \brief maps schema to the columnMap
@@ -104,7 +100,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 	table = tablePtr;
 	attributes = attributesPtr;
 
-	if (!table || !attributes || !columnNames.size())
+	if (!table || !attributes || columnNames.empty())
 		return false;
 
 	// map the attributes blob (where text and things go) to this object
@@ -121,7 +117,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 
 	auto schema = table->getColumns();
 
-	for (const auto colName: columnNames)
+	for (const auto &colName: columnNames)
 	{
 		const auto s = schema->getColumn(colName);
 
@@ -149,7 +145,7 @@ AttributeBlob* Grid::getAttributeBlob() const
 	return attributes->blob;
 }
 
-cjson Grid::toJSON(const bool condensed) const
+cjson Grid::toJSON() const
 {
 	cjson doc;
 
@@ -157,11 +153,47 @@ cjson Grid::toJSON(const bool condensed) const
 	doc.set("id_key", this->rawData->id);
 
 	auto rowDoc = doc.setArray("rows");
-
 	auto columns = table->getColumns();
-	cjson* rowObj;
 
-	std::vector<openset::db::Col_s*> accumulator;
+    std::vector<openset::db::Col_s*> accumulator;
+
+    const auto convertToJSON = [&](cjson* branch, Columns::Columns_s* colInfo, int64_t value, bool isArray)
+    {
+		switch (colInfo->type)
+		{
+		case columnTypes_e::intColumn:
+            if (isArray)
+                branch->push(value);
+            else
+			    branch->set(colInfo->name, value);
+			break;
+		case columnTypes_e::doubleColumn:
+            if (isArray)
+                branch->push(value / 10000.0);
+            else
+			    branch->set(colInfo->name, value / 10000.0);
+			break;
+		case columnTypes_e::boolColumn:
+            if (isArray)
+                branch->push(value != 0);
+            else
+			    branch->set(colInfo->name, value != 0);
+			break;
+		case columnTypes_e::textColumn:
+		    {						
+			    if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+                {
+                    if (isArray)
+                        branch->push(text);
+                    else
+				        branch->set(colInfo->name, text);
+                }
+		    }
+		    break;
+        default:
+            break;
+		}       
+    };
 
 	for (auto iter = rows.begin(); iter != rows.end(); ++iter)
 	{
@@ -180,7 +212,7 @@ cjson Grid::toJSON(const bool condensed) const
 				rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
 				rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
 				rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
-				rowObj = rootObj->setObject("attr");
+			    auto rowObj = rootObj->setObject("attr");
 
 				for (auto c = 0; c < columnCount; ++c)
 				{
@@ -195,26 +227,18 @@ cjson Grid::toJSON(const bool condensed) const
 					if (value == NONE)
 						continue;
 
-					switch (colInfo->type)
-					{
-					case columnTypes_e::freeColumn:
-						continue;
-					case columnTypes_e::intColumn:
-						rowObj->set(colInfo->name, value);
-						break;
-					case columnTypes_e::doubleColumn:
-						rowObj->set(colInfo->name, value / 10000.0);
-						break;
-					case columnTypes_e::boolColumn:
-						rowObj->set(colInfo->name, value ? true : false);
-						break;
-					case columnTypes_e::textColumn:
-					{						
-						if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-							rowObj->set(colInfo->name, text);
-					}
-					break;
-					}
+                    if (colInfo->isSet)
+                    {
+                        const auto set = rowObj->setArray(colInfo->name);
+                        const auto info = reinterpret_cast<const SetInfo_s*>(&value);
+
+                        for (auto offset = info->offset; offset < info->offset + info->length; ++offset)
+                            convertToJSON(set, colInfo, this->setData[offset], true); 
+                    }
+                    else
+                    {
+                        convertToJSON(rowObj, colInfo, value, false);
+                    }
 				}
 			}
             else // more than one row... kindof annoying
@@ -280,7 +304,7 @@ cjson Grid::toJSON(const bool condensed) const
                 for (auto &cc : columnCountMap)
                 {
                     std::pair<int64_t, int> value{ cc.first, 0 };
-                    if (auto t = setSizes.find(cc.second); t != setSizes.end())
+                    if (const auto t = setSizes.find(cc.second); t != setSizes.end())
                         value.second = t->second;
                     if (sameOnAllRows.count(cc.first))
                        value.second = 999999;
@@ -294,7 +318,7 @@ cjson Grid::toJSON(const bool condensed) const
                 });
 
 
-                auto setKeyValue = [&](cjson* current, Columns::columns_s* colInfo, int64_t value)
+                auto setKeyValue = [&](cjson* current, Columns::Columns_s* colInfo, int64_t value)
                 {
                     switch (colInfo->type)
                     {
@@ -319,7 +343,7 @@ cjson Grid::toJSON(const bool condensed) const
                     }
                 };
 
-                auto isKeyValue = [&](cjson* current, Columns::columns_s* colInfo, int64_t value)->bool
+                auto isKeyValue = [&](cjson* current, Columns::Columns_s* colInfo, int64_t value)->bool
                 {
                     if (auto t = current->find(colInfo->name); !t)
                         return false;
@@ -352,19 +376,17 @@ cjson Grid::toJSON(const bool condensed) const
                 // clean this up.
                 for (auto row : accumulator)
                 {
-                    auto lastDepth = 0;
                     auto current = &branch;
 
-                    for (auto c = 0; c < sorted.size(); ++c)
+                    for (auto &c : sorted)
                     {
-                        const auto ac = sorted[c].first; // actual column
-
+                        const auto ac = c.first; // actual column
                         const auto colInfo = columns->getColumn(columnMap[ac]);
 
                         if (colInfo->idx < 1000) // first 1000 are reserved
                             continue;
 
-                        auto value = row->cols[ac];
+                        const auto value = row->cols[ac];
 
                         if (const auto t = current->find("_"); t)
                             current = t->membersHead;
@@ -549,6 +571,8 @@ void Grid::prepare()
 	if (!rawData || !rawData->bytes || !columnCount)
 		return;
 
+    setData.clear();
+
 	const auto output = cast<char*>(PoolMem::getPool().getPtr(rawData->bytes));
 	LZ4_decompress_fast(rawData->getComp(), output, rawData->bytes);
 
@@ -562,6 +586,7 @@ void Grid::prepare()
 
 	auto session = 0;
 	int64_t lastSessionTime = 0;
+    auto columns = table->getColumns();
 
 	while (read < end)
 	{
@@ -589,21 +614,54 @@ void Grid::prepare()
 			row = newRow();
 			read += sizeOfCastHeader;
 			continue;
+		} 
 
-		} // skip non-mapped columns
+		const auto mappedColumn = reverseMap[cursor->columnNum];
 
-		const int32_t gridColumn = reverseMap[cursor->columnNum];
+        if (const auto colInfo = columns->getColumn(cursor->columnNum); colInfo)
+        {
+            if (colInfo->isSet)
+            {
+                read += sizeof(int16_t); // += 2
 
-		if (gridColumn < 0 || gridColumn >= columnCount)
-		{
-			read += sizeOfCast;
-			continue;
-		}
+                const auto count = static_cast<int>(*reinterpret_cast<int16_t*>(read));
 
-		*(row->cols + gridColumn) = cursor->val64;
+                read += sizeof(int16_t); // += 2
 
-		read += sizeOfCast;
-	}
+                const auto startIdx = setData.size();
+
+                auto counted = 0;
+                while (counted < count)
+                {
+                    setData.push_back(*reinterpret_cast<int64_t*>(read));
+                    read += sizeof(int64_t);
+                    ++counted;
+                }
+
+                if (mappedColumn < 0 || mappedColumn >= columnCount)
+                {
+                    continue;
+                }
+
+                // let our row use an encoded value for the column.
+                SetInfo_s info{ count, static_cast<int>(startIdx) };
+                *(row->cols + mappedColumn) = *reinterpret_cast<int64_t*>(&info);
+            }
+            else
+            {
+                if (mappedColumn < 0 || mappedColumn >= columnCount)
+                {
+                    read += sizeOfCast;
+                    continue;
+                }
+
+                *(row->cols + mappedColumn) = cursor->val64;
+                read += sizeOfCast;
+            }
+        }
+        else
+            read += sizeOfCast;
+    }
 
 	PoolMem::getPool().freePtr(output);
 }
@@ -620,13 +678,12 @@ PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, 
 	}
 	else
 	{
-		const auto count = rawData->flagRecords;
 		// copy the old flags to the new flags
-		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s) * (count + 1)));
-		memcpy(newFlags, rawData->getFlags(), sizeof(Flags_s) * count);
+		newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(sizeof(Flags_s) * (rawData->flagRecords + 1)));
+		memcpy(newFlags, rawData->getFlags(), sizeof(Flags_s) * rawData->flagRecords);
 
 		// index is count
-		idx = count;
+		idx = rawData->flagRecords;
 	}
 
 	// insert our new flag
@@ -649,8 +706,8 @@ PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, 
 	// copy NEW flags
 	memcpy(newPerson->getFlags(), newFlags, newFlagBytes);
 	// copy old props
-	if (rawData->propBytes)
-		memcpy(newPerson->getProps(), rawData->getProps(), static_cast<size_t>(rawData->propBytes));
+	if (rawData->setBytes)
+		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
 	// copy old compressed events
 	if (rawData->comp)
 		memcpy(newPerson->getComp(), rawData->getComp(), static_cast<size_t>(rawData->comp));
@@ -671,7 +728,9 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 		return rawData;
 
 	auto found = false;
-	for (auto iter = rawData->getFlags(); iter->flagType != flagType_e::feature_eof; ++iter)
+    const auto start = rawData->getFlags();
+    const auto end = start + rawData->flagRecords;
+    for (auto iter = start; iter < end; ++iter)
 	{
 		if (iter->flagType == flagType && 
 			iter->reference == reference &&
@@ -685,8 +744,10 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 	// copy flags over to new structure, skip the one we are omitting
 	const auto newFlags = recast<Flags_s*>(PoolMem::getPool().getPtr(rawData->flagBytes() - sizeof(Flags_s)));
 
+    // TODO - remove redundant buffer
+    const auto newFlagRecords = rawData->flagRecords - 1; 
 	auto writer = newFlags;
-	for (auto iter = rawData->getFlags(); iter->flagType != flagType_e::feature_eof; ++iter)
+	for (auto iter = start; iter < end; ++iter)
 	{
 		if (iter->flagType == flagType &&
 			iter->reference == reference &&
@@ -696,7 +757,6 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 		++writer;
 	}
 
-	const auto newFlagRecords = rawData->flagRecords - 1;
 	const auto oldFlagBytes = rawData->flagBytes();
 	const auto newFlagBytes = newFlagRecords * sizeof(Flags_s);
 
@@ -714,8 +774,8 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 	if (newFlagBytes)
 		memcpy(newPerson->getFlags(), newFlags, newFlagBytes);
 	// copy old props
-	if (rawData->propBytes)
-		memcpy(newPerson->getProps(), rawData->getProps(), static_cast<size_t>(rawData->propBytes));
+	if (rawData->setBytes)
+		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
 	// copy old compressed events
 	if (rawData->comp)
 		memcpy(newPerson->getComp(), rawData->getComp(), static_cast<size_t>(rawData->comp));
@@ -736,46 +796,79 @@ PersonData_s* Grid::commit()
 	{
 		cout << "no rows" << endl;
 	}
-
-	// calculate space needed
-	auto bytesNeeded = 0;
-	for (auto r : rows)
-	{
-		for (auto c = 0; c < columnCount; ++c)
-		{
-			// skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
-			if (r->cols[c] == NONE ||
-				(reverseMap[c] >= COL_OMIT_FIRST && reverseMap[c] <= COL_OMIT_LAST))
-				continue;
-			bytesNeeded += sizeOfCast;
-		}
-		bytesNeeded += sizeOfCastHeader; // row end
-	}
-
-	//TODO - technically we can predict the maximum size without iteration and counting... hmmm..
+    
+    // this is the worst case scenario temp buffer size for this data.
+    // (columns * rows) + (columns * row headers) + number_of_set_values
+    const auto tempBufferSize = 
+        (rows.size() * (this->columnCount * sizeOfCast)) + 
+        (rows.size() * sizeOfCastHeader) + 
+        (setData.size() * sizeof(int64_t)) + // the set data
+        ((rows.size() * this->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
 
 	// make an intermediate buffer that is fully uncompresed
-	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(bytesNeeded));
+	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
+
 	// copy over header and ID text
-	memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
+	//memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
 
 	auto write = intermediateBuffer;
 	Cast_s* cursor;
+    auto bytesNeeded = 0;
+
+    auto columns = table->getColumns();
 
 	for (auto r : rows)
 	{
 		for (auto c = 0; c < columnCount; ++c)
 		{
-			cursor = recast<Cast_s*>(write);
+            const auto actualColumn = columnMap[c];
 
 			// skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
 			if (r->cols[c] == NONE ||
-				(columnMap[c] >= COL_OMIT_FIRST && columnMap[c] <= COL_OMIT_LAST))
+				(actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
 				continue;
 
-			cursor->columnNum = columnMap[c];
-			cursor->val64 = r->cols[c];
-			write += sizeOfCast;
+            if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            {
+                if (colInfo->isSet)
+                {
+                    /* Sets
+                     *
+                     *  int16_t column
+                     *  int16_t length
+                     *  int64_t values[]
+                     */
+                    
+                    // write out column id
+                    *reinterpret_cast<int16_t*>(write) = actualColumn;
+                    write += sizeof(int16_t);
+                    bytesNeeded += sizeof(int16_t);
+
+                    // cast SetInfo_s over the value and get offset and length
+                    // write out count
+                    const auto start = static_cast<int32_t>(reinterpret_cast<SetInfo_s*>(&r->cols[c])->offset);
+                    auto& count = *reinterpret_cast<int16_t*>(write);
+                    count = static_cast<int16_t>(reinterpret_cast<SetInfo_s*>(&r->cols[c])->length);
+                    write += sizeof(int16_t);
+                    bytesNeeded += sizeof(int16_t);
+
+                    // write out values
+                    for (auto idx = start; idx < start + count; ++idx)
+                    {
+                        *recast<int64_t*>(write) = setData[idx];
+                        write += sizeof(int64_t);
+                        bytesNeeded += sizeof(int64_t);
+                    }
+                }
+                else
+                {
+                    cursor = recast<Cast_s*>(write);
+                    cursor->columnNum = actualColumn;
+                    cursor->val64 = r->cols[c];
+                    write += sizeOfCast;
+                    bytesNeeded += sizeOfCast;
+                }
+            }
 		}
 
 		cursor = recast<Cast_s*>(write);
@@ -783,8 +876,9 @@ PersonData_s* Grid::commit()
 		// END OF ROW - write a "row" marker at the end of the row
 		cursor->columnNum = -1;
 		write += sizeOfCastHeader;
+        bytesNeeded += sizeOfCastHeader;
 	}
-
+        
 	const auto maxBytes = LZ4_compressBound(bytesNeeded);
 	const auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
@@ -796,7 +890,7 @@ PersonData_s* Grid::commit()
 		maxBytes,
 		2);
 
-	const auto newPersonSize = rawData->size() - oldCompBytes + newCompBytes;
+	const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes; // size() includes data, we adjust
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
@@ -811,9 +905,9 @@ PersonData_s* Grid::commit()
 	if (rawData->flagRecords)
 	memcpy(newPerson->getFlags(), rawData->getFlags(), static_cast<size_t>(rawData->flagBytes()));
 	// copy old props
-	if (rawData->propBytes)
-		memcpy(newPerson->getProps(), rawData->getProps(), static_cast<size_t>(rawData->propBytes));
-	// copy old compressed events
+	if (rawData->setBytes)
+		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
+	// copy NEW compressed events
 	if (newCompBytes)
 		memcpy(newPerson->getComp(), compBuffer, static_cast<size_t>(newCompBytes));
 
@@ -829,111 +923,6 @@ PersonData_s* Grid::commit()
 	
 	return rawData;
 }
-
-Grid::ExpandedRows Grid::iterate_expand(cjson* json) const
-{
-	auto goodRows = ExpandedRows{ json->getNodes() };
-
-	while (true)
-	{
-		ExpandedRows newRes;
-
-		auto arrayCount = 0;
-		auto objectCount = 0;
-		auto nullCount = 0;
-
-		for (auto row : goodRows)
-		{
-			LineNodes tLine;
-
-			for (auto tNode : row)
-			{
-				if (!tNode)
-				{
-					++nullCount;
-					continue;
-				}
-
-				switch (tNode->type())
-				{
-				case cjsonType::NUL:
-				case cjsonType::INT:
-				case cjsonType::DBL:
-				case cjsonType::STR:
-				case cjsonType::BOOL:
-					tLine.push_back(tNode);
-					break;
-				case cjsonType::OBJECT:
-				{
-					++objectCount;
-					auto objects = tNode->getNodes();
-					for (auto tO : objects)
-						tLine.push_back(tO);
-				}
-				break;
-				case cjsonType::ARRAY:
-					++arrayCount;
-					tLine.push_back(tNode);
-					break;
-				default: 
-					break;
-				}
-			}
-			newRes.push_back(tLine);
-		}
-
-		if (arrayCount)
-		{
-			ExpandedRows unRolled;
-
-			for (auto row : newRes)
-			{
-				auto found = 0;
-				auto idx = -1;
-				for (auto &tNode : row) // walk through attrs in row
-				{
-					++idx;
-					if (tNode->type() == cjsonType::ARRAY)
-					{
-						++found;
-						auto arrayItems = tNode->getNodes();
-						for (auto aI : arrayItems)
-						{
-							auto newLine(row); // copy row
-							if (aI->type() != cjsonType::OBJECT &&
-								tNode->hasName())
-							{
-								newLine[idx] = nullptr;
-								newLine.push_back(aI);
-								newLine.back()->setName(tNode->name());
-							}
-							else
-								newLine[idx] = aI;
-							unRolled.push_back(newLine);
-						}
-						break;
-					}
-				}
-
-				if (!found)
-					unRolled.push_back(LineNodes(row));
-			}
-
-			goodRows = std::move(unRolled);
-			continue;
-		}
-
-		if (objectCount || nullCount)
-		{
-			goodRows = std::move(newRes);
-			continue;
-		}
-
-		if (!arrayCount && !objectCount && !nullCount)
-			return goodRows;
-	}
-}
-
 
 void Grid::insert(cjson* rowData)
 {
@@ -953,7 +942,7 @@ void Grid::insert(cjson* rowData)
 		return;
 
 	auto action = rowData->xPathString("/action", "");
-	auto attrNode = rowData->xPath("/attr");
+	auto attrNode = rowData->xPath("/_");
 	auto rowCount = rows.size();
 	decltype(newRow()) row = nullptr;
 
@@ -961,7 +950,7 @@ void Grid::insert(cjson* rowData)
 		return;
 
 	// cull on insert
-	if (rowCount > table->rowCull)
+	if (static_cast<int>(rowCount) > table->rowCull)
 	{
 		const auto numToErase = rowCount - table->rowCull;
 		rows.erase(rows.begin(), rows.begin() + numToErase);
@@ -970,17 +959,285 @@ void Grid::insert(cjson* rowData)
 
 	// move the action into the attrs so it will be integrated into the row set
 	attrNode->set("__action", action);
-
 	auto columns = table->getColumns();
 
-	auto insertBefore = -1; // where a new row will be inserted if needed
+    const auto insertRow = newRow();
+
+    insertRow->cols[COL_STAMP] = stamp;
+
+    const auto attrColumns = attrNode->getNodes();
+
+    for (auto c : attrColumns) // columns in row
+    {
+        // look for the name (by hash) in the insertMap
+        if (const auto iter = insertMap.find(MakeHash(c->name())); iter != insertMap.end())
+        {
+            const auto schemaCol = columnMap[iter->second];            
+            const auto colInfo = columns->getColumn(schemaCol);
+            const auto col = iter->second;
+
+            attributes->getMake(schemaCol, NONE);
+            attributes->setDirty(this->rawData->linId, schemaCol, NONE);
+
+            auto tval = NONE;
+            string tstr;
+
+            switch (c->type())
+            {
+            case cjsonType::INT:
+                switch (colInfo->type)
+                {
+                case columnTypes_e::intColumn:
+                    tval = c->getInt();
+                    break;
+                case columnTypes_e::doubleColumn:
+                    tval = cast<int64_t>(c->getInt() * 10000LL);
+                    break;
+                case columnTypes_e::boolColumn:
+                    tval = c->getInt() ? 1 : 0;
+                    break;
+                case columnTypes_e::textColumn:
+                    tstr = to_string(c->getInt());
+                    tval = MakeHash(tstr);
+                    break;
+                default:
+                    continue;
+                }
+                break;
+            case cjsonType::DBL:
+                switch (colInfo->type)
+                {
+                case columnTypes_e::intColumn:
+                    tval = cast<int64_t>(c->getDouble());
+                    break;
+                case columnTypes_e::doubleColumn:
+                    tval = cast<int64_t>(c->getDouble() * 10000LL);
+                    break;
+                case columnTypes_e::boolColumn:
+                    tval = c->getDouble() != 0;
+                    break;
+                case columnTypes_e::textColumn:
+                    tstr = to_string(c->getDouble());
+                    tval = MakeHash(tstr);
+                    break;
+                default:
+                    continue;
+                }
+                break;
+            case cjsonType::STR:
+                switch (colInfo->type)
+                {
+                case columnTypes_e::intColumn:
+                case columnTypes_e::doubleColumn:
+                    continue;
+                case columnTypes_e::boolColumn:
+                    tval = c->getString() != "0";
+                    break;
+                case columnTypes_e::textColumn:
+                    tstr = c->getString();
+                    tval = MakeHash(tstr);
+                    break;
+                default:
+                    continue;
+                }
+                break;
+            case cjsonType::BOOL:
+                switch (colInfo->type)
+                {
+                case columnTypes_e::intColumn:
+                    tval = c->getBool() ? 1 : 0;
+                    break;
+                case columnTypes_e::doubleColumn:
+                    tval = c->getBool() ? 10000 : 0;
+                    break;
+                case columnTypes_e::boolColumn:
+                    tval = c->getBool();
+                    break;
+                case columnTypes_e::textColumn:
+                    tstr = c->getBool() ? "true" : "false";
+                    tval = MakeHash(tstr);
+                    break;
+                default:
+                    continue;
+                }
+                break;
+
+            case cjsonType::ARRAY:
+            {
+                if (!colInfo->isSet)
+                    continue;
+
+                auto aNodes = c->getNodes();
+
+                const auto startIdx = setData.size();
+
+                for (auto n : aNodes)
+                {
+                    switch (n->type())
+                    {
+                    case cjsonType::INT:
+                        switch (colInfo->type)
+                        {
+                        case columnTypes_e::intColumn:
+                            tval = n->getInt();
+                            break;
+                        case columnTypes_e::doubleColumn:
+                            tval = cast<int64_t>(n->getInt() * 10000LL);
+                            break;
+                        case columnTypes_e::boolColumn:
+                            tval = n->getInt() ? 1 : 0;
+                            break;
+                        case columnTypes_e::textColumn:
+                            tstr = to_string(n->getInt());
+                            tval = MakeHash(tstr);
+                            break;
+                        default:
+                            continue;
+                        }
+                        break;
+                    case cjsonType::DBL:
+                        switch (colInfo->type)
+                        {
+                        case columnTypes_e::intColumn:
+                            tval = cast<int64_t>(n->getDouble());
+                            break;
+                        case columnTypes_e::doubleColumn:
+                            tval = cast<int64_t>(n->getDouble() * 10000LL);
+                            break;
+                        case columnTypes_e::boolColumn:
+                            tval = n->getDouble() != 0;
+                            break;
+                        case columnTypes_e::textColumn:
+                            tstr = to_string(n->getDouble());
+                            tval = MakeHash(tstr);
+                            break;
+                        default:
+                            continue;
+                        }
+                        break;
+                    case cjsonType::STR:
+                        switch (colInfo->type)
+                        {
+                        case columnTypes_e::intColumn:
+                        case columnTypes_e::doubleColumn:
+                            continue;
+                        case columnTypes_e::boolColumn:
+                            tval = n->getString() != "0";
+                            break;
+                        case columnTypes_e::textColumn:
+                            tstr = n->getString();
+                            tval = MakeHash(tstr);
+                            break;
+                        default:
+                            continue;
+                        }
+                        break;
+                    case cjsonType::BOOL:
+                        switch (colInfo->type)
+                        {
+                        case columnTypes_e::intColumn:
+                            tval = n->getBool() ? 1 : 0;
+                            break;
+                        case columnTypes_e::doubleColumn:
+                            tval = n->getBool() ? 10000 : 0;
+                            break;
+                        case columnTypes_e::boolColumn:
+                            tval = n->getBool();
+                            break;
+                        case columnTypes_e::textColumn:
+                            tstr = n->getBool() ? "true" : "false";
+                            tval = MakeHash(tstr);
+                            break;
+                        default:
+                            continue;
+                        }
+                        break;
+                    default:
+                        continue;
+                    }
+
+                    if (colInfo->type == columnTypes_e::textColumn)
+                        attributes->getMake(schemaCol, tstr);
+                    else
+                        attributes->getMake(schemaCol, tval);
+                    attributes->setDirty(this->rawData->linId, schemaCol, tval);
+
+                    setData.push_back(tval);
+                }
+
+                // let our row use an encoded value for the column.
+                SetInfo_s info{ static_cast<int>(setData.size() - startIdx), info.offset = startIdx };
+                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+            }
+            continue; // special handler for ARRAY
+
+            default:
+                tval = NONE;
+                break;
+            }
+
+            if (colInfo->type == columnTypes_e::textColumn)
+                attributes->getMake(schemaCol, tstr);
+            else
+                attributes->getMake(schemaCol, tval);
+            attributes->setDirty(this->rawData->linId, schemaCol, tval);
+
+            if (colInfo->isSet)
+            {
+                SetInfo_s info{ 1, static_cast<int>(setData.size()) };
+                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                setData.push_back(tval);
+            }
+            else
+            {
+                insertRow->cols[col] = tval;
+            }
+        }
+        else
+        {
+            // todo: do we care about non-mapped columns.
+        }
+    }
+
+    const auto getRowHash = [&](Col_s* rowPtr) -> int64_t
+    {
+        int64_t hash = 0;
+        for (auto col = 0; col < columnCount; col++)
+        {
+            if (rowPtr->cols[col] == NONE)
+                continue;
+
+            const auto colInfo = columns->getColumn(columnMap[col]);
+
+            if (colInfo->deleted)
+                continue;
+
+            if (colInfo->isSet)
+            {
+                auto& info = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
+                const auto end = info.offset + info.length;
+                for (auto idx = info.offset; idx < end; ++idx)
+                    hash = HashPair(setData[idx], hash);
+            }            
+            else
+            {
+                hash = HashPair(rowPtr->cols[col], hash);
+            }
+        }
+
+        return hash;
+    };
+
+    const auto insertHash = getRowHash(insertRow);
+
+    auto insertBefore = -1; // where a new row will be inserted if needed
 
 	const auto hashedAction = MakeHash(action);
-	const auto insertRowGroup = HashPair(stamp, hashedAction); //MakeHash(recast<const char*>(&pkValues.front()), 8 * pkValues.size());
+	//const auto insertRowGroup = HashPair(stamp, hashedAction); 
 
-	const auto zOrderInts = table->getZOrderInts();
+	const auto zOrderInts = table->getZOrderHashes();
 
-	auto getZOrder = [zOrderInts](int64_t value) -> int {
+	const auto getZOrder = [&](int64_t value) -> int {
 		auto iter = zOrderInts->find(value);
 
 		if (iter != zOrderInts->end())
@@ -989,12 +1246,12 @@ void Grid::insert(cjson* rowData)
 		return 99;
 	};
 
-	auto insertZOrder = getZOrder(hashedAction);
+	const auto insertZOrder = getZOrder(hashedAction);
 
-	auto findInsert = [&]() -> int {
-		int first = 0;
-		int last = static_cast<int>(rowCount - 1);
-		int mid = last >> 1;
+	const auto findInsert = [&]() -> int {
+		auto first = 0;
+		auto last = static_cast<int>(rowCount - 1);
+		auto mid = last >> 1;
 
 		while (first <= last)
 		{
@@ -1010,14 +1267,13 @@ void Grid::insert(cjson* rowData)
 
 		return -(first + 1);
 	};
-
-	
+    	
 	auto i = rowCount ? findInsert() : 0;
 
 	if (i < 0) // negative value (made positive - 1) is the insert position
 		i = -i - 1;
 
-	if (i != rowCount) // if they are equal skip all this, we are appending
+	if (i != static_cast<int>(rowCount)) // if they are equal skip all this, we are appending
 	{
 		// walk back to the beginning of all rows sharing this time stamp
 		if (rowCount)
@@ -1025,7 +1281,7 @@ void Grid::insert(cjson* rowData)
 				--i;
 
 		// walk forward to find our insertion point
-		for (; i < rowCount; i++)
+		for (; i < static_cast<int>(rowCount); i++)
 		{
 			// we have found rows with same stamp
 			if (rows[i]->cols[0] == stamp)
@@ -1037,22 +1293,21 @@ void Grid::insert(cjson* rowData)
 				{
 					// look this date range and zorder to see if we have a row group
 					// match (as in, we are replacing a row)
-					for (; i < rowCount; i++)
+					for (; i < static_cast<int>(rowCount); i++)
 					{
-						auto rowGroup = HashPair(rows[i]->cols[COL_STAMP], rows[i]->cols[COL_ACTION]);
 						zOrder = getZOrder(rows[i]->cols[COL_ACTION]);
 
 						// we have moved passed replacable rows, so insert here
 						if (rows[i]->cols[COL_STAMP] > stamp ||
-							zOrder > insertZOrder ||
-							rowGroup > insertRowGroup)
+							zOrder > insertZOrder)
 						{
 							insertBefore = i;
 							break;
 						}
 
+                        const auto currentRowHash = getRowHash(rows[i]);
 						// we have a matching row, we will replace this
-						if (rowGroup == insertRowGroup)
+						if (insertHash == currentRowHash)
 						{
 							row = rows[i];
 							insertBefore = i;
@@ -1078,182 +1333,19 @@ void Grid::insert(cjson* rowData)
 		}
 	}
 
-
 	if (row) // delete the rows that matched, we will be replacing them
 	{
-		for (auto iter = rows.begin() + insertBefore; iter != rows.end();)
-		{
-			const auto rowGroup =HashPair((*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]);
-
-			// if stamp changes we are done scanning this row group
-			if ((*iter)->cols[0] != stamp)
-				break;
-
-			if ((*iter)->cols[COL_STAMP] == stamp &&
-				rowGroup == insertRowGroup)
-				iter = rows.erase(iter);
-			else
-				++iter;
-		}
+		for (const auto iter = rows.begin() + insertBefore; iter != rows.end();)
+            if ((*iter) == row)
+            {
+                rows.erase(iter);
+                break;
+            }
 	}
 
-	auto expandedSet = iterate_expand(attrNode);
-
-	for (auto& r: expandedSet) // rows in set
-	{
-		auto fillCount = 0;
-		row = newRow();
-
-		for (auto& c: r) // columns in row
-		{			
-			if (const auto iter = insertMap.find(MakeHash(c->name())); iter != insertMap.end())
-			{
-				const auto schemaCol = columnMap[iter->second];
-				const auto col = iter->second;
-				const auto colInfo = columns->getColumn(schemaCol);
-
-				fillCount++;
-
-				auto attrInfo = attributes->getMake(schemaCol, NONE);
-				attributes->setDirty(this->rawData->linId, schemaCol, NONE);
-				
-				auto val = NONE;
-
-				switch (c->type())
-				{
-				case cjsonType::INT:
-					switch (colInfo->type)
-					{
-						case columnTypes_e::intColumn: 
-							val = c->getInt();
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::doubleColumn: 
-							val = cast<int64_t>(c->getInt() * 10000LL);
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::boolColumn: 
-							val = c->getInt() != 0;
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::textColumn: 
-							{
-								const auto tstr = to_string(c->getInt());
-								val = MakeHash(tstr);
-								attrInfo = attributes->getMake(schemaCol, tstr);
-							}
-							break;
-						default:
-							break;
-					}					
-					attributes->setDirty(this->rawData->linId, schemaCol, val);
-					break;
-				case cjsonType::DBL:
-					switch (colInfo->type)
-					{
-						case columnTypes_e::intColumn: 
-							val = cast<int64_t>(c->getDouble());
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::doubleColumn: 
-							val = cast<int64_t>(c->getDouble() * 10000LL);
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::boolColumn: 
-							val = c->getDouble() != 0;
-							attrInfo = attributes->getMake(schemaCol, val);
-							break;
-						case columnTypes_e::textColumn: 
-							{
-								const auto tstr = to_string(c->getDouble());
-								val = MakeHash(tstr);
-								attrInfo = attributes->getMake(schemaCol, tstr);
-							}
-							break;
-						default:
-							break;
-					}					
-					attributes->setDirty(this->rawData->linId, schemaCol, val);
-					break;
-				case cjsonType::STR:
-					switch (colInfo->type)
-					{
-					case columnTypes_e::intColumn:
-					case columnTypes_e::doubleColumn:
-						continue;
-					case columnTypes_e::boolColumn:
-						val = c->getString() != "0";
-						attrInfo = attributes->getMake(schemaCol, val);
-						break;
-					case columnTypes_e::textColumn:
-						{
-							const auto tstr = c->getString();
-							val = MakeHash(tstr);
-							attrInfo = attributes->getMake(schemaCol, tstr);
-						}
-						break;
-					default:
-						break;
-					}
-					attributes->setDirty(this->rawData->linId, schemaCol, val);
-					break;
-				case cjsonType::BOOL:
-					switch (colInfo->type)
-					{
-					case columnTypes_e::intColumn:
-						val = c->getBool() ? 1 : 0;
-						attrInfo = attributes->getMake(schemaCol, val);
-						break;
-					case columnTypes_e::doubleColumn:
-						val = c->getBool() ? 10000 : 0;
-						attrInfo = attributes->getMake(schemaCol, val);
-						break;
-					case columnTypes_e::boolColumn:
-						val = c->getBool();
-						attrInfo = attributes->getMake(schemaCol, val);
-						break;
-					case columnTypes_e::textColumn:
-						{
-							const auto tstr = c->getBool() ? "true" : "false";
-							val = MakeHash(tstr);
-							attrInfo = attributes->getMake(schemaCol, tstr);
-						}
-						break;
-					default:
-						break;
-					}
-
-					// attrInfo = attributes->getMake(schemaCol, val);
-					attributes->setDirty(this->rawData->linId, schemaCol, val);
-					break;
-
-				default:
-					val = NONE;
-					break;
-				}
-
-				row->cols[col] = val;
-			}
-			else
-			{
-				// todo: do we care about non-mapped columns.
-			}
-		}
-
-		// Do we have values in our Row?
-		if (fillCount)
-		{
-			row->cols[0] = stamp;
-
-			// action is injected into the attrs section so it will be indexed
-
-			if (insertBefore == -1) // no insertion found so append
-				rows.push_back(row);
-			else // insert before 
-			{
-				rows.insert(rows.begin() + insertBefore, row);
-			}
-		}
-	}
+	if (insertBefore == -1) // no insertion found so append
+		rows.push_back(insertRow);
+	else // insert before 
+		rows.insert(rows.begin() + insertBefore, insertRow);
 }
 
