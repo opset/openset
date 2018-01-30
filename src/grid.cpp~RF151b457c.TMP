@@ -6,113 +6,8 @@
 
 using namespace openset::db;
 
-class IndexDiffing
-{
-    using ColVal = std::pair<int32_t,int64_t>;
-    using CVMap = unordered_map<ColVal, int>;
-    using CVList = vector<ColVal>;
-
-    CVMap before;
-    CVMap after;
-
-public:
-
-    enum class Mode_e : int
-    {
-        before,
-        after
-    };
-
-    void reset()
-    {
-        before.clear();
-        after.clear();
-    }
-
-    void add(int32_t column, int64_t value, Mode_e mode)
-    {
-        if (mode == Mode_e::before)
-        {
-            if (const auto iter = before.find({column, value}); iter == before.end())
-                iter->second++;
-            else
-                before[{column,value}] = 1;
-        }
-        else
-        {
-            if (const auto iter = after.find({column, value}); iter == after.end())
-                iter->second++;
-            else
-                after[{column,value}] = 1;            
-        }
-
-        // a Value of NONE in combination with a column indicates that
-        // the column is referenced. This is used to index a column, rather
-        // than a column and value.
-        if (value != NONE)
-            add(column, NONE, mode);
-    }
-
-    void add(Grid* grid, Mode_e mode)
-    {
-        const auto columns = grid->getTable()->getColumns();
-        const auto rows = grid->getRows();
-        const auto &setData = grid->getSetData();
-        const auto colMap = grid->getColumnMap();
-
-	    for (auto r : *rows)
-	    {
-		    for (auto c = 0; c < colMap->columnCount; ++c)
-		    {
-                const auto actualColumn = colMap->columnMap[c];
-
-			    // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
-			    if (r->cols[c] == NONE ||
-				    (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
-				    continue;
-
-                if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
-                {
-                    if (colInfo->isSet)
-                    {
-                        // cast SetInfo_s over the value and get offset and length
-                        const auto& ol = reinterpret_cast<SetInfo_s*>(&r->cols[c]);
-
-                        // write out values
-                        for (auto idx = ol->offset; idx < ol->offset + ol->length; ++idx)
-                            add(actualColumn, setData[idx], mode); 
-                    }
-                    else
-                    {
-                        add(actualColumn, r->cols[c], mode);
-                    }
-                }
-		    }
-	    }
-    }
-
-    CVList getRemoved()
-    {
-        CVList result;
-
-        for (auto &b: before)
-            if (!after.count(b.first))
-                result.push_back(b.first);
-
-        return result;
-    }
-
-    CVList getAdded()
-    {
-        CVList result;
-
-        for (auto &a: after)
-            if (!before.count(a.first))
-                result.push_back(a.first);
-
-        return result;
-    }
-};
+Grid::Grid()
+{}
 
 Grid::~Grid()
 {
@@ -243,7 +138,7 @@ cjson Grid::toJSON() const
 		accumulator.push_back(*iter);
 
 		// if we are at the end or the next one is a different group, lets push 
-		// out some JSON 
+		// out some JSON snots
 		if (iter + 1 == rows.end() || 
 			HashPair((*(iter + 1))->cols[COL_STAMP], (*(iter + 1))->cols[COL_ACTION]) !=
 			HashPair( (*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]))
@@ -273,8 +168,9 @@ cjson Grid::toJSON() const
                     if (colInfo->isSet)
                     {
                         const auto set = rowObj->setArray(colInfo->name);
-                        const auto ol = reinterpret_cast<const SetInfo_s*>(&value);
-                        for (auto offset = ol->offset; offset < ol->offset + ol->length; ++offset)
+                        const auto info = reinterpret_cast<const SetInfo_s*>(&value);
+
+                        for (auto offset = info->offset; offset < info->offset + info->length; ++offset)
                             convertToJSON(set, colInfo, this->setData[offset], true); 
                     }
                     else
@@ -874,7 +770,7 @@ PersonData_s* Grid::commit()
             {
                 if (colInfo->isSet)
                 {
-                    /* Output stream looks like this:
+                    /* Sets
                      *
                      *  int16_t column
                      *  int16_t length
@@ -966,64 +862,6 @@ PersonData_s* Grid::commit()
 	return rawData;
 }
 
-bool Grid::cull()
-{
-    // empty? no cull
-    if (rows.empty())
-        return false;
-
-    // not at row limit, and first event is within time window? no cull
-    if (rows.size() < table->rowCull && 
-        rows[0]->cols[COL_STAMP] > Now() - table->stampCull)
-        return false;
-
-    IndexDiffing diff;
-    auto removed = false;
-	auto rowCount = rows.size();
-
-    diff.add(this, IndexDiffing::Mode_e::before);
-
-	// cull if row count exceeds limit
-	if (static_cast<int>(rowCount) > table->rowCull)
-	{
-		const auto numToErase = rowCount - table->rowCull;
-		rows.erase(rows.begin(), rows.begin() + numToErase);
-		rowCount = rows.size();
-        removed = true;
-	}
-
-    const auto cullStamp = Now() - table->stampCull;
-    auto expiredCount = 0;
-
-    for (const auto &r: rows)
-    {
-        if (r->cols[COL_STAMP] > cullStamp)
-            break;
-        ++expiredCount;
-    }
-
-	if (expiredCount)
-	{
-		const auto numToErase = rowCount - expiredCount;
-		rows.erase(rows.begin(), rows.begin() + numToErase);
-        removed = true;
-	}
-
-    diff.add(this, IndexDiffing::Mode_e::after);    
-
-    // what things are no longer referenced in anyway 
-    // within our row set? De-index those items.
-    const auto noLongerReferenced = diff.getRemoved();
-
-    for (const auto& cv: noLongerReferenced)
-        attributes->setDirty(this->rawData->linId, cv.first, cv.second, false); 
-
-    if (!noLongerReferenced.empty())
-        cout << ("removed " + to_string(noLongerReferenced.size())) << endl;
-    
-    return removed;
-}
-
 int Grid::getGridColumn(const int schemaColumn) const
 {
     return colMap->reverseMap[schemaColumn];
@@ -1059,7 +897,6 @@ void Grid::insert(cjson* rowData)
 	if (!attrNode || !action.length())
 		return;
 
-    /*
 	// cull on insert
 	if (static_cast<int>(rowCount) > table->rowCull)
 	{
@@ -1067,7 +904,6 @@ void Grid::insert(cjson* rowData)
 		rows.erase(rows.begin(), rows.begin() + numToErase);
 		rowCount = rows.size();
 	}
-    */
 
 	// move the action into the attrs so it will be integrated into the row set
 	attrNode->set("__action", action);
@@ -1326,8 +1162,9 @@ void Grid::insert(cjson* rowData)
 
             if (colInfo->isSet)
             {
-                const auto& ol = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
-                for (auto idx = ol.offset; idx < ol.offset + ol.length; ++idx)
+                auto& info = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
+                const auto end = info.offset + info.length;
+                for (auto idx = info.offset; idx < end; ++idx)
                     hash = HashPair(setData[idx], hash);
             }            
             else

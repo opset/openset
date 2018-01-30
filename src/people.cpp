@@ -9,7 +9,12 @@ People::People(const int partition) :
 {}
 
 People::~People()
-{}
+{
+    for (const auto &person: peopleLinear)
+        PoolMem::getPool().freePtr(person);
+
+    peopleLinear.clear();
+}
 
 PersonData_s* People::getPersonByID(int64_t userId)
 {
@@ -27,7 +32,7 @@ PersonData_s* People::getPersonByID(string userIdString)
 
 	while (true)
 	{
-		auto person = getPersonByID(hashId);
+		const auto person = getPersonByID(hashId);
 
 		if (!person)
 			return nullptr;
@@ -98,6 +103,20 @@ PersonData_s* People::getmakePerson(string userIdString)
 int64_t People::peopleCount() const
 {
 	return static_cast<int64_t>(peopleLinear.size());
+}
+
+void People::drop(const int64_t userId)
+{
+    const auto info = getPersonByID(userId);
+
+    if (!info)
+        return;
+
+    peopleMap.erase(userId);
+
+    peopleLinear[info->linId] = nullptr;
+
+    PoolMem::getPool().freePtr(info);
 }
 
 void People::serialize(HeapStack* mem)

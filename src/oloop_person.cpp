@@ -12,14 +12,11 @@ OpenLoopPerson::OpenLoopPerson(
     Shuttle<int>* shuttle, 
     openset::db::Table* table,
     const int64_t uuid) :
-
-    OpenLoop(oloopPriority_e::realtime),
+    OpenLoop(table->getName(), oloopPriority_e::realtime),
     shuttle(shuttle),
     table(table),
     uuid(uuid)
-{
-    
-}
+{}
 
 void OpenLoopPerson::prepare() 
 {}

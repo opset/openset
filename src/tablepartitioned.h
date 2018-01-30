@@ -42,7 +42,8 @@ namespace openset
 				AttributeBlob* attributeBlob,
 				Columns* schema);
 
-			TablePartitioned() = delete;
+			TablePartitioned() = default;
+            ~TablePartitioned();
 
 			void setSegmentTTL(std::string segmentName, int64_t TTL)
 			{

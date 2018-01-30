@@ -7,8 +7,6 @@
 #include "xxhash.h"
 
 #include "querycommon.h"
-#include "person.h"
-#include "grid.h"
 #include "result.h"
 #include "errors.h"
 
@@ -18,6 +16,8 @@ namespace openset
 {
 	namespace db
 	{
+        class Person;
+        class Grid;
 		class AttributeBlob;
 		class IndexBits;
 	}

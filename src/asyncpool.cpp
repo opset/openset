@@ -184,6 +184,20 @@ void AsyncPool::cellFactory(const function<OpenLoop*(AsyncLoop*)> factory)
 				p->ooLoop->queueCell(cell);
 }
 
+void AsyncPool::purgeByTable(const std::string& tableName)
+{
+	csLock lock(poolLock);
+
+	auto count = 0;
+	for (auto p : partitions)
+    {
+		if (!p)
+            continue;
+
+        p->ooLoop->purgeByTable(tableName);
+    }       
+}
+
 int32_t AsyncPool::count()
 {
 	csLock lock(poolLock);
@@ -265,7 +279,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 
 	int64_t nextRun = -1;
 
-	auto cleanup = [&]() -> bool
+    const auto cleanup = [&]() -> bool
 	{
 		auto deletionCount = 0;
 

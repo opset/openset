@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "cjson/cjson.h"
+#include "columnmapping.h"
 
 namespace openset
 {
@@ -15,6 +16,8 @@ namespace openset
 		class Table;
 		class Attributes;
 		class AttributeBlob;
+        class ColumnMapping;
+        struct ColumnMap_s;
 
 		const uint16_t TYPE_AND_MASK = 0b0111'0000'0000'0000;
 		const uint16_t TYPE_CLEAR_MASK = 0b0000'1111'1111'1111;
@@ -172,7 +175,6 @@ namespace openset
 		class Grid
 		{
 		private:
-
 			using LineNodes = vector<cjson*>;
 			using ExpandedRows = vector<LineNodes>;
             using SetVector = vector<int64_t>;
@@ -189,11 +191,13 @@ namespace openset
 			const static int sizeOfCast = sizeof(Cast_s);
 
 			// mapping
-			int16_t columnMap[MAXCOLUMNS]{}; // TODO - FIX THIS
-			int16_t reverseMap[MAXCOLUMNS]{}; // TODO - AND THIS
-			int16_t isSet[MAXCOLUMNS]{}; // TODO - AND THIS
+			//int32_t columnMap[MAXCOLUMNS]{}; // TODO - FIX THIS
+			//int32_t reverseMap[MAXCOLUMNS]{}; // TODO - AND THIS
+			//int16_t isSet[MAXCOLUMNS]{}; // TODO - AND THIS
+            ColumnMap_s* colMap{ nullptr };
 
-			unordered_map<int64_t, int32_t> insertMap;
+			//unordered_map<int64_t, int32_t> insertMap;
+
 			// we will get our memory via stack
 			// so rows have tight cache affinity 
 			HeapStack mem;
@@ -201,23 +205,17 @@ namespace openset
             SetVector setData;
 			PersonData_s* rawData{ nullptr };
 
-			int32_t columnCount{ 0 };
-			int32_t uuidColumn{ -1 }; // auto mapped in prepare
-			int32_t sessionColumn{ -1 };
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
 			Table* table{ nullptr };
 			Attributes* attributes{ nullptr };
 			AttributeBlob* blob{ nullptr };
 
-			int64_t rowBytes{ 0 };
 			int64_t groupIdCounter{ Now() };
 
-			bool fullSchemaMap{ false }; // only true on inserts and person queries
-
 		public:
-			Grid();
-			~Grid() = default;
+			Grid() = default;
+			~Grid();
 
 			/**
 			* \brief maps schema to the columnMap
@@ -249,59 +247,67 @@ namespace openset
 			*/
 			PersonData_s* commit();
 
+            // remove old records, or trim sets that have gotten to large.
+            // returns true if culling occured - de-index unreferrened items
+            bool cull(); 
+
+            // remove old records, or trim sets that have gotten to large.
+            // similar to `cull()` but quicker routine for use with queries,
+            // doesn't de-index or write back.
+            //void queryCull();
+
 			// given an actual schema column, what is the 
 			// column in the grid (which is compact)
-			inline int getGridColumn(const int schemaColumn) const
-			{
-				return reverseMap[schemaColumn];
-			}
+		    int getGridColumn(const int schemaColumn) const;
 
-			inline string getUUIDString() const
+			string getUUIDString() const
 			{
 				return rawData ? string{ rawData->events, static_cast<size_t>(rawData->idBytes) } : "";
 			}
 
-			inline int64_t getUUID() const
+			int64_t getUUID() const
 			{
 				return rawData->id;
 			}
 
-			inline int64_t getLinId() const
+			int64_t getLinId() const
 			{
 				return rawData->linId;
 			}
 
-			inline bool isFullSchema() const
-			{
-				return fullSchemaMap;
-			}
+		    bool isFullSchema() const;
 
-			inline const Rows* getRows() const
+            Table* getTable() const
+            {
+                return table;
+            }
+
+			const Rows* getRows() const
 			{
 				return &rows;
 			}
 
-            inline const SetVector& getSetData() const
+            const SetVector& getSetData() const
 			{
                 return setData;
 			}
 
-			inline Attributes* getAttributes() const
+			Attributes* getAttributes() const
 			{
 				return attributes;
 			}
 
-            inline PersonData_s* getMeta() const
+            PersonData_s* getMeta() const
 			{
 			    return rawData;
 			}
 
-			AttributeBlob* getAttributeBlob() const;
+            ColumnMap_s* getColumnMap() const
+            {
+                return colMap;
+            }
 
-			inline Table* getTable() const
-			{
-				return table;
-			}
+			AttributeBlob* getAttributeBlob() const;
 
 			cjson toJSON() const;
 

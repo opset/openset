@@ -47,7 +47,8 @@ namespace openset
 			bool nextExpired();
 
 			void prepare() final;
-			void run() final;
+		    void respawn();
+		    void run() final;
 			void partitionRemoved() final {};
 		};
 	}

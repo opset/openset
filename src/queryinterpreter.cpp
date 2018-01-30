@@ -5,6 +5,7 @@
 #include "time/epoch.h"
 #include "table.h"
 #include "columns.h"
+#include "grid.h"
 
 //const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;

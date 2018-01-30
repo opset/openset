@@ -18,10 +18,25 @@ Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Column
 	partition(partition)
 {}
 
+Attributes::~Attributes()
+{
+    for (auto &attr: columnIndex)
+    {
+        PoolMem::getPool().freePtr(attr.second);
+        attr.second = nullptr;
+    }
+
+    for (auto &change: changeIndex)
+    {
+        PoolMem::getPool().freePtr(change.second);
+        change.second = nullptr;
+    }
+}
+
 void Attributes::addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state)
 {
 	const auto changeRecord = changeIndex.get({ column, value });
-	Attr_changes_s* changeTail = changeRecord ? changeRecord->second : nullptr;
+	const auto changeTail = changeRecord ? changeRecord->second : nullptr;
 
 	// using placement new here into a POOL buffer
 	const auto change =
@@ -81,14 +96,20 @@ Attr_s* Attributes::get(const int32_t column, const string& value) const
 	return nullptr;
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value)
+void Attributes::drop(const int32_t column, const int64_t value) 
 {
-	addChange(column, value, linId, true);
+    columnIndex.erase({ column, value });
+}
+
+void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value, const bool on)
+{
+	addChange(column, value, linId, on);
 }
 
 void Attributes::clearDirty()
 {
 	IndexBits bits;
+
 
 	for (auto& change : changeIndex)
 	{
@@ -96,7 +117,7 @@ void Attributes::clearDirty()
 
 		if (!attrPair || !attrPair->second)
 			continue;
-
+        
 		const auto attr = attrPair->second;
 
 		bits.mount(attr->index, attr->ints, attr->linId);
@@ -114,32 +135,40 @@ void Attributes::clearDirty()
 			t = prev;
 		}
 
-		int64_t compBytes = 0; // OUT value via reference
-		int64_t linId;
+        if (!bits.population(bits.ints * 64)) //pop count zero? remove this
+        {
+            //cout << "dropped index item" << endl;
+            drop(change.first.column, change.first.value );
+            PoolMem::getPool().freePtr(attr);
+        }
+        else
+        {
+		    int64_t compBytes = 0; // OUT value via reference
+		    int64_t linId;
 
-		// compress the data, get it back in a pool ptr
-		const auto compData = bits.store(compBytes, linId);
-		const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
+		    // compress the data, get it back in a pool ptr
+		    const auto compData = bits.store(compBytes, linId);
+		    const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
-		// copy header
-		memcpy(destAttr, attr, sizeof(Attr_s));
-		if (compData)
-		{
-			memcpy(destAttr->index, compData, compBytes);
-			// return work buffer from bits.store to the pool
-			PoolMem::getPool().freePtr(compData);
-		}
+		    // copy header
+		    memcpy(destAttr, attr, sizeof(Attr_s));
+		    if (compData)
+		    {
+			    memcpy(destAttr->index, compData, compBytes);
+			    // return work buffer from bits.store to the pool
+			    PoolMem::getPool().freePtr(compData);
+		    }
 
-		destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
-		destAttr->comp = static_cast<int>(compBytes);
-		destAttr->linId = linId;
+		    destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
+		    destAttr->comp = static_cast<int>(compBytes);
+		    destAttr->linId = linId;
 
-		// if we made a new destination, we have to update the 
-		// index to point to it, and free the old one up.
-		// update the Attr pointer directly in the index
-		attrPair->second = destAttr;
-		PoolMem::getPool().freePtr(attr);
-
+		    // if we made a new destination, we have to update the 
+		    // index to point to it, and free the old one up.
+		    // update the Attr pointer directly in the index
+		    attrPair->second = destAttr;
+		    PoolMem::getPool().freePtr(attr);
+        }
 	}
 	changeIndex.clear();
 }

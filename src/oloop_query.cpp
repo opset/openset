@@ -16,7 +16,7 @@ OpenLoopQuery::OpenLoopQuery(
 	openset::result::ResultSet* result,
 	int instance) :
 
-	OpenLoop(oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
+	OpenLoop(table->getName(), oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
 	macros(std::move(macros)),
 	shuttle(shuttle),
 	table(table),

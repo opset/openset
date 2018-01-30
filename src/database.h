@@ -19,10 +19,11 @@ namespace openset
 			unordered_map<std::string, Table*> tables;
 
 			explicit Database();
-			~Database();
+			~Database() = default;
 
 			openset::db::Table* getTable(const std::string& tableName);
 			openset::db::Table* newTable(const std::string& tableName);
+            void dropTable(const std::string& tableName);
 
 			void serialize(cjson* doc);
 		};

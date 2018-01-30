@@ -12,14 +12,12 @@ using namespace openset::revent;
 Revent::Revent(reventSettings_s* settings, openset::db::TablePartitioned* parts) :
 	settings(settings),
 	lastConfigVersion(settings->configVersion),
-	table(parts->table),
 	parts(parts),
 	interpreter(nullptr),
 	person(nullptr),
 	attr(nullptr), 
 	bits(nullptr),
 	currentFunctionHash(0),
-	runCount(0),
 	beforeState(false),
 	inError(false)
 {

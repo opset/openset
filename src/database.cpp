@@ -1,7 +1,6 @@
 #include "database.h"
 #include "config.h"
-#include "file/file.h"
-#include "file/directory.h"
+#include "asyncpool.h"
 
 namespace openset
 {
@@ -19,17 +18,13 @@ Database::Database()
 	openset::globals::database = this;
 }
 
-Database::~Database()
-{}
-
 openset::db::Table* Database::getTable(const string& tableName)
 {
-	csLock lock(cs);
-	auto iter = tables.find(tableName);
-	if (iter == tables.end())
+	csLock lock(cs);	
+	if (const auto iter = tables.find(tableName); iter == tables.end())
 		return nullptr;
-
-	return iter->second;
+    else
+    	return iter->second;
 }
 
 openset::db::Table* Database::newTable(const string& tableName)
@@ -42,20 +37,28 @@ openset::db::Table* Database::newTable(const string& tableName)
 	table = new Table(tableName, this);
 	tables[tableName] = table;
 
-	// update the config files
-	// change - save is performed on commit
-	// saveConfig();
-
 	return table;
+}
+
+void Database::dropTable(const std::string& tableName)
+{
+	const auto table = getTable(tableName);
+	if (!table)
+		return;
+
+    openset::globals::async->suspendAsync();
+    openset::globals::async->purgeByTable(tableName);
+	csLock lock(cs);
+    tables.erase(tableName);  
+    delete table;
+    openset::globals::async->resumeAsync();
 }
 
 void Database::serialize(cjson* doc)
 {
-
 	doc->setType(cjsonType::ARRAY);
 
-	for (const auto n : tables)
-		doc->push(n.first);
-	
+	for (const auto& n : tables)
+		doc->push(n.first);	
 }
 

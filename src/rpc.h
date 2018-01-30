@@ -29,6 +29,7 @@ namespace openset::comms
 
 		// RpcTable
 		{ "PUT", std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcTable::column_add,{ { 1, "table" }, { 2, "name" } } },
+        { "DELETE", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_drop, { { 1, "table" } } },
 		{ "DELETE", std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcTable::column_drop,{ { 1, "table" }, { 2, "name" } } },
 		{ "GET", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_describe, { { 1, "table" } } },
 		{ "POST", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_create, { { 1, "table" } } },

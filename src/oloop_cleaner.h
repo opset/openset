@@ -17,18 +17,19 @@ namespace openset
 	namespace async
 	{
 
-		class OpenLoopRetrigger : public OpenLoop
+		class OpenLoopCleaner : public OpenLoop
 		{
 			openset::db::Table* table;
 			openset::db::Person person;
 			int64_t linearId; // used as iterator 
-			int64_t lowestStamp; // lowest non-expired stamp, for reschedule
 
 		    db::TablePartitioned* parts { nullptr };
 
 		public:
-			explicit OpenLoopRetrigger(openset::db::Table* table);
-			~OpenLoopRetrigger() final = default;
+			explicit OpenLoopCleaner(openset::db::Table* table);
+			~OpenLoopCleaner() final = default;
+
+            void respawn();
 
 			void prepare() final;
 			void run() final;

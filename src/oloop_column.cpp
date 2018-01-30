@@ -17,7 +17,7 @@ OpenLoopColumn::OpenLoopColumn(
     ColumnQueryConfig_s config,
     openset::result::ResultSet* result,
     const int64_t instance):
-        OpenLoop(oloopPriority_e::realtime),
+        OpenLoop(table->getName(), oloopPriority_e::realtime),
         shuttle(shuttle),
         config(std::move(config)),
         table(table),

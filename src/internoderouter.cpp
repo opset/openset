@@ -363,6 +363,12 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 void openset::mapping::Mapper::releaseResponses(Responses& responseSet)
 {
+    for (auto &r: responseSet.responses)
+    {
+        PoolMem::getPool().freePtr(r.data);
+        r.data = nullptr;
+    }
+
 	responseSet.responses.clear();
 }
 

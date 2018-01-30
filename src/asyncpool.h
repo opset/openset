@@ -132,6 +132,8 @@ namespace openset
 			void cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)> factory);
 			void cellFactory(const function<OpenLoop*(AsyncLoop*)> factory);
 
+            void purgeByTable(const std::string& tableName);
+
 			int32_t count();
 
 			AsyncLoop* isPartition(int32_t shardNumber);

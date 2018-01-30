@@ -11,12 +11,9 @@ using namespace openset::async;
 using namespace openset::db;
 
 OpenLoopRetrigger::OpenLoopRetrigger(openset::db::Table* table) :
-	OpenLoop(),
+	OpenLoop(table->getName()),
 	table(table),
 	linearId(0)
-{}
-
-OpenLoopRetrigger::~OpenLoopRetrigger() 
 {}
 
 void OpenLoopRetrigger::prepare()

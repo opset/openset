@@ -40,6 +40,8 @@ namespace openset
 			// uses locks - may be called from other threads
 			void queueCell(OpenLoop* work);
 
+            void purgeByTable(const std::string& tableName);
+
 			// this will add any queued jobs to the
 			// active Loop. This is particularly useful 
 			// because a job Cell can spawn more job cells

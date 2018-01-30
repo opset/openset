@@ -15,6 +15,7 @@ using namespace openset::async;
 using namespace openset::db;
 
 OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
+    OpenLoop(tablePartitioned->table->getName()),
 	tablePartitioned(tablePartitioned),
 	runCount(0)
 {

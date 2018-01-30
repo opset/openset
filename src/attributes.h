@@ -127,13 +127,12 @@ namespace openset::db
 		ColumnIndex columnIndex{ ringHint_e::lt_1_million };
 		ChangeIndex changeIndex{ ringHint_e::lt_compact };
 		
-
 		AttributeBlob* blob;
 		Columns* columns;
 		int partition;
 
 		explicit Attributes(const int parition, AttributeBlob* attributeBlob, Columns* columns);
-		~Attributes() = default;
+		~Attributes();
 
 		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);
 
@@ -143,7 +142,9 @@ namespace openset::db
 		Attr_s* get(const int32_t column, const int64_t value) const;
 		Attr_s* get(const int32_t column, const string& value) const;
 
-		void setDirty(const int32_t linId, const int32_t column, const int64_t value);
+        void drop(const int32_t column, const int64_t value);
+
+		void setDirty(const int32_t linId, const int32_t column, const int64_t value, const bool on = true);
 		void clearDirty();
 
 		// replace an indexes bits with new ones, used when generating segments

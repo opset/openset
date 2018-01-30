@@ -17,7 +17,7 @@ OpenLoopSegment::OpenLoopSegment(
 	openset::result::ResultSet* result,
     const int instance) :
 
-	OpenLoop(),
+	OpenLoop(table->getName(), oloopPriority_e::realtime),
 	macrosList(macros),
 	shuttle(shuttle),
 	table(table),

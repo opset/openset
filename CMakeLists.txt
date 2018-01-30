@@ -90,6 +90,8 @@ set(SOURCE_FILES
         src/attributes.h
         src/columns.cpp
         src/columns.h
+		src/columnmapping.cpp
+		src/columnmapping.h
         src/config.cpp
         src/config.h
         src/database.cpp
@@ -116,6 +118,8 @@ set(SOURCE_FILES
         src/message_broker.h
         src/oloop.cpp
         src/oloop.h
+		src/oloop_cleaner.cpp
+		src/oloop_cleaner.h
 		src/oloop_column.cpp
 		src/oloop_column.h
 		src/oloop_histogram.cpp

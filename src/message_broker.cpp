@@ -20,7 +20,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
         atomic<bool> done = false;
         atomic<bool> retry = false;
 
-        const auto done_cb = [&, broker](
+        const auto done_cb = [&](
             const http::StatusCode status, const bool error, char* data, const size_t size)
         {
             done = true;
@@ -99,11 +99,11 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
     th.detach();
 }
 
-openset::revent::MessageBroker::MessageBroker()
-{}
-
 openset::revent::MessageBroker::~MessageBroker()
-{}
+{
+    
+
+}
 
 std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t triggerId)
 {

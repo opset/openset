@@ -42,6 +42,8 @@ namespace openset
 
 			int64_t peopleCount() const;
 
+            void drop(const int64_t userId);
+
 			void serialize(HeapStack* mem);
 			int64_t deserialize(char* mem);
 		};

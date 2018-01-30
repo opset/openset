@@ -7,6 +7,7 @@
 #include "message_broker.h"
 #include "querycommon.h"
 #include "var/var.h"
+#include "columnmapping.h"
 
 using namespace std;
 
@@ -22,6 +23,7 @@ namespace openset
 	{
 
 		class Database;
+        class ColumnMapping;
 		class TablePartitioned;
 
 		struct SegmentTtl_s
@@ -79,21 +81,23 @@ namespace openset
 
 			// shared objects
 			Columns columns;
+            ColumnMapping columnMap;
 			openset::revent::MessageBroker messages;
 
 			using zMapStr = std::unordered_map<string, int>;
 			using zMapHash = std::unordered_map<int64_t, int>;
+            using PartitionMap = unordered_map<int, TablePartitioned*>;
 
 			zMapStr zOrderStrings;
 			zMapHash zOrderInts;
 			std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
-			TablePartitioned* partitions[PARTITION_MAX];
+			PartitionMap partitions;
 			int64_t loadVersion;
 
 		public:
-			int rowCull{ 5000 }; // remove oldest rows if more than rowCull
+			int rowCull{ 0 }; // remove oldest rows if more than rowCull
 			int64_t stampCull{ 86'400'000LL * 365LL }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
@@ -114,6 +118,11 @@ namespace openset
 			inline Columns* getColumns()
 			{
 				return &columns;
+			}
+
+            inline ColumnMapping* getColumnMapper()
+			{
+			    return &columnMap;
 			}
 
 			inline zMapHash* getZOrderHashes() 

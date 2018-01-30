@@ -197,6 +197,46 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
     message->reply(http::StatusCode::success_ok, response);
 }
 
+void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr message, const RpcMapping & matches)
+{
+    // this request must be forwarded to all the other nodes
+    if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
+        return;
+
+    auto database = openset::globals::database;
+    const auto request = message->getJSON();
+    const auto tableName = matches.find("table"s)->second;
+
+    if (!tableName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "bad table name" },
+                message);
+        return;
+    }
+
+    if (!database->getTable(tableName))
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "table not found" },
+                message);
+        return;
+    }
+
+    database->dropTable(tableName);
+
+    cjson response;
+    response.set("message", "dropped");
+    response.set("table", tableName);
+    message->reply(http::StatusCode::success_ok, response);
+}
+
 void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;

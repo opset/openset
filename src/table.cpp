@@ -16,8 +16,6 @@ Table::Table(const string name, Database* database):
 	database(database),
 	loadVersion(Now())
 {
-	memset(partitions, 0, sizeof(partitions));
-
 	// initialize the var object as a dictionary
 	globalVars.dict(); 
 
@@ -34,7 +32,13 @@ Table::Table(const string name, Database* database):
 }
 
 Table::~Table()
-{}
+{
+    for (auto &part : partitions)
+    {
+        delete part.second;
+        part.second = nullptr;
+    }
+}
 
 void Table::createMissingPartitionObjects()
 {
@@ -49,16 +53,17 @@ void Table::createMissingPartitionObjects()
 TablePartitioned* Table::getPartitionObjects(const int32_t partition)
 {
 	csLock lock(cs); // scoped lock		
-	if (partitions[partition])
-		return partitions[partition];
+	if (auto const part = partitions.find(partition); part != partitions.end())
+		return part->second;
 
-	partitions[partition] = new TablePartitioned(
+    const auto part = new TablePartitioned(
 		this, 
 		partition, 
 		&attributeBlob, 
 		&columns);
 
-	return partitions[partition];
+	partitions[partition] = part;
+	return part;
 }
 
 void Table::releasePartitionObjects(const int32_t partition)
@@ -144,7 +149,7 @@ void Table::deserializeTable(cjson* doc)
 	auto count = 0;
 
 	// load the columns
-	auto addToSchema = [&](cjson* item)
+	const auto addToSchema = [&](cjson* item)
 	{
 		auto colName = item->xPathString("/name", "");
 		auto type = item->xPathString("/type", "");
