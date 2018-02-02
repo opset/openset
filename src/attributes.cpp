@@ -7,7 +7,7 @@ IndexBits* Attr_s::getBits()
 {
 	auto bits = new IndexBits();
 
-	bits->mount(index, ints, linId);
+	bits->mount(index, ints, ofs, len, linId);
 
 	return bits;
 }
@@ -120,7 +120,7 @@ void Attributes::clearDirty()
         
 		const auto attr = attrPair->second;
 
-		bits.mount(attr->index, attr->ints, attr->linId);
+		bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
 		auto t = change.second; // second is the tail pointer for our changes
 
@@ -145,9 +145,10 @@ void Attributes::clearDirty()
         {
 		    int64_t compBytes = 0; // OUT value via reference
 		    int64_t linId;
+            int32_t ofs, len;
 
 		    // compress the data, get it back in a pool ptr
-		    const auto compData = bits.store(compBytes, linId);
+		    const auto compData = bits.store(compBytes, linId, ofs, len);
 		    const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 		    // copy header
@@ -162,6 +163,8 @@ void Attributes::clearDirty()
 		    destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
 		    destAttr->comp = static_cast<int>(compBytes);
 		    destAttr->linId = linId;
+            destAttr->ofs = ofs;
+            destAttr->len = len;
 
 		    // if we made a new destination, we have to update the 
 		    // index to point to it, and free the old one up.
@@ -184,9 +187,10 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 
 	int64_t compBytes = 0; // OUT value
 	int64_t linId = -1;
+    int32_t len, ofs;
 
 	// compress the data, get it back in a pool ptr, size returned in compBytes
-	const auto compData = newBits->store(compBytes, linId);
+	const auto compData = newBits->store(compBytes, linId, ofs, len);
 	const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
@@ -202,6 +206,8 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
 	destAttr->comp = static_cast<int32_t>(compBytes); // TODO - check for overflow
 	destAttr->linId = linId;
+    destAttr->ofs = ofs;
+    destAttr->len = len;
 
 	// if we made a new destination, we have to update the 
 	// index to point to it, and free the old one up.

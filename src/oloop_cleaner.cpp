@@ -29,7 +29,8 @@ void OpenLoopCleaner::respawn()
 {
     OpenLoop* newCell = new OpenLoopCleaner(table);
     
-    newCell->scheduleFuture(60000 * 5);
+    // schedule and add some random shuffle to stagger start-times accross workers
+    newCell->scheduleFuture(60000 + randomRange(5000, -5000)); 
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.    
@@ -41,7 +42,7 @@ void OpenLoopCleaner::run()
 
     auto dirty = false;
 
-	while (true)
+	//while (true)
 	{
 		if (sliceComplete())
         {

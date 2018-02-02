@@ -45,7 +45,7 @@ class HeapStackBlockPool
 {
 private:
 
-    const size_t MAXPOOLBLOCKS = 256;
+    const size_t MAXPOOLBLOCKS = 128;
 
 	std::vector<void*> pool;
 	CriticalSection poolLock;

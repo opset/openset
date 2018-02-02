@@ -46,7 +46,7 @@ void openset::web::Rest::request(const string method, const string path, const Q
                                    ? http::StatusCode::success_ok
                                    : http::StatusCode::client_error_bad_request;
                    auto isError = (status != http::StatusCode::success_ok || ec);
-                   cb(status, isError, cjson(string{data, length}, length));
+                   cb(status, isError, cjson(string{data, length}, cjson::Mode_e::string));
 
                    PoolMem::getPool().freePtr(data);
                  });

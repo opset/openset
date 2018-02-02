@@ -116,7 +116,7 @@ shared_ptr<cjson> forkQuery(
                     r.length &&
                     r.data[0] == '{')
                 {
-                    cjson error(std::string(r.data, r.length), r.length);
+                    cjson error(std::string(r.data, r.length), cjson::Mode_e::string);
 
                     if (error.xPath("/error"))
                     {
@@ -740,7 +740,7 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
         {
             cjson response;
             // FIX error(p.error, &response);
-            message->reply(http::StatusCode::client_error_bad_request, cjson::Stringify(&response, true));
+            message->reply(http::StatusCode::client_error_bad_request, cjson::stringify(&response, true));
             return;
         }
 
@@ -1982,7 +1982,7 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
                         r.length &&
                         r.data[0] == '{')
                     {
-                        cjson error(std::string(r.data, r.length), r.length);
+                        cjson error(std::string(r.data, r.length), cjson::Mode_e::string);
 
                         if (error.xPath("/error"))
                         {
@@ -2022,7 +2022,7 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
                         r.length &&
                         r.data[0] == '{')
                     {
-                        cjson error(std::string(r.data, r.length), r.length);
+                        cjson error(std::string(r.data, r.length), cjson::Mode_e::string);
 
                         if (error.xPath("/error"))
                         {
@@ -2054,10 +2054,10 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
             for (auto &r : results.responses)
             {
                 auto insertAt = resultBranch->pushObject();
-                cjson resultItemJson{ std::string{ r.data, r.length }, r.length };
+                cjson resultItemJson{ std::string{ r.data, r.length }, cjson::Mode_e::string };
 
                 if (auto item = resultItemJson.xPath("/_/0"); item)
-                    cjson::Parse(cjson::Stringify(item), insertAt, true);
+                    cjson::parse(cjson::stringify(item), insertAt, true);
             }
 
             message->reply(openset::http::StatusCode::success_ok, responseJson);

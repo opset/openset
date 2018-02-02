@@ -52,7 +52,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
                     msg->set("method", m.method);
                 }
 
-                auto buffer = cjson::Stringify(&payload);
+                auto buffer = cjson::stringify(&payload);
 
                 const auto backlog = broker->size(reventName, subscriberName);
 

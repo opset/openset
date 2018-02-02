@@ -30,14 +30,15 @@ namespace openset
 
 			// takes buffer to compressed data and actual size as parameters
 			// note: actual size is number of long longs (in64_t)
-			void mount(char* compressedData, const int32_t integers, const int32_t linId);
+			void mount(char* compressedData, const int32_t integers, const int32_t offset, const int32_t length, const int32_t linId);
 
 			int64_t getSizeBytes() const;
 
 			// returns a POOL buffer, and the number of bytes
 			// required for the stored data... obviously, and it's a pity
 			// we need to double copy the result.
-			char* store(int64_t& compressedBytes, int64_t &linId);
+			char* store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length);
+
 
 			void grow(const int64_t required);
 

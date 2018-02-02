@@ -24,12 +24,14 @@ TablePartitioned::TablePartitioned(
 	insertCell->scheduleFuture(1000); // run this in 1 second
 	asyncLoop->queueCell(insertCell);
 
+    return;
+
 	async::OpenLoop* segmentRefreshCell = new async::OpenLoopSegmentRefresh(this);
-	segmentRefreshCell->scheduleFuture(15000); // run this in 15 seconds
+	segmentRefreshCell->scheduleFuture(15000 + + randomRange(15000, -15000)); // run this in 15 seconds add shuffle
 	asyncLoop->queueCell(segmentRefreshCell);
 
 	async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(table);
-	cleanerCell->scheduleFuture(30000); // start this in 30 seconds
+	cleanerCell->scheduleFuture(60000 + randomRange(5000, -5000)); // start this in 90 seconds add shuffle
 	asyncLoop->queueCell(cleanerCell);
 
 }

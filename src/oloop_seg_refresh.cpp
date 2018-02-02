@@ -203,7 +203,7 @@ void OpenLoopSegmentRefresh::respawn()
 {
     OpenLoop* newCell = new OpenLoopSegmentRefresh(parts);
     
-    newCell->scheduleFuture(15000); // check again in 15 seconds
+    newCell->scheduleFuture(15000 + randomRange(5000, -5000)); // check again in 15 seconds
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.
@@ -222,10 +222,10 @@ void OpenLoopSegmentRefresh::run()
 		return;
 
 	openset::db::PersonData_s* personData;
-	while (true)
+	//while (true)
 	{
-		if (sliceComplete())
-			break; // let some other cells run
+		//if (sliceComplete())
+			//break; // let some other cells run
 		
 		// are we out of bits to analyze?
 		if (interpreter->error.inError() || 

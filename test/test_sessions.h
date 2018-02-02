@@ -184,7 +184,7 @@ inline Tests test_sessions()
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();
@@ -291,7 +291,7 @@ inline Tests test_sessions()
 				ASSERT(dataNodes.size() == 1);
 
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,3,9]");
 

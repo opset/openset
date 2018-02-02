@@ -17,6 +17,7 @@ namespace openset
 		class Attributes;
 		class AttributeBlob;
         class ColumnMapping;
+        class Grid;
         struct ColumnMap_s;
 
 		const uint16_t TYPE_AND_MASK = 0b0111'0000'0000'0000;
@@ -75,6 +76,34 @@ namespace openset
 			// single 2 byte section filled with 0 (feature_eof). This allows us
 			// to cast and check the buffer. 
 		};
+
+        class IndexDiffing
+        {
+            using ColVal = std::pair<int32_t,int64_t>;
+            using CVMap = unordered_map<ColVal, int>;
+            using CVList = vector<ColVal>;
+
+            CVMap before;
+            CVMap after;
+
+        public:
+
+            enum class Mode_e : int
+            {
+                before,
+                after
+            };
+
+            void reset();
+
+            void add(int32_t column, int64_t value, Mode_e mode);
+            void add(Grid* grid, Mode_e mode);
+
+            CVList getRemoved();
+            CVList getAdded();
+            void iterRemoved(const std::function<void(int32_t,int64_t)> cb);
+        };
+
 
 		struct PersonData_s
 		{
@@ -212,6 +241,8 @@ namespace openset
 			AttributeBlob* blob{ nullptr };
 
 			int64_t groupIdCounter{ Now() };
+
+            IndexDiffing diff;
 
 		public:
 			Grid() = default;

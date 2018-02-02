@@ -56,12 +56,12 @@ bool openset::mapping::Sentinel::failCheck()
 			nullptr, 
 			0);
 
-		bool isValid = false;
+		auto isValid = false;
 
 		if (result)
 		{
-			std::string resultJson( result->data,result->length );
-			cjson json(resultJson, resultJson.length());
+			const std::string resultJson( result->data,result->length );
+			cjson json(resultJson, cjson::Mode_e::string);
 
 			if (json.xPathBool("/pong", false))
 				isValid = true;
@@ -167,7 +167,7 @@ bool openset::mapping::Sentinel::broadcastMap() const
 	partitionMap->serializePartitionMap(configBlock.setObject("cluster"));
 
 	// JSON to text
-	auto newNodeJson = cjson::Stringify(&configBlock);
+	auto newNodeJson = cjson::stringify(&configBlock);
 	
 	// blast this out to our cluster
 	auto responses = openset::globals::mapper->dispatchCluster(

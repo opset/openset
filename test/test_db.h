@@ -196,7 +196,7 @@ inline Tests test_db()
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();
@@ -346,7 +346,7 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 1);
 				
 				auto totalsNode = dataNodes[0]->xPath("/c");				
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,2,2,6]");
 			}
@@ -438,7 +438,7 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 1);
 
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,4,2]");
 
@@ -523,7 +523,7 @@ inline Tests test_db()
                 */
 
 				// NOTE - uncomment if you want to see the results
-				//cout << cjson::Stringify(&resultJSON, true) << endl;
+				cout << cjson::stringify(&resultJSON, true) << endl;
 
 				auto underScoreNode = resultJSON.xPath("/_");
 				ASSERT(underScoreNode != nullptr);
@@ -547,11 +547,11 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 2);
 				
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 				ASSERT(values == "[1,2]");
 
 				totalsNode = dataNodes[1]->xPath("/c");
-				values = cjson::Stringify(totalsNode);
+				values = cjson::stringify(totalsNode);
 				ASSERT(values == "[1,1]");
 				
 			}

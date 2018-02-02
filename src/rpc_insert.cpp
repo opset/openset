@@ -75,7 +75,8 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
     for (auto row : rows)
     {
         const auto personNode = row->xPath("/person");
-        if (!personNode || (personNode->type() != cjsonType::INT && personNode->type() != cjsonType::STR))
+        if (!personNode || 
+            (personNode->type() != cjson::Types_e::INT && personNode->type() != cjson::Types_e::STR))
             continue;
 
 
@@ -83,7 +84,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
         // We can use numeric IDs (i.e. a customer id) directly.
         int64_t uuid = 0;
 
-        if (personNode->type() == cjsonType::STR)
+        if (personNode->type() == cjson::Types_e::STR)
         {
             auto uuString = personNode->getString();
             toLower(uuString);
@@ -105,7 +106,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
                 localGather.emplace(destination, vector<char*>{});
 
             int64_t len;
-            localGather[destination].push_back(cjson::StringifyCstr(row, len));
+            localGather[destination].push_back(cjson::stringifyCstr(row, len));
         }
 
         if (!isFork)
@@ -121,7 +122,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
                     remoteGather.emplace(targetNode, vector<char*>{});
 
                 int64_t len;
-                remoteGather[targetNode].push_back(cjson::StringifyCstr(row, len));
+                remoteGather[targetNode].push_back(cjson::stringifyCstr(row, len));
             }
         }
 
@@ -171,11 +172,11 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
 
             for (auto e : events)
             {
-                cjson::Parse(e, eventNode->pushObject(), true);
+                cjson::parse(e, eventNode->pushObject(), true);
                 PoolMem::getPool().freePtr(e);
             }
 
-            auto jsonText = cjson::Stringify(&json);
+            auto jsonText = cjson::stringify(&json);
 
 
             openset::globals::mapper->dispatchAsync(
@@ -200,9 +201,9 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
 
         auto sleepCount = 0;
         const auto sleepStart = Now();
-        while (parts->insertBacklog > 5000)
+        while (parts->insertBacklog > 7500)
         {
-            ThreadSleep(5);
+            ThreadSleep(10);
             ++sleepCount;
         }
 

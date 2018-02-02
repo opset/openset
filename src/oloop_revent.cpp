@@ -32,10 +32,10 @@ void OpenLoopRetrigger::run()
     const auto maxLinearId = parts->people.peopleCount();
     const auto now = Now();
 
-	while (true)
+	//while (true)
 	{
-		if (sliceComplete())
-			return; // let some other open loops run
+		//if (sliceComplete())
+			//return; // let some other open loops run
 
 		if (linearId > maxLinearId)
 		{

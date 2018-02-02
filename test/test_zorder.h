@@ -215,7 +215,7 @@ inline Tests test_zorder()
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();

@@ -131,11 +131,11 @@ namespace openset::web
             if (!payload || !payloadLength)
             {
                 cjson t;
-                return std::move(t);
+                return t;
             }
 
-			cjson json(string{ payload, payloadLength }, payloadLength);
-			return std::move(json);
+			cjson json(string{ payload, payloadLength }, cjson::Mode_e::string);
+			return json;
 		}
 
 		void reply(const http::StatusCode status, const char* replyData, const size_t replyLength) const
@@ -155,7 +155,7 @@ namespace openset::web
 			if (cb)
 			{
 				int64_t length;
-				const auto buffer = cjson::StringifyCstr(&message, length, false);
+				const auto buffer = cjson::stringifyCstr(&message, length, false);
 				cb(status, buffer, length);
 				cjson::releaseStringifyPtr(buffer);
 			}

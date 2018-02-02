@@ -132,7 +132,7 @@ void Table::serializeTable(cjson* doc)
 void Table::serializeTriggers(cjson* doc)
 {
 	// push the trigger names
-	doc->setType(cjsonType::OBJECT);
+	doc->setType(cjson::Types_e::OBJECT);
 
 	for (auto &t : triggerConf)
 	{
@@ -184,7 +184,7 @@ void Table::deserializeTable(cjson* doc)
 	const auto pkNode = doc->xPath("/z_order");
 
 	// list of keys
-	if (pkNode && pkNode->type() == cjsonType::ARRAY)
+	if (pkNode && pkNode->type() == cjson::Types_e::ARRAY)
 	{
 		
 		auto nodes = pkNode->getNodes();
@@ -192,7 +192,7 @@ void Table::deserializeTable(cjson* doc)
 		auto idx = 0;
 		for (auto n : nodes)
 		{
-			if (n->type() == cjsonType::STR)
+			if (n->type() == cjson::Types_e::STR)
 			{
 				zOrderStrings.emplace(n->getString(), idx);
 				zOrderInts.emplace(MakeHash(n->getString()), idx);

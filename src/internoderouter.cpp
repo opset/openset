@@ -155,7 +155,7 @@ bool openset::mapping::Mapper::dispatchAsync(
 	const openset::web::RestCbBin callback)
 {
 	// check if there is a route here
-	auto json = cjson::Stringify(&payload);
+	auto json = cjson::stringify(&payload);
 
 	if (auto rest = getRoute(route); rest)
 	{
@@ -213,7 +213,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	const openset::web::QueryParams params,
 	cjson& payload)
 {
-	auto json = cjson::Stringify(&payload);
+	auto json = cjson::stringify(&payload);
 	return std::move(dispatchSync(route, method, path, std::move(params), &json[0], json.length()));
 }
 
@@ -353,7 +353,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	const bool internalDispatch)
 {
 	int64_t jsonLength;
-	const auto jsonText = cjson::StringifyCstr(&json, jsonLength);
+	const auto jsonText = cjson::stringifyCstr(&json, jsonLength);
 
 	auto result = dispatchCluster(method, path, params, jsonText, jsonLength, internalDispatch);
 
@@ -546,7 +546,7 @@ void openset::mapping::Mapper::savePartitions()
 
 void openset::mapping::Mapper::serializeRoutes(cjson* doc)
 {
-	doc->setType(cjsonType::ARRAY);
+	doc->setType(cjson::Types_e::ARRAY);
 
 	for (const auto r : routes)
 	{
@@ -601,7 +601,7 @@ void openset::mapping::Mapper::loadRoutes()
 		return;
 	}
 
-	cjson tableDoc(globals::running->path + "routes.json");
+	cjson tableDoc(globals::running->path + "routes.json", cjson::Mode_e::file);
 
 	deserializeRoutes(&tableDoc);
 

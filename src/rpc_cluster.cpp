@@ -208,7 +208,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
         // make a node called cluster, serialize the partitionMap under it
         openset::globals::mapper->getPartitionMap()->serializePartitionMap(configBlock.setObject("cluster"));
 
-        auto rpcJson = cjson::Stringify(&configBlock);
+        auto rpcJson = cjson::stringify(&configBlock);
 
         Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
@@ -285,7 +285,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
         newNode.set("host", host);
         newNode.set("port", port);
 
-        auto newNodeJson = cjson::Stringify(&newNode);
+        auto newNodeJson = cjson::stringify(&newNode);
 
         auto addResponses = openset::globals::mapper->dispatchCluster(
             "POST",

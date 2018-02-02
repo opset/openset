@@ -61,7 +61,7 @@ void Revent::init()
 	// get our index bits if we have any. We will be keeping these cached
 	attr = parts->attributes.getMake(COL_TRIGGERS, valueName);
 	bits = new IndexBits();
-	bits->mount(attr->index, attr->ints, attr->linId);
+	bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
 	// this call back will be called by the 'schedule' marshal in the interpretor
 	const auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
@@ -132,7 +132,8 @@ void Revent::flushDirty()
 
 	int64_t compBytes = 0; // OUT value via reference filled by ->store
 	int64_t linId = -1;
-	const auto compData = bits->store(compBytes, linId);
+    int32_t ofs, len;
+	const auto compData = bits->store(compBytes, linId, ofs, len);
 
 	auto attrPair = parts->attributes.columnIndex.find({ COL_TRIGGERS, settings->id }); // settings.id is this trigger
 
@@ -145,6 +146,9 @@ void Revent::flushDirty()
 	std::memcpy(newAttr, oldAttr, sizeof(Attr_s));
 	std::memcpy(newAttr->index, compData, compBytes);
 	newAttr->linId = linId;
+    newAttr->ints = bits->ints;
+    newAttr->ofs = ofs;
+    newAttr->len = len;
 
 	// swap old index
 	attrPair->second = newAttr;

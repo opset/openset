@@ -81,9 +81,6 @@ namespace openset
 
 			void setNodeName(std::string name);
 
-			int64_t getExistingConfigVersion() const;
-			void save() const;
-			void load();
 		};
 	}
 

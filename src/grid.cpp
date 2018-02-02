@@ -6,113 +6,102 @@
 
 using namespace openset::db;
 
-class IndexDiffing
+void IndexDiffing::reset()
 {
-    using ColVal = std::pair<int32_t,int64_t>;
-    using CVMap = unordered_map<ColVal, int>;
-    using CVList = vector<ColVal>;
+    before.clear();
+    after.clear();
+}
 
-    CVMap before;
-    CVMap after;
-
-public:
-
-    enum class Mode_e : int
+void IndexDiffing::add(int32_t column, int64_t value, Mode_e mode)
+{
+    if (mode == Mode_e::before)
     {
-        before,
-        after
-    };
-
-    void reset()
-    {
-        before.clear();
-        after.clear();
-    }
-
-    void add(int32_t column, int64_t value, Mode_e mode)
-    {
-        if (mode == Mode_e::before)
-        {
-            if (const auto iter = before.find({column, value}); iter == before.end())
-                iter->second++;
-            else
-                before[{column,value}] = 1;
-        }
+        if (const auto iter = before.find({column, value}); iter != before.end())
+            iter->second++;
         else
+            before[{column, value}] = 1;
+    }
+    else
+    {
+        if (const auto iter = after.find({column, value}); iter != after.end())
+            iter->second++;
+        else
+            after[{column, value}] = 1;
+    }
+
+    // a Value of NONE in combination with a column indicates that
+    // the column is referenced. This is used to index a column, rather
+    // than a column and value.
+    if (value != NONE)
+        add(column, NONE, mode);
+}
+
+void IndexDiffing::add(Grid* grid, Mode_e mode)
+{
+    const auto columns = grid->getTable()->getColumns();
+    const auto rows = grid->getRows();
+    const auto& setData = grid->getSetData();
+    const auto colMap = grid->getColumnMap();
+
+    for (auto r : *rows)
+    {
+        for (auto c = 0; c < colMap->columnCount; ++c)
         {
-            if (const auto iter = after.find({column, value}); iter == after.end())
-                iter->second++;
-            else
-                after[{column,value}] = 1;            
-        }
+            const auto actualColumn = colMap->columnMap[c];
 
-        // a Value of NONE in combination with a column indicates that
-        // the column is referenced. This is used to index a column, rather
-        // than a column and value.
-        if (value != NONE)
-            add(column, NONE, mode);
-    }
+            // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
+            if (r->cols[c] == NONE ||
+                (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
+                continue;
 
-    void add(Grid* grid, Mode_e mode)
-    {
-        const auto columns = grid->getTable()->getColumns();
-        const auto rows = grid->getRows();
-        const auto &setData = grid->getSetData();
-        const auto colMap = grid->getColumnMap();
-
-	    for (auto r : *rows)
-	    {
-		    for (auto c = 0; c < colMap->columnCount; ++c)
-		    {
-                const auto actualColumn = colMap->columnMap[c];
-
-			    // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
-			    if (r->cols[c] == NONE ||
-				    (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
-				    continue;
-
-                if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            {
+                if (colInfo->isSet)
                 {
-                    if (colInfo->isSet)
-                    {
-                        // cast SetInfo_s over the value and get offset and length
-                        const auto& ol = reinterpret_cast<SetInfo_s*>(&r->cols[c]);
+                    // cast SetInfo_s over the value and get offset and length
+                    const auto& ol = reinterpret_cast<SetInfo_s*>(&r->cols[c]);
 
-                        // write out values
-                        for (auto idx = ol->offset; idx < ol->offset + ol->length; ++idx)
-                            add(actualColumn, setData[idx], mode); 
-                    }
-                    else
-                    {
-                        add(actualColumn, r->cols[c], mode);
-                    }
+                    // write out values
+                    for (auto idx = ol->offset; idx < ol->offset + ol->length; ++idx)
+                        add(actualColumn, setData[idx], mode);
                 }
-		    }
-	    }
+                else
+                {
+                    add(actualColumn, r->cols[c], mode);
+                }
+            }
+        }
     }
+}
 
-    CVList getRemoved()
-    {
-        CVList result;
+IndexDiffing::CVList IndexDiffing::getRemoved()
+{
+    CVList result;
 
-        for (auto &b: before)
-            if (!after.count(b.first))
-                result.push_back(b.first);
+    for (auto& b : before)
+        if (!after.count(b.first))
+            result.push_back(b.first);
 
-        return result;
-    }
+    return result;
+}
 
-    CVList getAdded()
-    {
-        CVList result;
+IndexDiffing::CVList IndexDiffing::getAdded()
+{
+    CVList result;
 
-        for (auto &a: after)
-            if (!before.count(a.first))
-                result.push_back(a.first);
+    for (auto& a : after)
+        if (!before.count(a.first))
+            result.push_back(a.first);
 
-        return result;
-    }
-};
+    return result;
+}
+
+void openset::db::IndexDiffing::iterRemoved(const std::function<void(int32_t,int64_t)> cb)
+{
+    for (auto& a : after)
+        if (!before.count(a.first))
+            cb(a.first.first, a.first.second);
+}
 
 Grid::~Grid()
 {
@@ -506,20 +495,20 @@ cjson Grid::toJSON() const
                                 {
                                     switch (p->type())
                                     {
-                                        case cjsonType::VOIDED: break;
-                                        case cjsonType::NUL: break;
-                                        case cjsonType::OBJECT: break;
-                                        case cjsonType::ARRAY: break;
-                                        case cjsonType::INT: 
+                                        case cjson::Types_e::VOIDED: break;
+                                        case cjson::Types_e::NUL: break;
+                                        case cjson::Types_e::OBJECT: break;
+                                        case cjson::Types_e::ARRAY: break;
+                                        case cjson::Types_e::INT: 
                                             newNode->push(p->getInt());
                                         break;
-                                        case cjsonType::DBL: 
+                                        case cjson::Types_e::DBL: 
                                             newNode->push(p->getDouble());
                                         break;
-                                        case cjsonType::STR: 
+                                        case cjson::Types_e::STR: 
                                             newNode->push(p->getString());
                                         break;
-                                        case cjsonType::BOOL: 
+                                        case cjson::Types_e::BOOL: 
                                             newNode->push(p->getBool());
                                         break;
                                         default: ;
@@ -569,7 +558,7 @@ cjson Grid::toJSON() const
 
                 // this Parses the `branch` document into the attributes node using
                 // using Stringify (not great, but not overly slow)
-                cjson::Parse(cjson::Stringify(&branch), attrObj, true);
+                cjson::parse(cjson::stringify(&branch), attrObj, true);
 
 			}
 
@@ -930,7 +919,7 @@ PersonData_s* Grid::commit()
 		compBuffer, 
 		bytesNeeded,
 		maxBytes,
-		2);
+		4);
 
 	const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes; // size() includes data, we adjust
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
@@ -973,11 +962,12 @@ bool Grid::cull()
         return false;
 
     // not at row limit, and first event is within time window? no cull
-    if (rows.size() < table->rowCull && 
+    if (rows.size() < static_cast<size_t>(table->rowCull) && 
         rows[0]->cols[COL_STAMP] > Now() - table->stampCull)
         return false;
 
-    IndexDiffing diff;
+    diff.reset();
+
     auto removed = false;
 	auto rowCount = rows.size();
 
@@ -1013,13 +1003,15 @@ bool Grid::cull()
 
     // what things are no longer referenced in anyway 
     // within our row set? De-index those items.
-    const auto noLongerReferenced = diff.getRemoved();
+    //const auto noLongerReferenced = diff.getRemoved();
 
-    for (const auto& cv: noLongerReferenced)
-        attributes->setDirty(this->rawData->linId, cv.first, cv.second, false); 
+    //for (const auto& cv: noLongerReferenced)
+    diff.iterRemoved([&](int32_t col, int64_t val) {
+        attributes->setDirty(this->rawData->linId, col, val, false); 
+    });
 
-    if (!noLongerReferenced.empty())
-        cout << ("removed " + to_string(noLongerReferenced.size())) << endl;
+    //if (!noLongerReferenced.empty())
+      //  cout << ("removed " + to_string(noLongerReferenced.size())) << endl;
     
     return removed;
 }
@@ -1042,32 +1034,29 @@ void Grid::insert(cjson* rowData)
 	if (!stampNode)
 		return;
 
-	auto stamp = (stampNode->type() == cjsonType::STR) ?
-		Epoch::ISO8601ToEpoch(stampNode->getString()) :
-		stampNode->getInt();
-
-	stamp = Epoch::fixMilli(stamp);
+	const auto stamp = (stampNode->type() == cjson::Types_e::STR) ?
+		Epoch::fixMilli(Epoch::ISO8601ToEpoch(stampNode->getString())) :
+		Epoch::fixMilli(stampNode->getInt());
 
 	if (stamp < 0)
 		return;
 
-	auto action = rowData->xPathString("/action", "");
-	auto attrNode = rowData->xPath("/_");
-	auto rowCount = rows.size();
+	const auto action = rowData->xPathString("/action", "");
+	const auto attrNode = rowData->xPath("/_");
+	
 	decltype(newRow()) row = nullptr;
 
 	if (!attrNode || !action.length())
 		return;
 
-    /*
-	// cull on insert
-	if (static_cast<int>(rowCount) > table->rowCull)
-	{
-		const auto numToErase = rowCount - table->rowCull;
-		rows.erase(rows.begin(), rows.begin() + numToErase);
-		rowCount = rows.size();
-	}
-    */
+    // over row limit, and first event older than time window? cull
+    // note - added leway to reduce calls, proper culling happens
+    // in in oloop_cleaner hourly.
+    if (rows.size() > static_cast<size_t>(table->rowCull + (table->rowCull * 0.1)) && 
+        rows[0]->cols[COL_STAMP] < Now() - (table->stampCull + 3'600'000))
+        cull();
+
+    auto rowCount = rows.size();
 
 	// move the action into the attrs so it will be integrated into the row set
 	attrNode->set("__action", action);
@@ -1096,7 +1085,7 @@ void Grid::insert(cjson* rowData)
 
             switch (c->type())
             {
-            case cjsonType::INT:
+            case cjson::Types_e::INT:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1116,7 +1105,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::DBL:
+            case cjson::Types_e::DBL:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1136,7 +1125,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::STR:
+            case cjson::Types_e::STR:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1153,7 +1142,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::BOOL:
+            case cjson::Types_e::BOOL:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1174,7 +1163,7 @@ void Grid::insert(cjson* rowData)
                 }
                 break;
 
-            case cjsonType::ARRAY:
+            case cjson::Types_e::ARRAY:
             {
                 if (!colInfo->isSet)
                     continue;
@@ -1187,7 +1176,7 @@ void Grid::insert(cjson* rowData)
                 {
                     switch (n->type())
                     {
-                    case cjsonType::INT:
+                    case cjson::Types_e::INT:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1207,7 +1196,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::DBL:
+                    case cjson::Types_e::DBL:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1227,7 +1216,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::STR:
+                    case cjson::Types_e::STR:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1244,7 +1233,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::BOOL:
+                    case cjson::Types_e::BOOL:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1339,8 +1328,7 @@ void Grid::insert(cjson* rowData)
         return hash;
     };
 
-    const auto insertHash = getRowHash(insertRow);
-
+    
     auto insertBefore = -1; // where a new row will be inserted if needed
 
 	const auto hashedAction = MakeHash(action);
@@ -1415,7 +1403,7 @@ void Grid::insert(cjson* rowData)
 							insertBefore = i;
 							break;
 						}
-
+                        const auto insertHash = getRowHash(insertRow);
                         const auto currentRowHash = getRowHash(rows[i]);
 						// we have a matching row, we will replace this
 						if (insertHash == currentRowHash)

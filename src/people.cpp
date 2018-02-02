@@ -5,7 +5,8 @@
 using namespace openset::db;
 
 People::People(const int partition) :	
-	partition(partition)
+	partition(partition),
+    peopleMap(ringHint_e::lt_5_million)
 {}
 
 People::~People()
@@ -68,6 +69,16 @@ PersonData_s* People::getmakePerson(string userIdString)
 	{
 	    const auto person = getPersonByID(hashId);
 
+        auto isReuse = false;
+        auto linId = static_cast<int32_t>(peopleLinear.size());
+
+        if (!reuse.empty())
+        {
+            linId = reuse.back();
+            reuse.pop_back();
+            isReuse = true;
+        }
+
 		if (!person) // not found, lets create
 		{
 			auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s) + idLen));
@@ -76,7 +87,7 @@ PersonData_s* People::getmakePerson(string userIdString)
 			//strcpy(newUser->idstr, idCstr);
 
 			newUser->id = hashId;
-			newUser->linId = static_cast<int32_t>(peopleLinear.size());
+			newUser->linId = linId;
 			newUser->idBytes = 0;
 			newUser->setBytes = 0;
 			newUser->flagRecords = 0;
@@ -84,7 +95,8 @@ PersonData_s* People::getmakePerson(string userIdString)
 			newUser->comp = 0;
 			newUser->setIdStr(userIdString);
 
-			peopleLinear.push_back(newUser);
+            if (!isReuse)
+			    peopleLinear.push_back(newUser);
 
 			peopleMap.set(hashId, newUser->linId);
 
@@ -116,6 +128,8 @@ void People::drop(const int64_t userId)
 
     peopleLinear[info->linId] = nullptr;
 
+    reuse.push_back(info->linId);
+
     PoolMem::getPool().freePtr(info);
 }
 
@@ -145,7 +159,7 @@ int64_t People::deserialize(char* mem)
 
 	read += sizeof(int64_t);
 
-	auto blockSize = *recast<int64_t*>(read);
+    const auto blockSize = *recast<int64_t*>(read);
 
 	if (blockSize == 0)
 	{
@@ -156,14 +170,14 @@ int64_t People::deserialize(char* mem)
 	read += sizeof(int64_t);
 
 	// end is the length of the block after the 16 bytes of header
-	auto end = read + blockSize;
+    const auto end = read + blockSize;
 
 	while (read < end)
 	{
-		auto streamPerson = recast<PersonData_s*>(read);
-		auto streamPersonLen = streamPerson->size();
+		const auto streamPerson = recast<PersonData_s*>(read);
+		const auto streamPersonLen = streamPerson->size();
 
-		auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(streamPersonLen));
+		const auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(streamPersonLen));
 		memcpy(person, streamPerson, streamPersonLen);
 
 		// grow if a record was excluded during serialization 

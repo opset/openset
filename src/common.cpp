@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <thread>
+#include <random>
 
 #include "xxhash.h"
 
@@ -35,6 +36,15 @@ int64_t AppendHash(const int64_t value, const int64_t last)
 int64_t AppendHash(const int32_t value, const int64_t last)
 {
     return XXH64(reinterpret_cast<const void*>(&value), 4, last);    
+}
+
+int64_t randomRange(const int64_t high, const int64_t low)
+{
+	std::random_device rd;
+	std::mt19937 mt(rd());
+
+    const std::uniform_int_distribution<int64_t> someNum(low, high);    
+    return someNum(mt);
 }
 
 void ThreadSleep(const int64_t milliseconds)

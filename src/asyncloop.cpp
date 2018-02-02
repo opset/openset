@@ -7,7 +7,7 @@ AsyncLoop::AsyncLoop(AsyncPool* asyncPool, const int partitionId, const int work
 	queueSize(0),
 	loopCount(0),
 	asyncPool(asyncPool),
-	runTime(50),
+	runTime(100),
 	partition(partitionId),
 	worker(workerId)
 {}

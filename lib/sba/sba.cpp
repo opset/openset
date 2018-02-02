@@ -92,12 +92,10 @@ void PoolMem::freePtr(void* ptr)
 	alloc->poolIndex = -2;
 	mem.freed.push_back(alloc);
 
-    const size_t cullAt = alloc->poolIndex < 10 ? 4000 : 2000;
-
     // if a pool gets to large, trim it back
-    if (mem.freed.size() > cullAt)
+    if (mem.freed.size() > MemConstants::CullSize)
     {
-        const auto cullTo = cullAt / 4;
+        const auto cullTo = MemConstants::CullSize / 5;
         while (mem.freed.size() > cullTo)
         {
 		    delete [] reinterpret_cast<char*>(mem.freed.back());

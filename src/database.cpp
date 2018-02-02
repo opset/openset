@@ -56,7 +56,7 @@ void Database::dropTable(const std::string& tableName)
 
 void Database::serialize(cjson* doc)
 {
-	doc->setType(cjsonType::ARRAY);
+	doc->setType(cjson::Types_e::ARRAY);
 
 	for (const auto& n : tables)
 		doc->push(n.first);	

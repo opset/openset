@@ -20,8 +20,8 @@ namespace openset
             int64_t rowBytes{0};
             int32_t refCount{0};
             int32_t columnCount{0};
-            int32_t uuidColumn{0};
-            int32_t sessionColumn{0};
+            int32_t uuidColumn{-1};
+            int32_t sessionColumn{-1};
             std::array<int32_t, MAXCOLUMNS> columnMap{-1};
             std::array<int32_t, MAXCOLUMNS> reverseMap{-1};
             unordered_map<int64_t, int32_t> insertMap;

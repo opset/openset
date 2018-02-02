@@ -96,7 +96,7 @@ void OpenLoopInsert::run()
         queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); 
         ++queueIter, ++count, --tablePartitioned->insertBacklog)
 	{
-		cjson row(*queueIter, strlen(*queueIter));		
+		cjson row(*queueIter, cjson::Mode_e::string);		
 		cjson::releaseStringifyPtr(*queueIter);
 
 		// we will take profile or table to specify the table name

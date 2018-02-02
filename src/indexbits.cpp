@@ -95,7 +95,7 @@ void IndexBits::makeBits(const int64_t index, const int state)
 	}
 }
 
-void IndexBits::mount(char* compressedData, const int32_t integers, const int32_t linId)
+void IndexBits::mount(char* compressedData, const int32_t integers, const int32_t offset, const int32_t length, const int32_t linId)
 {
 	reset();
 
@@ -118,8 +118,11 @@ void IndexBits::mount(char* compressedData, const int32_t integers, const int32_
 
 	assert(bytes);
 
+    const int64_t offsetPtr = offset * 8;
+    const int32_t byteLength = length * 8;
+
     // TODO - check for int overflow here
-	const auto code = LZ4_decompress_fast(compressedData, output, static_cast<int>(bytes));
+	const auto code = LZ4_decompress_fast(compressedData, output + offsetPtr, byteLength);
 
 	assert(code > 0);
 
@@ -136,7 +139,7 @@ int64_t IndexBits::getSizeBytes() const
 	return ints * sizeof(int64_t);
 }
 
-char* IndexBits::store(int64_t& compressedBytes, int64_t &linId)
+char* IndexBits::store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length)
 {
 	if (!ints)
 		grow(1);
@@ -145,27 +148,52 @@ char* IndexBits::store(int64_t& compressedBytes, int64_t &linId)
 	{
 		linId = -1;
 		compressedBytes = 0;
+        offset = 0;
+        length = 0;
 		return nullptr;
 	}
 	else if (pop == 1)
 	{
 		linId = -1;
 		compressedBytes = 0;
+        offset = 0;
+        length = 0;
+
 		linearIter(linId, ints * 64);
 		return nullptr;
 	}
 
-	const auto maxBytes = LZ4_compressBound(ints * sizeof(int64_t));
+    // find start
+    
+    auto idx = 0;
+    auto firstIdx = -1;
+    auto lastIdx = -1;
+
+	while (idx < ints)
+	{       
+        if (bits[idx])
+        {
+            if (firstIdx == -1)
+                firstIdx = idx;
+            lastIdx = idx;
+        }
+        ++idx;
+	}
+
+    offset = firstIdx;
+    length = (lastIdx - firstIdx) + 1;
+
+	const auto maxBytes = LZ4_compressBound(length * sizeof(int64_t));
 	const auto compressionBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
 
 	//memset(compressionBuffer, 0, maxBytes);
 
 	compressedBytes = LZ4_compress_fast(
-		recast<char*>(bits),
+		recast<char*>(bits + offset),
 		compressionBuffer,
-		ints * sizeof(int64_t),
+		length * sizeof(int64_t),
 		maxBytes,
-		10);
+		7);
 
 	linId = -1;
 

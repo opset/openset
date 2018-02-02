@@ -318,7 +318,7 @@ void openset::mapping::PartitionMap::serializePartitionMap(cjson* doc)
 {
 	csLock lock(cs);
 
-	doc->setType(cjsonType::OBJECT);
+	doc->setType(cjson::Types_e::OBJECT);
 
 	// generate the document
 	for (auto& p : part2node)
@@ -511,13 +511,13 @@ void openset::mapping::PartitionMap::loadPartitionMap()
 
 	if (!openset::IO::File::FileExists(globals::running->path + "partitions.json"))
 	{
-		auto doc = cjson::MakeDocument();
-		doc->setType(cjsonType::ARRAY);
+		auto doc = cjson::makeDocument();
+		doc->setType(cjson::Types_e::ARRAY);
 		doc->toFile(globals::running->path + "partitions.json", doc, true);
-		cjson::DisposeDocument(doc);
+		delete doc;
 	}
 
-	cjson doc(globals::running->path + "partitions.json");
+	cjson doc(globals::running->path + "partitions.json", cjson::Mode_e::file);
 	deserializePartitionMap(&doc);
 }
 
