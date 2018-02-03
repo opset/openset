@@ -2,6 +2,7 @@
 
 #include "oloop.h"
 #include "person.h"
+#include "database.h"
 
 namespace openset
 {
@@ -19,14 +20,14 @@ namespace openset
 
 		class OpenLoopCleaner : public OpenLoop
 		{
-			openset::db::Table* table;
+			openset::db::Database::TablePtr table;
 			openset::db::Person person;
 			int64_t linearId; // used as iterator 
 
 		    db::TablePartitioned* parts { nullptr };
 
 		public:
-			explicit OpenLoopCleaner(openset::db::Table* table);
+			explicit OpenLoopCleaner(openset::db::Database::TablePtr table);
 			~OpenLoopCleaner() final = default;
 
             void respawn();

@@ -43,9 +43,10 @@ namespace openset
 				Columns* schema);
 
 			TablePartitioned() = default;
-            ~TablePartitioned();
 
-			void setSegmentTTL(std::string segmentName, int64_t TTL)
+		    ~TablePartitioned();
+
+		    void setSegmentTTL(std::string segmentName, int64_t TTL)
 			{
 				if (TTL < 0)
 					return;

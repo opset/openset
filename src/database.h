@@ -16,13 +16,16 @@ namespace openset
 
 			CriticalSection cs;
 
-			unordered_map<std::string, Table*> tables;
+            using TablePtr = shared_ptr<Table>;
+            using TableMap = unordered_map<std::string, TablePtr>;
+
+			TableMap tables;
 
 			explicit Database();
 			~Database() = default;
 
-			openset::db::Table* getTable(const std::string& tableName);
-			openset::db::Table* newTable(const std::string& tableName);
+			TablePtr getTable(const std::string& tableName);
+			TablePtr newTable(const std::string& tableName);
             void dropTable(const std::string& tableName);
 
 			void serialize(cjson* doc);

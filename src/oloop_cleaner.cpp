@@ -10,7 +10,7 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopCleaner::OpenLoopCleaner(openset::db::Table* table) :
+OpenLoopCleaner::OpenLoopCleaner(openset::db::Database::TablePtr table) :
 	OpenLoop(table->getName()),
 	table(table),
 	linearId(0)
@@ -19,7 +19,7 @@ OpenLoopCleaner::OpenLoopCleaner(openset::db::Table* table) :
 void OpenLoopCleaner::prepare()
 {
 	linearId = 0;
-	person.mapTable(table, loop->partition);
+	person.mapTable(table.get(), loop->partition);
 
     parts = table->getPartitionObjects(loop->partition);
     parts->triggers->checkForConfigChange();

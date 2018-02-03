@@ -10,16 +10,17 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopRetrigger::OpenLoopRetrigger(openset::db::Table* table) :
+OpenLoopRetrigger::OpenLoopRetrigger(openset::db::Database::TablePtr table) :
 	OpenLoop(table->getName()),
-	table(table),
-	linearId(0)
+    table(table),
+	linearId(0),
+	lowestStamp(0)
 {}
 
 void OpenLoopRetrigger::prepare()
 {
 	linearId = 0;
-	person.mapTable(table, loop->partition);
+	person.mapTable(table.get(), loop->partition);
 	lowestStamp = Now() + 90000;
 
     parts = table->getPartitionObjects(loop->partition);

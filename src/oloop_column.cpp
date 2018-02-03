@@ -13,7 +13,7 @@ using namespace openset::result;
 
 OpenLoopColumn::OpenLoopColumn(
     ShuttleLambda<CellQueryResult_s>* shuttle,
-    openset::db::Table* table,
+    openset::db::Database::TablePtr table,
     ColumnQueryConfig_s config,
     openset::result::ResultSet* result,
     const int64_t instance):

@@ -188,7 +188,6 @@ void AsyncPool::purgeByTable(const std::string& tableName)
 {
 	csLock lock(poolLock);
 
-	auto count = 0;
 	for (auto p : partitions)
     {
 		if (!p)

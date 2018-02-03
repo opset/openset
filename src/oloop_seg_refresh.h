@@ -1,5 +1,6 @@
 #pragma once
 #include "common.h"
+#include "database.h"
 #include "oloop.h"
 #include "shuttle.h"
 #include "querycommon.h"
@@ -21,7 +22,7 @@ namespace openset
 		{
 		public:
 			openset::db::TablePartitioned* parts;
-			openset::db::Table* table;
+			openset::db::Database::TablePtr table;
 
 			int64_t maxLinearId;
 			int64_t currentLinId;
@@ -37,7 +38,7 @@ namespace openset
 			query::Macro_s macros;
 			std::string resultName;
 
-			explicit OpenLoopSegmentRefresh(TablePartitioned* parts);
+			explicit OpenLoopSegmentRefresh(openset::db::Database::TablePtr table);
 
 			~OpenLoopSegmentRefresh() final;
 

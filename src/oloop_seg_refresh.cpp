@@ -9,13 +9,14 @@ using namespace openset::query;
 using namespace openset::result;
 
 // yes, we are passing queryMacros by value to get a copy
-OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(TablePartitioned* parts) :
-	OpenLoop(parts->table->getName()),
-	parts(parts),
-	table(parts->table),
+OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(openset::db::Database::TablePtr table) :
+	OpenLoop(table->getName()),
+	parts(nullptr),
+	table(table),
 	maxLinearId(0),
-	currentLinId(-1),
+    currentLinId(-1),
 	interpreter(nullptr),
+	instance(0),
 	runCount(0),
 	index(nullptr)
 {}
@@ -138,7 +139,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		}
 		
 		// generate the index for this query	
-		indexing.mount(table, macros, loop->partition, maxLinearId);
+		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 		bool countable;
 		index = indexing.getIndex("_", countable);
 
@@ -169,7 +170,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// clean the person object
 		person.reinit();
 		// map table, partition and select schema columns to the Person object
-		person.mapTable(table, loop->partition, mappedColumns);
+		person.mapTable(table.get(), loop->partition, mappedColumns);
 
 		// is this calculated using other segments (i.e. the functions
 		// population, intersection, union, difference and compliment)
@@ -201,7 +202,7 @@ void OpenLoopSegmentRefresh::prepare()
 
 void OpenLoopSegmentRefresh::respawn()
 {
-    OpenLoop* newCell = new OpenLoopSegmentRefresh(parts);
+    OpenLoop* newCell = new OpenLoopSegmentRefresh(table);
     
     newCell->scheduleFuture(15000 + randomRange(5000, -5000)); // check again in 15 seconds
     

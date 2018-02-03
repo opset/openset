@@ -62,13 +62,17 @@ void AsyncLoop::purgeByTable(const std::string& tableName)
     for (auto a: active)
         if (a->owningTable != tableName)
             newActive.push_back(a);
+        else
+            delete a;
 
     active = std::move(newActive);
 
     vector<OpenLoop*> newQueued;
-    for (auto a: queued)
-        if (a->owningTable != tableName)
-            newQueued.push_back(a);
+    for (auto q: queued)
+        if (q->owningTable != tableName)
+            newQueued.push_back(q);
+        else
+            delete q;
 
     queued = std::move(newQueued);
 

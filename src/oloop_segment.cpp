@@ -12,7 +12,7 @@ using namespace openset::result;
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopSegment::OpenLoopSegment(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
-	Table* table,
+	openset::db::Database::TablePtr table,
     const QueryPairs macros,
 	openset::result::ResultSet* result,
     const int instance) :
@@ -153,7 +153,7 @@ bool OpenLoopSegment::nextMacro()
 		macros = macroIter->second;
 
 		// generate the index for this query	
-		indexing.mount(table, macros, loop->partition, maxLinearId);
+		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 		bool countable;
 		index = indexing.getIndex("_", countable);
 		population = index->population(maxLinearId);
@@ -168,7 +168,7 @@ bool OpenLoopSegment::nextMacro()
 		if (macros.useCached && !parts->isSegmentExpiredTTL(resultName))
 		{
 			auto deleteAfterUsing = false;
-			auto cachedBits = getSegmentCB(resultName, deleteAfterUsing);
+			const auto cachedBits = getSegmentCB(resultName, deleteAfterUsing);
 			if (cachedBits)
 			{
 				bits->opCopy(*cachedBits);
@@ -213,7 +213,7 @@ bool OpenLoopSegment::nextMacro()
 		// clean the person object
 		person.reinit();
 		// map table, partition and select schema columns to the Person object
-		person.mapTable(table, loop->partition, mappedColumns);
+		person.mapTable(table.get(), loop->partition, mappedColumns);
 
 		// is this calculated using other segments (i.e. the functions
 		// population, intersection, union, difference and compliment)

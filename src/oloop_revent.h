@@ -1,5 +1,6 @@
 #pragma once
 
+#include "database.h"
 #include "oloop.h"
 #include "person.h"
 
@@ -19,7 +20,7 @@ namespace openset
 
 		class OpenLoopRetrigger : public OpenLoop
 		{
-			openset::db::Table* table;
+			openset::db::Database::TablePtr table;
 			openset::db::Person person;
 			int64_t linearId; // used as iterator 
 			int64_t lowestStamp; // lowest non-expired stamp, for reschedule
@@ -27,7 +28,7 @@ namespace openset
 		    db::TablePartitioned* parts { nullptr };
 
 		public:
-			explicit OpenLoopRetrigger(openset::db::Table* table);
+			explicit OpenLoopRetrigger(openset::db::Database::TablePtr table);
 			~OpenLoopRetrigger() final = default;
 
 			void prepare() final;

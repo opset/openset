@@ -65,7 +65,7 @@ enum class queryFunction_e : int32_t
 * in memory and marged by the originator.
 */
 shared_ptr<cjson> forkQuery(
-    Table* table,
+    Database::TablePtr table,
     const openset::web::MessagePtr message,
     const int resultColumnCount,
     const int resultSetCount,

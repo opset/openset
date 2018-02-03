@@ -14,17 +14,18 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
-    OpenLoop(tablePartitioned->table->getName()),
-	tablePartitioned(tablePartitioned),
+OpenLoopInsert::OpenLoopInsert(openset::db::Database::TablePtr table) :
+    OpenLoop(table->getName()),
+	table(table),
+    tablePartitioned(nullptr),
 	runCount(0)
-{
-	Logger::get().info("insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
-}
+{}
 
 void OpenLoopInsert::prepare()
 {
+    tablePartitioned = table->getPartitionObjects(loop->partition);
 	queueIter = localQueue.end();
+    Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 void OpenLoopInsert::run()

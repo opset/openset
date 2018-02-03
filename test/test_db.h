@@ -192,7 +192,7 @@ inline Tests test_db()
 
 				Person person; // Person overlay for personRaw;
 
-				person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
@@ -289,7 +289,7 @@ inline Tests test_db()
 				// when performing queries
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -384,7 +384,7 @@ inline Tests test_db()
 				ASSERT(mappedColumns.size() == 5);
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -477,7 +477,7 @@ inline Tests test_db()
 				ASSERT(mappedColumns.size() == 4);
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses

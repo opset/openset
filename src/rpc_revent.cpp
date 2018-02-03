@@ -94,7 +94,7 @@ void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcM
 
             // recompile script
             auto err = openset::revent::Revent::compileTriggers(
-                table,
+                table.get(),
                 t->script,
                 t->macros);
 
@@ -112,7 +112,7 @@ void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcM
             t->configVersion = 0;
 
             auto err = openset::revent::Revent::compileTriggers(
-                table,
+                table.get(),
                 t->script,
                 t->macros);
 

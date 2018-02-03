@@ -11,7 +11,7 @@ using namespace openset::result;
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopHistogram::OpenLoopHistogram(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
-	Table* table, 
+	openset::db::Database::TablePtr table, 
 	Macro_s macros, 
     std::string groupName,
     std::string eachColumn,
@@ -56,7 +56,7 @@ void OpenLoopHistogram::prepare()
 	maxLinearId = parts->people.peopleCount();
 
 	// generate the index for this query	
-	indexing.mount(table, macros, loop->partition, maxLinearId);
+	indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 	bool countable;
 	index = indexing.getIndex("_", countable);
 	population = index->population(maxLinearId);
@@ -159,7 +159,7 @@ void OpenLoopHistogram::prepare()
 	auto mappedColumns = interpreter->getReferencedColumns();
 
 	// map table, partition and select schema columns to the Person object
-	person.mapTable(table, loop->partition, mappedColumns);
+	person.mapTable(table.get(), loop->partition, mappedColumns);
 	person.setSessionTime(macros.sessionTime);
 
     rowKey.clear();

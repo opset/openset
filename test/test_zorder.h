@@ -211,7 +211,7 @@ inline Tests test_zorder()
 
 				Person person; // Person overlay for personRaw;
 
-				person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block

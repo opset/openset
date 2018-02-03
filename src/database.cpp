@@ -18,7 +18,7 @@ Database::Database()
 	openset::globals::database = this;
 }
 
-openset::db::Table* Database::getTable(const string& tableName)
+Database::TablePtr Database::getTable(const string& tableName)
 {
 	csLock lock(cs);	
 	if (const auto iter = tables.find(tableName); iter == tables.end())
@@ -27,15 +27,22 @@ openset::db::Table* Database::getTable(const string& tableName)
     	return iter->second;
 }
 
-openset::db::Table* Database::newTable(const string& tableName)
+Database::TablePtr Database::newTable(const string& tableName)
 {
 	auto table = getTable(tableName);
 	if (table)
 		return table;
 
-	csLock lock(cs);
-	table = new Table(tableName, this);
-	tables[tableName] = table;
+    table = make_shared<Table>(tableName, this);
+
+    {
+	    csLock lock(cs);	
+	    tables[tableName] = table;
+    }
+
+    // call this outside the lock, or we will have
+    // a nested lock deadlock.
+    table->initialize();
 
 	return table;
 }
@@ -46,11 +53,12 @@ void Database::dropTable(const std::string& tableName)
 	if (!table)
 		return;
 
+    table->deleted = true;
+
     openset::globals::async->suspendAsync();
     openset::globals::async->purgeByTable(tableName);
 	csLock lock(cs);
     tables.erase(tableName);  
-    delete table;
     openset::globals::async->resumeAsync();
 }
 

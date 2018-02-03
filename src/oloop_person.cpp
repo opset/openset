@@ -10,7 +10,7 @@ using namespace openset::async;
 
 OpenLoopPerson::OpenLoopPerson(
     Shuttle<int>* shuttle, 
-    openset::db::Table* table,
+    openset::db::Database::TablePtr,
     const int64_t uuid) :
     OpenLoop(table->getName(), oloopPriority_e::realtime),
     shuttle(shuttle),
@@ -41,7 +41,7 @@ void OpenLoopPerson::run()
     }
 
     db::Person person; // Person overlay for personRaw;
-    person.mapTable(table, loop->partition); // will throw in DEBUG if not called before mount
+    person.mapTable(table.get(), loop->partition); // will throw in DEBUG if not called before mount
     person.mount(personData);
     person.prepare(); // this actually decompressed the record and populates the grid
 

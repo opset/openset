@@ -15,6 +15,25 @@ Table::Table(const string name, Database* database):
 	name(name),
 	database(database),
 	loadVersion(Now())
+{}
+
+Table::~Table()
+{
+    for (auto &part : partitions)
+    {
+        delete part.second;
+        part.second = nullptr;
+    }
+
+    Logger::get().info("table dropped '" + name + "'.");
+}
+
+Table::TablePtr openset::db::Table::getSharedPtr() const
+{
+    return this->database->getTable(name);
+}
+
+void openset::db::Table::initialize()
 {
 	// initialize the var object as a dictionary
 	globalVars.dict(); 
@@ -31,17 +50,8 @@ Table::Table(const string name, Database* database):
 	createMissingPartitionObjects();
 }
 
-Table::~Table()
-{
-    for (auto &part : partitions)
-    {
-        delete part.second;
-        part.second = nullptr;
-    }
-}
-
 void Table::createMissingPartitionObjects()
-{
+{        
 	globals::async->assertAsyncLock();
 	
 	auto myPartitions = globals::mapper->partitionMap.getPartitionsByNodeId(globals::running->nodeId);
@@ -56,6 +66,7 @@ TablePartitioned* Table::getPartitionObjects(const int32_t partition)
 	if (auto const part = partitions.find(partition); part != partitions.end())
 		return part->second;
 
+    // 
     const auto part = new TablePartitioned(
 		this, 
 		partition, 

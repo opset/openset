@@ -51,7 +51,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
 
     auto table = database->getTable(tableName);
 
-    if (!table)
+    if (!table || table->deleted)
     {
         RpcError(
             openset::errors::Error{

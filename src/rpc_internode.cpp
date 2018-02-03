@@ -141,7 +141,7 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
     const auto targetNode = message->getParamString("node");
     const auto partitionId = message->getParamInt("partition");
 
-    std::vector<openset::db::Table*> tables;
+    std::vector<openset::db::Database::TablePtr> tables;
 
     { // get a list of tables
         csLock lock(globals::database->cs);

@@ -1,7 +1,9 @@
 #pragma once
+
 #include "common.h"
 #include "oloop.h"
 #include "shuttle.h"
+#include "database.h"
 #include "querycommon.h"
 #include "queryindexing.h"
 #include "queryinterpreter.h"
@@ -22,7 +24,7 @@ namespace openset
 		public:
 			query::QueryPairs macrosList;
 			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
-			openset::db::Table* table;
+			openset::db::Database::TablePtr table;
 			openset::db::TablePartitioned* parts;
 			int64_t maxLinearId;
 			int64_t currentLinId;
@@ -48,7 +50,7 @@ namespace openset
 
 			explicit OpenLoopSegment(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
-				openset::db::Table* table,
+				openset::db::Database::TablePtr table,
 				const query::QueryPairs macros,
 				openset::result::ResultSet* result,
 				const int instance);
