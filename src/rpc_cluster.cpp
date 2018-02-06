@@ -131,7 +131,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
     // Step 1 - Verify that the remote node exists and is able to join
     {
-        openset::web::Rest client(host + ":" + to_string(port));
+        openset::web::Rest client(0, host + ":" + to_string(port));
 
         auto error = false;
         auto ready = false;
@@ -212,7 +212,8 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
         Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
-        openset::web::Rest client(host + ":" + to_string(port));
+        const auto hostPort = host + ":" + to_string(port);
+        openset::web::Rest client(0, hostPort);
 
         auto error = false;
         auto ready = false;

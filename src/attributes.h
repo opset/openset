@@ -100,6 +100,8 @@ namespace openset::db
 			int32_t column;
 			int64_t hashValue;
 			int32_t ints; // number of int64_t's used when decompressed
+            int32_t ofs;
+            int32_t len;
 			int32_t textSize;
 			int32_t compSize;
 		};

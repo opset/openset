@@ -38,6 +38,59 @@ int64_t openset::mapping::Sentinel::getSentinel() const
 	return mapper->getSentinelId();
 }
 
+void printMap()
+{
+
+	auto pad3 = [](int number)
+	{
+		auto str = to_string(number);
+		while (str.length() < 3)
+			str = " " + str;
+		return str;
+	};
+
+	auto routes = openset::globals::mapper->getActiveRoutes();
+	auto partCount = openset::globals::running->partitionMax;
+
+	for (auto p = 0; p < partCount; ++p)
+	{
+
+		cout << pad3(p) << ": |";
+
+		for (auto r: routes)
+		{
+
+			auto state = openset::globals::mapper->partitionMap.getState(p, r);
+
+			switch (state)
+			{
+				case openset::mapping::NodeState_e::free: 
+					cout << " |";
+				break;
+				case openset::mapping::NodeState_e::failed: 
+					cout << "#|";
+				break;
+				case openset::mapping::NodeState_e::active_owner: 
+					cout << "A|";
+				break;
+				case openset::mapping::NodeState_e::active_clone: 
+					cout << "C|";
+				break;
+				case openset::mapping::NodeState_e::active_placeholder: 
+					cout << "-|";
+				break;
+				default: 
+					cout << " |";
+			}
+			
+		}
+		cout << endl;	
+	}
+
+	cout << endl;
+
+}
+
 bool openset::mapping::Sentinel::failCheck()
 {
 	// Did we lose many nodes?
@@ -47,7 +100,10 @@ bool openset::mapping::Sentinel::failCheck()
 
 	for (auto r : activeRoutes)
 	{
-		
+        // don't ping ourselves.
+        if (r == openset::globals::running->nodeId)
+            continue;
+	
 		const auto result = mapper->dispatchSync(
 			r,
 			"GET",
@@ -153,6 +209,8 @@ bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t so
 		// TODO Parse message for errors
 	}
 
+    printMap();
+
 	return true;
 }
 
@@ -181,65 +239,13 @@ bool openset::mapping::Sentinel::broadcastMap() const
 
 	openset::globals::mapper->releaseResponses(responses);
 
+    printMap();
+
 	// TODO - parse all those responses and figure out if this is actually TRUE
 
 	return !inError;
 }
 
-void printMap()
-{
-
-	return;
-
-	auto pad3 = [](int number)
-	{
-		auto str = to_string(number);
-		while (str.length() < 3)
-			str = " " + str;
-		return str;
-	};
-
-	auto routes = openset::globals::mapper->getActiveRoutes();
-	auto partCount = openset::globals::running->partitionMax;
-
-	for (auto p = 0; p < partCount; ++p)
-	{
-
-		cout << pad3(p) << ": |";
-
-		for (auto r: routes)
-		{
-
-			auto state = openset::globals::mapper->partitionMap.getState(p, r);
-
-			switch (state)
-			{
-				case openset::mapping::NodeState_e::free: 
-					cout << " |";
-				break;
-				case openset::mapping::NodeState_e::failed: 
-					cout << "#|";
-				break;
-				case openset::mapping::NodeState_e::active_owner: 
-					cout << "A|";
-				break;
-				case openset::mapping::NodeState_e::active_clone: 
-					cout << "C|";
-				break;
-				case openset::mapping::NodeState_e::active_placeholder: 
-					cout << "-|";
-				break;
-				default: 
-					cout << " |";
-			}
-			
-		}
-		cout << endl;	
-	}
-
-	cout << endl;
-
-}
 
 void openset::mapping::Sentinel::dropLocalPartition(int partitionId)
 {
@@ -291,13 +297,19 @@ void openset::mapping::Sentinel::runMonitor()
 
 	auto mapTime = Now();
 
+    int64_t lastFail = 0;
+
 	// this loop runs every 100 milliseconds to ensure that
 	// our cluster is complete. 
 	while (true)
 	{
 		const auto partitionMax = openset::globals::async->getPartitionMax();
 
-		failCheck();
+        if (mapTime - lastFail > 1000)
+        {
+		    failCheck();
+            lastFail = mapTime;
+        }
 
 		// Are we running this? If not, lets loop and wait until
 		// someday we get to be the boss
@@ -312,7 +324,7 @@ void openset::mapping::Sentinel::runMonitor()
 
 			if (Now() > mapTime + 5000)
 			{
-				printMap();
+				//printMap();
 				mapTime = Now();
 			}
 
@@ -336,7 +348,7 @@ void openset::mapping::Sentinel::runMonitor()
 
 		if (Now() > mapTime + 5000)
 		{
-			printMap();
+			//printMap();
 			mapTime = Now();
 		}
 
@@ -539,7 +551,7 @@ void openset::mapping::Sentinel::runMonitor()
 				
 				if (targetNode == -1)
 				{
-					printMap();
+					//printMap();
 					ThreadSleep(5000);
 					Logger::get().error("a target node for partition " + to_string(p) + " could net be found (replication " +  to_string(replicas) + ").");
 					// TODO - Handle FUBAR scenario

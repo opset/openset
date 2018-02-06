@@ -323,7 +323,8 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
     auto testAndCreate = [message, retention, host, port, path, table, tableName, reventName, subName]()
     {
 
-        auto rest = std::make_shared<openset::web::Rest>(host + ":" + to_string(port));
+        const auto hostPort = host + ":" + to_string(port);
+        auto rest = std::make_shared<openset::web::Rest>(0, hostPort);
 
         auto done_cb = [message, retention, host, port, path, table, tableName, reventName, subName](
             const http::StatusCode status, const bool error, char* data, const size_t size)

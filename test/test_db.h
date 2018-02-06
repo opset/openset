@@ -135,18 +135,15 @@ inline Tests test_db()
 	openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
 	mapper->startRouter();
 
-
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
-
 	return {
 		{
-			"db: create and prepare a table", [database] {
+			"db: create and prepare a table", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test001__");
+				auto table = openset::globals::database->newTable("__test001__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -175,9 +172,9 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: add events to user", [database, user1_raw_inserts]() {
+			"db: add events to user", [=]() {
 
-				auto table = database->getTable("__test001__");
+				auto table = openset::globals::database->getTable("__test001__");
 				ASSERT(table != nullptr);
 
 				auto parts = table->getPartitionObjects(0); // partition zero for test
@@ -260,9 +257,9 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: query a user", [database, test1_pyql]() {
+			"db: query a user", [=]() {
 
-				auto table = database->getTable("__test001__");
+				auto table = openset::globals::database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
@@ -352,7 +349,7 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: query another user", [database, test_pluggable_pyql]() {
+			"db: query another user", [=]() {
 
 				openset::query::ParamVars params;
 
@@ -361,7 +358,7 @@ inline Tests test_db()
 				params["attr_keyword"] = "referral_search";
 				params["root_name"] = "root";
 				
-				auto table = database->getTable("__test001__");
+				auto table = openset::globals::database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
@@ -445,7 +442,7 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: test within()", [database, test_within_pyql]() {
+			"db: test within()", [=]() {
 
 				openset::query::ParamVars params;
 
@@ -454,7 +451,7 @@ inline Tests test_db()
 				params["attr_keyword"] = "referral_search";
 				params["root_name"] = "root";
 
-				auto table = database->getTable("__test001__");
+				auto table = openset::globals::database->getTable("__test001__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
@@ -523,7 +520,7 @@ inline Tests test_db()
                 */
 
 				// NOTE - uncomment if you want to see the results
-				cout << cjson::stringify(&resultJSON, true) << endl;
+				//cout << cjson::stringify(&resultJSON, true) << endl;
 
 				auto underScoreNode = resultJSON.xPath("/_");
 				ASSERT(underScoreNode != nullptr);

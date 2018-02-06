@@ -62,9 +62,11 @@ void Table::createMissingPartitionObjects()
 
 TablePartitioned* Table::getPartitionObjects(const int32_t partition)
 {
+    {
 	csLock lock(cs); // scoped lock		
 	if (auto const part = partitions.find(partition); part != partitions.end())
 		return part->second;
+    }
 
     // 
     const auto part = new TablePartitioned(
@@ -72,9 +74,11 @@ TablePartitioned* Table::getPartitionObjects(const int32_t partition)
 		partition, 
 		&attributeBlob, 
 		&columns);
-
-	partitions[partition] = part;
-	return part;
+    {
+        csLock lock(cs); // scoped lock		
+	    partitions[partition] = part;
+	    return part;
+    }
 }
 
 void Table::releasePartitionObjects(const int32_t partition)
@@ -86,7 +90,7 @@ void Table::releasePartitionObjects(const int32_t partition)
 
 	// delete the table objects for this partition
 	delete partitions[partition];
-	partitions[partition] = nullptr;
+    partitions.erase(partition);
 
 }
 

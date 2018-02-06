@@ -32,6 +32,52 @@ openset::mapping::Mapper::Mapper():
 openset::mapping::Mapper::~Mapper() 
 {}
 
+openset::mapping::Mapper::RestConnection openset::mapping::Mapper::getCachedConnection(const int64_t routeId)
+{
+    csLock lock(poolCs);
+
+    if (const auto iter = restPool.find(routeId); iter != restPool.end())
+    {
+        auto &vector = iter->second;
+        const auto now = Now();
+        while (!vector.empty())
+        {
+            auto info = vector.back();
+            vector.pop_back();
+
+            if (info.stamp < now - 300000) // 5 minutes
+            {
+                Logger::get().debug("OLD CONNECTION");
+                continue;
+            }
+
+            Logger::get().debug("CACHED CONNECTION");
+            return info.connection;
+        }
+    }
+ 
+    return nullptr;
+
+}
+
+void openset::mapping::Mapper::returnCachedConnection(RestConnection connection)
+{
+    // don't cache on route 0 - which are adhoc connections
+    if (connection->getRouteId() == 0)
+        return;
+
+    csLock lock(poolCs);
+
+    if (auto iter = restPool.find(connection->getRouteId()); iter != restPool.end())
+    {
+        iter->second.push_back(ConnectionPoolItem_s{Now(), connection});
+    }
+    else
+    {
+        restPool[connection->getRouteId()] = PoolVector{ConnectionPoolItem_s{Now(), connection}};
+    }
+}
+
 int64_t openset::mapping::Mapper::getSlotNumber()
 {
 	++slotCounter;
@@ -63,15 +109,16 @@ void openset::mapping::Mapper::removeRoute(const int64_t routeId)
 {
 	csLock lock(cs); // lock 
 
-	const auto rt = routes.find(routeId);
-
 	// is it missing?
-	if (rt != routes.end())
+	if (const auto rt = routes.find(routeId); rt != routes.end())
 	{
 		routes.erase(rt);
 		// clear the name out - will be in dictionary
 		names.erase(names.find(routeId));
 	}
+    
+    if (const auto rp = restPool.find(routeId); rp != restPool.end())
+        restPool.erase(rp);
 }
 
 std::string openset::mapping::Mapper::getRouteName(const int64_t routeId)
@@ -81,7 +128,7 @@ std::string openset::mapping::Mapper::getRouteName(const int64_t routeId)
 	return "startup";
 }
 
-int64_t openset::mapping::Mapper::getRouteId(const std::string routeName)
+int64_t openset::mapping::Mapper::getRouteId(const std::string& routeName)
 {
 	for (auto &info : names)
 		if (info.second == routeName)
@@ -95,8 +142,12 @@ openset::web::RestPtr openset::mapping::Mapper::getRoute(const int64_t routeId)
 	
 	if (const auto rt = routes.find(routeId); rt == routes.end())
 		return nullptr;
-	else
-		return std::make_shared<openset::web::Rest>(rt->second.first + ":" + to_string(rt->second.second));
+    else
+    {
+        if (auto cachedRoute = getCachedConnection(routeId); cachedRoute != nullptr)
+            return cachedRoute;	
+        return std::make_shared<openset::web::Rest>(routeId, rt->second.first + ":" + to_string(rt->second.second));
+    }
 }
 
 bool openset::mapping::Mapper::isRoute(const int64_t routeId)
@@ -113,17 +164,25 @@ bool openset::mapping::Mapper::isRouteNoLock(const int64_t routeId)
 // send a message to a destination
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const char* payload,
 	const size_t length,
 	const openset::web::RestCbBin callback)
 {
+    auto rest = getRoute(route); 
+
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
 	// check if there is a route here
-	if (auto rest = getRoute(route); rest)
+	if (rest)
 	{
-		rest->request(method, path, params, payload, length, callback);
+		rest->request(method, path, params, payload, length, callbackWrapper);
 		return true;
 	}
 	return false;
@@ -131,16 +190,24 @@ bool openset::mapping::Mapper::dispatchAsync(
 
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const std::string& payload,
 	const openset::web::RestCbBin callback)
 {
+    auto rest = getRoute(route); 
+
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
 	// check if there is a route here
-	if (auto rest = getRoute(route); rest)
+	if (rest)
 	{
-		rest->request(method, path, params, &payload[0], payload.length(), callback);
+		rest->request(method, path, params, &payload[0], payload.length(), callbackWrapper);
 		return true;
 	}
 	return false;
@@ -148,18 +215,26 @@ bool openset::mapping::Mapper::dispatchAsync(
 
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	cjson& payload,
 	const openset::web::RestCbBin callback)
 {
+    auto rest = getRoute(route); 
+
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
 	// check if there is a route here
 	auto json = cjson::stringify(&payload);
 
-	if (auto rest = getRoute(route); rest)
+	if (rest)
 	{
-		rest->request(method, path, params, &json[0], json.length(), callback);
+		rest->request(method, path, params, &json[0], json.length(), callbackWrapper);
 		return true;
 	}
 	return false;
@@ -181,7 +256,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	size_t resultSize;
     http::StatusCode resultStatus;
 
-	auto doneCb = [&ready, &nextReady, &resultData, &resultSize, &resultStatus](const http::StatusCode status, const bool error, char* data, const size_t size)
+	const auto doneCb = [&ready, &nextReady, &resultData, &resultSize, &resultStatus](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		resultData = data;
 		resultSize = size;

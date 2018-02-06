@@ -313,6 +313,8 @@ void Attributes::serialize(HeapStack* mem)
 		blockHeader->column = kv.first.column;
 		blockHeader->hashValue = kv.first.value;
 		blockHeader->ints = kv.second->ints;
+        blockHeader->ofs = kv.second->ofs;
+        blockHeader->len = kv.second->len;
 		const auto text = this->blob->getValue(kv.first.column, kv.first.value);
 		blockHeader->textSize = text ? strlen(text) : 0;
 		//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
@@ -382,6 +384,8 @@ int64_t Attributes::deserialize(char* mem)
 		const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
 		attr->text = blobPtr;
 		attr->ints = blockHeader->ints;
+        attr->ofs = blockHeader->ofs;
+        attr->len = blockHeader->len;
 		attr->comp = blockHeader->compSize;
 
 		// copy the data in

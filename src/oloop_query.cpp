@@ -11,7 +11,7 @@ using namespace openset::result;
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopQuery::OpenLoopQuery(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
-	Database::TablePtr, 
+	Database::TablePtr table, 
 	Macro_s macros, 
 	openset::result::ResultSet* result,
 	int instance) :

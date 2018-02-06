@@ -25,13 +25,17 @@ namespace openset::web
 	{
 		CriticalSection cs;
 		HttpClient client;
+        string host;
+        int64_t routeId;
 
 		std::string makeParams(const QueryParams params) const;
 
 	public:
 
-		Rest(const std::string server) :
-			client(server)
+		Rest(const int64_t routeId, const std::string server) :
+			client(server),
+            host(server),
+            routeId(routeId)
 		{
 			//cout << "****" << server << endl;
 			//client.io_service = openset::globals::global_io_service;
@@ -42,10 +46,15 @@ namespace openset::web
 			//cout << "destroyed" << endl;
 		}
 
-		void request(const std::string method, const std::string path, const QueryParams params, const char* payload,
+        int64_t getRouteId() const
+		{
+		    return routeId;
+		}
+
+		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
 		             const size_t length, RestCbJson cb);;
 
-		void request(const std::string method, const std::string path, const QueryParams params, const char* payload,
+		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
 		             const size_t length, RestCbBin cb);;
 
 	};

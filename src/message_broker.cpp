@@ -27,7 +27,8 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
             retry = error;
         };
 
-        auto rest = std::make_shared<openset::web::Rest>(host + ":" + to_string(port));
+        const auto hostPort = host + ":" + to_string(port);
+        auto rest = std::make_shared<openset::web::Rest>(0, hostPort);
         
         while (true)
         {

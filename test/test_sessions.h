@@ -158,14 +158,14 @@ inline Tests test_sessions()
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
+	//auto database = new Database();
 
 	return {
 		{
-			"test_sessions: create and prepare a table", [database, user1_raw_inserts] {
+			"test_sessions: create and prepare a table", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test004__");
+				auto table = openset::globals::database->newTable("__testsessions__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -205,11 +205,11 @@ inline Tests test_sessions()
 			}
 		},
 		{
-			"test_sessions: loop", [test1_pyql]
+			"test_sessions: loop", [=]
 			{
 				auto database = openset::globals::database;
 
-				auto table = database->getTable("__test004__");
+				auto table = openset::globals::database->getTable("__testsessions__");
 				auto parts = table->getPartitionObjects(0); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block

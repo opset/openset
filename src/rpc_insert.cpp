@@ -31,7 +31,7 @@ using namespace openset::result;
 
 void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
-    auto database = openset::globals::database;
+    const auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
 
     const auto request = message->getJSON();
@@ -95,7 +95,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
         else
             uuid = personNode->getInt();
 
-        const auto destination = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
+        const auto destination = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
 
         const auto mapInfo = globals::mapper->partitionMap.getState(destination, globals::running->nodeId);
 
@@ -149,7 +149,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
 
     auto remoteCount = 0;
 
-    const auto thankyouCB = [](http::StatusCode, bool, char*, size_t)
+    const auto thankyouCb = [](http::StatusCode, bool, char*, size_t)
     {
         // TODO - we should probably handle this horrible possibility somehow.
         // delete message;
@@ -164,29 +164,27 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
             const auto& events = data.second;
 
             // make an JSON array object
-            cjson json;
-
-            json.set("table", tableName);
-            json.set("is_fork", true);
-            auto eventNode = json.setArray("events");
+            cjson json(cjson::Types_e::ARRAY);
 
             for (auto e : events)
             {
-                cjson::parse(e, eventNode->pushObject(), true);
+                cjson::parse(e, json.pushObject(), true);
                 PoolMem::getPool().freePtr(e);
             }
 
             auto jsonText = cjson::stringify(&json);
 
-
+            auto newParams = message->getQuery();
+            newParams.emplace("fork", "true");
+            
             openset::globals::mapper->dispatchAsync(
                 targetNode,
                 "POST",
                 "/v1/insert/" + tableName,
-                {},
+                newParams,
                 jsonText.c_str(),
                 jsonText.length(),
-                thankyouCB);
+                thankyouCb);
 
         }
 

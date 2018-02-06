@@ -177,14 +177,12 @@ inline Tests test_zorder()
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
-
 	return {
 		{
-			"z-order: test event z-order", [database, user1_raw_inserts] {
+			"z-order: test event z-order", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test001__");
+				auto table = openset::globals::database->newTable("__testzorder__");
 
 				// add some columns
 				auto columns = table->getColumns();
