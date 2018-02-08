@@ -4,9 +4,7 @@
 #include "http_serve.h"
 #include "client_http.hpp"
 #include "utility.hpp"
-#include "sba/sba.h"
 #include "cjson/cjson.h"
-#include "threads/locks.h"
 #include "threads/spinlock.h"
 
 namespace openset
@@ -28,23 +26,17 @@ namespace openset::web
         string host;
         int64_t routeId;
 
-		std::string makeParams(const QueryParams params) const;
+		static std::string makeParams(const QueryParams& params);
 
 	public:
 
-		Rest(const int64_t routeId, const std::string server) :
+		Rest(const int64_t routeId, const std::string& server) :
 			client(server),
             host(server),
             routeId(routeId)
-		{
-			//cout << "****" << server << endl;
-			//client.io_service = openset::globals::global_io_service;
-		};
+		{};
 
-		~Rest()
-		{
-			//cout << "destroyed" << endl;
-		}
+		~Rest() = default;
 
         int64_t getRouteId() const
 		{

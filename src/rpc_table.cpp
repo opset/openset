@@ -29,7 +29,7 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
-void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     // this request must be forwarded to all the other nodes
@@ -78,6 +78,7 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
     }
 
     const auto sourceZOrder = request.xPath("/z_order");
+    const auto sourceSettings = request.xPath("/settings");
 
     auto sourceColumnsList = sourceColumns->getNodes();
 
@@ -127,6 +128,9 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
     globals::async->suspendAsync();
     auto table = database->newTable(tableName);
     auto columns = table->getColumns();
+
+    // lock the table object
+    csLock lock(*table->getLock());
 
     // set the default required columns
     columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
@@ -187,6 +191,21 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
         }
     }
 
+    if (sourceSettings)
+    {
+        if (const auto node = sourceSettings->find("event_ttl"); node)
+            table->eventTtl = node->getInt();
+
+        if (const auto node = sourceSettings->find("event_max"); node)
+            table->eventMax = node->getInt();
+
+        if (const auto node = sourceSettings->find("session_time"); node)
+            table->sessionTime = node->getInt();
+
+        if (const auto node = sourceSettings->find("tz_offset"); node)
+            table->tzOffset = node->getInt();       
+    }
+
     globals::async->resumeAsync();
 
     Logger::get().info("table '" + tableName + "' created.");
@@ -197,7 +216,7 @@ void RpcTable::table_create(const openset::web::MessagePtr message, const RpcMap
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr message, const RpcMapping & matches)
+void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr& message, const RpcMapping & matches)
 {
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
@@ -237,7 +256,7 @@ void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr message
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcTable::table_describe(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
 
@@ -268,6 +287,9 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
 
         return;
     }
+
+    // lock the table object
+    csLock lock(*table->getLock());
 
     cjson response;
 
@@ -307,11 +329,27 @@ void RpcTable::table_describe(const openset::web::MessagePtr message, const RpcM
                 columnRecord->set("is_set", c.isSet);
         }
 
+    auto zOrder = response.setArray("z_order");
+    const auto zOrderMap = table->getZOrderStrings(); 
+    std::vector<std::string> zOrderList(zOrderMap->size());
+
+    for (auto m: *zOrderMap)
+       zOrderList[m.second] = m.first;
+
+    for (const auto &z : zOrderList)
+        zOrder->push(z);
+
+    auto settings = response.setObject("settings");
+    settings->set("event_ttl", table->eventTtl);
+    settings->set("event_max", table->eventMax);
+    settings->set("session_time", table->sessionTime);
+    settings->set("tz_offset", table->tzOffset);
+
     Logger::get().info("describe table '" + tableName + "'.");
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     // this request must be forwarded to all the other nodes
@@ -384,6 +422,9 @@ void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMappi
         return;
     }
 
+    // lock the table object
+    csLock lock(*table->getLock());
+
     auto columns = table->getColumns();
 
     int64_t lowest = 999;
@@ -429,7 +470,7 @@ void RpcTable::column_add(const openset::web::MessagePtr message, const RpcMappi
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
 
@@ -472,6 +513,9 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
         return;
     }
 
+    // lock the table object
+    csLock lock(*table->getLock());
+
     const auto column = table->getColumns()->getColumn(columnName);
 
     if (!column || column->type == columnTypes_e::freeColumn)
@@ -495,4 +539,61 @@ void RpcTable::column_drop(const openset::web::MessagePtr message, const RpcMapp
     response.set("table", tableName);
     response.set("column", columnName);
     message->reply(http::StatusCode::success_ok, response);
+}
+
+void RpcTable::table_settings(const openset::web::MessagePtr& message, const RpcMapping& matches)
+{
+    auto database = openset::globals::database;
+
+    const auto request = message->getJSON();
+    const auto tableName = matches.find("table"s)->second;
+    const auto columnName = matches.find("name"s)->second;
+
+    if (!tableName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "missing /params/table" },
+                message);
+        return;
+    }
+
+    auto table = database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "table not found" },
+                message);
+        return;
+    }
+
+    // lock the table object
+    csLock lock(*table->getLock());
+
+    if (const auto node = request.find("event_ttl"); node)
+    {
+        table->eventTtl = node->getInt();
+    }
+
+    if (const auto node = request.find("event_max"); node)
+    {
+        table->eventMax = node->getInt();
+    }
+
+    if (const auto node = request.find("session_time"); node)
+    {
+        table->sessionTime = node->getInt();
+    }
+
+    if (const auto node = request.find("tz_offset"); node)
+    {
+        table->tzOffset = node->getInt();
+    }
+    
 }

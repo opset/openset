@@ -103,11 +103,12 @@ namespace openset
 
             bool deleted{ false };
 
-			int rowCull{ 5000 }; // remove oldest rows if more than rowCull
-			int64_t stampCull{ 86'400'000LL * 365LL * 5 }; // auto cull older than stampCull
+			int eventMax{ 5000 }; // remove oldest rows if more than rowCull
+            int64_t tzOffset{ 0 }; // UTC
+			int64_t eventTtl{ 86'400'000LL * 365LL * 5 }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
 
-			explicit Table(const string name, openset::db::Database* database);
+			explicit Table(const string &name, openset::db::Database* database);
 			~Table();
 
             TablePtr getSharedPtr() const;

@@ -11,7 +11,7 @@
 
 using namespace openset::db;
 
-Table::Table(const string name, Database* database):
+Table::Table(const string &name, Database* database):
 	name(name),
 	database(database),
 	loadVersion(Now())
@@ -108,6 +108,12 @@ void Table::serializeTable(cjson* doc)
 	for (auto &i : zList)
 		pkNode->push(i);
 
+    auto settings = doc->setObject("settings");
+    settings->set("event_ttl", eventTtl);
+    settings->set("event_max", eventMax);
+    settings->set("session_time", sessionTime);
+    settings->set("tz_offset", tzOffset);
+    
 	auto columnNodes = doc->setArray("columns");
 
 	for (auto &c : columns.columns)
@@ -140,7 +146,7 @@ void Table::serializeTable(cjson* doc)
 			columnRecord->set("index", cast<int64_t>(c.idx));
 			columnRecord->set("type", type);
 			columnRecord->set("deleted", c.deleted);
-			columnRecord->set("prop", c.isSet);
+			columnRecord->set("is_set", c.isSet);
 		}
 }
 
@@ -169,7 +175,7 @@ void Table::deserializeTable(cjson* doc)
 		auto colName = item->xPathString("/name", "");
 		auto type = item->xPathString("/type", "");
 		auto index = item->xPathInt("/index", -1);
-		auto isProp = item->xPathBool("/prop", false);
+		auto isProp = item->xPathBool("/is_set", false);
 		// was it deleted? > 0 = deleted, value is epoch time of deletion
 		auto deleted = item->xPathInt("/deleted", 0);
 		
@@ -187,7 +193,7 @@ void Table::deserializeTable(cjson* doc)
 		else if (type == "bool")
 			colType = columnTypes_e::boolColumn;
 		else
-			return; // TODO hmmm...
+			return; // skip 
 
 		columns.setColumn(index, colName, colType, isProp, deleted);
 		count++;
@@ -215,6 +221,24 @@ void Table::deserializeTable(cjson* doc)
 			}
 		}
 	}
+
+    // read in any settings
+    const auto sourceNode = doc->xPath("/settings");
+    if (sourceNode)
+    {
+        if (const auto node = sourceNode->find("event_ttl"); node)
+            eventTtl = node->getInt();
+
+        if (const auto node = sourceNode->find("event_max"); node)
+            eventMax = node->getInt();
+
+        if (const auto node = sourceNode->find("session_time"); node)
+            sessionTime = node->getInt();
+
+        if (const auto node = sourceNode->find("tz_offset"); node)
+            tzOffset = node->getInt();       
+    }
+
 
 	// set the default required columns
 	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);

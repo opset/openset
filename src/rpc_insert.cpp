@@ -151,8 +151,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
 
     const auto thankyouCb = [](http::StatusCode, bool, char*, size_t)
     {
-        // TODO - we should probably handle this horrible possibility somehow.
-        // delete message;
+        // do nothing.
     };
 
     if (!isFork)
@@ -189,7 +188,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
         }
 
     // FLOW CONTROL - check for backlogging, delay the 
-    // "thank you." response until backlog is acceptable
+    // "yummy" until backlog has gotten smaller
     for (auto &g : localGather)
     {
         const auto parts = table->getPartitionObjects(g.first);

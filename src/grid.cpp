@@ -962,8 +962,8 @@ bool Grid::cull()
         return false;
 
     // not at row limit, and first event is within time window? no cull
-    if (rows.size() < static_cast<size_t>(table->rowCull) && 
-        rows[0]->cols[COL_STAMP] > Now() - table->stampCull)
+    if (rows.size() < static_cast<size_t>(table->eventMax) && 
+        rows[0]->cols[COL_STAMP] > Now() - table->eventTtl)
         return false;
 
     diff.reset();
@@ -974,15 +974,15 @@ bool Grid::cull()
     diff.add(this, IndexDiffing::Mode_e::before);
 
 	// cull if row count exceeds limit
-	if (static_cast<int>(rowCount) > table->rowCull)
+	if (static_cast<int>(rowCount) > table->eventMax)
 	{
-		const auto numToErase = rowCount - table->rowCull;
+		const auto numToErase = rowCount - table->eventMax;
 		rows.erase(rows.begin(), rows.begin() + numToErase);
 		rowCount = rows.size();
         removed = true;
 	}
 
-    const auto cullStamp = Now() - table->stampCull;
+    const auto cullStamp = Now() - table->eventTtl;
     auto expiredCount = 0;
 
     for (const auto &r: rows)
@@ -1052,8 +1052,8 @@ void Grid::insert(cjson* rowData)
     // over row limit, and first event older than time window? cull
     // note - added leway to reduce calls, proper culling happens
     // in in oloop_cleaner hourly.
-    if (rows.size() > static_cast<size_t>(table->rowCull + (table->rowCull * 0.1)) && 
-        rows[0]->cols[COL_STAMP] < Now() - (table->stampCull + 3'600'000))
+    if (rows.size() > static_cast<size_t>(table->eventMax + (table->eventMax * 0.1)) && 
+        rows[0]->cols[COL_STAMP] < Now() - (table->eventTtl + 3'600'000))
         cull();
 
     auto rowCount = rows.size();

@@ -13,7 +13,6 @@
 #include "sentinel.h"
 #include "database.h"
 #include "result.h"
-#include "table.h"
 #include "tablepartitioned.h"
 #include "errors.h"
 #include "internoderouter.h"
@@ -153,7 +152,7 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
 
     globals::async->suspendAsync();
 
-    for (auto t : tables)
+    for (const auto &t : tables)
     {
         auto part = t->getPartitionObjects(partitionId);
 
