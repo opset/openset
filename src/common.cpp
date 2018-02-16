@@ -41,7 +41,7 @@ int64_t AppendHash(const int32_t value, const int64_t last)
 int64_t randomRange(const int64_t high, const int64_t low)
 {
 	std::default_random_engine rd;
-    const std::uniform_int_distribution<int64_t> someNum(low, high);    
+    const std::uniform_int_distribution<int> someNum(low, high);    
     return someNum(rd);
 }
 
