@@ -1640,7 +1640,7 @@ cjson* cjson::parseBranch(cjson* n, char* & readPtr, const bool embedding)
 					else
 					{
 						char* endp;
-						n->set(name, strtoll(value.c_str(), &endp, 10));
+						n->set(name, static_cast<int64_t>(strtoll(value.c_str(), &endp, 10)));
 					}
 
 					continue;
