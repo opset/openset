@@ -14,10 +14,7 @@ namespace openset
 openset::mapping::Sentinel::Sentinel(Mapper* mapper, openset::db::Database* database):
 	mapper(mapper),
 	partitionMap(mapper->getPartitionMap()),
-	database(database),
-	//xferQueueSize(0),
-	inErrorState(false),
-	inXferPurge(false)
+	database(database)
 {
 	globals::sentinel = this;
 
@@ -26,11 +23,14 @@ openset::mapping::Sentinel::Sentinel(Mapper* mapper, openset::db::Database* data
 	monitorRunner.detach();
 }
 
-openset::mapping::Sentinel::~Sentinel() { }
-
 bool openset::mapping::Sentinel::isSentinel() const
 {
 	return mapper->getSentinelId() == globals::running->nodeId;
+}
+
+bool openset::mapping::Sentinel::isBalanced() const
+{
+    return Now() - lastMapChange > 15'000;   
 }
 
 int64_t openset::mapping::Sentinel::getSentinel() const
@@ -38,57 +38,141 @@ int64_t openset::mapping::Sentinel::getSentinel() const
 	return mapper->getSentinelId();
 }
 
-void printMap()
+cjson openset::mapping::Sentinel::getPartitionStatus()
 {
 
-	auto pad3 = [](int number)
-	{
-		auto str = to_string(number);
-		while (str.length() < 3)
-			str = " " + str;
-		return str;
-	};
+    cjson doc;
 
-	auto routes = openset::globals::mapper->getActiveRoutes();
-	auto partCount = openset::globals::running->partitionMax;
+    auto routesBranch = doc.setObject("routes");
+
+    {
+        csLock lock(openset::globals::mapper->cs);
+
+    	auto routes = openset::globals::mapper->routes;
+
+        for (const auto &r : routes)
+        {
+            const auto routeName = globals::mapper->getRouteName(r.first);
+            auto routeInfoBranch = routesBranch->setObject(routeName);
+
+            routeInfoBranch->set("name", routeName );
+            routeInfoBranch->set("public_host", r.second.first );
+            routeInfoBranch->set("public_port", r.second.second );
+        }
+    }
+
+    
+    auto partitionsBranch = doc.setArray("partitions");
+	const auto partCount = openset::globals::running->partitionMax;
+    const auto routes = openset::globals::mapper->getActiveRoutes();
 
 	for (auto p = 0; p < partCount; ++p)
 	{
+		auto entry = partitionsBranch->pushObject();
 
-		cout << pad3(p) << ": |";
-
+        entry->set("partition", p);
+        auto routeObject = entry->setObject("routes");
+        
 		for (auto r: routes)
 		{
+            const auto routeName = openset::globals::mapper->getRouteName(r);
 
-			auto state = openset::globals::mapper->partitionMap.getState(p, r);
+			const auto state = openset::globals::mapper->partitionMap.getState(p, r);
 
 			switch (state)
 			{
-				case openset::mapping::NodeState_e::free: 
-					cout << " |";
-				break;
 				case openset::mapping::NodeState_e::failed: 
-					cout << "#|";
+					routeObject->set(routeName, "failed");
 				break;
 				case openset::mapping::NodeState_e::active_owner: 
-					cout << "A|";
+					routeObject->set(routeName, "active");
 				break;
 				case openset::mapping::NodeState_e::active_clone: 
-					cout << "C|";
+					routeObject->set(routeName, "clone");
 				break;
 				case openset::mapping::NodeState_e::active_placeholder: 
-					cout << "-|";
+					routeObject->set(routeName, "move");
 				break;
 				default: 
-					cout << " |";
+					routeObject->set(routeName, "free");
+				break;
 			}
 			
 		}
-		cout << endl;	
 	}
 
-	cout << endl;
+    return doc;
+}
 
+bool openset::mapping::Sentinel::isClusterComplete() const
+{
+    const auto partitionMax = openset::globals::async->getPartitionMax();
+
+    return partitionMap->isClusterComplete(
+		partitionMax, 
+		{ NodeState_e::active_owner }
+    );    
+}
+
+int openset::mapping::Sentinel::getFailureTolerance() const
+{
+	const auto routes = mapper->countRoutes();
+
+	// number of replicas, so 2 would mean there are three copies, the active and two clones
+    auto replicas = 2;
+
+	// adjust the number of replicas depending on the number of remaining nodes in the cluster
+	if (routes == 1)
+		return 0;
+	
+    if (routes <= 4)
+    {
+        return partitionMap->isClusterComplete(
+    	    openset::globals::async->getPartitionMax(), 
+	        { 
+		        NodeState_e::active_clone
+	        }, 
+	        1) ? 1 : 0;
+            
+    }
+    
+    const auto twoFails = partitionMap->isClusterComplete(
+    	openset::globals::async->getPartitionMax(), 
+	    { 
+		    NodeState_e::active_clone
+	    }, 
+	    2);
+
+    if (twoFails)
+        return 2;
+    
+    const auto oneFail = partitionMap->isClusterComplete(
+    	openset::globals::async->getPartitionMax(), 
+	    { 
+		    NodeState_e::active_clone
+	    }, 
+	    1);    
+
+    if (oneFail)
+        return 1;
+
+    return 0;
+}
+
+int openset::mapping::Sentinel::getRedundancyLevel() const
+{
+	const auto routes = mapper->countRoutes();
+
+	// number of replicas, so 2 would mean there are three copies, the active and two clones
+	auto replicas = 2; // amount of replication we want in the cluster
+
+	// adjust the number of replicas depending on the number of remaining nodes in the cluster
+	if (routes == 1)
+		replicas = 0;
+	else if (routes <= 4)
+		replicas = 1;
+
+    return replicas;    
 }
 
 bool openset::mapping::Sentinel::failCheck()
@@ -140,46 +224,6 @@ bool openset::mapping::Sentinel::failCheck()
 	}
 
 	return false;
-
-/*
-	// are there any downed nodes? Because this could be bad!
-	if (failedCount)
-	{
-		//enterErrorState(); // enter error state if we aren't already
-
-		Logger::get().error("NODE DOWN - " + to_string(failedCount) + " node(s) down... verifying");
-		ThreadSleep(500);
-
-		failedCount = mapper->countFailedRoutes();
-
-		if (!failedCount)
-		{
-			Logger::get().info("NODE DOWN - connections re-established");
-			return true;
-		}
-
-		auto deadRoutes = mapper->getFailedRoutes();
-
-		// purge partitions owned by the dead node from the map
-		// and remove the route
-		for (auto d : deadRoutes)
-		{
-			markDeadRoute(d);
-			partitionMap->purgeNodeById(d);
-			mapper->removeRoute(d);
-		}
-
-		Logger::get().info(to_string(deadRoutes.size()) + " node(s) removed.");
-
-		//enterErrorState();
-		if (isSentinel())
-			broadcastMap();
-		// go back up and test all logic
-		return true;
-	}
-
-	return false;
-*/
 }
 
 bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const
@@ -209,45 +253,42 @@ bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t so
 		// TODO Parse message for errors
 	}
 
-    printMap();
-
 	return true;
 }
 
-bool openset::mapping::Sentinel::broadcastMap() const
+bool openset::mapping::Sentinel::broadcastMap()
 {
+    cjson configBlock;
 
-	cjson configBlock;
+    setMapChanged();
 
 	// make a node called routes, serialize the routes (nodes) under it
 	mapper->serializeRoutes(configBlock.setObject("routes"));
+
 	// make a node called cluster, serialize the partitionMap under it
 	partitionMap->serializePartitionMap(configBlock.setObject("cluster"));
-
-	// JSON to text
-	auto newNodeJson = cjson::stringify(&configBlock);
-	
+    	
 	// blast this out to our cluster
 	auto responses = openset::globals::mapper->dispatchCluster(
 		"POST",
 		"/v1/internode/map_change",
 		{},
-		&newNodeJson[0],
-		newNodeJson.length());
+		configBlock);
 
-	const auto inError = responses.routeError;
+	const auto inError = !responses.routeError;
 
 	openset::globals::mapper->releaseResponses(responses);
 
-    printMap();
 
-	// TODO - parse all those responses and figure out if this is actually TRUE
+    openset::globals::async->suspendAsync();
+    openset::globals::async->balancePartitions();
+    openset::globals::async->resumeAsync();
 
-	return !inError;
+	return inError;
 }
 
 
-void openset::mapping::Sentinel::dropLocalPartition(int partitionId)
+void openset::mapping::Sentinel::dropLocalPartition(const int partitionId)
 {
 	if (openset::globals::mapper->partitionMap.isMapped(
 		partitionId, 
@@ -271,10 +312,13 @@ void openset::mapping::Sentinel::runMonitor()
 
 	int64_t lastMovedClonePartition = -1;
 
+    auto replicas = 0;
+    auto lastPartitionMove = Now();
+
 	while (true)
 	{		
-		auto routes = mapper->countRoutes();
-		auto up = mapper->countActiveRoutes();
+		const auto routes = mapper->countRoutes();
+		const auto up = mapper->countActiveRoutes();
 
 		// if there are not enough (active) nodes.. or.. we are not part of a cluster...
 		// or not initialized
@@ -295,9 +339,8 @@ void openset::mapping::Sentinel::runMonitor()
 
 	Logger::get().info("cluster complete.");
 
-	auto mapTime = Now();
 
-    int64_t lastFail = 0;
+    int64_t lastFailCheck = 0;
 
 	// this loop runs every 100 milliseconds to ensure that
 	// our cluster is complete. 
@@ -305,10 +348,10 @@ void openset::mapping::Sentinel::runMonitor()
 	{
 		const auto partitionMax = openset::globals::async->getPartitionMax();
 
-        if (mapTime - lastFail > 1000)
+        if (Now() - lastFailCheck > 250)
         {
 		    failCheck();
-            lastFail = mapTime;
+            lastFailCheck = Now();
         }
 
 		// Are we running this? If not, lets loop and wait until
@@ -320,12 +363,6 @@ void openset::mapping::Sentinel::runMonitor()
 				actingSentinel = false;
 				Logger::get().info("no longer team leader.");
 				//purgeTransferQeueue(); // clear the queue, it's not our job to watch it now
-			}
-
-			if (Now() > mapTime + 5000)
-			{
-				//printMap();
-				mapTime = Now();
 			}
 
 			ThreadSleep(100);
@@ -346,12 +383,6 @@ void openset::mapping::Sentinel::runMonitor()
 			continue;
 		}
 
-		if (Now() > mapTime + 5000)
-		{
-			//printMap();
-			mapTime = Now();
-		}
-
 		// ----------------------------------------------------------------
 		// ACTIVE
 		// ----------------------------------------------------------------
@@ -364,7 +395,9 @@ void openset::mapping::Sentinel::runMonitor()
 			}, 
 			1))
 		{
-			//enterErrorState(); // enter error state if we aren't already
+			// purge place_holder partitions - anything that isn't ACTIVE or CLONE
+            // anything else is likely part of plan from a previously elected node
+			auto cleaningList = partitionMap->purgeIncomplete();
 
 			// look for missing active nodes, if any are missing we promote them
 			// replication is expected to be 1 for active nodes
@@ -374,10 +407,6 @@ void openset::mapping::Sentinel::runMonitor()
 					NodeState_e::active_owner 
 				}, 
 				1);
-
-			// purge partial partitions - anything that isn't ACTIVE or CLONE, all else is dirty
-			// returns a list of partitions that THIS node can remove
-			auto cleaningList = partitionMap->purgeIncomplete();
 
 			// promote replicas for missingActive
 			for (auto p: missingActive)
@@ -410,40 +439,21 @@ void openset::mapping::Sentinel::runMonitor()
 				}
 			}
 
-			// drop all the partitions we don't want around from the async engine
-			// and then drop them from the database/tables as well
-			for (auto c : cleaningList)
-			{
-				// drop this partition from the async engine
-				globals::async->freePartition(c);
+			// properly drop all the LOCAL partitions we no longer need
+            if (cleaningList.size())
+            {
+                openset::globals::async->suspendAsync();
+			    for (auto c : cleaningList)
+			    {
+				    // drop this partition from the async engine
+				    globals::async->freePartition(c);
 
-				// drop this partition from any table objects
-				for (auto t : database->tables)
-					t.second->releasePartitionObjects(c);
-			}
-
-			// purge any transfer queues
-			// whatever cluster balancing was happening is garbage now
-			// Note - the cleaning list above clears out anything that 
-			//        isn't an active_owner/active_clone status including
-			//        nodes that are in build state. 
-			//purgeTransferQeueue();
-
-			/* GOOD TIMES - If we made it here then we should have a query complete cluster meaning
-			* all partitions have an active copy.
-			*
-			* This means we can share the cluster map with the other nodes. The should receive a map
-			* that has less mappings than they have at the time of receipt. So, those nodes will compare
-			* and promote partitions, and remove any partitions that don't match exactly what is in the map
-			* this will leave all nodes consistent.
-			*/
-
-
-			// save changes to our map
-			//OpenSet::globals::mapper->saveRoutes();
-			//OpenSet::globals::mapper->savePartitions();
-
-			// share the partitionMap, wait for OK.
+				    // drop this partition from any table objects
+				    for (auto t : database->tables)
+					    t.second->releasePartitionObjects(c);
+			    }
+                openset::globals::async->resumeAsync();
+            }
 
 			if (broadcastMap())
 			{
@@ -455,6 +465,7 @@ void openset::mapping::Sentinel::runMonitor()
 			}
 
 			// go back up and test all logic
+            inBalance = false;
 			continue;
 		}
 
@@ -462,15 +473,73 @@ void openset::mapping::Sentinel::runMonitor()
 		const auto routes = mapper->countRoutes();
 
 		// number of replicas, so 2 would mean there are three copies, the active and two clones
-		auto replicas = 2; // amount of replication we want in the cluster
 
 		// adjust the number of replicas depending on the number of remaining nodes in the cluster
 		if (routes == 1)
 			replicas = 0;
-		else if (routes <= 3)
-			replicas = 1;
+		else if (routes < 5)
+    	    replicas = 1; 
+        else 
+            replicas = 2;
 
+	    // ----------------------------------------------------------------
+		// PURGE OVER REPLICATED
 		// ----------------------------------------------------------------
+        {
+            auto purged = false;
+
+            for (auto p = 0; p < partitionMax; ++p)
+            {
+                auto nodes = partitionMap->getNodesByPartitionId(p);
+
+                if (static_cast<int>(nodes.size()) > replicas + 1)
+                {
+                    for (auto n : nodes)
+                    {
+                        if (partitionMap->getState(p, n) == NodeState_e::active_clone)
+                        {
+						    if (n == openset::globals::running->nodeId)
+							    dropLocalPartition(p);
+
+						    // remove the old active_owner from the heavy node
+						    mapper->partitionMap.removeMap(p, n, NodeState_e::active_clone);
+
+				            if (broadcastMap())
+					            Logger::get().info("replication check (2) - broadcast new map.");
+				            else
+					            Logger::get().error("replication check (2) - broadcast failed.");
+
+                            purged = true;
+
+                            break;
+                        }
+                    }
+                }
+
+                if (purged)
+                    break;
+            }
+
+            if (purged)
+            {
+                inBalance = false;
+                continue;
+            }
+        }
+
+        // Lazy balance if - 
+        // we are in high replication (3 total copies) and have at least 2 copies of 
+        // everything. 
+
+        if (replicas == 2 && 
+            lastPartitionMove + 2000 > Now() &&
+            partitionMap->isClusterComplete(partitionMax, { NodeState_e::active_clone }, 1))
+            continue;
+
+        lastPartitionMove = Now();
+
+
+	    // ----------------------------------------------------------------
 		// CLONES
 		// ----------------------------------------------------------------
 
@@ -479,7 +548,7 @@ void openset::mapping::Sentinel::runMonitor()
 			!partitionMap->isClusterComplete(
 				partitionMax, 
 				{ 
-					NodeState_e::active_clone, // this is why modern C++ is so nice.
+					NodeState_e::active_clone, 
 					NodeState_e::active_placeholder,
 				}, 
 				replicas
@@ -505,8 +574,8 @@ void openset::mapping::Sentinel::runMonitor()
 				int64_t sourceNode = -1;
 
 				for (auto n : foundOnNodes)
-					if (const auto state = partitionMap->getState(p, n); state == NodeState_e::active_owner ||
-						state == NodeState_e::active_clone)
+					if (const auto state = partitionMap->getState(p, n); 
+                        state == NodeState_e::active_owner) // || state == NodeState_e::active_clone)
 					{
 						sourceNode = n;
 						break;
@@ -524,6 +593,7 @@ void openset::mapping::Sentinel::runMonitor()
 
 				auto nodesByPartitions = this->mapper->getPartitionCountsByRoute(
 					{
+                        //NodeState_e::active_owner,
 						NodeState_e::active_clone,
 						NodeState_e::active_placeholder,
 					}
@@ -533,25 +603,20 @@ void openset::mapping::Sentinel::runMonitor()
 
 				// go through list of nodes, lowest population to greatest population
 				// of partitions matching the states above.
-				for (auto n: nodesByPartitions)
+				for (auto iter = nodesByPartitions.rbegin(); iter != nodesByPartitions.rend(); ++iter)
 				{
-					auto nodeId = n.first; // easier reading
+					const auto nodeId = iter->first; // easier reading
 
-					// if node is this node, then back to top
-					//if (nodeId == globals::config->nodeId)
-						//continue;
-
-					// if the partition is already mapped to `n` then back to top
+					// if the partition `p` is already mapped to `nodeId` then back to top
 					if (mapper->partitionMap.isMapped(p, nodeId))
 						continue;
 
 					targetNode = nodeId;
 					break;
-				}
+				};
 				
 				if (targetNode == -1)
 				{
-					//printMap();
 					ThreadSleep(5000);
 					Logger::get().error("a target node for partition " + to_string(p) + " could net be found (replication " +  to_string(replicas) + ").");
 					// TODO - Handle FUBAR scenario
@@ -581,9 +646,13 @@ void openset::mapping::Sentinel::runMonitor()
 				else
 					Logger::get().error("replication check (2) - broadcast failed.");
 
+                lastPartitionMove = Now();
+
 				// we want to go back to the top after each transfer and see if any other conditions have changed
 				break; 
 			}
+
+            inBalance = false;
 			continue;
 		}
 
@@ -601,9 +670,7 @@ void openset::mapping::Sentinel::runMonitor()
 			if (heavyList.size() > 1 && 
 				heavyList.front().second - heavyList.back().second > 1)
 			{
-				//enterErrorState(); // enter error state if we aren't already
-
-				auto heavyNode = heavyList.front().first;
+				const auto heavyNode = heavyList.front().first;
 				auto lightIter = heavyList.rbegin();
 
 				// get a partition from the heavyNode
@@ -625,7 +692,7 @@ void openset::mapping::Sentinel::runMonitor()
 				// do both these nodes have the partition? If so we can probably swap!
 				for (; heavyNode != (*lightIter).first; ++lightIter)
 				{
-					auto targetNode = (*lightIter).first;
+					const auto targetNode = (*lightIter).first;
 
 					// is this a swappable node?
 					// if the targetNode contains the clone, we can simply swap
@@ -634,7 +701,6 @@ void openset::mapping::Sentinel::runMonitor()
 						partitionMap->getState(partition, targetNode) == NodeState_e::active_clone)
 					{								
 						partitionMap->swapState(partition, heavyNode, targetNode);
-						//mapper->savePartitions();
 
 						// broadcast this revised map
 						if (broadcastMap())
@@ -650,9 +716,8 @@ void openset::mapping::Sentinel::runMonitor()
 					// we can adjust the map and send instructions to transfer the
 					// partition from the heavy node to the target node
 					if (!partitionMap->isMapped(partition, targetNode))
-					{
-												
-						// set the target to a build state
+					{												
+						// set the target to a build (place_holder) state
 						mapper->partitionMap.setState(partition, targetNode, NodeState_e::active_placeholder);
 
 						// broadcast this revised map
@@ -667,7 +732,7 @@ void openset::mapping::Sentinel::runMonitor()
 							if (heavyNode == openset::globals::running->nodeId)
 								dropLocalPartition(partition);
 
-							// remove the old active_onwer from the heavy node
+							// remove the old active_owner from the heavy node
 							mapper->partitionMap.removeMap(partition, heavyNode, NodeState_e::active_owner);
 							// set the new node as the active_owner of this partition
 							mapper->partitionMap.setState(partition, targetNode, NodeState_e::active_owner);
@@ -678,10 +743,14 @@ void openset::mapping::Sentinel::runMonitor()
 						else
 							Logger::get().error("replication check (2) - broadcast failed.");
 
+                        lastPartitionMove = Now();
+
 						break;
 
 					}
 				}
+
+                inBalance = false;
 
 				continue;
 			}
@@ -694,17 +763,18 @@ void openset::mapping::Sentinel::runMonitor()
 		// check for "heavy" nodes
 		if (replicas)
 		{
-			auto heavyList = this->mapper->getPartitionCountsByRoute({ NodeState_e::active_clone, NodeState_e::active_placeholder });
+			auto heavyList = this->mapper->getPartitionCountsByRoute({ 
+                NodeState_e::active_clone, 
+			    NodeState_e::active_placeholder 
+			});
 
 			// is there more than one node? Is the difference between the busiest and least busy
 			// node more than one?
 			if (heavyList.size() > 1 &&
 				heavyList.front().second - heavyList.back().second > 1)
-			{
-				//enterErrorState(); // enter error state if we aren't already
-
-				auto heavyNode = heavyList.front().first;
-				auto targetNode = heavyList.back().first;
+			{				
+				const auto heavyNode = heavyList.front().first;
+				const auto targetNode = heavyList.back().first;
 
 				// get a partition from the heavyNode
 				auto partitionList = partitionMap->getPartitionsByNodeId(heavyNode);
@@ -763,16 +833,20 @@ void openset::mapping::Sentinel::runMonitor()
 					else
 						Logger::get().error("replication check (clones) - broadcast failed.");
 
+                    lastPartitionMove = Now();
 
 				}
+
+                inBalance = false;
 
 				continue;
 			}
 		}
 
+        inBalance = true;
 		// If we made it here, there are no errors to be concerned about.
 		//clearErrorState(); // clear error state if set
-		ThreadSleep(50); // sleep a little then we are back to the top of this loop
+		ThreadSleep(100); // sleep a little then we are back to the top of this loop
 
 		lastMovedClonePartition = -1;
 

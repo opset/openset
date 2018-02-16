@@ -11,6 +11,7 @@
 #include "rpc_revent.h"
 #include "rpc_query.h"
 #include "rpc_insert.h"
+#include "rpc_status.h"
 
 using namespace openset::async;
 using namespace openset::db;
@@ -59,6 +60,9 @@ namespace openset::comms
 		{ "PUT", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_init, {} },
 		{ "POST", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_receive, {} },
 		{ "POST", std::regex(R"(^/v1/internode/map_change$)"), RpcInternode::map_change, {} },
+
+        // Status
+        { "GET", std::regex(R"(^/v1/status(\/|\?|\#|)$)"), RpcStatus::status, {} }
 	};
 
 	void Dispatch(openset::web::MessagePtr message);

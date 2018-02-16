@@ -40,7 +40,6 @@ namespace openset
 				AsyncLoop* ooLoop; // open-ended-AsyncLoop
 				int instance;
 				int worker;
-				bool markedForDeletion;
 				atomic<int32_t> realtimeCells;
 
 				explicit partitionInfo_s(AsyncPool* asyncPool, const int instance, const int worker) :
@@ -48,7 +47,6 @@ namespace openset
 					ooLoop(nullptr),
 					instance(instance),
 					worker(worker),
-					markedForDeletion(false),
 					realtimeCells(0)
 				{}
 
@@ -96,6 +94,9 @@ namespace openset
 			workerInfo_s workerInfo[PARTITION_WORKERS];
 			partitionInfo_s* partitions[PARTITION_MAX];
 
+            atomic<int64_t> lastZombieStamp{0};
+            std::vector<partitionInfo_s*> zombiePartitions;
+
 			AsyncPool(int32_t ShardMax, int32_t WorkerMax) :
 				partitionMax(ShardMax),
 				workerMax(WorkerMax),
@@ -110,8 +111,7 @@ namespace openset
 					wInfo.queued = 0;
 			}
 
-			~AsyncPool()
-			{ }
+			~AsyncPool() = default;
 
 			int getLeastBusy() const;
 
@@ -124,13 +124,15 @@ namespace openset
 
 			AsyncLoop* initPartition(int32_t partition);
 
+            void balancePartitions();
+
 			void freePartition(int32_t partition);
 
 			/* Add a cell to every the loop object in every partition
 			 * calls back to a factory function that builds the cell
 			 */
-			void cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)> factory);
-			void cellFactory(const function<OpenLoop*(AsyncLoop*)> factory);
+			void cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)>& factory);
+			void cellFactory(const function<OpenLoop*(AsyncLoop*)>& factory);
 
             void purgeByTable(const std::string& tableName);
 
@@ -164,6 +166,8 @@ namespace openset
 			}
 
 			void runner(int32_t workerId) noexcept;
+
+            void maint() noexcept;
 
 			void startAsync();
 		};

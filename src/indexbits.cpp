@@ -139,7 +139,7 @@ int64_t IndexBits::getSizeBytes() const
 	return ints * sizeof(int64_t);
 }
 
-char* IndexBits::store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length)
+char* IndexBits::store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length, const int compRatio)
 {
 	if (!ints)
 		grow(1);
@@ -193,7 +193,7 @@ char* IndexBits::store(int64_t& compressedBytes, int64_t &linId, int32_t& offset
 		compressionBuffer,
 		length * sizeof(int64_t),
 		maxBytes,
-		7);
+		compRatio);
 
 	linId = -1;
 

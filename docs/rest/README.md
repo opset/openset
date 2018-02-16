@@ -26,7 +26,7 @@ Returns a 200 or 400 status code.
 
 ## POST /v1/table/{table} (create table)
 
-```json
+```
 {
     "columns": [
         {
@@ -278,7 +278,7 @@ If `bucket=` is provided in the query, then missing values will be zero-filled. 
 Run multiple segment, column and histogram queries at once, generate a single result. Including `foreach` on histograms.
 
 Example post data using `highstreet` sample data:
-```python
+```
 @segment products_home ttl=300s use_cached refresh=300s:
     # match one of these
     match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
@@ -289,7 +289,7 @@ Example post data using `highstreet` sample data:
     match where product_group in ['outdoor', 'angling']:
         tally
 
-@use products_home,products_outdoor
+@use products_home products_outdoor
 
 @column product_name
 
@@ -358,7 +358,7 @@ Transfers packed `binary` data for partition. Partition is `partition_id` is pas
 ## GET /ping
 
 If the node is runing, this will respond with 200 OK and JSON:
-```json
+```
 {
   "pong": true
 }

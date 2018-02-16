@@ -5,16 +5,14 @@
 using namespace openset::db;
 
 People::People(const int partition) :	
-	partition(partition),
-    peopleMap(ringHint_e::lt_5_million)
+	peopleMap(ringHint_e::lt_5_million),
+    partition(partition)
 {}
 
 People::~People()
 {
     for (const auto &person: peopleLinear)
         PoolMem::getPool().freePtr(person);
-
-    peopleLinear.clear();
 }
 
 PersonData_s* People::getPersonByID(int64_t userId)
@@ -139,12 +137,12 @@ void People::serialize(HeapStack* mem)
 	*recast<serializedBlockType_e*>(mem->newPtr(sizeof(int64_t))) = serializedBlockType_e::people;
 
 	// grab 8 more bytes, this will be the length of the attributes data within the block
-	auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
+	const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
 	(*sectionLength) = 0;
 
 	for (auto person : peopleLinear)
 	{
-		auto serializedPerson = recast<PersonData_s*>(mem->newPtr(person->size()));
+		const auto serializedPerson = recast<PersonData_s*>(mem->newPtr(person->size()));
 		memcpy(serializedPerson, person, person->size());
 		*sectionLength += person->size();
 	}

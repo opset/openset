@@ -34,10 +34,8 @@ namespace openset
 
 			int64_t getSizeBytes() const;
 
-			// returns a POOL buffer, and the number of bytes
-			// required for the stored data... obviously, and it's a pity
-			// we need to double copy the result.
-			char* store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length);
+			// returns a POOL buffer ptr, and the number of bytes
+			char* store(int64_t& compressedBytes, int64_t &linId, int32_t& offset, int32_t& length, const int compRatio = 1);
 
 
 			void grow(const int64_t required);

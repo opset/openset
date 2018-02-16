@@ -23,7 +23,14 @@ OpenLoopInsert::OpenLoopInsert(openset::db::Database::TablePtr table) :
 
 void OpenLoopInsert::prepare()
 {
-    tablePartitioned = table->getPartitionObjects(loop->partition);
+    tablePartitioned = table->getPartitionObjects(loop->partition, false);
+
+    if (!tablePartitioned)
+    {
+        suicide();
+        return;
+    }
+
 	queueIter = localQueue.end();
     Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
@@ -82,8 +89,12 @@ void OpenLoopInsert::run()
 	}	
 
 	// map a table, partition and entire schema to the Person object
-	person.mapTable(tablePartitioned->table, loop->partition);
-
+	if (!person.mapTable(tablePartitioned->table, loop->partition))
+	{
+	    suicide();
+        return;
+	}
+    
 	// we are going to convert the events into JSON, and in the process
 	// we are going to group the events by their user_ids. 
 	// We will then insert all the events for a given person in one

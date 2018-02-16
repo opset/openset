@@ -28,6 +28,8 @@ namespace openset
 			TablePtr newTable(const std::string& tableName);
             void dropTable(const std::string& tableName);
 
+            std::vector<std::string> getTableNames();
+
 			void serialize(cjson* doc);
 		};
 	};

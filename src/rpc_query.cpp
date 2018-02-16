@@ -75,10 +75,35 @@ shared_ptr<cjson> forkQuery(
     const int trim = -1,
     const int64_t bucket = 0,
     const int64_t forceMin = std::numeric_limits<int64_t>::min(),
-    const int64_t forceMax = std::numeric_limits<int64_t>::min())
+    const int64_t forceMax = std::numeric_limits<int64_t>::min(),
+    const int64_t retryCount = 1)
 {
     auto newParams = message->getQuery();
     newParams.emplace("fork", "true");
+    
+    const auto startTime = Now();
+
+    // special case... if we ran this query during a map change, run it again (re-fork)
+    if (openset::globals::sentinel->wasDuringMapChange(startTime - 1, startTime))
+    {
+        const auto backOff = (retryCount * retryCount) * 20;
+        ThreadSleep(backOff < 10000 ? backOff : 10000);
+
+        return forkQuery(
+            table,
+            message,
+            resultColumnCount,
+            resultSetCount,
+            sortMode,
+            sortOrder,
+            sortColumn,
+            trim,
+            bucket,
+            forceMin,
+            forceMax,
+            retryCount + 1
+        );
+    }
 
     const auto setCount = resultSetCount ? resultSetCount : 1;
 
@@ -92,6 +117,30 @@ shared_ptr<cjson> forkQuery(
         message->getPayloadLength(),
         true);
 
+    const auto dispatchEndTime = Now();
+    
+    // special case... if we ran this query during a map change, run it again (re-fork)
+    if (openset::globals::sentinel->wasDuringMapChange(startTime, dispatchEndTime))
+    {
+        const auto backOff = (retryCount * retryCount) * 20;
+        ThreadSleep(backOff < 10000 ? backOff : 10000);
+
+        return forkQuery(
+            table,
+            message,
+            resultColumnCount,
+            resultSetCount,
+            sortMode,
+            sortOrder,
+            sortColumn,
+            trim,
+            bucket,
+            forceMin,
+            forceMax,
+            retryCount + 1
+        );
+    }
+
     std::vector<openset::result::ResultSet*> resultSets;
 
     for (auto &r : result.responses)
@@ -101,14 +150,10 @@ shared_ptr<cjson> forkQuery(
         else
         {
             // there is an error message from one of the participing nodes
-            // TODO - handle error
             if (!r.data || !r.length)
-                RpcError(
-                    openset::errors::Error{
-                        openset::errors::errorClass_e::internode,
-                        openset::errors::errorCode_e::internode_error,
-                        "Cluster error. Node had empty reply." },
-                        message);
+            {
+                result.routeError = true;
+            }
             else if (r.code != openset::http::StatusCode::success_ok)
             {
                 // try to capture a json error that has perculated up from the forked call.
@@ -156,6 +201,24 @@ shared_ptr<cjson> forkQuery(
             return nullptr;
         }
     }
+
+    /*
+    for (auto r: resultSets)
+    {
+        cjson tDoc;
+
+        std::vector<openset::result::ResultSet*> tSet;
+        tSet.push_back(r);
+
+        ResultMuxDemux::resultSetToJson(
+            resultColumnCount,
+            setCount,
+            tSet,
+            &tDoc);
+
+        cout << cjson::stringify(&tDoc, true ) << endl;       
+    }
+    */
 
     auto resultJson = make_shared<cjson>();
     ResultMuxDemux::resultSetToJson(
@@ -274,7 +337,7 @@ shared_ptr<cjson> forkQuery(
 
     Logger::get().info("RpcQuery on " + table->getName());
 
-    return std::move(resultJson);
+    return resultJson;
 }
 
 openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr message)
@@ -324,7 +387,7 @@ openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr mess
 
     }
 
-    return std::move(paramVars);
+    return paramVars;
 }
 
 void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& matches)
@@ -642,6 +705,17 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
             resultSets,
             bufferLength);
 
+        /*
+        cjson tDoc;
+        ResultMuxDemux::resultSetToJson(
+            queryMacros.vars.columnVars.size(),
+            queryMacros.indexes.size(),
+            resultSets,
+            &tDoc);
+
+        cout << cjson::stringify(&tDoc, true );
+        */
+        
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
         Logger::get().info("Fork query on " + table->getName());
@@ -662,7 +736,6 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
         instance++;
         return new OpenLoopQuery(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
     });
-
 }
 
 
@@ -717,8 +790,7 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
                 message);
         return;
     }
-
-
+    
     openset::query::ParamVars paramVars = getInlineVaraibles(message);
     // get the functions extracted and de-indented as named code blocks
     auto subQueries = openset::query::QueryParser::extractSections(queryCode.c_str());
@@ -728,7 +800,6 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
     // loop through the extracted functions (subQueries) and compile them
     for (auto r : subQueries)
     {
-
         if (r.sectionType != "segment")
             continue;
 
@@ -739,7 +810,6 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
         if (p.error.inError())
         {
             cjson response;
-            // FIX error(p.error, &response);
             message->reply(http::StatusCode::client_error_bad_request, cjson::stringify(&response, true));
             return;
         }
@@ -838,6 +908,8 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
         }
     );
 
+    resultSets.reserve(partitions->getWorkerCount());
+
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
             new openset::result::ResultSet(1)
@@ -861,6 +933,8 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
 
         PoolMem::getPool().freePtr(buffer);
+
+        Logger::get().info("No active workers for " + table->getName());
 
         // clean up stray resultSets
         for (auto resultSet : resultSets)
@@ -904,9 +978,7 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
             resultSets,
             bufferLength);
 
-        // reply is responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-
         PoolMem::getPool().freePtr(buffer);
 
         Logger::get().info("Fork count(s) on " + table->getName());

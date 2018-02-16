@@ -2793,7 +2793,9 @@ void openset::query::Interpreter::execReset()
 	// clear the flags
 	loopCount = 0;
 	recursion = 0;
-	eventCount = -1;
+    nestDepth = 0;
+    breakDepth = 0;
+	eventCount = -1;  
     inReturn = false;
 	jobState = false;
 	loopState = LoopState_e::run;

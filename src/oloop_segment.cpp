@@ -213,7 +213,12 @@ bool OpenLoopSegment::nextMacro()
 		// clean the person object
 		person.reinit();
 		// map table, partition and select schema columns to the Person object
-		person.mapTable(table.get(), loop->partition, mappedColumns);
+		if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+	    {
+            partitionRemoved();
+	        suicide();
+            return false;
+	    }
 
 		// is this calculated using other segments (i.e. the functions
 		// population, intersection, union, difference and compliment)
@@ -247,7 +252,14 @@ void OpenLoopSegment::prepare()
 {
 	auto prepStart = Now();
 
-	parts = table->getPartitionObjects(loop->partition);
+	parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
 	maxLinearId = parts->people.peopleCount();
 
 	startTime = Now();

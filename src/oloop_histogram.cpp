@@ -52,7 +52,14 @@ OpenLoopHistogram::~OpenLoopHistogram()
 
 void OpenLoopHistogram::prepare()
 {
-	parts = table->getPartitionObjects(loop->partition);
+	parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
 	maxLinearId = parts->people.peopleCount();
 
 	// generate the index for this query	
@@ -159,7 +166,13 @@ void OpenLoopHistogram::prepare()
 	auto mappedColumns = interpreter->getReferencedColumns();
 
 	// map table, partition and select schema columns to the Person object
-	person.mapTable(table.get(), loop->partition, mappedColumns);
+	if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+	{
+        partitionRemoved();
+	    suicide();
+        return;
+	}
+
 	person.setSessionTime(macros.sessionTime);
 
     rowKey.clear();

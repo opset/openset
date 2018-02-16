@@ -29,7 +29,7 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
-void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMapping& matches, const int retryCount)
 {
     const auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
@@ -44,7 +44,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
             openset::errors::Error{
                 openset::errors::errorClass_e::insert,
                 openset::errors::errorCode_e::route_error,
-                "node_not_initialized" },
+                "node not initialized" },
                 message);
         return;
     }
@@ -63,6 +63,20 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
     }
 
     auto rows = request.getNodes();
+
+    auto clusterErrors = false;
+    const auto startTime = Now();
+
+    // a cluster error (missing partition, etc), or a map changed happenned
+    // during this insert, then re-insert
+    if (openset::globals::sentinel->wasDuringMapChange(startTime - 1, startTime))
+    {
+        const auto backOff = (retryCount * retryCount) * 20;
+        ThreadSleep(backOff < 10000 ? backOff : 10000);
+
+        insertRetry(message, matches, retryCount + 1);
+        return;
+    }
 
     Logger::get().info("Inserting " + to_string(rows.size()) + " events.");
 
@@ -100,6 +114,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
         const auto mapInfo = globals::mapper->partitionMap.getState(destination, globals::running->nodeId);
 
         if (mapInfo == openset::mapping::NodeState_e::active_owner ||
+            mapInfo == openset::mapping::NodeState_e::active_placeholder ||
             mapInfo == openset::mapping::NodeState_e::active_clone)
         {
             if (!localGather.count(destination))
@@ -125,7 +140,6 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
                 remoteGather[targetNode].push_back(cjson::stringifyCstr(row, len));
             }
         }
-
     }
 
     for (auto &g : localGather)
@@ -133,7 +147,7 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
         if (!g.second.size())
             continue;
 
-        auto parts = table->getPartitionObjects(g.first);
+        auto parts = table->getPartitionObjects(g.first, false);
 
         if (parts)
         {
@@ -145,20 +159,28 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
                 std::make_move_iterator(g.second.begin()),
                 std::make_move_iterator(g.second.end()));
         }
+        else
+        {
+            for (auto &i : g.second)
+                PoolMem::getPool().freePtr(i); 
+        }
     }
 
-    auto remoteCount = 0;
+    auto sendCount = 0;
+    atomic<int> replyCount = 0;
 
-    const auto thankyouCb = [](http::StatusCode, bool, char*, size_t)
+    const auto thankyouCb = [&](http::StatusCode code, bool, char*, size_t)
     {
         // do nothing.
+        if (code != http::StatusCode::success_ok)
+            clusterErrors = true;
+
+        ++replyCount;
     };
 
     if (!isFork)
         for (auto &data : remoteGather)
         {
-            ++remoteCount;
-
             const auto targetNode = data.first;
             const auto& events = data.second;
 
@@ -176,40 +198,79 @@ void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping
             auto newParams = message->getQuery();
             newParams.emplace("fork", "true");
             
-            openset::globals::mapper->dispatchAsync(
+            if (openset::globals::mapper->dispatchAsync(
                 targetNode,
                 "POST",
                 "/v1/insert/" + tableName,
                 newParams,
                 jsonText.c_str(),
                 jsonText.length(),
-                thankyouCb);
-
+                thankyouCb))
+            {
+                ++sendCount;
+            }
+            else
+            {
+                clusterErrors = true;
+                break;
+            }
         }
+
+    while (sendCount != replyCount)
+        ThreadSleep(10);
 
     // FLOW CONTROL - check for backlogging, delay the 
     // "yummy" until backlog has gotten smaller
     for (auto &g : localGather)
     {
-        const auto parts = table->getPartitionObjects(g.first);
-
-        if (!parts)
-            continue;
-
         auto sleepCount = 0;
         const auto sleepStart = Now();
-        while (parts->insertBacklog > 7500)
+
+        while (true)
         {
+            const auto parts = table->getPartitionObjects(g.first, false);
+
+            // did this partitition get de-mapped while waiting?
+            if (!parts) 
+            {
+                clusterErrors = true;
+                sleepCount = 0;
+                break;
+            };
+
+            if (parts->insertBacklog < 7500)
+                break;
+
             ThreadSleep(10);
             ++sleepCount;
         }
 
+        if (clusterErrors)
+            break;
+
         if (sleepCount)
-            Logger::get().info("insert drain timer for " + to_string(Now() - sleepStart) + "ms on partition " +
-                to_string(parts->partition) + ".");
+            Logger::get().info("insert drain timer for " + to_string(Now() - sleepStart) + "ms.");
+    }
+    
+    const auto endTime = Now();
+
+    // a cluster error (missing partition, etc), or a map changed happenned
+    // during this insert, then re-insert
+    if (openset::globals::sentinel->wasDuringMapChange(startTime, endTime))
+    {
+        const auto backOff = (retryCount * retryCount) * 20;
+        ThreadSleep(backOff < 10000 ? backOff : 10000);
+
+        insertRetry(message, matches, retryCount + 1);
+        return;
     }
 
     cjson response;
     response.set("message", "yummy");
     message->reply(http::StatusCode::success_ok, response);
+}
+
+void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)
+{
+    insertRetry(message, matches, 1);
 }

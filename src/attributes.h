@@ -5,8 +5,6 @@
 #include "heapstack/heapstack.h"
 
 #include "dbtypes.h"
-#include "attributeblob.h"
-#include "columns.h"
 #include "indexbits.h"
 
 using namespace std;
@@ -28,6 +26,8 @@ namespace openset::db
 
 	struct BitData_s;
 	class Columns;
+    class Table;
+    class AttributeBlob;
 
 #pragma pack(push,1)
 
@@ -36,8 +36,8 @@ namespace openset::db
 		int32_t linId{ 0 }; // linear ID of Person
 		int32_t state{ 0 }; // 1 or 0
 		Attr_changes_s* prev{ nullptr }; // tail linked.
-		Attr_changes_s()
-		{}
+
+		Attr_changes_s() = default;
 
 		Attr_changes_s(const int32_t linId, const int32_t state, Attr_changes_s* prev) :
 			linId(linId), state(state), prev(prev)
@@ -104,6 +104,7 @@ namespace openset::db
             int32_t len;
 			int32_t textSize;
 			int32_t compSize;
+            int32_t linId;
 		};
 #pragma pack(pop)
 
@@ -131,11 +132,12 @@ namespace openset::db
 		ColumnIndex columnIndex{ ringHint_e::lt_1_million };
 		ChangeIndex changeIndex{ ringHint_e::lt_compact };
 		
+        Table* table;
 		AttributeBlob* blob;
 		Columns* columns;
 		int partition;
 
-		explicit Attributes(const int parition, AttributeBlob* attributeBlob, Columns* columns);
+		explicit Attributes(const int parition, Table* table, AttributeBlob* attributeBlob, Columns* columns);
 		~Attributes();
 
 		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);

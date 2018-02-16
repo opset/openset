@@ -27,10 +27,19 @@ string openset::web::Rest::makeParams(const QueryParams& params)
     return result;
 }
 
+openset::web::Rest::Rest(const int64_t routeId, const std::string& server):
+    client(server),
+    host(server),
+    routeId(routeId)
+{
+    client.config.timeout_connect = 2; // two seconds to connect or fail
+    client.config.timeout = 30; // 30 seconds to connect or fail
+}
+
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
                                  const char* payload, const size_t length, RestCbJson cb)
 {
-    csLock lock(cs);
+    //csLock lock(cs);
 
     stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
     if (payload && length)
@@ -38,7 +47,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
 
     const auto url = path + makeParams(params);
 
-    Logger::get().debug("http://" + host + url);
+    //Logger::get().debug("http://" + host + url);
 
     client.request(
         method, 
@@ -68,7 +77,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
                                  const char* payload, const size_t length, RestCbBin cb)
 {
-    csLock lock(cs);
+    //csLock lock(cs);
 
     stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
     if (payload && length)
@@ -76,7 +85,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
 
     const auto url = path + makeParams(params);
 
-    Logger::get().debug("http://" + host + url);
+    //Logger::get().debug("http://" + host + url);
 
     client.request(
         method, 

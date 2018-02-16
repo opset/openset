@@ -175,7 +175,7 @@ inline Tests test_sessions()
 				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
 				columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
 			
-				auto parts = table->getPartitionObjects(0); // partition zero for test
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
@@ -210,7 +210,7 @@ inline Tests test_sessions()
 				auto database = openset::globals::database;
 
 				auto table = openset::globals::database->getTable("__testsessions__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;

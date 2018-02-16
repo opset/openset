@@ -10,25 +10,52 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopRetrigger::OpenLoopRetrigger(openset::db::Database::TablePtr table) :
+OpenLoopRevent::OpenLoopRevent(openset::db::Database::TablePtr table) :
 	OpenLoop(table->getName()),
     table(table),
 	linearId(0),
 	lowestStamp(0)
 {}
 
-void OpenLoopRetrigger::prepare()
+void OpenLoopRevent::prepare()
 {
 	linearId = 0;
-	person.mapTable(table.get(), loop->partition);
+
+	if (!person.mapTable(table.get(), loop->partition))
+	{
+	    suicide();
+        return;
+	}
+
 	lowestStamp = Now() + 90000;
 
-    parts = table->getPartitionObjects(loop->partition);
-    parts->triggers->checkForConfigChange();
+    parts = table->getPartitionObjects(loop->partition, false);
 
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
+    parts->triggers->checkForConfigChange();
 }
 
-void OpenLoopRetrigger::run()
+void OpenLoopRevent::respawn(int64_t runIn)
+{
+    OpenLoop* newCell = new OpenLoopRevent(table);
+    
+    if (runIn > table->reventInterval)
+        runIn = table->reventInterval;
+    else if (runIn < 500)
+        runIn = 500;
+
+    newCell->scheduleFuture(runIn); 
+    
+    spawn(newCell); // add replacement to scheduler
+    suicide(); // kill this cell.    
+}
+
+void OpenLoopRevent::run()
 {
     const auto maxLinearId = parts->people.peopleCount();
     const auto now = Now();
@@ -46,14 +73,8 @@ void OpenLoopRetrigger::run()
 						
 			messages->run(); // do message queue maintenance 
 
-			OpenLoop* newCell = new OpenLoopRetrigger(table);
-
 		    const auto diff = lowestStamp - Now();
-
-			newCell->scheduleFuture(diff > 15000 ? 15000 : 5000); 
-
-			spawn(newCell);
-			suicide();
+            respawn(diff);
 			return;
 		}
 

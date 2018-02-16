@@ -7,12 +7,12 @@ If you have apps, websites, or IoT devices that generate user event data, you mi
 
 OpenSet is a streaming solution and can ingest data at up to 35,000 lines per second per node (fully indexed and replicated). OpenSet has been tested on datasets with millions of users and billions of rows.
 
-| Platform    | Info                             | Status                                                                                                                                                                     |
-| :-----------| :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
-| Windows x64 | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Platform    | Version   | Info                     | Status                                                                                                                                                                     |
+| :-----------| :-------: | :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux x64  | 0.1.2     | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
+| Windows x64 | 0.1.2     | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: **OpenSet is currently pre-release, pre-beta, pre-alpha etc.**
+:coffee: **OpenSet is currently in alpha.**
 
 ## Links
 *  [Documentation](https://github.com/perple-io/openset/tree/master/docs)
@@ -592,6 +592,8 @@ match where action == 'purchase':
                 # Tally counts for 
                 # sub-sequent product name under name
                 # under product_name in this row
+                if product == product_name:
+                    continue                                
                 tally(product, product_name)
 
     # loop to top
@@ -681,7 +683,10 @@ In this case we want to find the products purchased immediately after another pu
 
 # RoadMap
 
-OpenSet is pre-alpha. There are many items on the wish list, then there are things that need to be done so we can move to an alpha release. Follow this repo to watch the action.
+OpenSet is in Alpha. There may be semi-breaking changes going forward.
+
+- External data. This feature will allow complex data structures to be passed to OpenSet for use in queries. These will data structures will be global to a table and can be used from any `pyql` script as standard `python` data types.
+- Properties. A way to set non-event attributes on a `person` record. For example, life-time-value, gender or birth-date.  Properties will appear as regular named `python` variables in `pyql` scripts.
 
 # Inspiration
 

@@ -9,7 +9,7 @@ namespace MemConstants
 	const int PoolBuckets = 257;
 	const int PoolBucketOffset = 4;
 	const int PoolBucketAlign = 8;
-    const int CullSize = 5000;
+    const int CullSize = 10;
 }
 
 class PoolMem

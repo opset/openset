@@ -229,7 +229,7 @@ namespace openset
 
 			PartitionMap();
 
-			~PartitionMap();
+			~PartitionMap() = default;
 
 			// return a list of partitions mapped to a nodeId
 			// this would generally be used for self discovery
@@ -238,9 +238,6 @@ namespace openset
 
 			// return list of nodeIds by state
 			std::vector<int> getNodeIdsByState(NodeState_e state);
-
-			// return list of nodeIds that have failed
-			std::vector<int> getFailedNodes();
 
 			// return a list of nodeIds for a given partition
 			// this would generally be used to route inserts

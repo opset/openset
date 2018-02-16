@@ -43,12 +43,14 @@ namespace openset::web
 		auto length = request->content.size();
 		auto data = static_cast<char*>(PoolMem::getPool().getPtr(length));
 		request->content.read(data, length);
+        request->content.clear();
 
 		auto reply = [request, response](http::StatusCode status, const char* data, size_t length)
 		{
 			http::CaseInsensitiveMultimap header;
 			header.emplace("Content-Length", to_string(length));
 			header.emplace("Content-Type", "application/json");
+            header.emplace("Access-Control-Allow-Origin", "*");
 			response->write(status, header);
 			
 			if (data)
@@ -140,12 +142,11 @@ namespace openset::web
 		};
 
 		server.resource["^/ping$"]["GET"] = [&](SharedResponseT response, SharedRequestT request) {
-			response->write("{\"pong\":true}");
-		};
+			http::CaseInsensitiveMultimap header;
+			header.emplace("Content-Type", "application/json");
+            header.emplace("Access-Control-Allow-Origin", "*");
 
-		// default
-		server.resource["^/status$"]["GET"] = [](SharedResponseT response, SharedRequestT request) {
-			response->write("{\"status\":\"OK\"}");
+			response->write("{\"pong\":true}", header);
 		};
 	}
 

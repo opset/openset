@@ -125,7 +125,7 @@ AsyncLoop* AsyncPool::initPartition(int32_t partition)
 		// look for a worker with the least
 		// assigned to it, we will add our new partition
 		// here.
-		auto listIdx = getLeastBusy();
+		const auto listIdx = getLeastBusy();
 
 		auto part = new partitionInfo_s(this, partition, listIdx);
 		part->init();
@@ -140,21 +140,74 @@ AsyncLoop* AsyncPool::initPartition(int32_t partition)
 	return partitions[partition]->ooLoop;
 }
 
+void AsyncPool::balancePartitions()
+{
+	csLock lock(poolLock);
+
+    // make sure workers have an as close to even
+    // number of active and clone nodes
+	auto partitionList = openset::globals::mapper->getPartitionMap()->getPartitionsByNodeId(globals::running->nodeId);
+
+    std::vector<partitionInfo_s*> actives;
+    std::vector<partitionInfo_s*> clones;
+
+    // gather the active/non-active partition objects
+    for (const auto p : partitionList)
+    {
+        if (!partitions[p])
+            continue;
+
+        const auto state = openset::globals::mapper->getPartitionMap()->getState(p, globals::running->nodeId);
+        
+        if (state == mapping::NodeState_e::active_owner)
+            actives.push_back(partitions[p]);
+        else
+            clones.push_back(partitions[p]);
+    }
+
+    // clear the worker queues
+	for (auto i = 0; i < workerMax; i++)
+		workerInfo[i].jobs.clear();
+
+    // evenly distrube the active partitions
+    for (auto i = 0; i < static_cast<int>(actives.size()); ++i)
+    {   
+        const auto worker = i % workerMax;
+        actives[i]->ooLoop->worker = worker;
+        actives[i]->worker = worker;
+        workerInfo[worker].jobs.push_back(actives[i]);
+    }
+
+    // evenly distrube the non-ative partitions
+    for (auto i = 0; i < static_cast<int>(clones.size()); ++i)
+    {
+        const auto worker = i % workerMax;
+        clones[i]->ooLoop->worker = worker;
+        clones[i]->worker = worker;
+        workerInfo[worker].jobs.push_back(clones[i]);
+    }
+}
+
 void AsyncPool::freePartition(int32_t partition)
 {
+    assertAsyncLock();
+
 	csLock lock(poolLock);
 
 	if (partitions[partition])
 	{
 		// note we are orphaning the partition, it will
 		// be cleaned up in the main job loop by asyncLoop
-		// when it sees the markedForDeletion flag
-		partitions[partition]->markedForDeletion = true;
-		partitions[partition] = nullptr;
+		// when it sees the markedForDeletion flag        
+
+	    zombiePartitions.push_back(partitions[partition]);
+        lastZombieStamp = Now();
+
+        partitions[partition] = nullptr;     
 	}
 }
 
-void AsyncPool::cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)> factory)
+void AsyncPool::cellFactory(std::vector<int> partitionList, const function<OpenLoop*(AsyncLoop*)>& factory)
 {
 	csLock lock(poolLock);
 
@@ -164,14 +217,18 @@ void AsyncPool::cellFactory(std::vector<int> partitionList, const function<OpenL
 		// factory function can return nullptr if not applicable
 		// i.e. query on a non-owner partition
         if (p)
+        {
 			if (const auto cell = factory(p->ooLoop); cell)
 				p->ooLoop->queueCell(cell);
+        }
 		else
+        {
 			Logger::get().error("partition missing (" + to_string(pid) + ")");
+        }
 	}
 }
 
-void AsyncPool::cellFactory(const function<OpenLoop*(AsyncLoop*)> factory)
+void AsyncPool::cellFactory(const function<OpenLoop*(AsyncLoop*)>& factory)
 {
 	csLock lock(poolLock);
 
@@ -179,9 +236,13 @@ void AsyncPool::cellFactory(const function<OpenLoop*(AsyncLoop*)> factory)
     // i.e. query on a non-owner partition
 
 	for (auto& p : partitions)
+    {
 		if (p)
+        {
 			if (const auto cell = factory(p->ooLoop); cell)
 				p->ooLoop->queueCell(cell);
+        }
+    }
 }
 
 void AsyncPool::purgeByTable(const std::string& tableName)
@@ -263,45 +324,14 @@ void AsyncPool::runner(int32_t workerId) noexcept
 	exits and runs indefinitely,
 	*/
 
-	/* Playing with affinity masks... I don't think this helps
-	auto logicalCPUs = std::thread::hardware_concurrency();
-
-	auto threadHandle = GetCurrentThread();
-	DWORD_PTR m_id = 0;
-	DWORD_PTR m_mask = 1 << (workerId % logicalCPUs);
-
-	SetThreadAffinityMask(threadHandle, m_mask);
-	*/
-
 	auto worker = &workerInfo[workerId];
 	auto runAgain = 0;
 
 	int64_t nextRun = -1;
 
-    const auto cleanup = [&]() -> bool
-	{
-		auto deletionCount = 0;
-
-		// while we are suspended, lets check for partitions in need of deletion.
-		for (auto iter = worker->jobs.begin(); iter != worker->jobs.end();)
-		{
-			if ((*iter)->markedForDeletion)
-			{				
-				auto t = *iter;
-				iter = worker->jobs.erase(iter);
-				delete t;
-				++deletionCount;
-			}
-			else
-				++iter;
-		}
-
-		return deletionCount;
-	};
-
 	while (true)
 	{
-		// are we forced to be idle (config change?)
+		// are we forced to be idle with AsyncSuspend (config change?)
 		if (globalAsyncInitSuspend)
 		{
 			// indicate we are respecting the suspension 
@@ -311,14 +341,10 @@ void AsyncPool::runner(int32_t workerId) noexcept
 			// Loop & sleep until suspend is cleared 
 			// while suspended check for deletions thread migrations
 			while (globalAsyncInitSuspend)
-			{			
-				if (!cleanup()) // sleep only if we aren't deleting stuff
-					this_thread::sleep_for(chrono::milliseconds(1));
-			}
+    			ThreadSleep(10);
 
 			globalAsyncSuspendedWorkerCount -= 1;
 		}
-
 
 		if (!runAgain)
 		{ // we don't need the lock, so we will exit the moment we have it
@@ -338,7 +364,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 				worker->conditional.wait_for(lock, std::chrono::milliseconds(delay), [&]() -> bool
 				{
 					return (worker->triggered || globalAsyncInitSuspend);
-				}); //std::chrono::milliseconds(delay) );
+				}); 
 			}
 			worker->triggered = false;
 		}
@@ -354,11 +380,9 @@ void AsyncPool::runner(int32_t workerId) noexcept
 		nextRun = -1;
 
 		for (auto s : worker->jobs)
-		{
-			if (s->markedForDeletion)
-				continue;
-			
-			if (!openset::globals::mapper->getPartitionMap()->isMapped(
+		{		
+			if (!s || 
+                !openset::globals::mapper->getPartitionMap()->isMapped(
 					s->ooLoop->getPartitionId(),
 					openset::globals::running->nodeId))
 				continue;
@@ -374,6 +398,32 @@ void AsyncPool::runner(int32_t workerId) noexcept
 	}
 }
 
+void openset::async::AsyncPool::maint() noexcept
+{
+    while (true)
+    {
+        if (lastZombieStamp + 15'000 < Now())
+        {
+            csLock lock(poolLock);
+
+            if (zombiePartitions.size())
+            {
+                auto count = 0;
+                for (auto p : zombiePartitions)
+                {
+                    delete p;
+                    ++count;
+                }
+
+                zombiePartitions.clear();
+                Logger::get().info("cleaned " + to_string(count) + " abandoned partitions.");
+            }
+        }
+
+        ThreadSleep(5000);        
+    }
+}
+
 void AsyncPool::startAsync()
 {
 	/*
@@ -383,9 +433,7 @@ void AsyncPool::startAsync()
 
 	if (!this->getPartitionMax()) // exit if there are no partitions
 		return;
-
 	
-
 	Logger::get().info("Creating " + to_string(workerMax) + " partition pool threads.");
 
 	vector<std::thread> workers;
@@ -393,7 +441,7 @@ void AsyncPool::startAsync()
 	// make a little thread pool
 	for (auto workerNumber = 0; workerNumber < workerMax; workerNumber++)
 	{
-		workers.push_back(thread(
+		workers.emplace_back(thread(
 			&AsyncPool::runner,
 			this,
 			workerNumber));
@@ -402,9 +450,31 @@ void AsyncPool::startAsync()
 	running = true;
 	ThreadSleep(1000);
 
-	// wait for them to be finished
-	for (auto w = 0; w < workers.size(); w++)
-		workers[w].detach();
+    auto maintThread = thread(
+        &AsyncPool::maint,
+        this);
 
+    maintThread.detach();
 
+	// detach and return
+	for (auto &w : workers)
+		w.detach();
 }
+
+
+/*
+ 		for (auto iter = worker->jobs.begin(); iter != worker->jobs.end();)
+		{
+			if ((*iter)->markedForDeletion)
+			{				
+				auto t = *iter;
+				iter = worker->jobs.erase(iter);
+				delete t;
+				++deletionCount;
+			}
+			else
+				++iter;
+		}
+
+ *
+ */

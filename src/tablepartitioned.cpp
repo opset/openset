@@ -13,7 +13,7 @@ TablePartitioned::TablePartitioned(
 	Columns* schema) :
 		table(table),
 		partition(partition),
-		attributes(partition, attributeBlob, schema),
+		attributes(partition, table, attributeBlob, schema),
 		attributeBlob(attributeBlob),
 		people(partition),
 		asyncLoop(openset::globals::async->getPartition(partition)),
@@ -25,15 +25,15 @@ TablePartitioned::TablePartitioned(
 	async::OpenLoop* insertCell = new async::OpenLoopInsert(sharedTablePtr);
 	insertCell->scheduleFuture(1000); // run this in 1 second
 	asyncLoop->queueCell(insertCell);
-
+        
 	async::OpenLoop* segmentRefreshCell = new async::OpenLoopSegmentRefresh(sharedTablePtr);
-	segmentRefreshCell->scheduleFuture(30'000 + randomRange(10'000, -10'000)); // run this in 15 seconds add shuffle
+	segmentRefreshCell->scheduleFuture(table->segmentInterval + randomRange(1000, -1000)); 
 	asyncLoop->queueCell(segmentRefreshCell);
         
 	async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(sharedTablePtr);
-	cleanerCell->scheduleFuture(3'600'000 + randomRange(300'000, -300'000)); // start this in 90 seconds add shuffle
+	cleanerCell->scheduleFuture(table->maintInterval + randomRange(5000, -5000)); 
 	asyncLoop->queueCell(cleanerCell);
-
+    
 }
 
 TablePartitioned::~TablePartitioned()
@@ -48,3 +48,47 @@ TablePartitioned::~TablePartitioned()
 
     insertQueue.clear();
 }
+
+void openset::db::TablePartitioned::serializeInsertBacklog(HeapStack * mem)
+{
+    csLock lock(insertCS);
+
+    const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
+	(*sectionLength) = static_cast<int64_t>(insertQueue.size());
+
+    for (auto item : insertQueue)
+    {
+        const auto itemLength = recast<int32_t*>(mem->newPtr(sizeof(int32_t)));
+	    (*itemLength) = static_cast<int32_t>(strlen(item));  
+        const auto itemPtr = mem->newPtr(*itemLength);
+        memcpy(itemPtr, item, *itemLength);
+    }
+}
+
+int64_t openset::db::TablePartitioned::deserializeInsertBacklog(char * mem)
+{
+    csLock lock(insertCS);
+
+	auto read = mem;
+    
+    const auto sectionLength = *recast<int64_t*>(read);
+    read += sizeof(int64_t);
+
+    for (auto i = 0; i < sectionLength; ++i)
+    {
+        const auto itemLength = *recast<int32_t*>(read);
+        read += sizeof(int32_t);
+
+        const auto itemPtr = static_cast<char*>(PoolMem::getPool().getPtr(itemLength + 1));
+        memcpy(itemPtr, read, itemLength);
+        itemPtr[itemLength] = 0;
+
+        insertQueue.push_back(itemPtr);
+
+        read += itemLength;        
+    }
+
+    return read - mem;
+}
+
+

@@ -57,23 +57,29 @@ void Table::createMissingPartitionObjects()
 	auto myPartitions = globals::mapper->partitionMap.getPartitionsByNodeId(globals::running->nodeId);
 
 	for (auto p: myPartitions)
-		getPartitionObjects(p);
+		getPartitionObjects(p, true);
 }
 
-TablePartitioned* Table::getPartitionObjects(const int32_t partition)
+TablePartitioned* Table::getPartitionObjects(const int32_t partition, const bool create)
 {
     {
 	csLock lock(cs); // scoped lock		
+
+    clearZombies();
+
 	if (auto const part = partitions.find(partition); part != partitions.end())
 		return part->second;
     }
 
-    // 
+    if (!create)
+        return nullptr;
+
     const auto part = new TablePartitioned(
 		this, 
 		partition, 
 		&attributeBlob, 
 		&columns);
+
     {
         csLock lock(cs); // scoped lock		
 	    partitions[partition] = part;
@@ -85,13 +91,12 @@ void Table::releasePartitionObjects(const int32_t partition)
 {
 	csLock lock(cs); // lock for read		
 
-	if (!partitions[partition])
-		return;
-
-	// delete the table objects for this partition
-	delete partitions[partition];
-    partitions.erase(partition);
-
+	if (const auto part = partitions.find(partition); part != partitions.end())
+    {
+        part->second->markForDeletion();
+        zombies.push(part->second);
+        partitions.erase(partition);
+    }
 }
 
 void Table::serializeTable(cjson* doc)
@@ -150,6 +155,18 @@ void Table::serializeTable(cjson* doc)
 		}
 }
 
+void Table::serializeSettings(cjson* doc) const
+{
+    doc->set("event_ttl", eventTtl);
+    doc->set("event_max", eventMax);
+    doc->set("session_time", sessionTime);
+    doc->set("tz_offset", tzOffset);
+    doc->set("maint_interval", maintInterval);
+    doc->set("revent_interval", reventInterval);
+    doc->set("index_compression", indexCompression);
+    doc->set("person_compression", personCompression);    
+}
+
 void Table::serializeTriggers(cjson* doc)
 {
 	// push the trigger names
@@ -165,7 +182,7 @@ void Table::serializeTriggers(cjson* doc)
 	}	
 }
 
-void Table::deserializeTable(cjson* doc)
+void Table::deserializeTable(const cjson* doc)
 {
 	auto count = 0;
 
@@ -260,7 +277,88 @@ void Table::deserializeTable(cjson* doc)
 	}
 }
 
-void Table::deserializeTriggers(cjson* doc)
+void Table::deserializeSettings(const cjson* doc)
+{
+    if (const auto node = doc->find("event_ttl"); node)
+    {
+        eventTtl = node->getInt();
+        if (eventTtl < 60'000)
+            eventTtl = 60'000;
+    }
+
+    if (const auto node = doc->find("event_max"); node)
+    {
+        eventMax = node->getInt();
+        if (eventMax < 1)
+            eventMax = 1;
+    }
+
+    if (const auto node = doc->find("session_time"); node)
+    {
+        sessionTime = node->getInt();
+        if (sessionTime < 1000)
+            sessionTime = 1000;
+    }
+
+    if (const auto node = doc->find("tz_offset"); node)
+    {
+        tzOffset = node->getInt();
+        if (tzOffset < 0)
+            tzOffset = 0;
+    }
+
+    if (const auto node = doc->find("maint_interval"); node)
+    {
+        maintInterval = node->getInt();
+        if (maintInterval < 60'000)
+            maintInterval = 60'000;
+    }
+
+    if (const auto node = doc->find("revent_interval"); node)
+    {
+        reventInterval = node->getInt();
+        if (maintInterval < 1'000)
+            maintInterval = 1'000;
+    }
+
+    if (const auto node = doc->find("index_compression"); node)
+    {
+        indexCompression = node->getInt();
+        if (indexCompression < 1)
+            indexCompression = 1;
+        else if (indexCompression > 20)
+            indexCompression = 20;
+    }
+
+    if (const auto node = doc->find("person_compression"); node)
+    {
+        personCompression = node->getInt();
+        if (personCompression < 1)
+            personCompression = 1;
+        else if (personCompression > 20)
+            personCompression = 20;
+    }
+    
+}
+
+void Table::clearZombies()
+{
+    // Note: this private member must be called from within a lock
+    if (!zombies.size())
+        return;
+
+    // zombie partitions will linger for 30 seconds
+    const auto expireStamp = Now() - 30'000; 
+
+     while (zombies.size() && zombies.front()->getMarkedForDeletionStamp() < expireStamp)
+     {
+         const auto part = zombies.front();
+         zombies.pop();
+         delete part;
+     }    
+}
+
+void Table::deserializeTriggers(const cjson* doc)
 {
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)

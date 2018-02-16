@@ -18,7 +18,7 @@ namespace openset
 	namespace async
 	{
 
-		class OpenLoopRetrigger : public OpenLoop
+		class OpenLoopRevent : public OpenLoop
 		{
 			openset::db::Database::TablePtr table;
 			openset::db::Person person;
@@ -28,10 +28,11 @@ namespace openset
 		    db::TablePartitioned* parts { nullptr };
 
 		public:
-			explicit OpenLoopRetrigger(openset::db::Database::TablePtr table);
-			~OpenLoopRetrigger() final = default;
+			explicit OpenLoopRevent(openset::db::Database::TablePtr table);
+			~OpenLoopRevent() final = default;
 
 			void prepare() final;
+            void respawn(int64_t runIn);
 			void run() final;
 			void partitionRemoved() final {};
 		};

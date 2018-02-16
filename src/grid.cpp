@@ -919,7 +919,7 @@ PersonData_s* Grid::commit()
 		compBuffer, 
 		bytesNeeded,
 		maxBytes,
-		4);
+		table->personCompression);
 
 	const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes; // size() includes data, we adjust
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));

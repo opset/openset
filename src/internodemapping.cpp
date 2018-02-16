@@ -5,8 +5,6 @@
 openset::mapping::PartitionMap::PartitionMap():
 	part2node(ringHint_e::lt_compact) {}
 
-openset::mapping::PartitionMap::~PartitionMap() {}
-
 std::vector<int> openset::mapping::PartitionMap::getPartitionsByNodeId(int64_t nodeId)
 {
 	csLock lock(cs);
@@ -56,11 +54,6 @@ std::vector<int> openset::mapping::PartitionMap::getNodeIdsByState(NodeState_e s
 
 	result.assign(matchedNodes.begin(), matchedNodes.end());
 	return result;
-}
-
-std::vector<int> openset::mapping::PartitionMap::getFailedNodes()
-{
-	return getNodeIdsByState(NodeState_e::failed);
 }
 
 std::vector<int64_t> openset::mapping::PartitionMap::getNodesByPartitionId(int partitionId) const

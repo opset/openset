@@ -193,17 +193,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     if (sourceSettings)
     {
-        if (const auto node = sourceSettings->find("event_ttl"); node)
-            table->eventTtl = node->getInt();
-
-        if (const auto node = sourceSettings->find("event_max"); node)
-            table->eventMax = node->getInt();
-
-        if (const auto node = sourceSettings->find("session_time"); node)
-            table->sessionTime = node->getInt();
-
-        if (const auto node = sourceSettings->find("tz_offset"); node)
-            table->tzOffset = node->getInt();       
+        table->deserializeSettings(sourceSettings); 
     }
 
     globals::async->resumeAsync();
@@ -340,10 +330,7 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
         zOrder->push(z);
 
     auto settings = response.setObject("settings");
-    settings->set("event_ttl", table->eventTtl);
-    settings->set("event_max", table->eventMax);
-    settings->set("session_time", table->sessionTime);
-    settings->set("tz_offset", table->tzOffset);
+    table->serializeSettings(settings);
 
     Logger::get().info("describe table '" + tableName + "'.");
     message->reply(http::StatusCode::success_ok, response);
@@ -576,24 +563,9 @@ void RpcTable::table_settings(const openset::web::MessagePtr& message, const Rpc
     // lock the table object
     csLock lock(*table->getLock());
 
-    if (const auto node = request.find("event_ttl"); node)
-    {
-        table->eventTtl = node->getInt();
-    }
-
-    if (const auto node = request.find("event_max"); node)
-    {
-        table->eventMax = node->getInt();
-    }
-
-    if (const auto node = request.find("session_time"); node)
-    {
-        table->sessionTime = node->getInt();
-    }
-
-    if (const auto node = request.find("tz_offset"); node)
-    {
-        table->tzOffset = node->getInt();
-    }
+    table->deserializeSettings(&request);
     
+    cjson response;
+    table->serializeSettings(&response);
+    message->reply(http::StatusCode::success_ok, response);
 }

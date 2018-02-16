@@ -761,7 +761,7 @@ inline Tests test_pyql_language()
 					columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, 0);
 					columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, 0);
 
-					auto parts = table->getPartitionObjects(0); // partition zero for test
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test
 					auto personRaw = parts->people.getmakePerson("user1@test.com");
 
 					Person person; // Person overlay for personRaw;
@@ -799,7 +799,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -849,7 +849,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -896,7 +896,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -947,7 +947,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -998,7 +998,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1051,7 +1051,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1104,7 +1104,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1157,7 +1157,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1204,7 +1204,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1257,7 +1257,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1309,7 +1309,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1360,7 +1360,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1410,7 +1410,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1460,7 +1460,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1510,7 +1510,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1560,7 +1560,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1609,7 +1609,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;

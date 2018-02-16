@@ -1,3 +1,5 @@
+#include <functional>
+
 #include "database.h"
 #include "config.h"
 #include "asyncpool.h"
@@ -60,6 +62,24 @@ void Database::dropTable(const std::string& tableName)
 	csLock lock(cs);
     tables.erase(tableName);  
     openset::globals::async->resumeAsync();
+}
+
+std::vector<std::string> Database::getTableNames()
+{
+    std::vector<std::string> tableList;
+
+    {
+        csLock lock(cs);    
+
+        for (auto &t : tables)
+            tableList.push_back(t.first);
+    }
+
+    std:sort(tableList.begin(), tableList.end(), [](auto a, auto b) {
+       return a > b; 
+    });
+    
+    return tableList;
 }
 
 void Database::serialize(cjson* doc)

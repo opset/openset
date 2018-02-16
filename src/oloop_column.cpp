@@ -33,7 +33,14 @@ OpenLoopColumn::~OpenLoopColumn()
 
 void OpenLoopColumn::prepare()
 {  
-    parts = table->getPartitionObjects(loop->partition);
+    parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
     stopBit = parts->people.peopleCount();
 
     // if we are in segment compare mode:

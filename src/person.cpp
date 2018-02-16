@@ -26,10 +26,10 @@ void Person::reinit()
 	grid.reinit();
 }
 
-void Person::mapTable(Table* tablePtr, int Partition)
+bool Person::mapTable(Table* tablePtr, int Partition)
 {
 	if (table && tablePtr && table == tablePtr)
-		return;
+		return false;
 
 	table = tablePtr;
 	partition = Partition;
@@ -37,18 +37,24 @@ void Person::mapTable(Table* tablePtr, int Partition)
 	// attributes are partitioned, like users so that their bit indexes
 	// remain consistent if partitions migrate. 
 	// this will acquire the correct attribute data for this Person
-	auto PO = table->getPartitionObjects(partition);
-	attributes = &PO->attributes;
-	people = &PO->people;
+	const auto parts = table->getPartitionObjects(partition, false);
+
+    if (!parts)
+        return false;
+
+	attributes = &parts->attributes;
+	people = &parts->people;
 	blob = attributes->getBlob();
 	
 	mapSchemaAll();
+
+    return true;
 }
 
-void Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnNames)
+bool Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnNames)
 {
 	if (table && tablePtr && table == tablePtr)
-		return;
+		return false;
 
 	table = tablePtr;
 	partition = Partition;
@@ -56,13 +62,18 @@ void Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnName
 	// attributes are partitioned, like users so that their bit indexes
 	// remain consistent if partitions migrate. 
 	// this will acquire the correct attribute data for this Person
-	auto PO = table->getPartitionObjects(partition);
-	attributes = &PO->attributes;
-	people = &PO->people;
+	auto parts = table->getPartitionObjects(partition, false);
+
+    if (!parts)
+        return false;
+
+	attributes = &parts->attributes;
+	people = &parts->people;
 	blob = attributes->getBlob();
 
 	mapSchemaList(columnNames);
-	
+
+    return true;	
 }
 
 bool Person::mapSchemaAll()

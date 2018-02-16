@@ -21,7 +21,14 @@ void OpenLoopCleaner::prepare()
 	linearId = 0;
 	person.mapTable(table.get(), loop->partition);
 
-    parts = table->getPartitionObjects(loop->partition);
+    parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
     parts->triggers->checkForConfigChange();
 }
 
@@ -30,7 +37,7 @@ void OpenLoopCleaner::respawn()
     OpenLoop* newCell = new OpenLoopCleaner(table);
     
     // schedule and add some random shuffle to stagger start-times accross workers
-    newCell->scheduleFuture(60000 + randomRange(5000, -5000)); 
+    newCell->scheduleFuture(table->maintInterval + randomRange(1000, -1000)); 
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.    

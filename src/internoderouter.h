@@ -152,17 +152,17 @@ namespace openset
 
 			DataBlockPtr dispatchSync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				const char* payload,
 				const size_t length);
 
 			DataBlockPtr dispatchSync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				cjson& payload);
 
 
@@ -173,17 +173,17 @@ namespace openset
 
 			// send a message to all known routes
 			Responses dispatchCluster(
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				const char* data, 
 				const size_t length,
 				const bool internalDispatch = false);
 
 			Responses dispatchCluster(
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				cjson& json,
 				const bool internalDispatch = false);
 
@@ -196,18 +196,19 @@ namespace openset
 			int countActiveRoutes();
 			int countRoutes() const;
 			std::vector<int64_t> getActiveRoutes();
-			std::vector<int64_t> getFailedRoutes();
 
-			std::vector<std::pair<int64_t, int>> getPartitionCountsByRoute(std::unordered_set<NodeState_e> states);
+            using PartitionCounts = std::vector<std::pair<int64_t, int>>;
+
+			PartitionCounts getPartitionCountsByRoute(const std::unordered_set<NodeState_e>& states);
 			
 			// replaces existing mapping, cleaning up orphaned
 			// partitions and creating new ones when needed
 			void changeMapping(
 				const cjson& config, 
-				const std::function<void(int)> addPartition_cb, 
-				const std::function<void(int)> deletePartition_cb, 
-				const std::function<void(string, int64_t, string, int)> addRoute_cb,
-				const std::function<void(int64_t)> deleteRoute_cb);
+				const std::function<void(int)>& addPartition_cb, 
+				const std::function<void(int)>& deletePartition_cb, 
+				const std::function<void(string, int64_t, string, int)>& addRoute_cb,
+				const std::function<void(int64_t)>& deleteRoute_cb);
 
 			void loadPartitions();
 			void savePartitions();

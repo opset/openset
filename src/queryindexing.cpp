@@ -21,7 +21,7 @@ void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber,
 	table = tablePtr;
 	macros = queryMacros;
 	partition = partitionNumber;
-	parts = table->getPartitionObjects(partition);
+	parts = table->getPartitionObjects(partition, false);
 	stopBit = stopAtBit;
 
 	// this will build all the indexes and store them 

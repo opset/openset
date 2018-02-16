@@ -56,7 +56,7 @@ namespace std
 	{
 		size_t operator()(const openset::query::EventDistinct_s& v) const
 		{
-			return v.hash1 + v.hash2;
+			return XXH64(&v.hash1, 16, v.hash2);
 		}
 	};
 }

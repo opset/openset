@@ -56,14 +56,7 @@ void ResultSet::makeSortedList()
 		sortedResult.end(),
 		[](const RowPair& left, const RowPair& right ) -> bool
 		{
-			for (auto i = 0; i < keyDepth; ++i)
-			{
-				if (left.first.key[i] > right.first.key[i])
-					return false;
-				if (left.first.key[i] < right.first.key[i])
-					return true;
-			}
-			return true;
+            return left.first < right.first;
 		});
 }
 

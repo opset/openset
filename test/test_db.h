@@ -177,7 +177,7 @@ inline Tests test_db()
 				auto table = openset::globals::database->getTable("__test001__");
 				ASSERT(table != nullptr);
 
-				auto parts = table->getPartitionObjects(0); // partition zero for test
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				ASSERT(parts != nullptr);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
@@ -260,7 +260,7 @@ inline Tests test_db()
 			"db: query a user", [=]() {
 
 				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -359,7 +359,7 @@ inline Tests test_db()
 				params["root_name"] = "root";
 				
 				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -452,7 +452,7 @@ inline Tests test_db()
 				params["root_name"] = "root";
 
 				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;

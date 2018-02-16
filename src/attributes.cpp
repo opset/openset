@@ -1,5 +1,8 @@
 #include "attributes.h"
 #include "sba/sba.h"
+#include "table.h"
+#include "columns.h"
+#include "attributeblob.h"
 
 using namespace openset::db;
 
@@ -12,7 +15,8 @@ IndexBits* Attr_s::getBits()
 	return bits;
 }
 
-Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Columns* columns) :
+Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Columns* columns) :
+    table(table),
 	blob(attributeBlob),
 	columns(columns),
 	partition(partition)
@@ -28,7 +32,13 @@ Attributes::~Attributes()
 
     for (auto &change: changeIndex)
     {
-        PoolMem::getPool().freePtr(change.second);
+        auto changeIter = change.second;
+        while (changeIter)
+        {
+            const auto t = changeIter->prev;
+            PoolMem::getPool().freePtr(changeIter);
+            changeIter = t;
+        }
         change.second = nullptr;
     }
 }
@@ -148,7 +158,7 @@ void Attributes::clearDirty()
             int32_t ofs, len;
 
 		    // compress the data, get it back in a pool ptr
-		    const auto compData = bits.store(compBytes, linId, ofs, len);
+		    const auto compData = bits.store(compBytes, linId, ofs, len, table->indexCompression);
 		    const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 		    // copy header
@@ -315,6 +325,7 @@ void Attributes::serialize(HeapStack* mem)
 		blockHeader->ints = kv.second->ints;
         blockHeader->ofs = kv.second->ofs;
         blockHeader->len = kv.second->len;
+        blockHeader->linId = kv.second->linId;
 		const auto text = this->blob->getValue(kv.first.column, kv.first.value);
 		blockHeader->textSize = text ? strlen(text) : 0;
 		//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
@@ -387,6 +398,7 @@ int64_t Attributes::deserialize(char* mem)
         attr->ofs = blockHeader->ofs;
         attr->len = blockHeader->len;
 		attr->comp = blockHeader->compSize;
+        attr->linId = blockHeader->linId;
 
 		// copy the data in
 		memcpy(attr->index, dataPtr, blockHeader->compSize);

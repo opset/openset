@@ -30,11 +30,7 @@ namespace openset::web
 
 	public:
 
-		Rest(const int64_t routeId, const std::string& server) :
-			client(server),
-            host(server),
-            routeId(routeId)
-		{};
+	    Rest(const int64_t routeId, const std::string& server);;
 
 		~Rest() = default;
 

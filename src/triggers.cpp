@@ -88,7 +88,7 @@ void ReventManager::start()
 	}
 
 	// create the re-trigger job (it will continue to remake itself after)
-	async::OpenLoop* newCell = new async::OpenLoopRetrigger(table);
+	async::OpenLoop* newCell = new async::OpenLoopRevent(table);
     // first run in 5 seconds
 	newCell->scheduleFuture(5000); 
 	// add it to the async loop for this partition

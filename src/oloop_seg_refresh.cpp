@@ -170,7 +170,11 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// clean the person object
 		person.reinit();
 		// map table, partition and select schema columns to the Person object
-		person.mapTable(table.get(), loop->partition, mappedColumns);
+		if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+	    {
+	        suicide();
+            return false;
+	    }
 
 		// is this calculated using other segments (i.e. the functions
 		// population, intersection, union, difference and compliment)
@@ -195,7 +199,13 @@ void OpenLoopSegmentRefresh::prepare()
 {
 	auto prepStart = Now();
 
-	parts = table->getPartitionObjects(loop->partition);
+	parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
 	
 	nextExpired();	
 }
@@ -204,7 +214,7 @@ void OpenLoopSegmentRefresh::respawn()
 {
     OpenLoop* newCell = new OpenLoopSegmentRefresh(table);
     
-    newCell->scheduleFuture(15000 + randomRange(5000, -5000)); // check again in 15 seconds
+    newCell->scheduleFuture(table->segmentInterval + randomRange(5000, -5000)); // check again in 15 seconds
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.
