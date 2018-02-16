@@ -214,7 +214,7 @@ void OpenLoopSegmentRefresh::respawn()
 {
     OpenLoop* newCell = new OpenLoopSegmentRefresh(table);
     
-    newCell->scheduleFuture(table->segmentInterval + randomRange(5000, -5000)); // check again in 15 seconds
+    newCell->scheduleFuture(table->segmentInterval); // check again in 15 seconds
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.

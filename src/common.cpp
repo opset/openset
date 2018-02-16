@@ -38,13 +38,6 @@ int64_t AppendHash(const int32_t value, const int64_t last)
     return XXH64(reinterpret_cast<const void*>(&value), 4, last);    
 }
 
-int64_t randomRange(const int64_t high, const int64_t low)
-{
-	std::default_random_engine rd;
-    const std::uniform_int_distribution<int> someNum(low, high);    
-    return someNum(rd);
-}
-
 void ThreadSleep(const int64_t milliseconds)
 {
 	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));

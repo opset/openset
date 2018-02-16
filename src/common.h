@@ -39,9 +39,6 @@ int64_t HashPair(const int64_t a, const int64_t b);
 int64_t AppendHash(int64_t value, int64_t last);
 int64_t AppendHash(int32_t value, int64_t last);
 
-int64_t randomRange(const int64_t hight, const int64_t low = 0);
-
-
 void ThreadSleep(int64_t milliseconds);
 
 using namespace std;

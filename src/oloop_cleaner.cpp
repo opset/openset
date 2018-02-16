@@ -37,7 +37,7 @@ void OpenLoopCleaner::respawn()
     OpenLoop* newCell = new OpenLoopCleaner(table);
     
     // schedule and add some random shuffle to stagger start-times accross workers
-    newCell->scheduleFuture(table->maintInterval + randomRange(1000, -1000)); 
+    newCell->scheduleFuture(table->maintInterval); 
     
     spawn(newCell); // add replacement to scheduler
     suicide(); // kill this cell.    

@@ -27,11 +27,11 @@ TablePartitioned::TablePartitioned(
 	asyncLoop->queueCell(insertCell);
         
 	async::OpenLoop* segmentRefreshCell = new async::OpenLoopSegmentRefresh(sharedTablePtr);
-	segmentRefreshCell->scheduleFuture(table->segmentInterval + randomRange(1000, -1000)); 
+	segmentRefreshCell->scheduleFuture(table->segmentInterval); 
 	asyncLoop->queueCell(segmentRefreshCell);
         
 	async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(sharedTablePtr);
-	cleanerCell->scheduleFuture(table->maintInterval + randomRange(5000, -5000)); 
+	cleanerCell->scheduleFuture(table->maintInterval); 
 	asyncLoop->queueCell(cleanerCell);
     
 }
@@ -63,6 +63,8 @@ void openset::db::TablePartitioned::serializeInsertBacklog(HeapStack * mem)
         const auto itemPtr = mem->newPtr(*itemLength);
         memcpy(itemPtr, item, *itemLength);
     }
+
+    cout << ("serialized " + to_string(*sectionLength)) << endl;
 }
 
 int64_t openset::db::TablePartitioned::deserializeInsertBacklog(char * mem)
@@ -73,6 +75,8 @@ int64_t openset::db::TablePartitioned::deserializeInsertBacklog(char * mem)
     
     const auto sectionLength = *recast<int64_t*>(read);
     read += sizeof(int64_t);
+
+    cout << ("deserialized " + to_string(sectionLength)) << endl;
 
     for (auto i = 0; i < sectionLength; ++i)
     {
