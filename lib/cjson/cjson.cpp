@@ -1475,7 +1475,7 @@ cjson* cjson::parseBranch(cjson* n, char* & readPtr, const bool embedding)
 			else
 			{
 				char* endp;
-				n->push(strtoll(numericString.c_str(), &endp, 10));
+				n->push(static_cast<int64_t>(strtoll(numericString.c_str(), &endp, 10)));
 			}
 		}
 		else if (*readPtr == '"')
