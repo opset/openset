@@ -40,11 +40,9 @@ int64_t AppendHash(const int32_t value, const int64_t last)
 
 int64_t randomRange(const int64_t high, const int64_t low)
 {
-	std::random_device rd;
-	std::mt19937 mt(rd());
-
+	std::default_random_engine rd;
     const std::uniform_int_distribution<int64_t> someNum(low, high);    
-    return someNum(mt);
+    return someNum(rd);
 }
 
 void ThreadSleep(const int64_t milliseconds)
