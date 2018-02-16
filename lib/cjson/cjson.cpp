@@ -1181,7 +1181,7 @@ void cjson::stringify_worker(const cjson* n, HeapStack& writer, int indent, cons
 				emitText(writer, (indent >= 0) ? "\": " : "\":");
 			}
             
-			snprintf(n->scratchPad, 128, "%lld", n->nodeData->asInt);
+			snprintf(n->scratchPad, 128, "%lld", static_cast<long long int>(n->nodeData->asInt));
 			emitText(writer, n->scratchPad);
 			//emitText(writer, std::to_string(N->nodeData->asInt).c_str()); // slower pure C++ way
 			break;
