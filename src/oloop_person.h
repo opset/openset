@@ -3,6 +3,7 @@
 #include "common.h"
 #include "oloop.h"
 #include "shuttle.h"
+#include "database.h"
 
 namespace openset
 {
@@ -19,14 +20,14 @@ namespace openset
         {
 
             Shuttle<int>* shuttle;
-            db::Table* table;
+            openset::db::Database::TablePtr table;
             int64_t uuid;
 
         public:
             
             explicit OpenLoopPerson(
                 Shuttle<int>* shuttle,
-                openset::db::Table* table,
+                openset::db::Database::TablePtr table,
                 const int64_t uuid);
 
             void prepare() final;

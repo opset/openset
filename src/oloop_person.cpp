@@ -10,23 +10,27 @@ using namespace openset::async;
 
 OpenLoopPerson::OpenLoopPerson(
     Shuttle<int>* shuttle, 
-    openset::db::Table* table,
+    openset::db::Database::TablePtr,
     const int64_t uuid) :
-
-    OpenLoop(oloopPriority_e::realtime),
+    OpenLoop(table->getName(), oloopPriority_e::realtime),
     shuttle(shuttle),
     table(table),
     uuid(uuid)
-{
-    
-}
+{}
 
 void OpenLoopPerson::prepare() 
 {}
 
 void OpenLoopPerson::run()
 {
-    auto parts = table->getPartitionObjects(loop->partition);
+    auto parts = table->getPartitionObjects(loop->partition, false );
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
     const auto personData = parts->people.getPersonByID(uuid);
 
     if (!personData) // no person, not found
@@ -44,12 +48,18 @@ void OpenLoopPerson::run()
     }
 
     db::Person person; // Person overlay for personRaw;
-    person.mapTable(table, loop->partition); // will throw in DEBUG if not called before mount
+    if (!person.mapTable(table.get(), loop->partition)) // will throw in DEBUG if not called before mount
+    {
+        partitionRemoved();
+	    suicide();
+        return;       
+    }
+
     person.mount(personData);
     person.prepare(); // this actually decompressed the record and populates the grid
 
     auto json = person.getGrid()->toJSON();
-    auto jsonString = cjson::Stringify(&json);
+    auto jsonString = cjson::stringify(&json);
 
     shuttle->reply(
         http::StatusCode::success_ok,

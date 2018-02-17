@@ -88,8 +88,15 @@ namespace openset
 		// key type used by Attributes and AttributeBlob class
 		struct attr_key_s
 		{
-			int32_t column;
-			int64_t value;
+			int32_t column{ 0 };
+			int64_t value{ 0 };
+
+            attr_key_s() = default;
+
+            attr_key_s(const int32_t column, const int64_t value) :
+                column(column),
+                value(value)
+            {}
 
 			static attr_key_s makeKey(const int32_t column, const int64_t value)
 			{

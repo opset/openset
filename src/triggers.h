@@ -4,6 +4,7 @@
 
 #include "cjson/cjson.h"
 #include <unordered_map>
+#include "database.h"
 #include "trigger.h"
 
 namespace openset
@@ -23,7 +24,6 @@ namespace openset
 
 		class ReventManager
 		{
-			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 			openset::db::Columns* columns;
 			std::unordered_map<int64_t, Revent*> revents;

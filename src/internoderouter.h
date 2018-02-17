@@ -7,6 +7,9 @@
 #include "http_cli.h"
 #include "threads/spinlock.h"
 
+#include "threads/locks.h"
+#include "threads/spinlock.h"
+
 namespace openset
 {
 
@@ -30,6 +33,20 @@ namespace openset
 			using RouteNames = unordered_map<int64_t, string>;
 			// map route to HTTP string
 			using Routes = unordered_map<int64_t, std::pair<std::string, int>>;
+            
+            using RestConnection = shared_ptr<openset::web::Rest>;
+
+            struct ConnectionPoolItem_s
+            {
+                int64_t stamp;
+                RestConnection connection;
+            };
+
+            using PoolVector = vector<ConnectionPoolItem_s>;
+		    using Pool = unordered_map<int64_t, PoolVector>;
+
+            CriticalSection poolCs;
+            Pool restPool;
 
 			struct DataBlock
 			{
@@ -86,8 +103,11 @@ namespace openset
 			atomic<int64_t> slotCounter;
 
 			Mapper();
-
 			~Mapper();
+
+            RestConnection getCachedConnection(const int64_t routeId);
+            void returnCachedConnection(RestConnection connection);
+
 
 			int64_t getSlotNumber();
 
@@ -95,7 +115,7 @@ namespace openset
 			void removeRoute(const int64_t routeId);
 
 			std::string getRouteName(const int64_t routeId);
-			int64_t getRouteId(const std::string routeName);
+			int64_t getRouteId(const std::string& routeName);
 
 			// factories a Rest object
 			openset::web::RestPtr getRoute(const int64_t routeId);
@@ -106,42 +126,43 @@ namespace openset
 			// dispatchAsync - send a payload down a route.
 			bool dispatchAsync(
 				const int64_t route, 
-				const std::string method,
-				const std::string path, 
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path, 
+				const openset::web::QueryParams& params,
 				const char* payload, 
 				const size_t length, 
 				const openset::web::RestCbBin callback);
 
 			bool dispatchAsync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				const std::string& payload,
 				const openset::web::RestCbBin callback);
 
 			bool dispatchAsync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				cjson& payload,
+
 				const openset::web::RestCbBin callback);
 
 			DataBlockPtr dispatchSync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				const char* payload,
 				const size_t length);
 
 			DataBlockPtr dispatchSync(
 				const int64_t route,
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				cjson& payload);
 
 
@@ -152,17 +173,17 @@ namespace openset
 
 			// send a message to all known routes
 			Responses dispatchCluster(
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				const char* data, 
 				const size_t length,
 				const bool internalDispatch = false);
 
 			Responses dispatchCluster(
-				const std::string method,
-				const std::string path,
-				const openset::web::QueryParams params,
+				const std::string& method,
+				const std::string& path,
+				const openset::web::QueryParams& params,
 				cjson& json,
 				const bool internalDispatch = false);
 
@@ -175,18 +196,19 @@ namespace openset
 			int countActiveRoutes();
 			int countRoutes() const;
 			std::vector<int64_t> getActiveRoutes();
-			std::vector<int64_t> getFailedRoutes();
 
-			std::vector<std::pair<int64_t, int>> getPartitionCountsByRoute(std::unordered_set<NodeState_e> states);
+            using PartitionCounts = std::vector<std::pair<int64_t, int>>;
+
+			PartitionCounts getPartitionCountsByRoute(const std::unordered_set<NodeState_e>& states);
 			
 			// replaces existing mapping, cleaning up orphaned
 			// partitions and creating new ones when needed
 			void changeMapping(
 				const cjson& config, 
-				const std::function<void(int)> addPartition_cb, 
-				const std::function<void(int)> deletePartition_cb, 
-				const std::function<void(string, int64_t, string, int)> addRoute_cb,
-				const std::function<void(int64_t)> deleteRoute_cb);
+				const std::function<void(int)>& addPartition_cb, 
+				const std::function<void(int)>& deletePartition_cb, 
+				const std::function<void(string, int64_t, string, int)>& addRoute_cb,
+				const std::function<void(int64_t)>& deleteRoute_cb);
 
 			void loadPartitions();
 			void savePartitions();

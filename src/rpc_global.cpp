@@ -36,7 +36,7 @@ ForwardStatus_e openset::comms::ForwardRequest(const openset::web::MessagePtr me
     if (!result.routeError)
     {
         cjson response;
-        cjson::Parse(
+        cjson::parse(
             string{
                 result.responses[0].data,
                 result.responses[0].length
@@ -56,7 +56,7 @@ ForwardStatus_e openset::comms::ForwardRequest(const openset::web::MessagePtr me
             result.responses[0].length &&
             result.responses[0].data[0] == '{')
         {
-            cjson error(std::string(result.responses[0].data, result.responses[0].length), result.responses[0].length);
+            cjson error(std::string(result.responses[0].data, result.responses[0].length), cjson::Mode_e::string);
 
             if (error.xPath("/error"))
                 message->reply(openset::http::StatusCode::client_error_bad_request, error);

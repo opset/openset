@@ -113,7 +113,6 @@ namespace openset
 			reventSettings_s* settings;
 			int lastConfigVersion; // class copy, used to check against settings version for reload
 
-			openset::db::Table* table;
 			openset::db::TablePartitioned* parts;
 
 			openset::query::Macro_s macros; // this will be a copy of what is in the triggerSettings_S
@@ -126,7 +125,6 @@ namespace openset
 
 			int64_t currentFunctionHash;
 
-			int runCount;
 			bool beforeState;
 			bool inError;
 

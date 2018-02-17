@@ -4,9 +4,7 @@
 #include "http_serve.h"
 #include "client_http.hpp"
 #include "utility.hpp"
-#include "sba/sba.h"
 #include "cjson/cjson.h"
-#include "threads/locks.h"
 #include "threads/spinlock.h"
 
 namespace openset
@@ -25,27 +23,26 @@ namespace openset::web
 	{
 		CriticalSection cs;
 		HttpClient client;
+        string host;
+        int64_t routeId;
 
-		std::string makeParams(const QueryParams params) const;
+		static std::string makeParams(const QueryParams& params);
 
 	public:
 
-		Rest(const std::string server) :
-			client(server)
-		{
-			//cout << "****" << server << endl;
-			//client.io_service = openset::globals::global_io_service;
-		};
+	    Rest(const int64_t routeId, const std::string& server);;
 
-		~Rest()
+		~Rest() = default;
+
+        int64_t getRouteId() const
 		{
-			//cout << "destroyed" << endl;
+		    return routeId;
 		}
 
-		void request(const std::string method, const std::string path, const QueryParams params, const char* payload,
+		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
 		             const size_t length, RestCbJson cb);;
 
-		void request(const std::string method, const std::string path, const QueryParams params, const char* payload,
+		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
 		             const size_t length, RestCbBin cb);;
 
 	};

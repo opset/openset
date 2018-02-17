@@ -11,13 +11,30 @@
 
 using namespace openset::db;
 
-Table::Table(const string name, Database* database):
+Table::Table(const string &name, Database* database):
 	name(name),
 	database(database),
 	loadVersion(Now())
-{
-	memset(partitions, 0, sizeof(partitions));
+{}
 
+Table::~Table()
+{
+    for (auto &part : partitions)
+    {
+        delete part.second;
+        part.second = nullptr;
+    }
+
+    Logger::get().info("table dropped '" + name + "'.");
+}
+
+Table::TablePtr openset::db::Table::getSharedPtr() const
+{
+    return this->database->getTable(name);
+}
+
+void openset::db::Table::initialize()
+{
 	// initialize the var object as a dictionary
 	globalVars.dict(); 
 
@@ -33,45 +50,53 @@ Table::Table(const string name, Database* database):
 	createMissingPartitionObjects();
 }
 
-Table::~Table()
-{}
-
 void Table::createMissingPartitionObjects()
-{
+{        
 	globals::async->assertAsyncLock();
 	
 	auto myPartitions = globals::mapper->partitionMap.getPartitionsByNodeId(globals::running->nodeId);
 
 	for (auto p: myPartitions)
-		getPartitionObjects(p);
+		getPartitionObjects(p, true);
 }
 
-TablePartitioned* Table::getPartitionObjects(const int32_t partition)
+TablePartitioned* Table::getPartitionObjects(const int32_t partition, const bool create)
 {
+    {
 	csLock lock(cs); // scoped lock		
-	if (partitions[partition])
-		return partitions[partition];
 
-	partitions[partition] = new TablePartitioned(
+    clearZombies();
+
+	if (auto const part = partitions.find(partition); part != partitions.end())
+		return part->second;
+    }
+
+    if (!create)
+        return nullptr;
+
+    const auto part = new TablePartitioned(
 		this, 
 		partition, 
 		&attributeBlob, 
 		&columns);
 
-	return partitions[partition];
+    {
+        csLock lock(cs); // scoped lock		
+	    partitions[partition] = part;
+	    return part;
+    }
 }
 
 void Table::releasePartitionObjects(const int32_t partition)
 {
 	csLock lock(cs); // lock for read		
 
-	if (!partitions[partition])
-		return;
-
-	// delete the table objects for this partition
-	delete partitions[partition];
-	partitions[partition] = nullptr;
-
+	if (const auto part = partitions.find(partition); part != partitions.end())
+    {
+        part->second->markForDeletion();
+        zombies.push(part->second);
+        partitions.erase(partition);
+    }
 }
 
 void Table::serializeTable(cjson* doc)
@@ -88,6 +113,12 @@ void Table::serializeTable(cjson* doc)
 	for (auto &i : zList)
 		pkNode->push(i);
 
+    auto settings = doc->setObject("settings");
+    settings->set("event_ttl", eventTtl);
+    settings->set("event_max", eventMax);
+    settings->set("session_time", sessionTime);
+    settings->set("tz_offset", tzOffset);
+    
 	auto columnNodes = doc->setArray("columns");
 
 	for (auto &c : columns.columns)
@@ -120,14 +151,26 @@ void Table::serializeTable(cjson* doc)
 			columnRecord->set("index", cast<int64_t>(c.idx));
 			columnRecord->set("type", type);
 			columnRecord->set("deleted", c.deleted);
-			columnRecord->set("prop", c.isSet);
+			columnRecord->set("is_set", c.isSet);
 		}
+}
+
+void Table::serializeSettings(cjson* doc) const
+{
+    doc->set("event_ttl", eventTtl);
+    doc->set("event_max", eventMax);
+    doc->set("session_time", sessionTime);
+    doc->set("tz_offset", tzOffset);
+    doc->set("maint_interval", maintInterval);
+    doc->set("revent_interval", reventInterval);
+    doc->set("index_compression", indexCompression);
+    doc->set("person_compression", personCompression);    
 }
 
 void Table::serializeTriggers(cjson* doc)
 {
 	// push the trigger names
-	doc->setType(cjsonType::OBJECT);
+	doc->setType(cjson::Types_e::OBJECT);
 
 	for (auto &t : triggerConf)
 	{
@@ -139,17 +182,17 @@ void Table::serializeTriggers(cjson* doc)
 	}	
 }
 
-void Table::deserializeTable(cjson* doc)
+void Table::deserializeTable(const cjson* doc)
 {
 	auto count = 0;
 
 	// load the columns
-	auto addToSchema = [&](cjson* item)
+	const auto addToSchema = [&](cjson* item)
 	{
 		auto colName = item->xPathString("/name", "");
 		auto type = item->xPathString("/type", "");
 		auto index = item->xPathInt("/index", -1);
-		auto isProp = item->xPathBool("/prop", false);
+		auto isProp = item->xPathBool("/is_set", false);
 		// was it deleted? > 0 = deleted, value is epoch time of deletion
 		auto deleted = item->xPathInt("/deleted", 0);
 		
@@ -167,7 +210,7 @@ void Table::deserializeTable(cjson* doc)
 		else if (type == "bool")
 			colType = columnTypes_e::boolColumn;
 		else
-			return; // TODO hmmm...
+			return; // skip 
 
 		columns.setColumn(index, colName, colType, isProp, deleted);
 		count++;
@@ -179,7 +222,7 @@ void Table::deserializeTable(cjson* doc)
 	const auto pkNode = doc->xPath("/z_order");
 
 	// list of keys
-	if (pkNode && pkNode->type() == cjsonType::ARRAY)
+	if (pkNode && pkNode->type() == cjson::Types_e::ARRAY)
 	{
 		
 		auto nodes = pkNode->getNodes();
@@ -187,7 +230,7 @@ void Table::deserializeTable(cjson* doc)
 		auto idx = 0;
 		for (auto n : nodes)
 		{
-			if (n->type() == cjsonType::STR)
+			if (n->type() == cjson::Types_e::STR)
 			{
 				zOrderStrings.emplace(n->getString(), idx);
 				zOrderInts.emplace(MakeHash(n->getString()), idx);
@@ -195,6 +238,24 @@ void Table::deserializeTable(cjson* doc)
 			}
 		}
 	}
+
+    // read in any settings
+    const auto sourceNode = doc->xPath("/settings");
+    if (sourceNode)
+    {
+        if (const auto node = sourceNode->find("event_ttl"); node)
+            eventTtl = node->getInt();
+
+        if (const auto node = sourceNode->find("event_max"); node)
+            eventMax = node->getInt();
+
+        if (const auto node = sourceNode->find("session_time"); node)
+            sessionTime = node->getInt();
+
+        if (const auto node = sourceNode->find("tz_offset"); node)
+            tzOffset = node->getInt();       
+    }
+
 
 	// set the default required columns
 	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
@@ -216,7 +277,88 @@ void Table::deserializeTable(cjson* doc)
 	}
 }
 
-void Table::deserializeTriggers(cjson* doc)
+void Table::deserializeSettings(const cjson* doc)
+{
+    if (const auto node = doc->find("event_ttl"); node)
+    {
+        eventTtl = node->getInt();
+        if (eventTtl < 60'000)
+            eventTtl = 60'000;
+    }
+
+    if (const auto node = doc->find("event_max"); node)
+    {
+        eventMax = node->getInt();
+        if (eventMax < 1)
+            eventMax = 1;
+    }
+
+    if (const auto node = doc->find("session_time"); node)
+    {
+        sessionTime = node->getInt();
+        if (sessionTime < 1000)
+            sessionTime = 1000;
+    }
+
+    if (const auto node = doc->find("tz_offset"); node)
+    {
+        tzOffset = node->getInt();
+        if (tzOffset < 0)
+            tzOffset = 0;
+    }
+
+    if (const auto node = doc->find("maint_interval"); node)
+    {
+        maintInterval = node->getInt();
+        if (maintInterval < 60'000)
+            maintInterval = 60'000;
+    }
+
+    if (const auto node = doc->find("revent_interval"); node)
+    {
+        reventInterval = node->getInt();
+        if (maintInterval < 1'000)
+            maintInterval = 1'000;
+    }
+
+    if (const auto node = doc->find("index_compression"); node)
+    {
+        indexCompression = node->getInt();
+        if (indexCompression < 1)
+            indexCompression = 1;
+        else if (indexCompression > 20)
+            indexCompression = 20;
+    }
+
+    if (const auto node = doc->find("person_compression"); node)
+    {
+        personCompression = node->getInt();
+        if (personCompression < 1)
+            personCompression = 1;
+        else if (personCompression > 20)
+            personCompression = 20;
+    }
+    
+}
+
+void Table::clearZombies()
+{
+    // Note: this private member must be called from within a lock
+    if (!zombies.size())
+        return;
+
+    // zombie partitions will linger for 30 seconds
+    const auto expireStamp = Now() - 30'000; 
+
+     while (zombies.size() && zombies.front()->getMarkedForDeletionStamp() < expireStamp)
+     {
+         const auto part = zombies.front();
+         zombies.pop();
+         delete part;
+     }    
+}
+
+void Table::deserializeTriggers(const cjson* doc)
 {
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)

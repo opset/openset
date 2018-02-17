@@ -158,14 +158,14 @@ inline Tests test_sessions()
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
+	//auto database = new Database();
 
 	return {
 		{
-			"test_sessions: create and prepare a table", [database, user1_raw_inserts] {
+			"test_sessions: create and prepare a table", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test004__");
+				auto table = openset::globals::database->newTable("__testsessions__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -175,16 +175,16 @@ inline Tests test_sessions()
 				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
 				columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
 			
-				auto parts = table->getPartitionObjects(0); // partition zero for test
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
 
-				person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();
@@ -205,12 +205,12 @@ inline Tests test_sessions()
 			}
 		},
 		{
-			"test_sessions: loop", [test1_pyql]
+			"test_sessions: loop", [=]
 			{
 				auto database = openset::globals::database;
 
-				auto table = database->getTable("__test004__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto table = openset::globals::database->getTable("__testsessions__");
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -235,7 +235,7 @@ inline Tests test_sessions()
 				// when performing queries
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -291,7 +291,7 @@ inline Tests test_sessions()
 				ASSERT(dataNodes.size() == 1);
 
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,3,9]");
 

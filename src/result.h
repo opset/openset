@@ -44,10 +44,9 @@ namespace openset
 			int64_t key[keyDepth];
             ResultTypes_e types[keyDepth];
 
-			RowKey() 
-			{}
+			RowKey() = default; 
 
-			inline void clear()
+			void clear()
 			{
 				key[0] = NONE;
 				key[1] = NONE;
@@ -67,20 +66,20 @@ namespace openset
                 types[7] = ResultTypes_e::Int;
 			}
 
-			inline void clearFrom(const int index)
+			void clearFrom(const int index)
 			{
 				for (auto iter = key + index; iter < key + keyDepth; ++iter)
 					*iter = NONE;
 			}
 
-			inline RowKey keyFrom(const int index) const
+			RowKey keyFrom(const int index) const
 			{
 				auto newKey{ *this };
 				newKey.clearFrom(index);
 				return newKey;
 			}
 
-			inline void keyFrom(const int index, RowKey& rowKey) const
+			void keyFrom(const int index, RowKey& rowKey) const
 			{
 				rowKey = *this;
 				rowKey.clearFrom(index);
@@ -94,7 +93,7 @@ namespace openset
 						break;
 				return count;
 			}
-
+            
 			bool operator==(const RowKey &other) const
 			{
 				return (memcmp(key, other.key, sizeof(key)) == 0);
@@ -103,33 +102,19 @@ namespace openset
 			{
 				return (memcmp(key, other.key, sizeof(key)) != 0);
 			}
-
-			bool operator<(const RowKey &other) const
-			{
-				for (auto i = 0; i < keyDepth; ++i)
-				{
-					if (key[i] > other.key[i])
-						return false;
-					if (key[i] < other.key[i])
-						return true;
-				}
-				return false;
-			}
-
-			bool operator>(const RowKey &other) const
-			{
-				for (auto i = 0; i < keyDepth; ++i)
-				{
-					if (key[i] < other.key[i])
-						return false;
-					if (key[i] > other.key[i])
-						return true;
-				}
-				return false;
-			}
-
 		};
 
+        inline bool operator< (const RowKey &left, const RowKey &right) 
+        {
+			for (auto i = 0; i < keyDepth; ++i)
+			{
+				if (left.key[i] > right.key[i])
+					return false;
+				if (left.key[i] < right.key[i])
+					return true;
+			}
+			return false;
+        }
 
 	}
 }

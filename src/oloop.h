@@ -24,15 +24,15 @@ namespace openset
 		class OpenLoop
 		{
 		public:
-			oloopPriority_e priority;
-
+			oloopPriority_e priority;           
 			oloopState_e state;
+            std::string owningTable;
 			int64_t runAt;
 			int64_t runStart; // time or call to run
 			bool prepared;
 			AsyncLoop* loop;
 
-			explicit OpenLoop(oloopPriority_e priority = oloopPriority_e::background);
+			explicit OpenLoop(std::string owningTable, oloopPriority_e priority = oloopPriority_e::background);
 			virtual ~OpenLoop();
 			void assignLoop(AsyncLoop* loop);
 

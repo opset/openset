@@ -9,14 +9,14 @@ using namespace openset::query;
 using namespace openset::result;
 
 // yes, we are passing queryMacros by value to get a copy
-OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(TablePartitioned* parts) :
-	OpenLoop(),
-	parts(parts),
-	table(parts->table),
+OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(openset::db::Database::TablePtr table) :
+	OpenLoop(table->getName()),
+	parts(nullptr),
+	table(table),
 	maxLinearId(0),
-	currentLinId(-1),
+    currentLinId(-1),
 	interpreter(nullptr),
-	instance(instance),
+	instance(0),
 	runCount(0),
 	index(nullptr)
 {}
@@ -49,7 +49,7 @@ void OpenLoopSegmentRefresh::storeSegment(IndexBits* bits) const
 bool OpenLoopSegmentRefresh::nextExpired()
 {
 	// retreive any indexes this script depends on
-	auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
+	const auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
 	{
 		// if there are no bits with this name created in this query
 		// then look in the index
@@ -62,7 +62,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		return attr->getBits();
 	};
 
-	auto deleteInterpreter = [&]()
+	const auto deleteInterpreter = [&]()
 	{
 		if (interpreter)
 		{
@@ -91,17 +91,17 @@ bool OpenLoopSegmentRefresh::nextExpired()
 
 			// sync the refresh map in the table object with our local refresh timer
 			// first, lets grab the master list
-			auto refreshList = parts->table->getSegmentRefresh();
+			const auto refreshList = parts->table->getSegmentRefresh();
 
 			// add new segments to our refreshList (a map)
 			for (auto seg : *refreshList)
 				if (!parts->segmentRefresh.count(seg.first))
 					parts->setSegmentRefresh(seg.first, seg.second.getRefresh());
 
-			auto now = Now();
+			const auto now = Now();
 
 			// find expired and clean up
-			for (auto seg : parts->segmentRefresh)
+			for (auto &seg : parts->segmentRefresh)
 			{
 				// if we didn't see it in the master list
 				// lets destroy it in our list
@@ -128,7 +128,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		}
 
 		// do some cleanup
-		for (auto seg : cleanup)
+		for (auto &seg : cleanup)
 			parts->segmentRefresh.erase(seg);
 
 		// if we didn't get an expired segment lets exit
@@ -139,7 +139,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		}
 		
 		// generate the index for this query	
-		indexing.mount(table, macros, loop->partition, maxLinearId);
+		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 		bool countable;
 		index = indexing.getIndex("_", countable);
 
@@ -170,7 +170,11 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// clean the person object
 		person.reinit();
 		// map table, partition and select schema columns to the Person object
-		person.mapTable(table, loop->partition, mappedColumns);
+		if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+	    {
+	        suicide();
+            return false;
+	    }
 
 		// is this calculated using other segments (i.e. the functions
 		// population, intersection, union, difference and compliment)
@@ -195,9 +199,25 @@ void OpenLoopSegmentRefresh::prepare()
 {
 	auto prepStart = Now();
 
-	parts = table->getPartitionObjects(loop->partition);
+	parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
 	
 	nextExpired();	
+}
+
+void OpenLoopSegmentRefresh::respawn()
+{
+    OpenLoop* newCell = new OpenLoopSegmentRefresh(table);
+    
+    newCell->scheduleFuture(table->segmentInterval); // check again in 15 seconds
+    
+    spawn(newCell); // add replacement to scheduler
+    suicide(); // kill this cell.
 }
 
 void OpenLoopSegmentRefresh::run()
@@ -205,7 +225,7 @@ void OpenLoopSegmentRefresh::run()
 	if (!interpreter && 
 		!nextExpired())
 	{
-		this->scheduleFuture(5000);
+		respawn();
 		return;
 	}
 
@@ -213,10 +233,10 @@ void OpenLoopSegmentRefresh::run()
 		return;
 
 	openset::db::PersonData_s* personData;
-	while (true)
+	//while (true)
 	{
-		if (sliceComplete())
-			break; // let some other cells run
+		//if (sliceComplete())
+			//break; // let some other cells run
 		
 		// are we out of bits to analyze?
 		if (interpreter->error.inError() || 
@@ -229,16 +249,13 @@ void OpenLoopSegmentRefresh::run()
 			if (!interpreter->error.inError())
 				storeSegment(interpreter->bits);
 			
-			// is there another query to run? If not we are done
+			// all done?
 			if (!nextExpired())
-			{			
-				this->scheduleFuture(5000);
-				return;
-			}
+				respawn();
 
-			// we have more macros, loop to the top and try again
-			//continue;
-			return;
+            // either we are done, or we will do more on the next
+            // loop
+            return;
 		}
 		
 		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)

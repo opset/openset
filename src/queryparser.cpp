@@ -415,12 +415,12 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 					auto modifier = ColumnModifiers.find(c.parts[0]);
 					if (modifier == ColumnModifiers.end())
 						throw ParseFail_s{
-						errors::errorClass_e::parse,
-						errors::errorCode_e::syntax_error,
-						"an aggregator function is expected (i.e. var/value/count/sum/min/max/avg)",
-						c.debug 
-					};
-
+						    errors::errorClass_e::parse,
+						    errors::errorCode_e::syntax_error,
+						    "an aggregator function is expected (i.e. var/value/count/sum/min/max/avg)",
+						    c.debug 
+	    				};
+    
 					auto nonDistinct = false;
 					auto forceDistinct = false;
 					auto lambdaIdx = -1;
@@ -609,7 +609,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 				"person",
 				"column",
 				Modifiers_e::count,
-				cast<int>(vars.columnVars.size())
+				0
 			});
 	}
 

@@ -67,7 +67,7 @@ namespace openset
 			QueueMap queueMap;
 			SubscriberMap subscribers;
 
-			MessageBroker();
+			MessageBroker() = default;
 			~MessageBroker();
 
 		private:

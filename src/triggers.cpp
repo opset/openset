@@ -23,19 +23,29 @@ using namespace openset::revent;
  */
 
 ReventManager::ReventManager(openset::db::TablePartitioned* parts) :
-    table(parts->table),
     parts(parts),
-    columns(table->getColumns()),
-    loadVersion(table->getLoadVersion())
+    columns(parts->table->getColumns()),
+    loadVersion(parts->table->getLoadVersion())
 {
     start();
 }
 
-ReventManager::~ReventManager() 
-{}
+ReventManager::~ReventManager()
+{
+    for (auto &r: revents)
+    {
+        delete r.second;
+        r.second = nullptr;
+    }
+}
 
 void ReventManager::start() 
 {
+
+    // this method gets the shared_ptr version we need to create 
+    // an OpenLoopRetrigger object
+    auto table = globals::database->getTable(parts->table->getName());
+
 	{ // scope for lock
 		csLock lock(globals::running->cs);
 
@@ -64,7 +74,7 @@ void ReventManager::start()
 
 		// compare trigger list to before Ids, see if any 
 		// were deleted
-		for (const auto t : beforeNames)
+		for (const auto &t : beforeNames)
 			if (triggerList->count(t) == 0)
 			{
 				// DELETE
@@ -78,7 +88,7 @@ void ReventManager::start()
 	}
 
 	// create the re-trigger job (it will continue to remake itself after)
-	async::OpenLoop* newCell = new async::OpenLoopRetrigger(table);
+	async::OpenLoop* newCell = new async::OpenLoopRevent(table);
     // first run in 5 seconds
 	newCell->scheduleFuture(5000); 
 	// add it to the async loop for this partition
@@ -92,11 +102,11 @@ void ReventManager::dispatchMessages() const
 	auto triggers = parts->triggers->getTriggerMap();
 
 	for (auto &t : triggers)
-		table->getMessages()->push(t.second->getName(), t.second->triggerQueue);	
+		parts->table->getMessages()->push(t.second->getName(), t.second->triggerQueue);	
 }
 
 void ReventManager::checkForConfigChange()
 {
-	if (loadVersion != table->getLoadVersion())
+	if (loadVersion != parts->table->getLoadVersion())
 		start();
 }

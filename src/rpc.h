@@ -11,6 +11,7 @@
 #include "rpc_revent.h"
 #include "rpc_query.h"
 #include "rpc_insert.h"
+#include "rpc_status.h"
 
 using namespace openset::async;
 using namespace openset::db;
@@ -29,9 +30,11 @@ namespace openset::comms
 
 		// RpcTable
 		{ "PUT", std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcTable::column_add,{ { 1, "table" }, { 2, "name" } } },
+        { "DELETE", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_drop, { { 1, "table" } } },
 		{ "DELETE", std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"), RpcTable::column_drop,{ { 1, "table" }, { 2, "name" } } },
 		{ "GET", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_describe, { { 1, "table" } } },
 		{ "POST", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_create, { { 1, "table" } } },
+        { "PUT", std::regex(R"(^/v1/table/([a-z0-9_]+)/settings(\/|\?|\#|)$)"), RpcTable::table_settings, { { 1, "table" } } },
 
 		// RpcQuery
 		{ "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/event(\/|\?|\#|)$)"), RpcQuery::event,{ { 1, "table" } } },
@@ -57,6 +60,9 @@ namespace openset::comms
 		{ "PUT", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_init, {} },
 		{ "POST", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_receive, {} },
 		{ "POST", std::regex(R"(^/v1/internode/map_change$)"), RpcInternode::map_change, {} },
+
+        // Status
+        { "GET", std::regex(R"(^/v1/status(\/|\?|\#|)$)"), RpcStatus::status, {} }
 	};
 
 	void Dispatch(openset::web::MessagePtr message);

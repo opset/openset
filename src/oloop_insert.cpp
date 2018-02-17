@@ -14,16 +14,25 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopInsert::OpenLoopInsert(TablePartitioned* tablePartitioned) :
-	tablePartitioned(tablePartitioned),
+OpenLoopInsert::OpenLoopInsert(openset::db::Database::TablePtr table) :
+    OpenLoop(table->getName()),
+	table(table),
+    tablePartitioned(nullptr),
 	runCount(0)
-{
-	Logger::get().info("insert job started for " + tablePartitioned->table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
-}
+{}
 
 void OpenLoopInsert::prepare()
 {
+    tablePartitioned = table->getPartitionObjects(loop->partition, false);
+
+    if (!tablePartitioned)
+    {
+        suicide();
+        return;
+    }
+
 	queueIter = localQueue.end();
+    Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 void OpenLoopInsert::run()
@@ -80,8 +89,12 @@ void OpenLoopInsert::run()
 	}	
 
 	// map a table, partition and entire schema to the Person object
-	person.mapTable(tablePartitioned->table, loop->partition);
-
+	if (!person.mapTable(tablePartitioned->table, loop->partition))
+	{
+	    suicide();
+        return;
+	}
+    
 	// we are going to convert the events into JSON, and in the process
 	// we are going to group the events by their user_ids. 
 	// We will then insert all the events for a given person in one
@@ -95,7 +108,7 @@ void OpenLoopInsert::run()
         queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); 
         ++queueIter, ++count, --tablePartitioned->insertBacklog)
 	{
-		cjson row(*queueIter, strlen(*queueIter));		
+		cjson row(*queueIter, cjson::Mode_e::string);		
 		cjson::releaseStringifyPtr(*queueIter);
 
 		// we will take profile or table to specify the table name

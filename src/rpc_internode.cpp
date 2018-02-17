@@ -13,7 +13,6 @@
 #include "sentinel.h"
 #include "database.h"
 #include "result.h"
-#include "table.h"
 #include "tablepartitioned.h"
 #include "errors.h"
 #include "internoderouter.h"
@@ -39,14 +38,14 @@ enum class internodeFunction_e : int32_t
     cluster_release,
 };
 
-void RpcInternode::is_member(const openset::web::MessagePtr message, const RpcMapping&)
+void RpcInternode::is_member(const openset::web::MessagePtr& message, const RpcMapping&)
 {
     cjson response;
     response.set("part_of_cluster", globals::running->state != openset::config::NodeState_e::ready_wait);
     message->reply(openset::http::StatusCode::success_ok, response);
 }
 
-void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::join_to_cluster(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     globals::mapper->removeRoute(globals::running->nodeId);
 
@@ -104,7 +103,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr message, const
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::add_node(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto requestJson = message->getJSON();
 
@@ -136,16 +135,16 @@ void RpcInternode::add_node(const openset::web::MessagePtr message, const RpcMap
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcInternode::transfer_init(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::transfer_init(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     const auto targetNode = message->getParamString("node");
     const auto partitionId = message->getParamInt("partition");
 
-    std::vector<openset::db::Table*> tables;
+    std::vector<openset::db::Database::TablePtr> tables;
 
     { // get a list of tables
         csLock lock(globals::database->cs);
-        for (const auto t : globals::database->tables)
+        for (const auto &t : globals::database->tables)
             tables.push_back(t.second);
     }
 
@@ -153,9 +152,9 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
 
     globals::async->suspendAsync();
 
-    for (auto t : tables)
+    for (const auto &t : tables)
     {
-        auto part = t->getPartitionObjects(partitionId);
+        auto part = t->getPartitionObjects(partitionId, false);
 
         if (part)
         {
@@ -186,6 +185,9 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
                 // serialize the people
                 part->people.serialize(&mem);
 
+                // serialize pending inserts
+                part->serializeInsertBacklog(&mem);
+
                 blockPtr = mem.flatten();
                 blockSize = mem.getBytes();
             } // HeapStack mem gets release here
@@ -201,6 +203,8 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
                 {},
                 blockPtr,
                 blockSize);
+
+            PoolMem::getPool().freePtr(blockPtr);
 
             if (!responseMessage)
                 Logger::get().error("partition transfer error " + t->getName() + ".");
@@ -220,7 +224,7 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr message, const R
     message->reply(http::StatusCode::success_ok, response);
 }
 
-void RpcInternode::transfer_receive(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::transfer_receive(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     // This is a binary message, it will contain an inbound table for a given partition.
@@ -248,12 +252,13 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr message, cons
         table = globals::database->newTable(tableName);
 
     // make table partition objects
-    auto parts = table->getPartitionObjects(partitionId);
+    auto parts = table->getPartitionObjects(partitionId, true);
     // make async partition object (loop, etc).
     openset::globals::async->initPartition(partitionId);
 
     read += parts->attributes.deserialize(read);
-    parts->people.deserialize(read);
+    read += parts->people.deserialize(read);
+    parts->deserializeInsertBacklog(read);
 
     openset::globals::async->resumeAsync();
 
@@ -267,7 +272,7 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr message, cons
 
 
 
-void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcInternode::map_change(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     // These callbacks allow us to clean objects up when the map is altered.
     // The map doesn't have knowledge of these objects (and shouldn't) and these
@@ -280,7 +285,7 @@ void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcM
         globals::async->assertAsyncLock(); // dbg - assert we are in a lock
 
         for (auto t : globals::database->tables)
-            t.second->getPartitionObjects(partitionId);
+            t.second->getPartitionObjects(partitionId, true);
     };
 
     const auto removePartition = [&](int partitionId)
@@ -313,6 +318,8 @@ void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcM
 
     const auto requestJson = message->getJSON();
 
+    globals::sentinel->setMapChanged();
+
     // map changes require the full undivided attention of the cluster!
     // nothing executing, means no goofy locks and no bad pointers
     openset::globals::mapper->changeMapping(
@@ -321,6 +328,8 @@ void RpcInternode::map_change(const openset::web::MessagePtr message, const RpcM
         removePartition,
         addRoute,
         removeRoute);
+
+    openset::globals::async->balancePartitions();
 
     globals::async->resumeAsync();
 

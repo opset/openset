@@ -5,8 +5,6 @@
 #include "heapstack/heapstack.h"
 
 #include "dbtypes.h"
-#include "attributeblob.h"
-#include "columns.h"
 #include "indexbits.h"
 
 using namespace std;
@@ -28,6 +26,8 @@ namespace openset::db
 
 	struct BitData_s;
 	class Columns;
+    class Table;
+    class AttributeBlob;
 
 #pragma pack(push,1)
 
@@ -36,8 +36,8 @@ namespace openset::db
 		int32_t linId{ 0 }; // linear ID of Person
 		int32_t state{ 0 }; // 1 or 0
 		Attr_changes_s* prev{ nullptr }; // tail linked.
-		Attr_changes_s()
-		{}
+
+		Attr_changes_s() = default;
 
 		Attr_changes_s(const int32_t linId, const int32_t state, Attr_changes_s* prev) :
 			linId(linId), state(state), prev(prev)
@@ -81,6 +81,8 @@ namespace openset::db
 		//Attr_changes_s* changeTail{ nullptr };
 		char* text{ nullptr };
 		int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
+        int32_t ofs{ 0 };
+        int32_t len{ 0 };
 		int32_t comp{ 0 }; // compressed size in bytes
 		int32_t linId{ -1 };
 		char index[1]{ 0 }; // char* (1st byte) of packed index bits struct
@@ -98,8 +100,11 @@ namespace openset::db
 			int32_t column;
 			int64_t hashValue;
 			int32_t ints; // number of int64_t's used when decompressed
+            int32_t ofs;
+            int32_t len;
 			int32_t textSize;
 			int32_t compSize;
+            int32_t linId;
 		};
 #pragma pack(pop)
 
@@ -127,13 +132,13 @@ namespace openset::db
 		ColumnIndex columnIndex{ ringHint_e::lt_1_million };
 		ChangeIndex changeIndex{ ringHint_e::lt_compact };
 		
-
+        Table* table;
 		AttributeBlob* blob;
 		Columns* columns;
 		int partition;
 
-		explicit Attributes(const int parition, AttributeBlob* attributeBlob, Columns* columns);
-		~Attributes() = default;
+		explicit Attributes(const int parition, Table* table, AttributeBlob* attributeBlob, Columns* columns);
+		~Attributes();
 
 		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);
 
@@ -143,7 +148,9 @@ namespace openset::db
 		Attr_s* get(const int32_t column, const int64_t value) const;
 		Attr_s* get(const int32_t column, const string& value) const;
 
-		void setDirty(const int32_t linId, const int32_t column, const int64_t value);
+        void drop(const int32_t column, const int64_t value);
+
+		void setDirty(const int32_t linId, const int32_t column, const int64_t value, const bool on = true);
 		void clearDirty();
 
 		// replace an indexes bits with new ones, used when generating segments

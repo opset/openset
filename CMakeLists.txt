@@ -90,6 +90,8 @@ set(SOURCE_FILES
         src/attributes.h
         src/columns.cpp
         src/columns.h
+		src/columnmapping.cpp
+		src/columnmapping.h
         src/config.cpp
         src/config.h
         src/database.cpp
@@ -116,6 +118,8 @@ set(SOURCE_FILES
         src/message_broker.h
         src/oloop.cpp
         src/oloop.h
+		src/oloop_cleaner.cpp
+		src/oloop_cleaner.h
 		src/oloop_column.cpp
 		src/oloop_column.h
 		src/oloop_histogram.cpp
@@ -147,6 +151,8 @@ set(SOURCE_FILES
         src/result.h
         src/rpc_global.cpp
         src/rpc_global.h
+		src/rpc_insert.cpp
+		src/rpc_insert.h
         src/rpc_internode.cpp
         src/rpc_internode.h
         src/rpc_cluster.cpp
@@ -155,10 +161,10 @@ set(SOURCE_FILES
         src/rpc_table.h
 		src/rpc_revent.cpp
 		src/rpc_revent.h
+		src/rpc_status.cpp
+		src/rpc_status.h
 		src/rpc_query.cpp
 		src/rpc_query.h
-		src/rpc_insert.cpp
-		src/rpc_insert.h
         src/rpc.cpp
         src/rpc.h
 		src/sentinel.h

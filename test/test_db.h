@@ -135,18 +135,15 @@ inline Tests test_db()
 	openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
 	mapper->startRouter();
 
-
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
-
 	return {
 		{
-			"db: create and prepare a table", [database] {
+			"db: create and prepare a table", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test001__");
+				auto table = openset::globals::database->newTable("__test001__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -175,12 +172,12 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: add events to user", [database, user1_raw_inserts]() {
+			"db: add events to user", [=]() {
 
-				auto table = database->getTable("__test001__");
+				auto table = openset::globals::database->getTable("__test001__");
 				ASSERT(table != nullptr);
 
-				auto parts = table->getPartitionObjects(0); // partition zero for test
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				ASSERT(parts != nullptr);
 
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
@@ -192,11 +189,11 @@ inline Tests test_db()
 
 				Person person; // Person overlay for personRaw;
 
-				person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();
@@ -260,10 +257,10 @@ inline Tests test_db()
 			}
 		},
 		{
-			"db: query a user", [database, test1_pyql]() {
+			"db: query a user", [=]() {
 
-				auto table = database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto table = openset::globals::database->getTable("__test001__");
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -289,7 +286,7 @@ inline Tests test_db()
 				// when performing queries
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -346,13 +343,13 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 1);
 				
 				auto totalsNode = dataNodes[0]->xPath("/c");				
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,2,2,6]");
 			}
 		},
 		{
-			"db: query another user", [database, test_pluggable_pyql]() {
+			"db: query another user", [=]() {
 
 				openset::query::ParamVars params;
 
@@ -361,8 +358,8 @@ inline Tests test_db()
 				params["attr_keyword"] = "referral_search";
 				params["root_name"] = "root";
 				
-				auto table = database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto table = openset::globals::database->getTable("__test001__");
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -384,7 +381,7 @@ inline Tests test_db()
 				ASSERT(mappedColumns.size() == 5);
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -438,14 +435,14 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 1);
 
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 
 				ASSERT(values == "[1,4,2]");
 
 			}
 		},
 		{
-			"db: test within()", [database, test_within_pyql]() {
+			"db: test within()", [=]() {
 
 				openset::query::ParamVars params;
 
@@ -454,8 +451,8 @@ inline Tests test_db()
 				params["attr_keyword"] = "referral_search";
 				params["root_name"] = "root";
 
-				auto table = database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0); // partition zero for test				
+				auto table = openset::globals::database->getTable("__test001__");
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
 				openset::query::QueryParser p;
@@ -477,7 +474,7 @@ inline Tests test_db()
 				ASSERT(mappedColumns.size() == 4);
 
 				Person person; // Person overlay for personRaw;
-				person.mapTable(table, 0, mappedColumns);
+				person.mapTable(table.get(), 0, mappedColumns);
 
 				person.mount(personRaw); // this tells the person object where the raw compressed data is
 				person.prepare(); // this actually decompresses
@@ -523,7 +520,7 @@ inline Tests test_db()
                 */
 
 				// NOTE - uncomment if you want to see the results
-				//cout << cjson::Stringify(&resultJSON, true) << endl;
+				//cout << cjson::stringify(&resultJSON, true) << endl;
 
 				auto underScoreNode = resultJSON.xPath("/_");
 				ASSERT(underScoreNode != nullptr);
@@ -547,11 +544,11 @@ inline Tests test_db()
 				ASSERT(dataNodes.size() == 2);
 				
 				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::Stringify(totalsNode);
+				auto values = cjson::stringify(totalsNode);
 				ASSERT(values == "[1,2]");
 
 				totalsNode = dataNodes[1]->xPath("/c");
-				values = cjson::Stringify(totalsNode);
+				values = cjson::stringify(totalsNode);
 				ASSERT(values == "[1,1]");
 				
 			}

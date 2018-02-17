@@ -602,7 +602,7 @@ public:
 		return i;
 	}
 
-	iterator find(const K key) const
+	iterator find(const K& key) const
 	{
 		RingPage* current = root;
 		const uint64_t keyHash = hasher(key);
@@ -645,7 +645,8 @@ public:
 			
 			// set memory to voided value
 			//memset(item, 0xff, sizeof(item));
-            *item = voidItem;
+            memset(&item->first, 0xff, sizeof(K));
+            memset(&item->second, 0xff, sizeof(V));
 
 			--distinct;
 		}

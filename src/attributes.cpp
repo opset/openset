@@ -1,5 +1,8 @@
 #include "attributes.h"
 #include "sba/sba.h"
+#include "table.h"
+#include "columns.h"
+#include "attributeblob.h"
 
 using namespace openset::db;
 
@@ -7,21 +10,43 @@ IndexBits* Attr_s::getBits()
 {
 	auto bits = new IndexBits();
 
-	bits->mount(index, ints, linId);
+	bits->mount(index, ints, ofs, len, linId);
 
 	return bits;
 }
 
-Attributes::Attributes(const int partition, AttributeBlob* attributeBlob, Columns* columns) :
+Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Columns* columns) :
+    table(table),
 	blob(attributeBlob),
 	columns(columns),
 	partition(partition)
 {}
 
+Attributes::~Attributes()
+{
+    for (auto &attr: columnIndex)
+    {
+        PoolMem::getPool().freePtr(attr.second);
+        attr.second = nullptr;
+    }
+
+    for (auto &change: changeIndex)
+    {
+        auto changeIter = change.second;
+        while (changeIter)
+        {
+            const auto t = changeIter->prev;
+            PoolMem::getPool().freePtr(changeIter);
+            changeIter = t;
+        }
+        change.second = nullptr;
+    }
+}
+
 void Attributes::addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state)
 {
 	const auto changeRecord = changeIndex.get({ column, value });
-	Attr_changes_s* changeTail = changeRecord ? changeRecord->second : nullptr;
+	const auto changeTail = changeRecord ? changeRecord->second : nullptr;
 
 	// using placement new here into a POOL buffer
 	const auto change =
@@ -81,14 +106,20 @@ Attr_s* Attributes::get(const int32_t column, const string& value) const
 	return nullptr;
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value)
+void Attributes::drop(const int32_t column, const int64_t value) 
 {
-	addChange(column, value, linId, true);
+    columnIndex.erase({ column, value });
+}
+
+void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value, const bool on)
+{
+	addChange(column, value, linId, on);
 }
 
 void Attributes::clearDirty()
 {
 	IndexBits bits;
+
 
 	for (auto& change : changeIndex)
 	{
@@ -96,10 +127,10 @@ void Attributes::clearDirty()
 
 		if (!attrPair || !attrPair->second)
 			continue;
-
+        
 		const auto attr = attrPair->second;
 
-		bits.mount(attr->index, attr->ints, attr->linId);
+		bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
 		auto t = change.second; // second is the tail pointer for our changes
 
@@ -114,32 +145,43 @@ void Attributes::clearDirty()
 			t = prev;
 		}
 
-		int64_t compBytes = 0; // OUT value via reference
-		int64_t linId;
+        if (!bits.population(bits.ints * 64)) //pop count zero? remove this
+        {
+            //cout << "dropped index item" << endl;
+            drop(change.first.column, change.first.value );
+            PoolMem::getPool().freePtr(attr);
+        }
+        else
+        {
+		    int64_t compBytes = 0; // OUT value via reference
+		    int64_t linId;
+            int32_t ofs, len;
 
-		// compress the data, get it back in a pool ptr
-		const auto compData = bits.store(compBytes, linId);
-		const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
+		    // compress the data, get it back in a pool ptr
+		    const auto compData = bits.store(compBytes, linId, ofs, len, table->indexCompression);
+		    const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
-		// copy header
-		memcpy(destAttr, attr, sizeof(Attr_s));
-		if (compData)
-		{
-			memcpy(destAttr->index, compData, compBytes);
-			// return work buffer from bits.store to the pool
-			PoolMem::getPool().freePtr(compData);
-		}
+		    // copy header
+		    memcpy(destAttr, attr, sizeof(Attr_s));
+		    if (compData)
+		    {
+			    memcpy(destAttr->index, compData, compBytes);
+			    // return work buffer from bits.store to the pool
+			    PoolMem::getPool().freePtr(compData);
+		    }
 
-		destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
-		destAttr->comp = static_cast<int>(compBytes);
-		destAttr->linId = linId;
+		    destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
+		    destAttr->comp = static_cast<int>(compBytes);
+		    destAttr->linId = linId;
+            destAttr->ofs = ofs;
+            destAttr->len = len;
 
-		// if we made a new destination, we have to update the 
-		// index to point to it, and free the old one up.
-		// update the Attr pointer directly in the index
-		attrPair->second = destAttr;
-		PoolMem::getPool().freePtr(attr);
-
+		    // if we made a new destination, we have to update the 
+		    // index to point to it, and free the old one up.
+		    // update the Attr pointer directly in the index
+		    attrPair->second = destAttr;
+		    PoolMem::getPool().freePtr(attr);
+        }
 	}
 	changeIndex.clear();
 }
@@ -155,9 +197,10 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 
 	int64_t compBytes = 0; // OUT value
 	int64_t linId = -1;
+    int32_t len, ofs;
 
 	// compress the data, get it back in a pool ptr, size returned in compBytes
-	const auto compData = newBits->store(compBytes, linId);
+	const auto compData = newBits->store(compBytes, linId, ofs, len);
 	const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
 	// copy header
@@ -173,6 +216,8 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
 	destAttr->comp = static_cast<int32_t>(compBytes); // TODO - check for overflow
 	destAttr->linId = linId;
+    destAttr->ofs = ofs;
+    destAttr->len = len;
 
 	// if we made a new destination, we have to update the 
 	// index to point to it, and free the old one up.
@@ -278,6 +323,9 @@ void Attributes::serialize(HeapStack* mem)
 		blockHeader->column = kv.first.column;
 		blockHeader->hashValue = kv.first.value;
 		blockHeader->ints = kv.second->ints;
+        blockHeader->ofs = kv.second->ofs;
+        blockHeader->len = kv.second->len;
+        blockHeader->linId = kv.second->linId;
 		const auto text = this->blob->getValue(kv.first.column, kv.first.value);
 		blockHeader->textSize = text ? strlen(text) : 0;
 		//blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
@@ -347,7 +395,10 @@ int64_t Attributes::deserialize(char* mem)
 		const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
 		attr->text = blobPtr;
 		attr->ints = blockHeader->ints;
+        attr->ofs = blockHeader->ofs;
+        attr->len = blockHeader->len;
 		attr->comp = blockHeader->compSize;
+        attr->linId = blockHeader->linId;
 
 		// copy the data in
 		memcpy(attr->index, dataPtr, blockHeader->compSize);

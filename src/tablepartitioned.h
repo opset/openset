@@ -35,6 +35,8 @@ namespace openset
 			CriticalSection insertCS;
 			atomic<int32_t> insertBacklog;
 			std::vector<char*> insertQueue;
+
+            int64_t markedForDeleteStamp{ 0 };
 			
 			explicit TablePartitioned(
 				Table* table,
@@ -42,9 +44,21 @@ namespace openset
 				AttributeBlob* attributeBlob,
 				Columns* schema);
 
-			TablePartitioned() = delete;
+			TablePartitioned() = default;
 
-			void setSegmentTTL(std::string segmentName, int64_t TTL)
+		    ~TablePartitioned();
+
+            void markForDeletion()
+            {
+                markedForDeleteStamp = Now();
+            }
+
+            int64_t getMarkedForDeletionStamp() const
+            {
+                return markedForDeleteStamp;
+            }
+
+		    void setSegmentTTL(std::string segmentName, int64_t TTL)
 			{
 				if (TTL < 0)
 					return;
@@ -75,6 +89,9 @@ namespace openset
 					return true;
 				return segmentTTL[segmentName] < Now();
 			}
+
+            void serializeInsertBacklog(HeapStack* mem);
+            int64_t deserializeInsertBacklog(char* mem);
 
 		};
 	};

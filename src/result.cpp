@@ -56,14 +56,7 @@ void ResultSet::makeSortedList()
 		sortedResult.end(),
 		[](const RowPair& left, const RowPair& right ) -> bool
 		{
-			for (auto i = 0; i < keyDepth; ++i)
-			{
-				if (left.first.key[i] > right.first.key[i])
-					return false;
-				if (left.first.key[i] < right.first.key[i])
-					return true;
-			}
-			return true;
+            return left.first < right.first;
 		});
 }
 
@@ -840,20 +833,20 @@ void ResultMuxDemux::jsonResultHistogramFill(
 
             switch (gNode->type())
             {
-            case cjsonType::BOOL:
-            case cjsonType::INT:
+            case cjson::Types_e::BOOL:
+            case cjson::Types_e::INT:
                 value = gNode->getInt() * 10000;
                 isDouble = false;
                 break;
-            case cjsonType::DBL:
+            case cjson::Types_e::DBL:
                 value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
                 isDouble = true;
                 break;
-            case cjsonType::STR:
-            case cjsonType::OBJECT:
-            case cjsonType::ARRAY:
-            case cjsonType::VOIDED:
-            case cjsonType::NUL:
+            case cjson::Types_e::STR:
+            case cjson::Types_e::OBJECT:
+            case cjson::Types_e::ARRAY:
+            case cjson::Types_e::VOIDED:
+            case cjson::Types_e::NUL:
             default:
                 value = 0;;
             }
@@ -881,20 +874,20 @@ void ResultMuxDemux::jsonResultHistogramFill(
 
             switch (gNode->type())
             {
-            case cjsonType::BOOL:
-            case cjsonType::INT:
+            case cjson::Types_e::BOOL:
+            case cjson::Types_e::INT:
                 value = gNode->getInt() * 10000;
                 isDouble = false;
                 break;
-            case cjsonType::DBL:
+            case cjson::Types_e::DBL:
                 value = static_cast<int64_t>(gNode->getDouble() * 10000.0);
                 isDouble = true;
                 break;
-            case cjsonType::STR:
-            case cjsonType::OBJECT:
-            case cjsonType::ARRAY:
-            case cjsonType::VOIDED:
-            case cjsonType::NUL:
+            case cjson::Types_e::STR:
+            case cjson::Types_e::OBJECT:
+            case cjson::Types_e::ARRAY:
+            case cjson::Types_e::VOIDED:
+            case cjson::Types_e::NUL:
             default:
                 value = 0;;
             }
@@ -911,7 +904,7 @@ void ResultMuxDemux::jsonResultHistogramFill(
                         overflow[c] += cNodes[0]->getInt();
                 }
 
-                n->setType(cjsonType::VOIDED);
+                n->setType(cjson::Types_e::VOIDED);
             }
             else
             {
@@ -963,28 +956,28 @@ void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e 
 
         switch (colLeft->at(column)->type())
         {
-            case cjsonType::BOOL: 
-            case cjsonType::INT: 
+            case cjson::Types_e::BOOL: 
+            case cjson::Types_e::INT: 
                 if (sort == ResultSortOrder_e::Asc)
                     return (colLeft->at(column)->getInt() < colRight->at(column)->getInt());
                 else
                     return (colLeft->at(column)->getInt() > colRight->at(column)->getInt());
-            case cjsonType::DBL: 
+            case cjson::Types_e::DBL: 
                 if (sort == ResultSortOrder_e::Asc)
                     return (colLeft->at(column)->getDouble() < colRight->at(column)->getDouble());
                 else
                     return (colLeft->at(column)->getDouble() > colRight->at(column)->getDouble());
-            case cjsonType::STR: 
+            case cjson::Types_e::STR: 
                 if (sort == ResultSortOrder_e::Asc)
                     return (colLeft->at(column)->getString() < colRight->at(column)->getString());
                 else
                     return (colLeft->at(column)->getString() > colRight->at(column)->getString());
             break;           
 
-            case cjsonType::OBJECT:
-            case cjsonType::ARRAY: 
-            case cjsonType::VOIDED: 
-            case cjsonType::NUL: 
+            case cjson::Types_e::OBJECT:
+            case cjson::Types_e::ARRAY: 
+            case cjson::Types_e::VOIDED: 
+            case cjson::Types_e::NUL: 
             default: 
                 return false;
         }
@@ -1003,40 +996,40 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
 
         switch (colLeft->type())
         {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
+        case cjson::Types_e::BOOL:
+        case cjson::Types_e::INT:
             leftValue = colLeft->getInt();
             break;
-        case cjsonType::DBL:
+        case cjson::Types_e::DBL:
             leftValue = colLeft->getDouble();
             break;
-        case cjsonType::STR:
+        case cjson::Types_e::STR:
             leftValue = toLowerCase(colLeft->getString());
             break;
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
+        case cjson::Types_e::OBJECT:
+        case cjson::Types_e::ARRAY:
+        case cjson::Types_e::VOIDED:
+        case cjson::Types_e::NUL:
         default:
             leftValue = 0;;
         }
 
         switch (colRight->type())
         {
-        case cjsonType::BOOL:
-        case cjsonType::INT:
+        case cjson::Types_e::BOOL:
+        case cjson::Types_e::INT:
             rightValue = colRight->getInt();
             break;
-        case cjsonType::DBL:
+        case cjson::Types_e::DBL:
             rightValue = colRight->getDouble();
             break;
-        case cjsonType::STR:
+        case cjson::Types_e::STR:
             rightValue = toLowerCase(colRight->getString());
             break;
-        case cjsonType::OBJECT:
-        case cjsonType::ARRAY:
-        case cjsonType::VOIDED:
-        case cjsonType::NUL:
+        case cjson::Types_e::OBJECT:
+        case cjson::Types_e::ARRAY:
+        case cjson::Types_e::VOIDED:
+        case cjson::Types_e::NUL:
         default:
             leftValue = 0;;
         }

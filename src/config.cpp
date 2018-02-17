@@ -57,24 +57,7 @@ void Config::setState(NodeState_e state)
 void Config::setRootPath(string path)
 {
 	this->path = (path.back() != '/') ? path + "/" : path;
-
-	try
-	{
-		globals::running = this;
-
-		if (!openset::IO::File::FileExists(path + "openset.json"))
-		{
-			Logger::get().info("existing configuration available");
-			existingConfig = true;
-			// load the config version saved to disk for try restart
-			configVersion = getExistingConfigVersion();
-		}
-	}
-	catch (std::string e)
-	{
-		Logger::get().fatal("could not configure");
-	}
-
+    globals::running = this;
 }
 
 void Config::updateConfigVersion(int64_t remoteConfigId)
@@ -96,34 +79,3 @@ void Config::setNodeName(std::string name)
 	nodeId = MakeHash(name);
 }
 
-void Config::save() const
-{
-	csLock lock(cs); // scoped lock
-
-	openset::IO::Directory::mkdir(path);
-	cjson doc;
-	doc.set("node_id", nodeId);
-	doc.set("partitions", partitionMax);
-	doc.set("config_version", configVersion);
-	doc.set("data_path", path + "data/");
-	cjson::toFile(path + "openset.json", &doc, true);
-}
-
-int64_t Config::getExistingConfigVersion() const
-{
-	csLock lock(cs); // scoped lock
-	cjson doc(path + "openset.json");
-	return doc.xPathInt("/config_version", 0);
-}
-
-void Config::load()
-{
-	Logger::get().info("loading settings");
-
-	csLock lock(cs); // scoped lock
-	cjson doc(path + "openset.json");
-	nodeId = doc.xPathInt("/node_id", 0);
-	partitionMax = doc.xPathInt("partitions", 0);
-	configVersion = doc.xPathInt("/config_version", Now());
-	path = doc.xPathString("/data_path", "./tables");
-}

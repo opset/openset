@@ -67,8 +67,8 @@ namespace openset
 			 * \param[in] tablePtr pointer to a Table object
 			 * \param[in] Partition number this object lives in
 			 */
-			void mapTable(Table* tablePtr, int Partition);
-			void mapTable(Table* tablePTr, int Partition, vector<string>& columnNames);
+			bool mapTable(Table* tablePtr, int Partition);
+			bool mapTable(Table* tablePTr, int Partition, vector<string>& columnNames);
 
 			/**
 			 * \brief maps a personData_s object to the Person object

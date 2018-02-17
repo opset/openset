@@ -2,11 +2,13 @@
 
 #include "common.h"
 #include "people.h"
+#include "database.h"
 #include "threads/locks.h"
 #include "columns.h"
 #include "message_broker.h"
 #include "querycommon.h"
 #include "var/var.h"
+#include "columnmapping.h"
 
 using namespace std;
 
@@ -22,6 +24,7 @@ namespace openset
 	{
 
 		class Database;
+        class ColumnMapping;
 		class TablePartitioned;
 
 		struct SegmentTtl_s
@@ -79,31 +82,49 @@ namespace openset
 
 			// shared objects
 			Columns columns;
+            ColumnMapping columnMap;
 			openset::revent::MessageBroker messages;
 
 			using zMapStr = std::unordered_map<string, int>;
 			using zMapHash = std::unordered_map<int64_t, int>;
+            using PartitionMap = unordered_map<int, TablePartitioned*>;
+            using ZombiePartitions = std::queue<TablePartitioned*>;
 
 			zMapStr zOrderStrings;
 			zMapHash zOrderInts;
 			std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
-			TablePartitioned* partitions[PARTITION_MAX];
+			PartitionMap partitions;
+            ZombiePartitions zombies;
 			int64_t loadVersion;
 
 		public:
-			int rowCull{ 5000 }; // remove oldest rows if more than rowCull
-			int64_t stampCull{ 86'400'000LL * 365LL }; // auto cull older than stampCull
+
+            using TablePtr = shared_ptr<Table>;
+
+            bool deleted{ false };
+
+            // Table Settings
+			int eventMax{ 5000 }; // remove oldest rows if more than rowCull
+            int64_t tzOffset{ 0 }; // UTC
+			int64_t eventTtl{ 86'400'000LL * 365LL * 5 }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
+            int64_t maintInterval{ 86'400'000LL }; // trim, index, clean, etc (daily)
+            int64_t reventInterval{ 60'000 }; // check for re-events every 60 seconds
+            int64_t segmentInterval{ 60'000 }; // update segments every 60 seconds
+            int indexCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
+            int personCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
 
-			explicit Table(const string name, openset::db::Database* database);
-
+			explicit Table(const string &name, openset::db::Database* database);
 			~Table();
 
+            TablePtr getSharedPtr() const;
+
+            void initialize();
 			void createMissingPartitionObjects();
 
-			TablePartitioned* getPartitionObjects(const int32_t partition);
+			TablePartitioned* getPartitionObjects(const int32_t partition, const bool create);
 			void releasePartitionObjects(const int32_t partition);
 
 			int64_t getSessionTime() const
@@ -114,6 +135,11 @@ namespace openset
 			inline Columns* getColumns()
 			{
 				return &columns;
+			}
+
+            inline ColumnMapping* getColumnMapper()
+			{
+			    return &columnMap;
 			}
 
 			inline zMapHash* getZOrderHashes() 
@@ -198,7 +224,7 @@ namespace openset
 				return &triggerConf;
 			}
 
-			void setSegmentRefresh(std::string segmentName, const query::Macro_s macros, const int64_t refreshTime)
+			void setSegmentRefresh(std::string& segmentName, const query::Macro_s& macros, const int64_t refreshTime)
 			{
 				csLock lock(segmentCS);
 				segmentRefresh.emplace(segmentName, SegmentRefresh_s{ segmentName, macros, refreshTime });
@@ -210,13 +236,21 @@ namespace openset
 				segmentTTL.emplace(segmentName, SegmentTtl_s{ segmentName, TTL });
 			}
 
-			// serialize table structure, pk, trigger names, into cjson branch
-			void serializeTable(cjson* doc);
-			// used by intra-node config to serialize the transfer of 
-			void serializeTriggers(cjson* doc);
+            
 
-			void deserializeTable(cjson* doc);
-			void deserializeTriggers(cjson* doc);
+			void serializeTable(cjson* doc);
+			void serializeTriggers(cjson* doc);
+            void serializeSettings(cjson* doc) const;
+
+			void deserializeTable(const cjson* doc);
+			void deserializeTriggers(const cjson* doc);
+            void deserializeSettings(const cjson* doc);
+
+		private:
+
+            void clearZombies();
+
+
 		};
 	};
 };

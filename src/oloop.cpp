@@ -5,9 +5,10 @@ using namespace openset::async;
 
 int64_t totalRuns = 0;
 
-OpenLoop::OpenLoop(oloopPriority_e priority) :
+OpenLoop::OpenLoop(std::string owningTable, oloopPriority_e priority) :
 	priority(priority),
 	state(oloopState_e::running),
+    owningTable(std::move(owningTable)),
 	runAt(0),
 	runStart(0),
 	prepared(false),

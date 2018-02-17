@@ -7,7 +7,7 @@ AsyncLoop::AsyncLoop(AsyncPool* asyncPool, const int partitionId, const int work
 	queueSize(0),
 	loopCount(0),
 	asyncPool(asyncPool),
-	runTime(50),
+	runTime(100),
 	partition(partitionId),
 	worker(workerId)
 {}
@@ -54,6 +54,30 @@ void AsyncLoop::queueCell(OpenLoop* work)
 	asyncPool->workerInfo[worker].conditional.notify_one();
 }
 
+void AsyncLoop::purgeByTable(const std::string& tableName)
+{
+    csLock lock(pendLock);
+
+    vector<OpenLoop*> newActive;
+    for (auto a: active)
+        if (a->owningTable != tableName)
+            newActive.push_back(a);
+        else
+            delete a;
+
+    active = std::move(newActive);
+
+    vector<OpenLoop*> newQueued;
+    for (auto q: queued)
+        if (q->owningTable != tableName)
+            newQueued.push_back(q);
+        else
+            delete q;
+
+    queued = std::move(newQueued);
+
+}
+
 // this will add any queued jobs to the
 // active Loop. This is particularly useful 
 // because a job Cell can spawn more job cells
@@ -87,6 +111,7 @@ bool AsyncLoop::run(int64_t &nextRun)
         return false;
 
 	vector<OpenLoop*> rerun;
+    rerun.reserve(active.size());
 
 	// this is the inside of our open ended Loop
 	// it will call each job that is ready to run

@@ -177,14 +177,12 @@ inline Tests test_zorder()
 	// put engine in a wait state otherwise we will throw an exception
 	async->suspendAsync();
 
-	auto database = new Database();
-
 	return {
 		{
-			"z-order: test event z-order", [database, user1_raw_inserts] {
+			"z-order: test event z-order", [=] {
 
 				// prepare our table
-				auto table = database->newTable("__test001__");
+				auto table = openset::globals::database->newTable("__testzorder__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -206,16 +204,16 @@ inline Tests test_zorder()
 				zOrderStrings->emplace("cappa", 2);
 				zOrderInts->emplace(MakeHash("cappa"), 2);
 				
-				auto parts = table->getPartitionObjects(0); // partition zero for test
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
 
-				person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 				person.mount(personRaw);
 
 				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 				// get vector of cjson nodes for each element in root array
 				auto events = insertJSON.getNodes();

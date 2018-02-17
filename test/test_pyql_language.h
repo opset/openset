@@ -761,16 +761,16 @@ inline Tests test_pyql_language()
 					columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, 0);
 					columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, 0);
 
-					auto parts = table->getPartitionObjects(0); // partition zero for test
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test
 					auto personRaw = parts->people.getmakePerson("user1@test.com");
 
 					Person person; // Person overlay for personRaw;
 
-					person.mapTable(table, 0); // will throw in DEBUG if not called before mount
+					person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 					person.mount(personRaw);
 
 					// parse the user1_raw_inserts raw JSON text block
-					cjson insertJSON(user1_raw_inserts, strlen(user1_raw_inserts));
+					cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
 					// get vector of cjson nodes for each element in root array
 					auto events = insertJSON.getNodes();
@@ -799,7 +799,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -824,7 +824,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -849,7 +849,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -874,7 +874,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -896,7 +896,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -921,7 +921,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -947,7 +947,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -972,7 +972,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -998,7 +998,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1025,7 +1025,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1051,7 +1051,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1078,7 +1078,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1104,7 +1104,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1131,7 +1131,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1157,7 +1157,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1184,7 +1184,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1204,7 +1204,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1231,7 +1231,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1257,7 +1257,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1284,7 +1284,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1309,7 +1309,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1336,7 +1336,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1360,7 +1360,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1387,7 +1387,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1410,7 +1410,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1437,7 +1437,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1460,7 +1460,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1487,7 +1487,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1510,7 +1510,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1537,7 +1537,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1560,7 +1560,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1587,7 +1587,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses
@@ -1609,7 +1609,7 @@ inline Tests test_pyql_language()
 					auto database = openset::globals::database;
 
 					auto table = database->getTable("__test003__");
-					auto parts = table->getPartitionObjects(0); // partition zero for test				
+					auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 					openset::query::Macro_s queryMacros; // this is our compiled code block
 					openset::query::QueryParser p;
@@ -1636,7 +1636,7 @@ inline Tests test_pyql_language()
 					// when performing queries
 
 					Person person; // Person overlay for personRaw;
-					person.mapTable(table, 0, mappedColumns);
+					person.mapTable(table.get(), 0, mappedColumns);
 
 					person.mount(personRaw); // this tells the person object where the raw compressed data is
 					person.prepare(); // this actually decompresses

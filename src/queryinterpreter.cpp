@@ -5,6 +5,7 @@
 #include "time/epoch.h"
 #include "table.h"
 #include "columns.h"
+#include "grid.h"
 
 //const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
@@ -2792,7 +2793,9 @@ void openset::query::Interpreter::execReset()
 	// clear the flags
 	loopCount = 0;
 	recursion = 0;
-	eventCount = -1;
+    nestDepth = 0;
+    breakDepth = 0;
+	eventCount = -1;  
     inReturn = false;
 	jobState = false;
 	loopState = LoopState_e::run;

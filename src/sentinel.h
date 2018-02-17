@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cjson/cjson.h"
 
 #include "internodemapping.h"
 #include "internoderouter.h"
@@ -71,26 +72,48 @@ namespace openset
 			// they come back from the dead, we have to keep track of that
 			std::unordered_set<int64_t> deadNodes;
 
-			bool inErrorState;
-			bool inXferPurge;
+            int64_t lastMapChange{0};
+            bool inBalance{true};
 
 		public:
 			explicit Sentinel(Mapper* mapper, db::Database* database);
 
-			~Sentinel();
+			~Sentinel() = default;
 
 			// is this node the teamster
 			bool isSentinel() const;
+            bool isBalanced() const;
 			int64_t getSentinel() const;
 			bool failCheck();
 
-			bool isDeadRoute(int64_t nodeId) const
-			{
-				csLock lock(cs_dead);
-				return deadNodes.count(nodeId);
-			}
+            void setMapChanged()
+            {
+                lastMapChange = Now();
+            }
 
-			static void dropLocalPartition(int partitionId);
+            bool wasDuringMapChange(const int64_t startTime, const int64_t endTime) const
+            {
+                // started before and ended after change (change during)
+                if (startTime - 500 < lastMapChange && endTime + 500 > lastMapChange)
+                    return true;
+
+                // started around 100ms of map change                
+                if (startTime > lastMapChange - 500 && startTime < lastMapChange + 500)
+                    return true;
+
+                // ended around 100ms of map change
+                if (endTime > lastMapChange - 500 && endTime < lastMapChange + 500)
+                    return true;
+
+                return false;
+            }
+
+			static void dropLocalPartition(const int partitionId);
+            static cjson getPartitionStatus();
+
+            bool isClusterComplete() const;
+            int getFailureTolerance() const;
+            int getRedundancyLevel() const;
 
 		private:
 
@@ -102,7 +125,7 @@ namespace openset
 
 			bool tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const;
 
-			bool broadcastMap() const;
+			bool broadcastMap();
 			void runMonitor();
 		};
 	};

@@ -11,12 +11,12 @@ using namespace openset::result;
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopQuery::OpenLoopQuery(
 	ShuttleLambda<CellQueryResult_s>* shuttle,
-	Table* table, 
+	Database::TablePtr table, 
 	Macro_s macros, 
 	openset::result::ResultSet* result,
 	int instance) :
 
-	OpenLoop(oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
+	OpenLoop(table->getName(), oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
 	macros(std::move(macros)),
 	shuttle(shuttle),
 	table(table),
@@ -46,11 +46,18 @@ OpenLoopQuery::~OpenLoopQuery()
 
 void OpenLoopQuery::prepare()
 {
-	parts = table->getPartitionObjects(loop->partition);
+	parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
 	maxLinearId = parts->people.peopleCount();
 
 	// generate the index for this query	
-	indexing.mount(table, macros, loop->partition, maxLinearId);
+	indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 	bool countable;
 	index = indexing.getIndex("_", countable);
 	population = index->population(maxLinearId);
@@ -63,9 +70,9 @@ void OpenLoopQuery::prepare()
 	{
 		std::vector<IndexBits*> segments;
 
-		for (const auto segmentName : macros.segments)
+		for (const auto &segmentName : macros.segments)
 		{
-            if (segmentName == "*")
+            if (segmentName == "*"s)
             {
                 auto tBits = new IndexBits();
                 tBits->makeBits(maxLinearId, 1);
@@ -103,7 +110,13 @@ void OpenLoopQuery::prepare()
 
     // map table, partition and select schema columns to the Person object
 	auto mappedColumns = interpreter->getReferencedColumns();
-	person.mapTable(table, loop->partition, mappedColumns);
+	if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+	{
+        partitionRemoved();
+	    suicide();
+        return;
+	}
+
 	person.setSessionTime(macros.sessionTime);
 	
 	startTime = Now();

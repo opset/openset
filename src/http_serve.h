@@ -1,6 +1,10 @@
 #pragma once
 
+#include <string>
+#include <mutex>
+#include <condition_variable>
 #include <queue>
+#include <atomic>
 #include "server_http.hpp"
 #include "sba/sba.h"
 #include "cjson/cjson.h"
@@ -36,19 +40,19 @@ namespace openset::web
 		ReplyCB cb;
 	public:
 		Message(
-			http::CaseInsensitiveMultimap header,
-			http::CaseInsensitiveMultimap query,
-			const std::string method,
-			const std::string path,
-			const std::string queryString,
+			const http::CaseInsensitiveMultimap& header,
+			const http::CaseInsensitiveMultimap& query,
+			const std::string& method,
+			const std::string& path,
+			const std::string& queryString,
 			char* payload,
 			const size_t payloadLength,
-			const ReplyCB cb) :
-			header(std::move(header)),
-			query(std::move(query)),
-			method(std::move(method)),
-			path(std::move(path)),
-			queryString(std::move(queryString)),
+			const ReplyCB& cb) :
+			header(header),
+			query(query),
+			method(method),
+			path(path),
+			queryString(queryString),
 			payload(payload),
 			payloadLength(payloadLength),
 			cb(cb)
@@ -91,35 +95,35 @@ namespace openset::web
 			return query;
 		}
 
-        bool isParam(const std::string name)
+        bool isParam(const std::string& name)
 		{
             if (const auto found = query.find(name); found != query.end())
                 return true;
             return false;
 		}
 
-		std::string getParamString(const std::string name, const std::string defaultValue = ""s)
+		std::string getParamString(const std::string& name, const std::string& defaultValue = ""s)
 		{
 			if (const auto found = query.find(name); found != query.end())
 				return found->second;
 			return defaultValue;
 		}
 
-		bool getParamBool(const std::string name, const bool defaultValue = false)
+		bool getParamBool(const std::string& name, const bool defaultValue = false)
 		{
 			if (const auto found = query.find(name); found != query.end())
 				return (found->second == "1" || std::tolower(found->second[0]) == 't') ? true : false;
 			return defaultValue;
 		}
 
-		int64_t getParamInt(const std::string name, const int64_t defaultValue = 0)
+		int64_t getParamInt(const std::string& name, const int64_t defaultValue = 0)
 		{
 			if (const auto found = query.find(name); found != query.end())
 				return std::stoll(found->second);
 			return defaultValue;
 		}
 
-		double getParamDouble(const std::string name, const double defaultValue = 0)
+		double getParamDouble(const std::string& name, const double defaultValue = 0)
 		{
 			if (const auto found = query.find(name); found != query.end())
 				return std::stod(found->second);
@@ -131,11 +135,11 @@ namespace openset::web
             if (!payload || !payloadLength)
             {
                 cjson t;
-                return std::move(t);
+                return t;
             }
 
-			cjson json(string{ payload, payloadLength }, payloadLength);
-			return std::move(json);
+			cjson json(string{ payload, payloadLength }, cjson::Mode_e::string);
+			return json;
 		}
 
 		void reply(const http::StatusCode status, const char* replyData, const size_t replyLength) const
@@ -155,7 +159,7 @@ namespace openset::web
 			if (cb)
 			{
 				int64_t length;
-				const auto buffer = cjson::StringifyCstr(&message, length, false);
+				const auto buffer = cjson::stringifyCstr(&message, length, false);
 				cb(status, buffer, length);
 				cjson::releaseStringifyPtr(buffer);
 			}

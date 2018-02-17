@@ -32,6 +32,58 @@ openset::mapping::Mapper::Mapper():
 openset::mapping::Mapper::~Mapper() 
 {}
 
+openset::mapping::Mapper::RestConnection openset::mapping::Mapper::getCachedConnection(const int64_t routeId)
+{
+    csLock lock(poolCs);
+
+    if (const auto iter = restPool.find(routeId); iter != restPool.end())
+    {
+        PoolVector newPool;
+
+        const auto now = Now();
+        for (auto &c : iter->second)
+            if (c.stamp > now - 120'000) 
+                newPool.emplace_back(c);
+
+        iter->second = std::move(newPool);
+
+        if (iter->second.empty())
+        {
+            //Logger::get().debug("new connection");
+            return nullptr;
+        }
+
+        //Logger::get().debug("connection recycle");
+
+        auto info = iter->second.back();
+        iter->second.pop_back();
+        return info.connection; 
+    }
+
+    //Logger::get().debug("new connection");
+ 
+    return nullptr;
+
+}
+
+void openset::mapping::Mapper::returnCachedConnection(RestConnection connection)
+{
+    // don't cache on route 0 - which are adhoc connections
+    if (connection->getRouteId() == 0)
+        return;
+
+    csLock lock(poolCs);
+
+    if (auto iter = restPool.find(connection->getRouteId()); iter != restPool.end())
+    {
+        iter->second.push_back(ConnectionPoolItem_s{Now(), connection});
+    }
+    else
+    {
+        restPool[connection->getRouteId()] = PoolVector{ConnectionPoolItem_s{Now(), connection}};
+    }
+}
+
 int64_t openset::mapping::Mapper::getSlotNumber()
 {
 	++slotCounter;
@@ -50,28 +102,36 @@ void openset::mapping::Mapper::addRoute(const std::string routeName, const int64
 		
 	// create it if it doesn't exist
 	if (const auto rt = routes.find(routeId); rt == routes.end())
+    {
 		if (routeId == globals::running->nodeId)
-			routes.insert({ routeId,{ globals::running->host == 
-                "0.0.0.0" 
-			        ? "127.0.0.1" 
-			        : globals::running->host, globals::running->port } }).first; // local route answers on local ip:port
+        {
+            const auto host = (globals::running->host == "0.0.0.0"s)
+			        ? "127.0.0.1"s 
+			        : globals::running->host;
+
+			routes.insert({ routeId,{ host, globals::running->port } }).first; // local route answers on local ip:port
+        }
 		else
+        {
 			routes.insert({ routeId, { ip, port }}).first; // make it
+        }
+    }
 }
 
 void openset::mapping::Mapper::removeRoute(const int64_t routeId)
 {
 	csLock lock(cs); // lock 
 
-	const auto rt = routes.find(routeId);
-
 	// is it missing?
-	if (rt != routes.end())
+	if (const auto rt = routes.find(routeId); rt != routes.end())
 	{
 		routes.erase(rt);
 		// clear the name out - will be in dictionary
 		names.erase(names.find(routeId));
 	}
+    
+    if (const auto rp = restPool.find(routeId); rp != restPool.end())
+        restPool.erase(rp);
 }
 
 std::string openset::mapping::Mapper::getRouteName(const int64_t routeId)
@@ -81,7 +141,7 @@ std::string openset::mapping::Mapper::getRouteName(const int64_t routeId)
 	return "startup";
 }
 
-int64_t openset::mapping::Mapper::getRouteId(const std::string routeName)
+int64_t openset::mapping::Mapper::getRouteId(const std::string& routeName)
 {
 	for (auto &info : names)
 		if (info.second == routeName)
@@ -95,8 +155,12 @@ openset::web::RestPtr openset::mapping::Mapper::getRoute(const int64_t routeId)
 	
 	if (const auto rt = routes.find(routeId); rt == routes.end())
 		return nullptr;
-	else
-		return std::make_shared<openset::web::Rest>(rt->second.first + ":" + to_string(rt->second.second));
+    else
+    {
+        if (auto cachedRoute = getCachedConnection(routeId); cachedRoute != nullptr)
+            return cachedRoute;	
+        return std::make_shared<openset::web::Rest>(routeId, rt->second.first + ":" + to_string(rt->second.second));
+    }
 }
 
 bool openset::mapping::Mapper::isRoute(const int64_t routeId)
@@ -113,17 +177,25 @@ bool openset::mapping::Mapper::isRouteNoLock(const int64_t routeId)
 // send a message to a destination
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const char* payload,
 	const size_t length,
 	const openset::web::RestCbBin callback)
 {
+    auto rest = getRoute(route); 
+
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
 	// check if there is a route here
-	if (auto rest = getRoute(route); rest)
+	if (rest)
 	{
-		rest->request(method, path, params, payload, length, callback);
+		rest->request(method, path, params, payload, length, callbackWrapper);
 		return true;
 	}
 	return false;
@@ -131,16 +203,24 @@ bool openset::mapping::Mapper::dispatchAsync(
 
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const std::string& payload,
 	const openset::web::RestCbBin callback)
 {
+    auto rest = getRoute(route); 
+
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
 	// check if there is a route here
-	if (auto rest = getRoute(route); rest)
+	if (rest)
 	{
-		rest->request(method, path, params, &payload[0], payload.length(), callback);
+		rest->request(method, path, params, &payload[0], payload.length(), callbackWrapper);
 		return true;
 	}
 	return false;
@@ -148,18 +228,26 @@ bool openset::mapping::Mapper::dispatchAsync(
 
 bool openset::mapping::Mapper::dispatchAsync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	cjson& payload,
 	const openset::web::RestCbBin callback)
 {
-	// check if there is a route here
-	auto json = cjson::Stringify(&payload);
+    auto rest = getRoute(route); 
 
-	if (auto rest = getRoute(route); rest)
+    const auto callbackWrapper = [&](const http::StatusCode code, const bool error, char* data, const size_t size)
+    {
+        returnCachedConnection(rest);
+        callback(code, error, data, size);  
+    };
+
+	// check if there is a route here
+	auto json = cjson::stringify(&payload);
+
+	if (rest)
 	{
-		rest->request(method, path, params, &json[0], json.length(), callback);
+		rest->request(method, path, params, &json[0], json.length(), callbackWrapper);
 		return true;
 	}
 	return false;
@@ -167,9 +255,9 @@ bool openset::mapping::Mapper::dispatchAsync(
 
 openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const char* payload,
 	const size_t length)
 {
@@ -181,7 +269,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	size_t resultSize;
     http::StatusCode resultStatus;
 
-	auto doneCb = [&ready, &nextReady, &resultData, &resultSize, &resultStatus](const http::StatusCode status, const bool error, char* data, const size_t size)
+	const auto doneCb = [&ready, &nextReady, &resultData, &resultSize, &resultStatus](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		resultData = data;
 		resultSize = size;
@@ -197,7 +285,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	while (!ready)
 	{
 		unique_lock<std::mutex> lock(nextLock);
-		nextReady.wait_for(lock, 250ms, [&ready, route]()
+		nextReady.wait_for(lock, 250ms, [&ready]()
 		{
 			return ready;
 		});
@@ -208,13 +296,13 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 
 openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	const int64_t route,
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	cjson& payload)
 {
-	auto json = cjson::Stringify(&payload);
-	return std::move(dispatchSync(route, method, path, std::move(params), &json[0], json.length()));
+	auto json = cjson::stringify(&payload);
+	return dispatchSync(route, method, path, params, &json[0], json.length());
 }
 
 class dispatchState
@@ -246,9 +334,9 @@ public:
 };
 
 openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	const char* data, 
 	const size_t length,
 	const bool internalDispatch)
@@ -261,7 +349,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	Responses result;
 	auto callbackState = new dispatchState();
 
-	auto doneCb = [callbackState, &responseCs, &result, &continueReady](const http::StatusCode status, const bool error, char* data, const size_t size)
+	const auto doneCb = [callbackState, &responseCs, &result, &continueReady](const http::StatusCode status, const bool error, char* data, const size_t size)
 	{
 		if (!callbackState->isActive())
 		{
@@ -300,15 +388,21 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 		tRoutes = routes;
 	}
 	
+
+    
 	// dispatchAsync to all our nodes
 	{
-		for (const auto r : tRoutes)
+		for (const auto& r : tRoutes)
 		{
 			// don't call this node unless we want to
 			if (!internalDispatch && r.first == globals::running->nodeId)
 				continue;
 
-			dispatchAsync(r.first, method, path, params, data, length, doneCb);
+			if (!dispatchAsync(r.first, method, path, params, data, length, doneCb))
+			{
+			    result.routeError = true;
+                break;
+			}
 			callbackState->incrRequest();
 
 			cachedRoutes.push_back(r.first);
@@ -319,7 +413,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	while (!callbackState->isComplete())
 	{
 		unique_lock<std::mutex> lock(continueLock);
-		continueReady.wait_for(lock, 500ms, [callbackState]()
+		continueReady.wait_for(lock, 50ms, [callbackState]()
 		{
 			return callbackState->isComplete();
 		});
@@ -339,6 +433,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 	// this callback is done
 	callbackState->deactivate();
+
 	if (callbackState->isComplete())
 		delete callbackState;
 
@@ -346,14 +441,14 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 }
 
 openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
-	const std::string method,
-	const std::string path,
-	const openset::web::QueryParams params,
+	const std::string& method,
+	const std::string& path,
+	const openset::web::QueryParams& params,
 	cjson& json,
 	const bool internalDispatch)
 {
 	int64_t jsonLength;
-	const auto jsonText = cjson::StringifyCstr(&json, jsonLength);
+	const auto jsonText = cjson::stringifyCstr(&json, jsonLength);
 
 	auto result = dispatchCluster(method, path, params, jsonText, jsonLength, internalDispatch);
 
@@ -363,6 +458,12 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
 void openset::mapping::Mapper::releaseResponses(Responses& responseSet)
 {
+    for (auto &r: responseSet.responses)
+    {
+        PoolMem::getPool().freePtr(r.data);
+        r.data = nullptr;
+    }
+
 	responseSet.responses.clear();
 }
 
@@ -432,21 +533,7 @@ std::vector<int64_t> openset::mapping::Mapper::getActiveRoutes()
 	return activeRoutes;
 }
 
-std::vector<int64_t> openset::mapping::Mapper::getFailedRoutes() 
-{
-	std::vector<int64_t> deadRoutes;
-
-	/* FIX
-	csLock lock(cs);
-	for (auto& r : routes)
-		if (!r.second->isLocalLoop && !r.second->isOpen())
-			deadRoutes.push_back(r.first);
-	*/
-
-	return deadRoutes;
-}
-
-std::vector<std::pair<int64_t, int>> openset::mapping::Mapper::getPartitionCountsByRoute(std::unordered_set<NodeState_e> states)
+openset::mapping::Mapper::PartitionCounts openset::mapping::Mapper::getPartitionCountsByRoute(const std::unordered_set<NodeState_e>& states)
 {
 	auto activeRoutes = getActiveRoutes();
 
@@ -471,7 +558,7 @@ std::vector<std::pair<int64_t, int>> openset::mapping::Mapper::getPartitionCount
 	}
 
 	sort(result.begin(), result.end(),
-		[](const std::pair<int64_t, int> a, const std::pair<int64_t, int> b)
+		[](const std::pair<int64_t, int>& a, const std::pair<int64_t, int>& b)
 	{
 		return a.second > b.second;
 	});
@@ -481,10 +568,10 @@ std::vector<std::pair<int64_t, int>> openset::mapping::Mapper::getPartitionCount
 
 void openset::mapping::Mapper::changeMapping(
 	const cjson& config, 
-	const std::function<void(int)> addPartition_cb,
-	const std::function<void(int)> deletePartition_cb, 
-	const std::function<void(string, int64_t, string, int)> addRoute_cb,
-	const std::function<void(int64_t)> deleteRoute_cb)
+	const std::function<void(int)>& addPartition_cb,
+	const std::function<void(int)>& deletePartition_cb, 
+	const std::function<void(string, int64_t, string, int)>& addRoute_cb,
+	const std::function<void(int64_t)>& deleteRoute_cb)
 {
 	const auto routesNode = config.xPath("/routes");
 
@@ -511,7 +598,7 @@ void openset::mapping::Mapper::changeMapping(
 		}
 
 		std::vector<int64_t> cleanup;
-		for (const auto r: routes)
+		for (const auto& r: routes)
 			if (!providedRouteIds.count(r.first))
 				cleanup.push_back(r.first);
 
@@ -540,9 +627,9 @@ void openset::mapping::Mapper::savePartitions()
 
 void openset::mapping::Mapper::serializeRoutes(cjson* doc)
 {
-	doc->setType(cjsonType::ARRAY);
+	doc->setType(cjson::Types_e::ARRAY);
 
-	for (const auto r : routes)
+	for (const auto& r : routes)
 	{
 		auto item = doc->pushObject();
 		// get the name from the names map
@@ -595,7 +682,7 @@ void openset::mapping::Mapper::loadRoutes()
 		return;
 	}
 
-	cjson tableDoc(globals::running->path + "routes.json");
+	cjson tableDoc(globals::running->path + "routes.json", cjson::Mode_e::file);
 
 	deserializeRoutes(&tableDoc);
 

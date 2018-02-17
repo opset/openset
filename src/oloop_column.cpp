@@ -13,11 +13,11 @@ using namespace openset::result;
 
 OpenLoopColumn::OpenLoopColumn(
     ShuttleLambda<CellQueryResult_s>* shuttle,
-    openset::db::Table* table,
+    openset::db::Database::TablePtr table,
     ColumnQueryConfig_s config,
     openset::result::ResultSet* result,
     const int64_t instance):
-        OpenLoop(oloopPriority_e::realtime),
+        OpenLoop(table->getName(), oloopPriority_e::realtime),
         shuttle(shuttle),
         config(std::move(config)),
         table(table),
@@ -33,7 +33,14 @@ OpenLoopColumn::~OpenLoopColumn()
 
 void OpenLoopColumn::prepare()
 {  
-    parts = table->getPartitionObjects(loop->partition);
+    parts = table->getPartitionObjects(loop->partition, false);
+
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
     stopBit = parts->people.peopleCount();
 
     // if we are in segment compare mode:

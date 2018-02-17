@@ -45,30 +45,32 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 */
+#include <string>
 #include <vector>
 #include <algorithm>
 #include <functional>
 #include "../heapstack/heapstack.h"
 
-enum class cjsonType : int64_t
-{
-	VOIDED,
-	NUL,
-	OBJECT,
-	ARRAY,
-	INT,
-	DBL,
-	STR,
-	BOOL
-};
-
 class cjson
 {
+public:
+    enum class Types_e : int64_t
+    {
+	    VOIDED,
+	    NUL,
+	    OBJECT,
+	    ARRAY,
+	    INT,
+	    DBL,
+	    STR,
+	    BOOL
+    };
+
 private:
 
 	HeapStack* mem;
 
-	cjsonType nodeType;
+	Types_e nodeType;
 	char* nodeName;
 
 	// dataUnion uses the often ignored but always awesome
@@ -91,6 +93,13 @@ private:
 	//std::vector< cjson* > nodeMembers;
 
 public:
+
+    enum class Mode_e : int
+    {
+        file,
+        string
+    };
+
 	// members are linked list of other nodes at this
 	// document level.
 	// this is how array and object values are stored
@@ -98,11 +107,13 @@ public:
 	cjson* membersTail;
 	int memberCount;
 
+    char* scratchPad;
+
 	// next and previous sibling in to this members node list
 	cjson* siblingPrev;
 	cjson* siblingNext;
 	cjson* parentNode;
-	cjson* rootNode;
+	///cjson* rootNode;
 	
 	using SortFunction = std::function<bool(const cjson*, const cjson*)>;
 
@@ -206,13 +217,12 @@ public:
 	bool selfConstructed;
 
 	cjson();
-	explicit cjson(cjsonType docType);
-	explicit cjson(std::string fileName);
-	cjson(std::string jsonText, size_t length);
-	cjson(HeapStack* MemObj, cjson* RootObj);
+	explicit cjson(Types_e docType);
+	explicit cjson(const std::string &value, const Mode_e mode);
+	cjson(HeapStack* mem);
 
 	cjson(const cjson&) = delete; // can't copy - actually we could... but..
-	cjson(cjson&& other); // moveable 
+	cjson(cjson&& other) noexcept; // moveable 
 
 	~cjson();
 
@@ -224,16 +234,16 @@ public:
 	-------------------------------------------------------------------------
 	*/
 
-	cjsonType type() const; // returns the node type cjsonNode:: is the enum
+	Types_e type() const; // returns the node type cjsonNode:: is the enum
 	std::string name() const; // returns the node name or ""
 	const char* nameCstr() const; // returns pointer to node name or NULL
 
 	void setName(const char* newName);
-	void setName(std::string newName);
-	void setType(cjsonType Type);
+	void setName(const std::string& newName);
+	void setType(const Types_e type);
 
 	// test for node by xpath
-	bool isNode(std::string xPath) const;
+	bool isNode(const std::string& xPath) const;
 	bool hasName() const;
 
 	/*
@@ -261,8 +271,8 @@ public:
 	*/
 
 	cjson* createNode() const;
-	cjson* createNode(cjsonType Type, const char* Name) const;
-	cjson* createNode(cjsonType Type, std::string Name) const;
+	cjson* createNode(Types_e Type, const char* Name) const;
+	cjson* createNode(Types_e Type, const std::string& Name) const;
 	void removeNode();
 
 	cjson* hasMembers() const;
@@ -290,7 +300,7 @@ public:
 
 	// search this node for (immediate) child of name
 	cjson* find(const char* Name) const;
-	cjson* find(std::string Name) const;
+	cjson* find(const std::string& Name) const;
 	cjson* findByHashValue(size_t hashedId) const;
 
 	// helper, append a value to an array
@@ -306,12 +316,12 @@ public:
 	result is the newly created cjson object (node).
 	-------------------------------------------------------------------------
 	*/
-	cjson* push(int64_t Value);
-	cjson* push(double Value);
-	cjson* push(const char* Value);
-	cjson* push(std::string Value);
-	cjson* push(bool Value);
-	cjson* push(cjson* Node); // push a node - returns provided node
+	cjson* push(const int64_t value);
+	cjson* push(const double value);
+	cjson* push(const char* value);
+	cjson* push(const std::string& value);
+	cjson* push(const bool value);
+	cjson* push(cjson* node); // push a node - returns provided node
 	cjson* pushNull(); // pushes a null node
 	cjson* pushArray(); // append members with an array 
 	cjson* pushObject(); // append members with object/sub-document 
@@ -326,29 +336,29 @@ public:
 	i.e. "key": "value" or "key": #value, etc.
 	-------------------------------------------------------------------------
 	*/
-	cjson* set(const char* Key, int64_t Value);
-	cjson* set(std::string Key, int64_t Value);
-	cjson* set(const char* Key, int32_t Value);
-	cjson* set(std::string Key, int32_t Value);
-	cjson* set(const char* Key, double Value);
-	cjson* set(std::string Key, double Value);
-	cjson* set(const char* Key, const char* Value);
-	cjson* set(std::string Key, const char* Value);
-	cjson* set(std::string Key, std::string Value);
-	cjson* set(const char* Key, bool Value);
-	cjson* set(std::string Key, bool Value);
-	cjson* set(const char* Key); // sets "key": null
-	cjson* set(std::string Key); // sets "key": null
+	cjson* set(const char* key, const int64_t value);
+	cjson* set(const std::string& key, const int64_t value);
+	cjson* set(const char* key, const int32_t value);
+	cjson* set(const std::string& key, const int32_t value);
+	cjson* set(const char* key, double value);
+	cjson* set(const std::string& key, double value);
+	cjson* set(const char* key, const char* value);
+	cjson* set(const std::string& key, const char* value);
+	cjson* set(const std::string& key, const std::string& value);
+	cjson* set(const char* key, const bool value);
+	cjson* set(const std::string& key, const bool value);
+	cjson* set(const char* key); // sets "key": null
+	cjson* set(const std::string& key); // sets "key": null
 
 	// adds a new array or returns an existing array key value type\
 	// i.e. "key": []
-	cjson* setArray(const char* Key);
-	cjson* setArray(std::string Key);
+	cjson* setArray(const char* key);
+	cjson* setArray(const std::string& key);
 
 	// adds a new or returns an existing document key value type
 	// i.e. "key": {}
-	cjson* setObject(const char* Key);
-	cjson* setObject(std::string Key);
+	cjson* setObject(const char* key);
+	cjson* setObject(const std::string& key);
 
 	// get number of items in an array
 	int size() const;
@@ -362,11 +372,11 @@ public:
 	Will overwrite the current value (and type) for an existing node
 	-------------------------------------------------------------------------
 	*/
-	void replace(int64_t Val);
-	void replace(double Val);
-	void replace(const char* Val);
-	void replace(std::string Val);
-	void replace(bool Val);
+	void replace(const int64_t val);
+	void replace(const double val);
+	void replace(const char* val);
+	void replace(const std::string& val);
+	void replace(const bool val);
 	void replace(); // sets value to NUll;
 
 	/* 
@@ -389,13 +399,13 @@ public:
 	for nodes deeper into the document use a relative path.
 	-------------------------------------------------------------------------
 	*/
-	int64_t xPathInt(std::string Path, int64_t Default) const;
-	bool xPathBool(std::string Path, bool Default) const;
-	double xPathDouble(std::string Path, double Default) const;
-	const char* xPathCstr(const char* Path, const char* Default) const;
-	std::string xPathString(std::string Path, std::string Default) const;
+	int64_t xPathInt(const std::string& path, int64_t defaultValue = 0) const;
+	bool xPathBool(const std::string& path, const bool defaultValue = false) const;
+	double xPathDouble(const std::string& path, double defaultValue = 0.0) const;
+	const char* xPathCstr(const char* path, const char* defaultValue = nullptr) const;
+	std::string xPathString(const std::string& path, const std::string& defaultValue = ""s) const;
 	// returns a node or NULL;
-	cjson* xPath(std::string Path) const;
+	cjson* xPath(const std::string& path) const;
 
 	std::string xPath() const; // return the current xpath;
 
@@ -406,7 +416,7 @@ public:
 	These retrieve the value at a node.
 
 	These functions return a true/false (success)
-	return the value (if successful) as a reference. 
+	return the value (if successful) will be in reference param. 
 
 	These functions can be used in conditional
 	
@@ -420,13 +430,16 @@ public:
 	else if (someNode->isDouble( someDouble ))
 	   // do something else
 
+    In either case someInt or someDouble will contain the value
+    at the node if the condition is true
+
 	-------------------------------------------------------------------------
 	*/
-	bool isStringCstr(char* & Value) const;
-	bool isString(std::string& Value) const;
-	bool isInt(int64_t& Value) const;
-	bool isDouble(double& Value) const;
-	bool isBool(bool& Value) const;
+	bool isStringCstr(char*& value) const;
+	bool isString(std::string& value) const;
+	bool isInt(int64_t& value) const;
+	bool isDouble(double& value) const;
+	bool isBool(bool& value) const;
 	bool isNull() const;
 
 	int64_t getInt() const;
@@ -440,33 +453,30 @@ public:
 	Document import/export functions
 	-------------------------------------------------------------------------
 	*/
-	static cjson* Parse(const char* JSON, cjson* root = nullptr, bool embedded = false);
-	static cjson* Parse(std::string JSON, cjson* root = nullptr, bool embedded = false);
+	static cjson* parse(const char* json, cjson* root = nullptr, const bool embedded = false);
+	static cjson* parse(const std::string& json, cjson* root = nullptr, const bool embedded = false);
 
 	// returns char* you must call delete[] on the result
 	// memory is allocated with pooled memory, call releaseStringifyPtr to release
 	// this buffer
-	static char* StringifyCstr(const cjson* N, int64_t& length, bool pretty = false);
+	static char* stringifyCstr(const cjson* doc, int64_t& length, const bool pretty = false);
+    static HeapStack* stringifyHeapStack(cjson* doc, int64_t& length, const bool pretty);
 
-	static HeapStack* StringifyHeapStack(cjson* N, int64_t& length, bool pretty = false);
-	// returns std::string (calls char* version internally)
+    // returns std::string (calls char* version internally)
 	// this version is slightly slower than the char* version
 	// on multi-megabyte JSON documents
-	static std::string Stringify(cjson* N, bool pretty = false);
+	static std::string stringify(cjson* doc, const bool pretty = false);
 
 	// release memory allocated by PooledMem when flatten is called
 	static void releaseStringifyPtr(char* strPtr);
 
-	// completely free a document and all it's children
-	// all nodes in the document become invalid immediately
-	static void DisposeDocument(cjson* Document);
 	// create a root node (with heapstack object).
-	static cjson* MakeDocument();
+	static cjson* makeDocument();
 
-	static cjson* fromFile(std::string fileName, cjson* root = nullptr);
-	static bool toFile(std::string fileName, cjson* root, bool pretty = true);
+	static cjson* fromFile(const std::string& fileName, cjson* root = nullptr);
+	static bool toFile(const std::string& fileName, cjson* root, bool pretty = true);
 
-	void sortMembers(const SortFunction sortLambda)
+	void sortMembers(const SortFunction& sortLambda)
 	{
 		if (membersHead == nullptr)
 			return;
@@ -477,7 +487,7 @@ public:
 		auto it = membersHead;
 		while (it)
 		{
-			if (it->nodeType != cjsonType::VOIDED)
+			if (it->nodeType != Types_e::VOIDED)
     			sortVector.push_back(it);
 			it = it->siblingNext;
 		}
@@ -502,12 +512,12 @@ public:
 
 	}
 
-	void recurseSort(const string nodeName, const SortFunction sortLambda) 
+	void recurseSort(const string& nodeName, const SortFunction& sortLambda) 
 	{
 		__recurseSort(nodeName, this, sortLambda);
 	}
 
-    void recurseTrim(const string nodeName, const int trim)
+    void recurseTrim(const string& nodeName, const int trim)
     {
         __recurseTrim(nodeName, this, trim);
     }
@@ -519,7 +529,7 @@ private:
 	// this recurses the tree, it would be possible to make a non-recursive 
 	// version at some point.
 
-    static void __recurseTrim(const string nodeName, cjson* branch, const int trim)
+    static void __recurseTrim(const string& nodeName, cjson* branch, const int trim)
     {
 
         if (branch->name() == nodeName && branch->memberCount > trim)
@@ -544,14 +554,14 @@ private:
 
         while (it)
         {
-            if (it->nodeType == cjsonType::VOIDED)
+            if (it->nodeType == Types_e::VOIDED)
                 continue;
             __recurseTrim(nodeName, it, trim);
             it = it->siblingNext;
         }
     }
 
-	static void __recurseSort(const string nodeName, cjson* branch, const SortFunction sortLambda)
+	static void __recurseSort(const string& nodeName, cjson* branch, const SortFunction& sortLambda)
 	{
 
 		if (branch->name() == nodeName)
@@ -561,7 +571,7 @@ private:
 
 		while (it)
 		{
-			if (it->nodeType == cjsonType::VOIDED)
+			if (it->nodeType == Types_e::VOIDED)
 				continue;
 			__recurseSort(nodeName, it, sortLambda);
 			it = it->siblingNext;
@@ -574,14 +584,14 @@ private:
 	// Link will set maintain membersHead and membersTail within
 	// the node that calls link as well as maintain siblingNext
 	// and siblingPrev for newNode and it's siblings.
-	void Link(cjson* newNode);
-	static cjson* ParseBranch(cjson* N, char* & readPtr, bool embedding = false);
+	void link(cjson* newNode);
+	static cjson* parseBranch(cjson* n, char* & readPtr, const bool embedding = false);
 
 	// function used by xPath functions
-	cjson* GetNodeByPath(std::string Path) const;
+	cjson* getNodeByPath(const std::string& path) const;
 
 	// worker used stringifyC
-	void Stringify_worker(const cjson* N, HeapStack& writer, int indent, const cjson* startNode) const;
+	void stringify_worker(const cjson* n, HeapStack& writer, int indent, const cjson* startNode) const;
 
 	// helper used to find the index of current node in a members list
 	int getIndex() const;
@@ -591,29 +601,25 @@ namespace std
 {
 	template <>
 	struct hash<cjson>
+
 	{
 		size_t operator()(const cjson& x) const
 		{
 			switch (x.type())
 			{
-				case cjsonType::INT: 
+                case cjson::Types_e::INT: 
 					return static_cast<size_t>(x.getInt());
-				break;
-				case cjsonType::DBL: 
+				case cjson::Types_e::DBL: 
 					return static_cast<size_t>(x.getDouble() * 10000);
-				break;
-				case cjsonType::STR: 
+				case cjson::Types_e::STR: 
 				{
-					hash<string> hasher;
+				    const hash<string> hasher;
 					return hasher(x.getString());
 				}
-				break;
-				case cjsonType::BOOL: 
+				case cjson::Types_e::BOOL: 
 					return x.getBool() ? 1 : 0;
-				break;
 				default: 
 					return 0;
-				break;
 			}
 		}
 	};

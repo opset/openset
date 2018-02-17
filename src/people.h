@@ -21,6 +21,7 @@ namespace openset
 		public:
 			bigRing<int64_t, int32_t> peopleMap; // probably delete this!
 			vector<PersonData_s*> peopleLinear;
+            vector<int32_t> reuse;
 			int partition;
 		public:
 			explicit People(int partition);
@@ -41,6 +42,8 @@ namespace openset
 			}
 
 			int64_t peopleCount() const;
+
+            void drop(const int64_t userId);
 
 			void serialize(HeapStack* mem);
 			int64_t deserialize(char* mem);

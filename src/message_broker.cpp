@@ -20,14 +20,15 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
         atomic<bool> done = false;
         atomic<bool> retry = false;
 
-        const auto done_cb = [&, broker](
+        const auto done_cb = [&](
             const http::StatusCode status, const bool error, char* data, const size_t size)
         {
             done = true;
             retry = error;
         };
 
-        auto rest = std::make_shared<openset::web::Rest>(host + ":" + to_string(port));
+        const auto hostPort = host + ":" + to_string(port);
+        auto rest = std::make_shared<openset::web::Rest>(0, hostPort);
         
         while (true)
         {
@@ -52,7 +53,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
                     msg->set("method", m.method);
                 }
 
-                auto buffer = cjson::Stringify(&payload);
+                auto buffer = cjson::stringify(&payload);
 
                 const auto backlog = broker->size(reventName, subscriberName);
 
@@ -99,11 +100,11 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
     th.detach();
 }
 
-openset::revent::MessageBroker::MessageBroker()
-{}
-
 openset::revent::MessageBroker::~MessageBroker()
-{}
+{
+    
+
+}
 
 std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t triggerId)
 {

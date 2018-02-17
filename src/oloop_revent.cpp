@@ -10,35 +10,60 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopRetrigger::OpenLoopRetrigger(openset::db::Table* table) :
-	OpenLoop(),
-	table(table),
-	linearId(0)
+OpenLoopRevent::OpenLoopRevent(openset::db::Database::TablePtr table) :
+	OpenLoop(table->getName()),
+    table(table),
+	linearId(0),
+	lowestStamp(0)
 {}
 
-OpenLoopRetrigger::~OpenLoopRetrigger() 
-{}
-
-void OpenLoopRetrigger::prepare()
+void OpenLoopRevent::prepare()
 {
 	linearId = 0;
-	person.mapTable(table, loop->partition);
+
+	if (!person.mapTable(table.get(), loop->partition))
+	{
+	    suicide();
+        return;
+	}
+
 	lowestStamp = Now() + 90000;
 
-    parts = table->getPartitionObjects(loop->partition);
-    parts->triggers->checkForConfigChange();
+    parts = table->getPartitionObjects(loop->partition, false);
 
+    if (!parts)
+    {
+        suicide();
+        return;
+    }
+
+    parts->triggers->checkForConfigChange();
 }
 
-void OpenLoopRetrigger::run()
+void OpenLoopRevent::respawn(int64_t runIn)
+{
+    OpenLoop* newCell = new OpenLoopRevent(table);
+    
+    if (runIn > table->reventInterval)
+        runIn = table->reventInterval;
+    else if (runIn < 500)
+        runIn = 500;
+
+    newCell->scheduleFuture(runIn); 
+    
+    spawn(newCell); // add replacement to scheduler
+    suicide(); // kill this cell.    
+}
+
+void OpenLoopRevent::run()
 {
     const auto maxLinearId = parts->people.peopleCount();
     const auto now = Now();
 
-	while (true)
+	//while (true)
 	{
-		if (sliceComplete())
-			return; // let some other open loops run
+		//if (sliceComplete())
+			//return; // let some other open loops run
 
 		if (linearId > maxLinearId)
 		{
@@ -48,14 +73,8 @@ void OpenLoopRetrigger::run()
 						
 			messages->run(); // do message queue maintenance 
 
-			OpenLoop* newCell = new OpenLoopRetrigger(table);
-
 		    const auto diff = lowestStamp - Now();
-
-			newCell->scheduleFuture(diff > 15000 ? 15000 : 5000); 
-
-			spawn(newCell);
-			suicide();
+            respawn(diff);
 			return;
 		}
 

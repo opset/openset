@@ -8,6 +8,8 @@
 #include "../lib/str/strtools.h"
 #include "../lib/var/var.h"
 
+#include "database.h"
+
 
 // this testing framework was inspired by:
 //
@@ -78,6 +80,10 @@ using Fails = std::vector<TestFail_s>;
 inline Fails runTests(Tests &tests)
 {
 	using namespace std;
+
+    // we need a global database object to runt he tests.
+    auto database = new openset::db::Database();
+
 
 	Fails failed;
 	

@@ -6,11 +6,107 @@
 
 using namespace openset::db;
 
-Grid::Grid()
+void IndexDiffing::reset()
 {
-	memset(columnMap, 0, sizeof(columnMap)); // all zeros
-	memset(isSet, 0, sizeof(isSet)); // all false
-	rows.reserve(10000);
+    before.clear();
+    after.clear();
+}
+
+void IndexDiffing::add(int32_t column, int64_t value, Mode_e mode)
+{
+    if (mode == Mode_e::before)
+    {
+        if (const auto iter = before.find({column, value}); iter != before.end())
+            iter->second++;
+        else
+            before[{column, value}] = 1;
+    }
+    else
+    {
+        if (const auto iter = after.find({column, value}); iter != after.end())
+            iter->second++;
+        else
+            after[{column, value}] = 1;
+    }
+
+    // a Value of NONE in combination with a column indicates that
+    // the column is referenced. This is used to index a column, rather
+    // than a column and value.
+    if (value != NONE)
+        add(column, NONE, mode);
+}
+
+void IndexDiffing::add(Grid* grid, Mode_e mode)
+{
+    const auto columns = grid->getTable()->getColumns();
+    const auto rows = grid->getRows();
+    const auto& setData = grid->getSetData();
+    const auto colMap = grid->getColumnMap();
+
+    for (auto r : *rows)
+    {
+        for (auto c = 0; c < colMap->columnCount; ++c)
+        {
+            const auto actualColumn = colMap->columnMap[c];
+
+            // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
+            if (r->cols[c] == NONE ||
+                (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
+                continue;
+
+            if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            {
+                if (colInfo->isSet)
+                {
+                    // cast SetInfo_s over the value and get offset and length
+                    const auto& ol = reinterpret_cast<SetInfo_s*>(&r->cols[c]);
+
+                    // write out values
+                    for (auto idx = ol->offset; idx < ol->offset + ol->length; ++idx)
+                        add(actualColumn, setData[idx], mode);
+                }
+                else
+                {
+                    add(actualColumn, r->cols[c], mode);
+                }
+            }
+        }
+    }
+}
+
+IndexDiffing::CVList IndexDiffing::getRemoved()
+{
+    CVList result;
+
+    for (auto& b : before)
+        if (!after.count(b.first))
+            result.push_back(b.first);
+
+    return result;
+}
+
+IndexDiffing::CVList IndexDiffing::getAdded()
+{
+    CVList result;
+
+    for (auto& a : after)
+        if (!before.count(a.first))
+            result.push_back(a.first);
+
+    return result;
+}
+
+void openset::db::IndexDiffing::iterRemoved(const std::function<void(int32_t,int64_t)> cb)
+{
+    for (auto& a : after)
+        if (!before.count(a.first))
+            cb(a.first.first, a.first.second);
+}
+
+Grid::~Grid()
+{
+    if (colMap && table)
+        table->getColumnMapper()->releaseMap(colMap);
 }
 
 void Grid::reset()
@@ -26,8 +122,8 @@ void Grid::reinit()
 	table = nullptr;
 	blob = nullptr;
 	attributes = nullptr;
-	memset(columnMap, 0, sizeof(columnMap)); // all zeros
-	memset(isSet, 0, sizeof(isSet)); // all false
+	//memset(columnMap, 0, sizeof(columnMap)); // all zeros
+	//memset(isSet, 0, sizeof(isSet)); // all false
 }
 
 /**
@@ -46,45 +142,14 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr)
 	if (tablePtr && table && tablePtr->getName() == table->getName())
 		return true;
 
-	fullSchemaMap = true;
-
+    if (colMap)
+        table->getColumnMapper()->releaseMap(colMap);
+	
 	table = tablePtr;
 	attributes = attributesPtr;
-
-	if (!table || !attributes)
-		return false;
-
-	// map the attributes blob (where text and things go) to this object
 	blob = attributes->getBlob();
 
-	// negative one fill these as -1 means no mapping
-	for (auto& i : columnMap)
-		i = -1;
-
-	for (auto& i : reverseMap)
-		i = -1;
-
-	columnCount = 0;
-
-	insertMap.clear();
-
-	for (auto& s : table->getColumns()->columns)
-		if (s.type != columnTypes_e::freeColumn)
-		{
-			if (s.idx == COL_UUID)
-				uuidColumn = columnCount;
-			else if (s.idx == COL_SESSION)
-				sessionColumn = columnCount;
-
-			columnMap[columnCount] = static_cast<int16_t>(s.idx); // maps local column to schema
-			reverseMap[s.idx] = static_cast<int16_t>(columnCount); // maps schema to local column
-			insertMap[MakeHash(s.name)] = columnCount; // maps to local column
-			isSet[columnCount] = true;
-
-			++columnCount;
-		}
-
-	rowBytes = columnCount * 8LL;
+    colMap = table->getColumnMapper()->mapSchema(tablePtr, attributesPtr);
 
 	return true;
 }
@@ -95,47 +160,14 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 	if (tablePtr && table && tablePtr->getName() == table->getName())
 		return true;
 
-	fullSchemaMap = false;
-
+    if (colMap)
+        table->getColumnMapper()->releaseMap(colMap);
+	
 	table = tablePtr;
 	attributes = attributesPtr;
-
-	if (!table || !attributes || columnNames.empty())
-		return false;
-
-	// map the attributes blob (where text and things go) to this object
 	blob = attributes->getBlob();
 
-	// negative one fill these as -1 means no mapping
-	for (auto& i : columnMap)
-		i = -1;
-
-	for (auto& i : reverseMap)
-		i = -1;
-
-	columnCount = 0;
-
-	auto schema = table->getColumns();
-
-	for (const auto &colName: columnNames)
-	{
-		const auto s = schema->getColumn(colName);
-
-		if (!s)
-			return false;
-
-		if (s->idx == COL_UUID)
-			uuidColumn = columnCount;
-		else if (s->idx == COL_SESSION)
-			sessionColumn = columnCount;
-
-		columnMap[columnCount] = static_cast<int16_t>(s->idx); // maps local column to schema
-		reverseMap[s->idx] = static_cast<int16_t>(columnCount); // maps schema to local column
-
-		++columnCount;
-	}
-
-	rowBytes = columnCount * 8LL;
+    colMap = table->getColumnMapper()->mapSchema(tablePtr, attributesPtr, columnNames);
 
 	return true;
 }
@@ -200,7 +232,7 @@ cjson Grid::toJSON() const
 		accumulator.push_back(*iter);
 
 		// if we are at the end or the next one is a different group, lets push 
-		// out some JSON snots
+		// out some JSON 
 		if (iter + 1 == rows.end() || 
 			HashPair((*(iter + 1))->cols[COL_STAMP], (*(iter + 1))->cols[COL_ACTION]) !=
 			HashPair( (*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]))
@@ -214,10 +246,10 @@ cjson Grid::toJSON() const
 				rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
 			    auto rowObj = rootObj->setObject("attr");
 
-				for (auto c = 0; c < columnCount; ++c)
+				for (auto c = 0; c < colMap->columnCount; ++c)
 				{
 					// get the column information
-					const auto colInfo = columns->getColumn(columnMap[c]);
+					const auto colInfo = columns->getColumn(colMap->columnMap[c]);
 
 					if (colInfo->idx < 1000) // first 1000 are reserved
 						continue;
@@ -230,9 +262,8 @@ cjson Grid::toJSON() const
                     if (colInfo->isSet)
                     {
                         const auto set = rowObj->setArray(colInfo->name);
-                        const auto info = reinterpret_cast<const SetInfo_s*>(&value);
-
-                        for (auto offset = info->offset; offset < info->offset + info->length; ++offset)
+                        const auto ol = reinterpret_cast<const SetInfo_s*>(&value);
+                        for (auto offset = ol->offset; offset < ol->offset + ol->length; ++offset)
                             convertToJSON(set, colInfo, this->setData[offset], true); 
                     }
                     else
@@ -256,7 +287,7 @@ cjson Grid::toJSON() const
                 
                 // every combination of column:value counted
                 for (auto r : accumulator)
-                    for (auto c = 0; c < columnCount; ++c)
+                    for (auto c = 0; c < colMap->columnCount; ++c)
                         if (r->cols[c] != NONE)
                         {
                             const auto key = make_pair(c, r->cols[c]);
@@ -381,7 +412,7 @@ cjson Grid::toJSON() const
                     for (auto &c : sorted)
                     {
                         const auto ac = c.first; // actual column
-                        const auto colInfo = columns->getColumn(columnMap[ac]);
+                        const auto colInfo = columns->getColumn(colMap->columnMap[ac]);
 
                         if (colInfo->idx < 1000) // first 1000 are reserved
                             continue;
@@ -464,20 +495,20 @@ cjson Grid::toJSON() const
                                 {
                                     switch (p->type())
                                     {
-                                        case cjsonType::VOIDED: break;
-                                        case cjsonType::NUL: break;
-                                        case cjsonType::OBJECT: break;
-                                        case cjsonType::ARRAY: break;
-                                        case cjsonType::INT: 
+                                        case cjson::Types_e::VOIDED: break;
+                                        case cjson::Types_e::NUL: break;
+                                        case cjson::Types_e::OBJECT: break;
+                                        case cjson::Types_e::ARRAY: break;
+                                        case cjson::Types_e::INT: 
                                             newNode->push(p->getInt());
                                         break;
-                                        case cjsonType::DBL: 
+                                        case cjson::Types_e::DBL: 
                                             newNode->push(p->getDouble());
                                         break;
-                                        case cjsonType::STR: 
+                                        case cjson::Types_e::STR: 
                                             newNode->push(p->getString());
                                         break;
-                                        case cjsonType::BOOL: 
+                                        case cjson::Types_e::BOOL: 
                                             newNode->push(p->getBool());
                                         break;
                                         default: ;
@@ -527,7 +558,7 @@ cjson Grid::toJSON() const
 
                 // this Parses the `branch` document into the attributes node using
                 // using Stringify (not great, but not overly slow)
-                cjson::Parse(cjson::Stringify(&branch), attrObj, true);
+                cjson::parse(cjson::stringify(&branch), attrObj, true);
 
 			}
 
@@ -546,13 +577,13 @@ Col_s* Grid::newRow()
 	// assigning *iter.
 	// adding volatile makes it happy. I've had gcc do similar things with
 	// for loops using pointers and *value = something
-	const volatile auto row = recast<int64_t*>(mem.newPtr(rowBytes));
+	const volatile auto row = recast<int64_t*>(mem.newPtr(colMap->rowBytes));
 
-	for (auto iter = row; iter < row + columnCount; ++iter)
+	for (auto iter = row; iter < row + colMap->columnCount; ++iter)
         *iter = NONE;
 
-	if (uuidColumn != -1)
-		*(row + uuidColumn) = rawData->id;
+	if (colMap->uuidColumn != -1)
+		*(row + colMap->uuidColumn) = rawData->id;
 
 	return reinterpret_cast<Col_s*>(row);
 }
@@ -568,7 +599,7 @@ void Grid::mount(PersonData_s* personData)
 
 void Grid::prepare()
 {
-	if (!rawData || !rawData->bytes || !columnCount)
+	if (!colMap || !rawData || !rawData->bytes || !colMap->columnCount)
 		return;
 
     setData.clear();
@@ -602,12 +633,12 @@ void Grid::prepare()
 
 		if (cursor->columnNum == -1) // -1 is new row
 		{
-			if (sessionColumn != -1)
+			if (colMap->sessionColumn != -1)
 			{
 				if (row->cols[COL_STAMP] - lastSessionTime > sessionTime)
 					++session;
 				lastSessionTime = row->cols[COL_STAMP];
-				row->cols[sessionColumn] = session;
+				row->cols[colMap->sessionColumn] = session;
 			}
 			
 			rows.push_back(row);
@@ -616,7 +647,7 @@ void Grid::prepare()
 			continue;
 		} 
 
-		const auto mappedColumn = reverseMap[cursor->columnNum];
+		const auto mappedColumn = colMap->reverseMap[cursor->columnNum];
 
         if (const auto colInfo = columns->getColumn(cursor->columnNum); colInfo)
         {
@@ -638,7 +669,7 @@ void Grid::prepare()
                     ++counted;
                 }
 
-                if (mappedColumn < 0 || mappedColumn >= columnCount)
+                if (mappedColumn < 0 || mappedColumn >= colMap->columnCount)
                 {
                     continue;
                 }
@@ -649,7 +680,7 @@ void Grid::prepare()
             }
             else
             {
-                if (mappedColumn < 0 || mappedColumn >= columnCount)
+                if (mappedColumn < 0 || mappedColumn >= colMap->columnCount)
                 {
                     read += sizeOfCast;
                     continue;
@@ -800,10 +831,10 @@ PersonData_s* Grid::commit()
     // this is the worst case scenario temp buffer size for this data.
     // (columns * rows) + (columns * row headers) + number_of_set_values
     const auto tempBufferSize = 
-        (rows.size() * (this->columnCount * sizeOfCast)) + 
+        (rows.size() * (colMap->columnCount * sizeOfCast)) + 
         (rows.size() * sizeOfCastHeader) + 
         (setData.size() * sizeof(int64_t)) + // the set data
-        ((rows.size() * this->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
+        ((rows.size() * colMap->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
 
 	// make an intermediate buffer that is fully uncompresed
 	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
@@ -819,9 +850,9 @@ PersonData_s* Grid::commit()
 
 	for (auto r : rows)
 	{
-		for (auto c = 0; c < columnCount; ++c)
+		for (auto c = 0; c < colMap->columnCount; ++c)
 		{
-            const auto actualColumn = columnMap[c];
+            const auto actualColumn = colMap->columnMap[c];
 
 			// skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
 			if (r->cols[c] == NONE ||
@@ -832,7 +863,7 @@ PersonData_s* Grid::commit()
             {
                 if (colInfo->isSet)
                 {
-                    /* Sets
+                    /* Output stream looks like this:
                      *
                      *  int16_t column
                      *  int16_t length
@@ -888,7 +919,7 @@ PersonData_s* Grid::commit()
 		compBuffer, 
 		bytesNeeded,
 		maxBytes,
-		2);
+		table->personCompression);
 
 	const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes; // size() includes data, we adjust
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
@@ -924,6 +955,77 @@ PersonData_s* Grid::commit()
 	return rawData;
 }
 
+bool Grid::cull()
+{
+    // empty? no cull
+    if (rows.empty())
+        return false;
+
+    // not at row limit, and first event is within time window? no cull
+    if (rows.size() < static_cast<size_t>(table->eventMax) && 
+        rows[0]->cols[COL_STAMP] > Now() - table->eventTtl)
+        return false;
+
+    diff.reset();
+
+    auto removed = false;
+	auto rowCount = rows.size();
+
+    diff.add(this, IndexDiffing::Mode_e::before);
+
+	// cull if row count exceeds limit
+	if (static_cast<int>(rowCount) > table->eventMax)
+	{
+		const auto numToErase = rowCount - table->eventMax;
+		rows.erase(rows.begin(), rows.begin() + numToErase);
+		rowCount = rows.size();
+        removed = true;
+	}
+
+    const auto cullStamp = Now() - table->eventTtl;
+    auto expiredCount = 0;
+
+    for (const auto &r: rows)
+    {
+        if (r->cols[COL_STAMP] > cullStamp)
+            break;
+        ++expiredCount;
+    }
+
+	if (expiredCount)
+	{
+		const auto numToErase = rowCount - expiredCount;
+		rows.erase(rows.begin(), rows.begin() + numToErase);
+        removed = true;
+	}
+
+    diff.add(this, IndexDiffing::Mode_e::after);    
+
+    // what things are no longer referenced in anyway 
+    // within our row set? De-index those items.
+    //const auto noLongerReferenced = diff.getRemoved();
+
+    //for (const auto& cv: noLongerReferenced)
+    diff.iterRemoved([&](int32_t col, int64_t val) {
+        attributes->setDirty(this->rawData->linId, col, val, false); 
+    });
+
+    //if (!noLongerReferenced.empty())
+      //  cout << ("removed " + to_string(noLongerReferenced.size())) << endl;
+    
+    return removed;
+}
+
+int Grid::getGridColumn(const int schemaColumn) const
+{
+    return colMap->reverseMap[schemaColumn];
+}
+
+bool Grid::isFullSchema() const
+{
+    return (colMap && colMap->hash == 0);
+}
+
 void Grid::insert(cjson* rowData)
 {
 	// ensure we have ms on the time stamp
@@ -932,30 +1034,29 @@ void Grid::insert(cjson* rowData)
 	if (!stampNode)
 		return;
 
-	auto stamp = (stampNode->type() == cjsonType::STR) ?
-		Epoch::ISO8601ToEpoch(stampNode->getString()) :
-		stampNode->getInt();
-
-	stamp = Epoch::fixMilli(stamp);
+	const auto stamp = (stampNode->type() == cjson::Types_e::STR) ?
+		Epoch::fixMilli(Epoch::ISO8601ToEpoch(stampNode->getString())) :
+		Epoch::fixMilli(stampNode->getInt());
 
 	if (stamp < 0)
 		return;
 
-	auto action = rowData->xPathString("/action", "");
-	auto attrNode = rowData->xPath("/_");
-	auto rowCount = rows.size();
+	const auto action = rowData->xPathString("/action", "");
+	const auto attrNode = rowData->xPath("/_");
+	
 	decltype(newRow()) row = nullptr;
 
 	if (!attrNode || !action.length())
 		return;
 
-	// cull on insert
-	if (static_cast<int>(rowCount) > table->rowCull)
-	{
-		const auto numToErase = rowCount - table->rowCull;
-		rows.erase(rows.begin(), rows.begin() + numToErase);
-		rowCount = rows.size();
-	}
+    // over row limit, and first event older than time window? cull
+    // note - added leway to reduce calls, proper culling happens
+    // in in oloop_cleaner hourly.
+    if (rows.size() > static_cast<size_t>(table->eventMax + (table->eventMax * 0.1)) && 
+        rows[0]->cols[COL_STAMP] < Now() - (table->eventTtl + 3'600'000))
+        cull();
+
+    auto rowCount = rows.size();
 
 	// move the action into the attrs so it will be integrated into the row set
 	attrNode->set("__action", action);
@@ -970,9 +1071,9 @@ void Grid::insert(cjson* rowData)
     for (auto c : attrColumns) // columns in row
     {
         // look for the name (by hash) in the insertMap
-        if (const auto iter = insertMap.find(MakeHash(c->name())); iter != insertMap.end())
+        if (const auto iter = colMap->insertMap.find(MakeHash(c->name())); iter != colMap->insertMap.end())
         {
-            const auto schemaCol = columnMap[iter->second];            
+            const auto schemaCol = colMap->columnMap[iter->second];            
             const auto colInfo = columns->getColumn(schemaCol);
             const auto col = iter->second;
 
@@ -984,7 +1085,7 @@ void Grid::insert(cjson* rowData)
 
             switch (c->type())
             {
-            case cjsonType::INT:
+            case cjson::Types_e::INT:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1004,7 +1105,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::DBL:
+            case cjson::Types_e::DBL:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1024,7 +1125,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::STR:
+            case cjson::Types_e::STR:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1041,7 +1142,7 @@ void Grid::insert(cjson* rowData)
                     continue;
                 }
                 break;
-            case cjsonType::BOOL:
+            case cjson::Types_e::BOOL:
                 switch (colInfo->type)
                 {
                 case columnTypes_e::intColumn:
@@ -1062,7 +1163,7 @@ void Grid::insert(cjson* rowData)
                 }
                 break;
 
-            case cjsonType::ARRAY:
+            case cjson::Types_e::ARRAY:
             {
                 if (!colInfo->isSet)
                     continue;
@@ -1075,7 +1176,7 @@ void Grid::insert(cjson* rowData)
                 {
                     switch (n->type())
                     {
-                    case cjsonType::INT:
+                    case cjson::Types_e::INT:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1095,7 +1196,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::DBL:
+                    case cjson::Types_e::DBL:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1115,7 +1216,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::STR:
+                    case cjson::Types_e::STR:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1132,7 +1233,7 @@ void Grid::insert(cjson* rowData)
                             continue;
                         }
                         break;
-                    case cjsonType::BOOL:
+                    case cjson::Types_e::BOOL:
                         switch (colInfo->type)
                         {
                         case columnTypes_e::intColumn:
@@ -1202,21 +1303,20 @@ void Grid::insert(cjson* rowData)
     const auto getRowHash = [&](Col_s* rowPtr) -> int64_t
     {
         int64_t hash = 0;
-        for (auto col = 0; col < columnCount; col++)
+        for (auto col = 0; col < colMap->columnCount; col++)
         {
             if (rowPtr->cols[col] == NONE)
                 continue;
 
-            const auto colInfo = columns->getColumn(columnMap[col]);
+            const auto colInfo = columns->getColumn(colMap->columnMap[col]);
 
             if (colInfo->deleted)
                 continue;
 
             if (colInfo->isSet)
             {
-                auto& info = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
-                const auto end = info.offset + info.length;
-                for (auto idx = info.offset; idx < end; ++idx)
+                const auto& ol = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
+                for (auto idx = ol.offset; idx < ol.offset + ol.length; ++idx)
                     hash = HashPair(setData[idx], hash);
             }            
             else
@@ -1228,8 +1328,7 @@ void Grid::insert(cjson* rowData)
         return hash;
     };
 
-    const auto insertHash = getRowHash(insertRow);
-
+    
     auto insertBefore = -1; // where a new row will be inserted if needed
 
 	const auto hashedAction = MakeHash(action);
@@ -1304,7 +1403,7 @@ void Grid::insert(cjson* rowData)
 							insertBefore = i;
 							break;
 						}
-
+                        const auto insertHash = getRowHash(insertRow);
                         const auto currentRowHash = getRowHash(rows[i]);
 						// we have a matching row, we will replace this
 						if (insertHash == currentRowHash)

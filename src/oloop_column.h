@@ -3,6 +3,7 @@
 #include <vector>
 #include <regex>
 
+#include "database.h"
 #include "common.h"
 #include "result.h"
 #include "oloop.h"
@@ -68,7 +69,7 @@ namespace openset
 
             ColumnQueryConfig_s config;
 
-            db::Table* table;
+            openset::db::Database::TablePtr table;
             db::TablePartitioned* parts;
             result::ResultSet* result;
 
@@ -87,7 +88,7 @@ namespace openset
 
             explicit OpenLoopColumn(
                 ShuttleLambda<result::CellQueryResult_s>* shuttle,
-                openset::db::Table* table,
+                openset::db::Database::TablePtr table,
                 ColumnQueryConfig_s config,
                 openset::result::ResultSet* result,
                 const int64_t instance);

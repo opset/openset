@@ -131,7 +131,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
     // Step 1 - Verify that the remote node exists and is able to join
     {
-        openset::web::Rest client(host + ":" + to_string(port));
+        openset::web::Rest client(0, host + ":" + to_string(port));
 
         auto error = false;
         auto ready = false;
@@ -208,11 +208,12 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
         // make a node called cluster, serialize the partitionMap under it
         openset::globals::mapper->getPartitionMap()->serializePartitionMap(configBlock.setObject("cluster"));
 
-        auto rpcJson = cjson::Stringify(&configBlock);
+        auto rpcJson = cjson::stringify(&configBlock);
 
         Logger::get().info("configuring node " + newNodeName + "@" + host + ":" + to_string(port) + ".");
 
-        openset::web::Rest client(host + ":" + to_string(port));
+        const auto hostPort = host + ":" + to_string(port);
+        openset::web::Rest client(0, hostPort);
 
         auto error = false;
         auto ready = false;
@@ -285,7 +286,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
         newNode.set("host", host);
         newNode.set("port", port);
 
-        auto newNodeJson = cjson::Stringify(&newNode);
+        auto newNodeJson = cjson::stringify(&newNode);
 
         auto addResponses = openset::globals::mapper->dispatchCluster(
             "POST",
