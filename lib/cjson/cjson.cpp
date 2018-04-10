@@ -107,6 +107,16 @@ cjson::cjson(const std::string &value, const Mode_e mode):
         parse(value, this, true);
 };
 
+cjson::cjson(char* data, const size_t length):
+    cjson()
+{
+    if (length)
+    {
+        data[length-1] = 0x00;
+        parse(data, this, true);
+    }
+}
+
 cjson::cjson(HeapStack* mem) :
     mem(mem),
     nodeType(Types_e::VOIDED),

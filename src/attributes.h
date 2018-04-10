@@ -20,6 +20,7 @@ namespace openset::db
 	const int32_t COL_EMIT = 4;
 	const int32_t COL_SEGMENT = 5;
 	const int32_t COL_SESSION = 6;
+    const int32_t COL_FIRST_USER_DATA = 7;
 
 	const int32_t COL_OMIT_FIRST = COL_UUID; // omit >=
 	const int32_t COL_OMIT_LAST = COL_SESSION; // omit <=

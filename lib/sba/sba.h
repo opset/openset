@@ -95,7 +95,7 @@ private:
 
 public:
 
-	// singlton 
+	// singleton 
 	static PoolMem& getPool()
 	{
 		static PoolMem pool;

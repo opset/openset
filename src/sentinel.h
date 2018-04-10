@@ -123,7 +123,7 @@ namespace openset
 				deadNodes.insert(nodeId);
 			}
 
-			bool tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const;
+			bool tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode);
 
 			bool broadcastMap();
 			void runMonitor();

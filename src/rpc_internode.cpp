@@ -17,6 +17,7 @@
 #include "errors.h"
 #include "internoderouter.h"
 #include "http_serve.h"
+#include "sidelog.h"
 
 //#include "trigger.h"
 
@@ -185,9 +186,6 @@ void RpcInternode::transfer_init(const openset::web::MessagePtr& message, const 
                 // serialize the people
                 part->people.serialize(&mem);
 
-                // serialize pending inserts
-                part->serializeInsertBacklog(&mem);
-
                 blockPtr = mem.flatten();
                 blockSize = mem.getBytes();
             } // HeapStack mem gets release here
@@ -258,7 +256,6 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr& message, con
 
     read += parts->attributes.deserialize(read);
     read += parts->people.deserialize(read);
-    parts->deserializeInsertBacklog(read);
 
     openset::globals::async->resumeAsync();
 
@@ -270,7 +267,21 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr& message, con
     message->reply(http::StatusCode::success_ok, response);
 }
 
+void RpcInternode::transfer_translog(openset::web::MessagePtr& message, const RpcMapping& matches)
+{
+    Logger::get().info("translog transfer in (received " + to_string(message->getPayloadLength()) + " bytes).");
 
+    const auto read = message->getPayload();
+
+    SideLog::getSideLog().deserialize(read);
+
+    Logger::get().info("transfer comlete");
+
+    // reply when done
+    cjson response;
+    response.set("transferred", true);
+    message->reply(http::StatusCode::success_ok, response);   
+}
 
 void RpcInternode::map_change(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
@@ -285,13 +296,18 @@ void RpcInternode::map_change(const openset::web::MessagePtr& message, const Rpc
         globals::async->assertAsyncLock(); // dbg - assert we are in a lock
 
         for (auto t : globals::database->tables)
-            t.second->getPartitionObjects(partitionId, true);
+        {
+            const auto table = t.second.get();
+            table->getPartitionObjects(partitionId, true);
+            db::SideLog::getSideLog().resetReadHead(table, partitionId);
+        }        
     };
 
     const auto removePartition = [&](int partitionId)
     {
         // drop this partition from the async engine
         globals::async->freePartition(partitionId);
+        db::SideLog::getSideLog().removeReadHeadsByPartition(partitionId);
 
         globals::async->assertAsyncLock();
 

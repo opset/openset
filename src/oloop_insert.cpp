@@ -8,6 +8,7 @@
 #include "table.h"
 #include "asyncpool.h"
 #include "tablepartitioned.h"
+#include "sidelog.h"
 #include "internoderouter.h"
 
 using namespace std;
@@ -31,37 +32,31 @@ void OpenLoopInsert::prepare()
         return;
     }
 
-	queueIter = localQueue.end();
+//	queueIter = localQueue.end();
     Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 void OpenLoopInsert::run()
-{
+{       
+    const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
-	if ((localQueue.empty() || queueIter == localQueue.end()) &&
-		!tablePartitioned->insertQueue.empty())
+	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
+		mapInfo != openset::mapping::NodeState_e::active_clone)
 	{
-		if (!tablePartitioned->insertCS.tryLock())
-		{
-			if (sleepCounter > 50)
-				sleepCounter = 50;
-			scheduleFuture(sleepCounter * 10); // lazy backoff function
-			++sleepCounter; // inc after, this will make it run one more time before sleeping
-			return;
-		}
-
-		// swap the queues, so fast, so spiffy
-		localQueue.clear();
-		localQueue = std::move(tablePartitioned->insertQueue);
-		tablePartitioned->insertQueue = {};
-
-		tablePartitioned->insertCS.unlock();
-
-		queueIter = localQueue.begin();
+		// if we are not in owner or clone state we are just going to backlog
+		// the inserts until our state changes, then we will perform inserts
+		Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
+		this->scheduleFuture(1000);
+		return;
 	}
 
-	if (queueIter == localQueue.end())
+    int64_t readHandle = 0;
+    auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 5 : 25, readHandle);
+    auto insertIter = inserts.begin();
+
+	if (inserts.empty())
 	{
+        SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
 		if (sleepCounter > 50)
 			sleepCounter = 50;
 		scheduleFuture(sleepCounter * 10); // lazy backoff function
@@ -75,19 +70,7 @@ void OpenLoopInsert::run()
 	Person person;
 
 	++runCount;
-
-    const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
-
-	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
-		mapInfo != openset::mapping::NodeState_e::active_clone)
-	{
-		// if we are not in owner or clone state we are just going to backlog
-		// the inserts until our state changes, then we will perform inserts
-		Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
-		this->scheduleFuture(1000);
-		return;
-	}	
-
+       	
 	// map a table, partition and entire schema to the Person object
 	if (!person.mapTable(tablePartitioned->table, loop->partition))
 	{
@@ -103,13 +86,9 @@ void OpenLoopInsert::run()
 	// has it's overhead)
 	std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
 
-	// now insert without locks
-	for (auto count = 0; 
-        queueIter != localQueue.end() && count < (inBypass() ? 15 : 50); 
-        ++queueIter, ++count, --tablePartitioned->insertBacklog)
+	for (; insertIter != inserts.end(); ++insertIter)
 	{
-		cjson row(*queueIter, cjson::Mode_e::string);		
-		cjson::releaseStringifyPtr(*queueIter);
+		cjson row(*insertIter, cjson::Mode_e::string);		
 
 		// we will take profile or table to specify the table name
 		auto uuidString = row.xPathString("/person", "");
@@ -122,6 +101,10 @@ void OpenLoopInsert::run()
 			evtByPerson[uuidString].emplace_back(std::move(row));
 	}
 
+    // after we have processed the data, move the head forward
+    SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
+
+	// now insert without locks
 	for (auto& uuid : evtByPerson)
 	{
 	    const auto personData = tablePartitioned->people.getmakePerson(uuid.first);

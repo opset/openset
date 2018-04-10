@@ -14,7 +14,8 @@ using namespace openset::db;
 Table::Table(const string &name, Database* database):
 	name(name),
 	database(database),
-	loadVersion(Now())
+	loadVersion(Now()),
+    tableHash(MakeHash(name))
 {}
 
 Table::~Table()

@@ -18,7 +18,7 @@
 #include "internoderouter.h"
 #include "names.h"
 #include "http_serve.h"
-
+#include "sidelog.h"
 //#include "trigger.h"
 
 using namespace std;
@@ -268,7 +268,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
     }
 
-    // add the new node to the local dispatchAsync list, then
+    // Step 3. add the new node to the local dispatchAsync list, then
     // fork out the node_add command to any other nodes
     {
         Logger::get().info("broadcasting membership for node " + newNodeName + " @" + host + ":" + to_string(port));
@@ -297,6 +297,39 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
 
         openset::globals::mapper->releaseResponses(addResponses);
 
+    }
+
+    // Step 4. push translog
+    {
+        ThreadSleep(500); // wait, let the other nodes start forwarding to this node
+
+        char* blockPtr;
+        int64_t blockSize;
+
+        {
+            HeapStack mem;
+            SideLog::getSideLog().serialize(&mem);
+            blockPtr = mem.flatten();
+            blockSize = mem.getBytes();
+        } // HeapStack mem gets release here
+
+        const auto responseMessage = openset::globals::mapper->dispatchSync(
+            newNodeId,
+            "POST",
+            "/v1/internode/translog",
+            {},
+            blockPtr,
+            blockSize);
+
+        PoolMem::getPool().freePtr(blockPtr);
+
+        if (!responseMessage)
+            Logger::get().error("translog transfer error.");
+        else
+            Logger::get().info(
+                "transferred translog to " + openset::globals::mapper->getRouteName(newNodeId) +
+                " (transfered " + to_string(blockSize) + " bytes).");
+       
     }
 
     // respond to client

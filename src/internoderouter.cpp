@@ -29,9 +29,6 @@ openset::mapping::Mapper::Mapper():
 	//addRoute("startup", globals::running->nodeId, globals::running->host, globals::running->port);
 }
 
-openset::mapping::Mapper::~Mapper() 
-{}
-
 openset::mapping::Mapper::RestConnection openset::mapping::Mapper::getCachedConnection(const int64_t routeId)
 {
     csLock lock(poolCs);
@@ -49,21 +46,15 @@ openset::mapping::Mapper::RestConnection openset::mapping::Mapper::getCachedConn
 
         if (iter->second.empty())
         {
-            //Logger::get().debug("new connection");
             return nullptr;
         }
-
-        //Logger::get().debug("connection recycle");
 
         auto info = iter->second.back();
         iter->second.pop_back();
         return info.connection; 
     }
-
-    //Logger::get().debug("new connection");
  
     return nullptr;
-
 }
 
 void openset::mapping::Mapper::returnCachedConnection(RestConnection connection)
@@ -180,7 +171,7 @@ bool openset::mapping::Mapper::dispatchAsync(
 	const std::string& method,
 	const std::string& path,
 	const openset::web::QueryParams& params,
-	const char* payload,
+	char* payload,
 	const size_t length,
 	const openset::web::RestCbBin callback)
 {
@@ -206,7 +197,7 @@ bool openset::mapping::Mapper::dispatchAsync(
 	const std::string& method,
 	const std::string& path,
 	const openset::web::QueryParams& params,
-	const std::string& payload,
+	std::string& payload,
 	const openset::web::RestCbBin callback)
 {
     auto rest = getRoute(route); 
@@ -258,7 +249,7 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	const std::string& method,
 	const std::string& path,
 	const openset::web::QueryParams& params,
-	const char* payload,
+	char* payload,
 	const size_t length)
 {
 	mutex nextLock;
@@ -337,7 +328,7 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	const std::string& method,
 	const std::string& path,
 	const openset::web::QueryParams& params,
-	const char* data, 
+	char* data, 
 	const size_t length,
 	const bool internalDispatch)
 {
@@ -383,13 +374,12 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 
     // we copy the routes so that another thread won't corrupt them
 	decltype(routes) tRoutes;
-    	{
+
+    {
 		csLock lock(cs);
 		tRoutes = routes;
 	}
-	
-
-    
+	    
 	// dispatchAsync to all our nodes
 	{
 		for (const auto& r : tRoutes)

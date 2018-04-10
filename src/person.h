@@ -57,7 +57,7 @@ namespace openset
 
 		public:
 			Person();
-			~Person();
+			~Person() = default;
 
 			// totally reset the person object back to square one
 			void reinit();

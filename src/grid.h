@@ -116,8 +116,6 @@ namespace openset
 			*  ------------
 			*  flags_s records
 			*  ------------
-			*  props
-			*  ------------
 			*  compressed event rows
 			*
 			*/
@@ -126,10 +124,9 @@ namespace openset
 			int32_t linId;
 			int32_t bytes; // bytes when uncompressed
 			int32_t comp; // bytes when compressed
-			int32_t setBytes;
 			int16_t idBytes; // number of bytes in id string
 			int16_t flagRecords; // number of flag records
-			char events[1]; // char* (1st byte) of packed event struct
+			char events[1]; // char* (1st byte) of packed event struct            
 
 			std::string getIdStr() const
 			{
@@ -158,7 +155,7 @@ namespace openset
 
 			int64_t size() const
 			{
-				return sizeof(PersonData_s) + comp + setBytes + idBytes + flagBytes();
+				return (sizeof(PersonData_s) - 1LL) + comp + idBytes + flagBytes();
 			}
 
 			Flags_s* getFlags() 
@@ -171,22 +168,18 @@ namespace openset
 				return events;
 			}
 
-			char* getSets() 
+			char* getComp() 
 			{
 				return events + idBytes + flagBytes();
 			}
-
-			char* getComp() 
-			{
-				return events + idBytes + flagBytes() + setBytes;
-			}
 		};
+
+        const int64_t PERSON_DATA_SIZE = sizeof(PersonData_s) - 1LL;
 
 		struct Col_s
 		{
 			int64_t cols[MAXCOLUMNS];
 		};
-#pragma pack(pop)
 
 		using Rows = vector<Col_s*>;
 
@@ -200,6 +193,8 @@ namespace openset
                 offset(offset)
             {}
         };
+
+#pragma pack(pop)
 
 		class Grid
 		{
@@ -239,8 +234,6 @@ namespace openset
 			Table* table{ nullptr };
 			Attributes* attributes{ nullptr };
 			AttributeBlob* blob{ nullptr };
-
-			int64_t groupIdCounter{ Now() };
 
             IndexDiffing diff;
 

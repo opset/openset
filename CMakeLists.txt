@@ -172,6 +172,7 @@ set(SOURCE_FILES
         src/service.cpp
         src/service.h
         src/shuttle.h
+		src/sidelog.h
         src/table.cpp
         src/table.h
         src/tablepartitioned.cpp

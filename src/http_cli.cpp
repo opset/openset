@@ -1,4 +1,6 @@
 #include "http_cli.h"
+#include <utility>
+#include <string_view>
 #include "logger.h"
 #include "sba/sba.h"
 #include "threads/locks.h"
@@ -37,14 +39,15 @@ openset::web::Rest::Rest(const int64_t routeId, const std::string& server):
 }
 
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
-                                 const char* payload, const size_t length, RestCbJson cb)
+                                 char* payload, const size_t length, RestCbJson cb)
 {
     //csLock lock(cs);
 
-    stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
-    if (payload && length)
-        buffer.write(payload, length);
+    //stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
+    //if (payload && length)
+      //  buffer.write(payload, length);
 
+    SimpleWeb::string_view buffer(payload, length);
     const auto url = path + makeParams(params);
 
     //Logger::get().debug("http://" + host + url);
@@ -64,7 +67,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
                 ? http::StatusCode::success_ok
                 : http::StatusCode::client_error_bad_request;
             auto isError = (status != http::StatusCode::success_ok || ec);
-            cb(status, isError, cjson(string{data, length}, cjson::Mode_e::string));
+            cb(status, isError, cjson(data, length));
 
             PoolMem::getPool().freePtr(data);
         }
@@ -75,13 +78,16 @@ void openset::web::Rest::request(const string& method, const string& path, const
 }
 
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
-                                 const char* payload, const size_t length, RestCbBin cb)
+                                 char* payload, const size_t length, RestCbBin cb)
 {
     //csLock lock(cs);
 
-    stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
-    if (payload && length)
-        buffer.write(payload, length);
+    //stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
+    //if (payload && length)
+      //  buffer.write(payload, length);
+
+    SimpleWeb::string_view buffer(payload, length);
+
 
     const auto url = path + makeParams(params);
 
