@@ -13,9 +13,6 @@ Person::Person():
 	partition(0)
 {}
 
-Person::~Person()
-{}
-
 void Person::reinit()
 {
 	table = nullptr;
@@ -106,7 +103,7 @@ void Person::insert(cjson* rowData)
 
 PersonData_s* Person::commit()
 {
-	auto data = grid.commit();
+	const auto data = grid.commit();
 	people->replacePersonRecord(data);
 	return data;    
 }

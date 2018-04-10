@@ -219,7 +219,8 @@ public:
 	cjson();
 	explicit cjson(Types_e docType);
 	explicit cjson(const std::string &value, const Mode_e mode);
-	cjson(HeapStack* mem);
+    cjson(char* data, const size_t length);
+    cjson(HeapStack* mem);
 
 	cjson(const cjson&) = delete; // can't copy - actually we could... but..
 	cjson(cjson&& other) noexcept; // moveable 

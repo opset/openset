@@ -13,7 +13,6 @@ namespace openset
 		class Database
 		{
 		public:
-
 			CriticalSection cs;
 
             using TablePtr = shared_ptr<Table>;

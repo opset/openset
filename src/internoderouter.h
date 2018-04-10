@@ -103,7 +103,7 @@ namespace openset
 			atomic<int64_t> slotCounter;
 
 			Mapper();
-			~Mapper();
+			~Mapper() = default;
 
             RestConnection getCachedConnection(const int64_t routeId);
             void returnCachedConnection(RestConnection connection);
@@ -129,7 +129,7 @@ namespace openset
 				const std::string& method,
 				const std::string& path, 
 				const openset::web::QueryParams& params,
-				const char* payload, 
+				char* payload, 
 				const size_t length, 
 				const openset::web::RestCbBin callback);
 
@@ -138,7 +138,7 @@ namespace openset
 				const std::string& method,
 				const std::string& path,
 				const openset::web::QueryParams& params,
-				const std::string& payload,
+				std::string& payload,
 				const openset::web::RestCbBin callback);
 
 			bool dispatchAsync(
@@ -155,7 +155,7 @@ namespace openset
 				const std::string& method,
 				const std::string& path,
 				const openset::web::QueryParams& params,
-				const char* payload,
+				char* payload,
 				const size_t length);
 
 			DataBlockPtr dispatchSync(
@@ -176,7 +176,7 @@ namespace openset
 				const std::string& method,
 				const std::string& path,
 				const openset::web::QueryParams& params,
-				const char* data, 
+				char* data, 
 				const size_t length,
 				const bool internalDispatch = false);
 

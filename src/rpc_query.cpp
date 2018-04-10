@@ -87,7 +87,7 @@ shared_ptr<cjson> forkQuery(
     if (openset::globals::sentinel->wasDuringMapChange(startTime - 1, startTime))
     {
         const auto backOff = (retryCount * retryCount) * 20;
-        ThreadSleep(backOff < 10000 ? backOff : 10000);
+        ThreadSleep(backOff < 10'000 ? backOff : 10'000);
 
         return forkQuery(
             table,

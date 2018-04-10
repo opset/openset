@@ -604,14 +604,14 @@ void Grid::prepare()
 
     setData.clear();
 
-	const auto output = cast<char*>(PoolMem::getPool().getPtr(rawData->bytes));
-	LZ4_decompress_fast(rawData->getComp(), output, rawData->bytes);
+	const auto expandedBytes = cast<char*>(PoolMem::getPool().getPtr(rawData->bytes));
+	LZ4_decompress_fast(rawData->getComp(), expandedBytes, rawData->bytes);
 
 	// make a blank row
 	auto row = newRow();
 
 	// read pointer - will increment through the compacted set
-	auto read = output;
+	auto read = expandedBytes;
 	// end pointer - when we get here we are done
 	const auto end = read + rawData->bytes;
 
@@ -694,7 +694,7 @@ void Grid::prepare()
             read += sizeOfCast;
     }
 
-	PoolMem::getPool().freePtr(output);
+	PoolMem::getPool().freePtr(expandedBytes);
 }
 
 PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, const int64_t context, const int64_t value)
@@ -728,7 +728,7 @@ PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, 
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(PersonData_s));
+	memcpy(newPerson, rawData, PERSON_DATA_SIZE);
 	newPerson->flagRecords = static_cast<int16_t>(newFlagRecords); // adjust offsets in new person
 
 	// copy old id bytes
@@ -736,9 +736,6 @@ PersonData_s* Grid::addFlag(const flagType_e flagType, const int64_t reference, 
 		memcpy(newPerson->getIdPtr(), rawData->getIdPtr(), static_cast<size_t>(rawData->idBytes));
 	// copy NEW flags
 	memcpy(newPerson->getFlags(), newFlags, newFlagBytes);
-	// copy old props
-	if (rawData->setBytes)
-		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
 	// copy old compressed events
 	if (rawData->comp)
 		memcpy(newPerson->getComp(), rawData->getComp(), static_cast<size_t>(rawData->comp));
@@ -795,7 +792,7 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(PersonData_s));
+	memcpy(newPerson, rawData, PERSON_DATA_SIZE);
 	newPerson->flagRecords = static_cast<int16_t>(newFlagRecords); // adjust offsets in new person
 
 	// copy old id bytes											 
@@ -804,9 +801,6 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 	// copy NEW flags
 	if (newFlagBytes)
 		memcpy(newPerson->getFlags(), newFlags, newFlagBytes);
-	// copy old props
-	if (rawData->setBytes)
-		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
 	// copy old compressed events
 	if (rawData->comp)
 		memcpy(newPerson->getComp(), rawData->getComp(), static_cast<size_t>(rawData->comp));
@@ -838,9 +832,6 @@ PersonData_s* Grid::commit()
 
 	// make an intermediate buffer that is fully uncompresed
 	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
-
-	// copy over header and ID text
-	//memcpy(intermediateBuffer, rawData, sizeof(PersonData_s) + rawData->idBytes);
 
 	auto write = intermediateBuffer;
 	Cast_s* cursor;
@@ -925,7 +916,7 @@ PersonData_s* Grid::commit()
 	const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize));
 
 	// copy old header
-	memcpy(newPerson, rawData, sizeof(PersonData_s));
+	memcpy(newPerson, rawData, PERSON_DATA_SIZE);
 	newPerson->comp = newCompBytes; // adjust offsets
 	newPerson->bytes = bytesNeeded;
 									
@@ -935,9 +926,6 @@ PersonData_s* Grid::commit()
 	// copy NEW flags
 	if (rawData->flagRecords)
 	memcpy(newPerson->getFlags(), rawData->getFlags(), static_cast<size_t>(rawData->flagBytes()));
-	// copy old props
-	if (rawData->setBytes)
-		memcpy(newPerson->getSets(), rawData->getSets(), static_cast<size_t>(rawData->setBytes));
 	// copy NEW compressed events
 	if (newCompBytes)
 		memcpy(newPerson->getComp(), compBuffer, static_cast<size_t>(newCompBytes));
@@ -1062,6 +1050,18 @@ void Grid::insert(cjson* rowData)
 	attrNode->set("__action", action);
 	auto columns = table->getColumns();
 
+#if defined(_DEBUG) || defined(NDEBUG)
+    // debug data that is useful when breakpointing in here
+    const auto jsonText = cjson::stringify(rowData, true);
+    std::vector<db::Columns::Columns_s*> debugColumns;
+
+    for (auto col = 0; col < colMap->columnCount; ++col)
+    {
+        auto info = columns->getColumn(colMap->columnMap[col]);
+        debugColumns.push_back(info);
+    }
+#endif
+    
     const auto insertRow = newRow();
 
     insertRow->cols[COL_STAMP] = stamp;
@@ -1261,26 +1261,27 @@ void Grid::insert(cjson* rowData)
                         attributes->getMake(schemaCol, tstr);
                     else
                         attributes->getMake(schemaCol, tval);
+
                     attributes->setDirty(this->rawData->linId, schemaCol, tval);
 
                     setData.push_back(tval);
                 }
 
                 // let our row use an encoded value for the column.
-                SetInfo_s info{ static_cast<int>(setData.size() - startIdx), info.offset = startIdx };
+                SetInfo_s info{ static_cast<int>(setData.size() - startIdx), static_cast<int>(startIdx) };
                 insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
             }
             continue; // special handler for ARRAY
 
             default:
-                tval = NONE;
-                break;
+                continue;
             }
 
             if (colInfo->type == columnTypes_e::textColumn)
                 attributes->getMake(schemaCol, tstr);
             else
                 attributes->getMake(schemaCol, tval);
+
             attributes->setDirty(this->rawData->linId, schemaCol, tval);
 
             if (colInfo->isSet)
@@ -1302,8 +1303,9 @@ void Grid::insert(cjson* rowData)
 
     const auto getRowHash = [&](Col_s* rowPtr) -> int64_t
     {
-        int64_t hash = 0;
-        for (auto col = 0; col < colMap->columnCount; col++)
+        auto hash = rowPtr->cols[COL_STAMP];
+
+        for (auto col = COL_FIRST_USER_DATA; col < colMap->columnCount; ++col)
         {
             if (rowPtr->cols[col] == NONE)
                 continue;
@@ -1315,7 +1317,7 @@ void Grid::insert(cjson* rowData)
 
             if (colInfo->isSet)
             {
-                const auto& ol = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
+                const auto ol = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
                 for (auto idx = ol.offset; idx < ol.offset + ol.length; ++idx)
                     hash = HashPair(setData[idx], hash);
             }            

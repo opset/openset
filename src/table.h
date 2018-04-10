@@ -108,13 +108,15 @@ namespace openset
             // Table Settings
 			int eventMax{ 5000 }; // remove oldest rows if more than rowCull
             int64_t tzOffset{ 0 }; // UTC
-			int64_t eventTtl{ 86'400'000LL * 365LL * 5 }; // auto cull older than stampCull
+			int64_t eventTtl{ 86'400'000LL * 365LL * 5LL }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
             int64_t maintInterval{ 86'400'000LL }; // trim, index, clean, etc (daily)
             int64_t reventInterval{ 60'000 }; // check for re-events every 60 seconds
             int64_t segmentInterval{ 60'000 }; // update segments every 60 seconds
             int indexCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
             int personCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
+
+            int64_t tableHash;
 
 			explicit Table(const string &name, openset::db::Database* database);
 			~Table();
@@ -132,37 +134,37 @@ namespace openset
 				return sessionTime;
 			}
 
-			inline Columns* getColumns()
+			Columns* getColumns()
 			{
 				return &columns;
 			}
 
-            inline ColumnMapping* getColumnMapper()
+            ColumnMapping* getColumnMapper()
 			{
 			    return &columnMap;
 			}
 
-			inline zMapHash* getZOrderHashes() 
+			zMapHash* getZOrderHashes() 
 			{
 				return &zOrderInts;
 			}
 
-			inline zMapStr* getZOrderStrings()
+			zMapStr* getZOrderStrings()
 			{
 				return &zOrderStrings;
 			}
 
-			inline CriticalSection* getLock() 
+			CriticalSection* getLock() 
 			{
 				return &cs;
 			}
 
-			inline CriticalSection* getGlobalsLock()
+			CriticalSection* getGlobalsLock()
 			{
 				return &globalVarCS;
 			}
 
-			inline AttributeBlob* getAttributeBlob()
+			AttributeBlob* getAttributeBlob()
 			{
 				return &attributeBlob;
 			}
@@ -179,42 +181,47 @@ namespace openset
 				return &globalVars;
 			}
 
-			inline CriticalSection* getSegmentLock()
+			CriticalSection* getSegmentLock()
 			{
 				return &segmentCS;
 			}
 
-			inline std::unordered_map<std::string, SegmentTtl_s>* getSegmentTTL()
+			std::unordered_map<std::string, SegmentTtl_s>* getSegmentTTL()
 			{
 				return &segmentTTL;
 			}
 
-			inline std::unordered_map<std::string, SegmentRefresh_s>* getSegmentRefresh()
+			std::unordered_map<std::string, SegmentRefresh_s>* getSegmentRefresh()
 			{
 				return &segmentRefresh;
 			}
 
-			inline const string& getName() const
+			const string& getName() const
 			{
 				return name;
 			}
 
-			inline openset::revent::MessageBroker* getMessages()
+            const int64_t getTableHash() const
+			{
+			    return tableHash;
+			}
+
+			openset::revent::MessageBroker* getMessages()
 			{
 				return &messages;
 			}
 
-			inline Database* getDatabase() const
+			Database* getDatabase() const
 			{
 				return database;
 			}
 
-			inline int64_t getLoadVersion() const
+			int64_t getLoadVersion() const
 			{
 				return loadVersion;
 			}
 
-			inline void forceReload()
+			void forceReload()
 			{
 				++loadVersion;
 			}

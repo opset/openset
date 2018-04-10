@@ -89,10 +89,6 @@ namespace openset
 					return true;
 				return segmentTTL[segmentName] < Now();
 			}
-
-            void serializeInsertBacklog(HeapStack* mem);
-            int64_t deserializeInsertBacklog(char* mem);
-
 		};
 	};
 };

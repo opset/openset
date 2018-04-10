@@ -39,11 +39,11 @@ namespace openset::web
 		    return routeId;
 		}
 
-		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
-		             const size_t length, RestCbJson cb);;
+		void request(const std::string& method, const std::string& path, const QueryParams& params, 
+                     char* payload, const size_t length, RestCbJson cb);;
 
-		void request(const std::string& method, const std::string& path, const QueryParams& params, const char* payload,
-		             const size_t length, RestCbBin cb);;
+		void request(const std::string& method, const std::string& path, const QueryParams& params, 
+                     char* payload, const size_t length, RestCbBin cb);;
 
 	};
 

@@ -57,9 +57,10 @@ namespace openset::comms
 		{ "GET", std::regex(R"(^/v1/internode/is_member$)"), RpcInternode::is_member, {} },
 		{ "POST", std::regex(R"(^/v1/internode/join_to_cluster$)"), RpcInternode::join_to_cluster, {} },
 		{ "POST", std::regex(R"(^/v1/internode/add_node$)"), RpcInternode::add_node, {} },
-		{ "PUT", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_init, {} },
-		{ "POST", std::regex(R"(^/v1/internode/transfer)"), RpcInternode::transfer_receive, {} },
+		{ "PUT", std::regex(R"(^/v1/internode/transfer$)"), RpcInternode::transfer_init, {} },
+		{ "POST", std::regex(R"(^/v1/internode/transfer$)"), RpcInternode::transfer_receive, {} },
 		{ "POST", std::regex(R"(^/v1/internode/map_change$)"), RpcInternode::map_change, {} },
+        { "POST", std::regex(R"(^/v1/internode/translog$)"), RpcInternode::transfer_translog, {} },
 
         // Status
         { "GET", std::regex(R"(^/v1/status(\/|\?|\#|)$)"), RpcStatus::status, {} }

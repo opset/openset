@@ -1,0 +1,38 @@
+{
+  "configurations": [
+    {
+      "inheritEnvironments": [
+        "msvc_x64"
+      ],
+      "name": "x64-Debug",
+      "includePath": [ "${env.INCLUDE}", "src", "lib", "vendor/simple-web-server", "vendor/lz4/lib/", "vendor/asio/asio/include",  "test" ],
+      "defines": [ "_DEBUG" ],
+      "compilerSwitches": "/std:c++17",
+      "intelliSenseMode": "windows-msvc-x64",
+      "undefines": []
+    },
+    {
+      "inheritEnvironments": [
+        "msvc_x64"
+      ],
+      "name": "x64-Release",
+      "includePath": [ "${env.INCLUDE}", "src", "lib", "vendor/simple-web-server", "vendor/lz4/lib/", "vendor/asio/asio/include", "test" ],
+      "exclude": [ "node_modules" ],
+      "defines": [],
+      "compilerSwitches": "/std:c++17",
+      "intelliSenseMode": "windows-msvc-x64",
+      "undefines": []
+    },
+    {
+      "inheritEnvironments": [
+        "msvc_x64"
+      ],
+      "name": "x64-Release-with-debug",
+      "includePath": [ "${env.INCLUDE}", "src", "lib", "vendor/simple-web-server", "vendor/lz4/lib/", "vendor/asio/asio/include", "test" ],
+      "defines": [],
+      "compilerSwitches": "/std:c++17",
+      "intelliSenseMode": "windows-msvc-x64",
+      "undefines": []
+    }
+  ]
+}

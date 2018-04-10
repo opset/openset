@@ -65,11 +65,21 @@ namespace std
 		}
 	};
 
-	// hasher for std::pair<int64_t, int64_t>
+	// hasher for std::pair<int32_t, int64_t>
 	template <>
 	struct hash<std::pair<int32_t, int64_t>>
 	{
 		size_t operator()(const std::pair<int32_t, int64_t>& v) const
+		{
+			return static_cast<size_t>(MakeHash(recast<const char*>(&v), sizeof(v)));
+		}
+	};
+    
+    // hasher for std::pair<int64_t, int32_t>
+	template <>
+	struct hash<std::pair<int64_t, int32_t>>
+	{
+		size_t operator()(const std::pair<int32_t, int32_t>& v) const
 		{
 			return static_cast<size_t>(MakeHash(recast<const char*>(&v), sizeof(v)));
 		}
@@ -130,4 +140,5 @@ namespace std {
 
 	};
 }
+
 using voidfunc = std::function<void()>;

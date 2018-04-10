@@ -20,5 +20,7 @@ namespace openset::comms
         static void transfer_init(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/internode/transfer?partition={partition_id}&table={table_name}
         static void transfer_receive(const openset::web::MessagePtr& message, const RpcMapping& matches);
+        // POST /v1/internode/translog
+        static void transfer_translog(const openset::web::MessagePtr& message, const RpcMapping& matches);
     };
 }

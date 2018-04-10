@@ -80,10 +80,7 @@ namespace openset::web
 
 				message = server->getQueuedMessage();
 				if (!message)
-				{
-					cout << "!!! empty queue" << endl;
 					continue;
-				}
 
 			} // unlock out of scope
 
@@ -92,9 +89,6 @@ namespace openset::web
 			openset::comms::Dispatch(message);
 		}
 	}
-
-	HttpServe::HttpServe()
-	{}
 
 	void HttpServe::queueMessage(std::shared_ptr<Message> message) 
 	{
@@ -170,11 +164,15 @@ namespace openset::web
 			threads[i].detach();
 	}
 
-	void HttpServe::serve(const std::string ip, const int port)
+	void HttpServe::serve(const std::string& ip, const int port)
 	{
 		using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
+        openset::globals::global_io_service = std::make_shared<asio::io_service>();
+        const auto server_io = openset::globals::global_io_service;//std::make_shared<asio::io_service>();
+
 		HttpServer server;
+        server.io_service = server_io;
 		server.config.port = port;
 		server.config.address = ip;
 		server.config.reuse_address = false; // we want an error if this is already going
@@ -183,23 +181,14 @@ namespace openset::web
 		makeWorkers();
 
 		server.default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) {
-			auto size = request->content.size();
-			char buffer[1024];
-			request->content.read(buffer, size);
 			response->write("{\"error\":\"unknown request\""s);
 		};
-
-		std::thread server_thread([&server]() {
-			// Start server
-			std::cout << "Started" << std::endl;
-			server.start(); // blocks
-		});
-
-		// make a client object for our Rest class (http_cli.h)		
-		openset::globals::global_io_service = std::make_shared<asio::io_service>();
+    
+	    // Start server
+		server.start();
 		
 		Logger::get().info("REST server listening on "s + ip + ":"s + to_string(port) + "."s);
 
-		server_thread.join();
+        server_io->run();
 	}
 }

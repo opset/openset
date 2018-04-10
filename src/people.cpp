@@ -81,13 +81,9 @@ PersonData_s* People::getmakePerson(string userIdString)
 		{
 			auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s) + idLen));
 
-			//newUser->idstr = cast<char*>(PoolMem::getPool().getPtr(idLen + 1));
-			//strcpy(newUser->idstr, idCstr);
-
 			newUser->id = hashId;
 			newUser->linId = linId;
 			newUser->idBytes = 0;
-			newUser->setBytes = 0;
 			newUser->flagRecords = 0;
 			newUser->bytes = 0;
 			newUser->comp = 0;
@@ -142,9 +138,14 @@ void People::serialize(HeapStack* mem)
 
 	for (auto person : peopleLinear)
 	{
-		const auto serializedPerson = recast<PersonData_s*>(mem->newPtr(person->size()));
-		memcpy(serializedPerson, person, person->size());
-		*sectionLength += person->size();
+        if (!person)
+            continue;
+
+        const auto size = person->size();
+		const auto serializedPerson = mem->newPtr(size);
+
+		memcpy(serializedPerson, person, size);
+		*sectionLength += size;
 	}
 }
 
@@ -157,29 +158,33 @@ int64_t People::deserialize(char* mem)
 
 	read += sizeof(int64_t);
 
-    const auto blockSize = *recast<int64_t*>(read);
+    const auto sectionLength = *recast<int64_t*>(read);
+	read += sizeof(int64_t);
 
-	if (blockSize == 0)
+	if (sectionLength == 0)
 	{
 		Logger::get().error("no people to deserialize for partition " + to_string(partition));
 		return 16;
 	}
 
-	read += sizeof(int64_t);
+    peopleMap.clear();
+    peopleLinear.clear();
+    peopleLinear.reserve(sectionLength);
+    reuse.clear();
 
 	// end is the length of the block after the 16 bytes of header
-    const auto end = read + blockSize;
+    const auto end = read + sectionLength;
 
 	while (read < end)
 	{
 		const auto streamPerson = recast<PersonData_s*>(read);
-		const auto streamPersonLen = streamPerson->size();
+		const auto size = streamPerson->size();
 
-		const auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(streamPersonLen));
-		memcpy(person, streamPerson, streamPersonLen);
+		const auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(size));
+		memcpy(person, streamPerson, size);
 
 		// grow if a record was excluded during serialization 
-		while (peopleLinear.size() <= person->linId)
+		while (static_cast<int>(peopleLinear.size()) <= person->linId)
 			peopleLinear.push_back(nullptr);
 
 		// index this person
@@ -187,8 +192,15 @@ int64_t People::deserialize(char* mem)
 		peopleMap.set(person->id, person->linId);
 		
 		// next block please
-		read += streamPersonLen;
+		read += size;
 	}
 
-	return blockSize + 16;
+    for (auto i = 0; i < static_cast<int>(peopleLinear.size()); ++i)
+    {
+        if (!peopleLinear[i])
+            reuse.push_back(i);
+    }
+
+
+	return sectionLength + 16;
 }

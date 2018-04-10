@@ -2,6 +2,7 @@
 #include "sentinel.h"
 #include "tablepartitioned.h"
 #include "asyncpool.h"
+#include "sidelog.h"
 
 namespace openset
 {
@@ -214,6 +215,7 @@ bool openset::mapping::Sentinel::failCheck()
 			mapper->removeRoute(r);
 			Logger::get().error("node down, removing.");
 			++errorCount;
+            break;
 		}
 	}
 
@@ -226,7 +228,7 @@ bool openset::mapping::Sentinel::failCheck()
 	return false;
 }
 
-bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) const
+bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t sourceNode, const int64_t targetNode) 
 {
 	// make a JSON request payload
 	auto targetNodeName = globals::mapper->getRouteName(targetNode);
@@ -246,6 +248,9 @@ bool openset::mapping::Sentinel::tranfer(const int partitionId, const int64_t so
 		// this will unset the partition from the map
 		openset::globals::mapper->getPartitionMap()->setState(partitionId, targetNode, openset::mapping::NodeState_e::free);
 		Logger::get().error("transfer error on paritition " + to_string(partitionId) + ".");
+
+        failCheck();
+
 		return false;
 	}
 	else
@@ -279,7 +284,6 @@ bool openset::mapping::Sentinel::broadcastMap()
 
 	openset::globals::mapper->releaseResponses(responses);
 
-
     openset::globals::async->suspendAsync();
     openset::globals::async->balancePartitions();
     openset::globals::async->resumeAsync();
@@ -295,8 +299,9 @@ void openset::mapping::Sentinel::dropLocalPartition(const int partitionId)
 		openset::globals::running->nodeId))
 	{
 		openset::globals::async->suspendAsync();
-
 		openset::globals::async->freePartition(partitionId);
+
+	    db::SideLog::getSideLog().removeReadHeadsByPartition(partitionId);
 
 		// drop this partition from any table objects
 		for (auto t : openset::globals::database->tables)
@@ -342,7 +347,7 @@ void openset::mapping::Sentinel::runMonitor()
 
     int64_t lastFailCheck = 0;
 
-	// this loop runs every 100 milliseconds to ensure that
+	// this loop runs every 250 milliseconds to ensure that
 	// our cluster is complete. 
 	while (true)
 	{
@@ -814,7 +819,7 @@ void openset::mapping::Sentinel::runMonitor()
 						Logger::get().error("error balance (clones) - moving roles on partition " + to_string(partition) + ".");
 
 					//  TRANSFER PARTITION HERE 				
-					if (tranfer(partition, heavyNode, targetNode)) // update the map again!
+					if (tranfer(partition, heavyNode, targetNode)) 
 					{
 						lastMovedClonePartition = partition;
 
@@ -828,6 +833,7 @@ void openset::mapping::Sentinel::runMonitor()
 						mapper->partitionMap.setState(partition, targetNode, NodeState_e::active_clone);
 					}
 
+                    // update the map again to make the placeholder and active
 					if (broadcastMap())
 						Logger::get().info("replication check (clones) - broadcast new map.");
 					else
@@ -846,7 +852,7 @@ void openset::mapping::Sentinel::runMonitor()
         inBalance = true;
 		// If we made it here, there are no errors to be concerned about.
 		//clearErrorState(); // clear error state if set
-		ThreadSleep(100); // sleep a little then we are back to the top of this loop
+		ThreadSleep(250); // sleep a little then we are back to the top of this loop
 
 		lastMovedClonePartition = -1;
 

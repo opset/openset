@@ -197,7 +197,7 @@ namespace openset::web
 		vector<shared_ptr<webWorker>> workers;
 		vector<thread> threads;
 
-		HttpServe();
+		HttpServe() = default;
 
 		void queueMessage(std::shared_ptr<Message> message);
 		std::shared_ptr<Message> getQueuedMessage();
@@ -205,7 +205,7 @@ namespace openset::web
 		template<typename T>
 		void mapEndpoints(T& server);
 		void makeWorkers();
-		void serve(const std::string ip, const int port);
+		void serve(const std::string& ip, const int port);
 	};
 }
 
