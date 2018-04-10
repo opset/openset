@@ -683,13 +683,10 @@ namespace openset
             // NOTE - VC 15.5.0 is optimizing adjectiveIndex and thingsIndex out and faulting.
             //         volatile is a temp fix
 
-		    const std::uniform_int_distribution<int> distAdjectives(0, namingAdjectives.size() - 1);
-			volatile const auto adjectiveIndex = distAdjectives(mt);
+		    std::uniform_int_distribution<int> distAdjectives(0, namingAdjectives.size() - 1);
+		    std::uniform_int_distribution<int> distThings(0, namingThings.size() - 1);
 
-		    const std::uniform_int_distribution<int> distThings(0, namingThings.size() - 1);
-			volatile const auto thingsIndex = distThings(mt);
-
-			return namingAdjectives[adjectiveIndex] + "-"s + namingThings[thingsIndex];
+			return namingAdjectives[distAdjectives(mt)] + "-"s + namingThings[distThings(mt)];
 		};
 	}
 }
