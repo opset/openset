@@ -1,8 +1,3 @@
-/**
- * \class Person
- * \
- */
-
 #pragma once
 
 #include "grid.h"
@@ -47,13 +42,11 @@ namespace openset
 
 		private:
 			Grid grid;
-			//PersonData_s* data;
 			Table* table;
 			Attributes* attributes;
 			AttributeBlob* blob;
 			People* people;
 			int partition;
-
 
 		public:
 			Person();

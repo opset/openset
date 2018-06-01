@@ -133,13 +133,13 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
     csLock lock(*table->getLock());
 
     // set the default required columns
-    columns->setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
-    columns->setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+    columns->setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
+    columns->setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
+    columns->setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
     columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
     columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
     columns->setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
+    columns->setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
 
     int64_t columnEnum = 1000;
 
@@ -148,6 +148,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
         const auto name = n->xPathString("/name", "");
         const auto type = n->xPathString("/type", "");
         const auto isSet = n->xPathBool("/is_set", false);
+        const auto isProp = n->xPathBool("/is_prop", false);
 
         columnTypes_e colType;
 
@@ -171,7 +172,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
             return;
         }
 
-        columns->setColumn(columnEnum, name, colType, isSet);
+        columns->setColumn(columnEnum, name, colType, isSet, isProp);
         ++columnEnum;
     }
 
@@ -316,7 +317,9 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
             columnRecord->set("name", c.name);
             columnRecord->set("type", type);
             if (c.isSet)
-                columnRecord->set("is_set", c.isSet);
+                columnRecord->set("is_set", true);
+            if (c.isProp)
+                columnRecord->set("is_prop", true);
         }
 
     auto zOrder = response.setArray("z_order");
@@ -350,6 +353,7 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
     const auto columnName = matches.find("name"s)->second;
     const auto columnType = message->getParamString("type"s);
     const auto isSet = message->getParamBool("is_set"s);
+    const auto isProp = message->getParamBool("is_prop"s);
 
     if (!tableName.size())
     {
@@ -445,7 +449,7 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
         return; // TODO hmmm...
     }
 
-    columns->setColumn(lowest, columnName, colType, isSet);
+    columns->setColumn(lowest, columnName, colType, isSet, isProp);
 
     Logger::get().info("added column '" + columnName + "' from table '" + tableName + "' created.");
 

@@ -160,7 +160,7 @@ inline Tests test_db()
 			
 				// built-ins
 				ASSERT(table->getColumns()->nameMap.count("__triggers"));
-				ASSERT(table->getColumns()->nameMap.count("__uuid"));
+				ASSERT(table->getColumns()->nameMap.count("id"));
 				ASSERT(table->getColumns()->nameMap.count("__emit"));
 
 				// columns we've added

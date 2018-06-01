@@ -14,46 +14,43 @@ QueryParser::QueryParser(const parseMode_e parseMode) :
 	parseMode(parseMode)
 {}
 
-QueryParser::~QueryParser()
-{}
-
 bool QueryParser::isDigit(const char value)
 {
 	return (value >= '0' && value <= '9');
 }
 
-bool QueryParser::isNumeric(const string value)
+bool QueryParser::isNumeric(const string& value)
 {
 	return ((value[0] >= '0' && value[0] <= '9') ||
 		(value[0] == '-' && value[1] >= '0' && value[1] <= '9'));
 }
 
-bool QueryParser::isFloat(const string value)
+bool QueryParser::isFloat(const string& value)
 {
-	return ((value[0] >= '0' && value[0] <= '9' ||
+	return (((value[0] >= '0' && value[0] <= '9') ||
 		(value[0] == '-' && value[1] >= '0' && value[1] <= '9')) &&
 		value.find('.') != string::npos);
 }
 
-bool QueryParser::isString(const string value)
+bool QueryParser::isString(const string& value)
 {
 	return (value[0] == '"' || value[0] == '\'');
 }
 
-bool QueryParser::isBool(const string value)
+bool QueryParser::isBool(const string& value)
 {
     return (value == "True" || value == "true" || value == "False" || value == "false");
 }
 
 
-bool QueryParser::isTextual(const string value)
+bool QueryParser::isTextual(const string& value)
 {
 	return ((value[0] >= 'a' && value[0] <= 'z') ||
 		(value[0] >= 'A' && value[0] <= 'Z') ||
 		value[0] == '_');
 }
 
-bool QueryParser::isValue(const string value)
+bool QueryParser::isValue(const string& value)
 {
 	return (isString(value) || isNumeric(value));
 }
@@ -354,7 +351,7 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
 				}
 
 				// reset the line accumulator
-				current.clear();
+                current = {};// .clear();
 			}
 			break;
 
@@ -376,7 +373,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 
 	FirstPass blocks; // empty collector for lines as we parse
 
-	for (auto i = 0; i < lines.size(); i++)
+	for (auto i = 0; i < static_cast<int>(lines.size()); i++)
 	{
 
 		lastDebug = lines[i].debug;
@@ -394,7 +391,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 			FirstPass capture; // place to capture lines
 			auto& line = blocks.back();
 
-			for (; i < lines.size(); i++)
+			for (; i < static_cast<int>(lines.size()); i++)
 			{
 				if (lines[i].indent <= indent)
 					break;
@@ -426,7 +423,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 					auto lambdaIdx = -1;
 					auto lambdaId = -1;
 
-					if (c.parts[1] == "__session")
+					if (c.parts[1] == "session")
 					{
 						useSessions = true;
 						// distinct_count_person distinct counts per person, meaning over a query it sums the 
@@ -438,9 +435,9 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 					auto alias = c.parts[1]; // name				
 					auto distinct = std::string{ alias };
 
-					for (auto s = 1; s < c.parts.size(); ++s)
+					for (auto s = 1; s < static_cast<int>(c.parts.size()); ++s)
 					{
-						if (s < c.parts.size() - 1)
+						if (s < static_cast<int>(c.parts.size()) - 1)
 						{
 							if (c.parts[s] == "as" || c.parts[s] == "AS")
 							{
@@ -552,15 +549,15 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 				line.block = extractBlocks(indent + 1, capture, blockList);
 
 				// find our block
-				for (auto b = 0; b < blockList.size(); b++)
+				for (auto& b : blockList)
 				{
-					if (blockList[b].blockId == line.block)
+					if (b.blockId == line.block)
 					{
 						FirstPass_s item;
 						item.isFunction = true;
 						item.parts = move(line.parts);
-						blockList[b].code.insert(blockList[b].code.begin(), item);
-						for (auto& c : blockList[b].code)
+					    b.code.insert(b.code.begin(), item);
+						for (auto& c : b.code)
 							c.isFunction = true;
 						break;
 					}
@@ -580,11 +577,11 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 						line.parts[0] == "elif" ||
 						line.parts[0] == "else"))
 				{
-					for (auto b = 0; b < blockList.size(); b++)
+					for (auto& b : blockList)
 					{
-						if (blockList[b].blockId == line.block)
+						if (b.blockId == line.block)
 						{
-							for (auto& c : blockList[b].code)
+							for (auto& c : b.code)
 								c.isConditional = true;
 							break;
 						}
@@ -595,7 +592,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 		}
 		else // indent was the same as current block
 		{
-			if (lines.size() > i && lines[i].parts.size())
+			if (i < static_cast<int>(lines.size()) && lines[i].parts.size())
 				blocks.push_back(move(lines[i]));
 		}
 	}
@@ -603,10 +600,10 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
 	if (!vars.columnVars.size())
 	{
 		vars.columnVars.emplace(
-			"person", 
+			"id", 
 			Variable_s{
-				"__uuid",
-				"person",
+				"id",
+				"id",
 				"column",
 				Modifiers_e::count,
 				0
@@ -629,7 +626,13 @@ QueryParser::BlockList_s* QueryParser::getBlockByID(const int64_t blockId, Block
 	return nullptr;
 }
 
-int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug, const bool stopOnConditions, const string stackOp)
+int64_t QueryParser::parseConditions(
+    LineParts& conditions, 
+    MiddleOpList& opList, 
+    int64_t index, 
+    Debug_s& debug, 
+    const bool stopOnConditions, 
+    const string& stackOp)
 {
 	while (index < conditions.size())
 	{
@@ -840,55 +843,129 @@ int64_t QueryParser::parseConditions(LineParts& conditions, MiddleOpList& opList
 					if (conditions.size() > index + 1 &&
 						conditions[index + 1] == "[")
 					{
-						vector<MiddleOpList> derefCaptures;
 
-						auto derefEndIdx = index + 1;
+                        if (isRowObject(value))
+                        {
+                            // is there enough data here to extract
+                            // square brackes
+                            /*if (conditions.size() < index + 3)
+                            {
+                                throw ParseFail_s{
+                                    errors::errorClass_e::parse,
+                                    errors::errorCode_e::syntax_error,
+                                    "row iterator variable must be dereferenced",
+                                    debug
+                                };
 
-						while (derefEndIdx < conditions.size() &&
-							conditions[derefEndIdx] == "[")
-						{
-							MiddleOpList derefOps;
+                                return index;
+                            }*/
 
-							derefEndIdx = parseConditions(
-								conditions,
-								derefOps,
-								derefEndIdx + 1,
-								debug,
-								false);
+                            auto tableVar = stripQuotes(conditions[index + 2]);
 
-							// TODO - check for zero length
+                            /*
+                            if (tableVar == "action" || tableVar == "event")
+                                tableVar = "__action";
+                            else if (tableVar == "time" || tableVar == "stamp")
+                                tableVar = "__stamp";
+                            else if (tableVar == "person" || tableVar == "people")
+                                tableVar = "__uuid";
+                            else if (tableVar == "session")
+                                tableVar = "__session";
+                            */
 
-							derefCaptures.emplace_back(derefOps);
+                            // this is a set row command
+                            opList.emplace_back(
+                                OpCode_e::SETROW,
+                                value,
+                                debug);
 
-							++derefEndIdx;
-						}
+                            // this will pop the value for the specified table column
+                            // for the set row
+                            opList.emplace_back(
+                                OpCode_e::PSHTBLCOL,
+                                tableVar,
+                                debug);
 
-						--derefEndIdx;
+                            if (!isVar(vars.tableVars, tableVar))
+                            {
+                                vars.tableVars.emplace(
+                                    tableVar,
+                                    Variable_s{ tableVar, "grid" });
+                            }
 
-						// insert the deref ops in reverse (stack) order
-						for_each(derefCaptures.rbegin(), derefCaptures.rend(), [&opList](auto item)
-					         {
-						         opList.insert(
-							         opList.end(),
-							         make_move_iterator(item.begin()),
-							         make_move_iterator(item.end()));
-					         });
+                            index += 3;
 
-						opList.emplace_back(
-							isRef ? OpCode_e::PSHUSROREF : OpCode_e::PSHUSROBJ,
-							value,
-							debug);
+                        }
+                        else
+                        {
 
-						// params contains the depth of the deref
-						opList.back().params = derefCaptures.size();
+                            vector<MiddleOpList> derefCaptures;
 
-						index = derefEndIdx;
+                            auto derefEndIdx = index + 1;
 
-						if (!isVar(vars.userVars, value))
-							vars.userVars.emplace(value, Variable_s{value,""});
+                            while (derefEndIdx < conditions.size() &&
+                                conditions[derefEndIdx] == "[")
+                            {
+                                MiddleOpList derefOps;
+
+                                derefEndIdx = parseConditions(
+                                    conditions,
+                                    derefOps,
+                                    derefEndIdx + 1,
+                                    debug,
+                                    false);
+
+                                // TODO - check for zero length
+
+                                derefCaptures.emplace_back(derefOps);
+
+                                ++derefEndIdx;
+                            }
+
+                            --derefEndIdx;
+
+                            // insert the deref ops in reverse (stack) order
+                            for_each(derefCaptures.rbegin(), derefCaptures.rend(), [&opList](auto item)
+                            {
+                                opList.insert(
+                                    opList.end(),
+                                    make_move_iterator(item.begin()),
+                                    make_move_iterator(item.end()));
+                            });
+
+                            opList.emplace_back(
+                                isRef ? OpCode_e::PSHUSROREF : OpCode_e::PSHUSROBJ,
+                                value,
+                                debug);
+
+                            // params contains the depth of the deref
+                            opList.back().params = derefCaptures.size();
+
+                            index = derefEndIdx;
+
+                            if (!isVar(vars.userVars, value))
+                                vars.userVars.emplace(value, Variable_s{ value,"" });
+
+                        }
 					}
 					else
 					{ // simple variable no deref brackets var[deref]
+
+
+                        // row objects must be dereference
+                        /*
+                        if (isRowObject(value))
+                        {
+                            throw ParseFail_s{
+                                errors::errorClass_e::parse,
+                                errors::errorCode_e::syntax_error,
+                                "row iterator variable must be dereferenced",
+                                debug
+                            };
+                            return index;
+                        }
+                        */
+                        
 						if (value == "True")
 						{
 							opList.emplace_back(
@@ -1026,13 +1103,13 @@ int64_t QueryParser::parseCall(LineParts& conditions, MiddleOpList& opList, int6
 	return index;
 }
 
-void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockList, MiddleBlockList& outputBlocks)
+void QueryParser::tokenizeBlock(FirstPass& lines, const int blockId, BlockList& blockList, MiddleBlockList& outputBlocks)
 {
 	MiddleOpList block;
 
 	auto i = 0;
 
-	const auto pushBlock = [&](MiddleOpList& lambdaBlock, int newId, BlockType_e blockType = BlockType_e::code)
+	const auto pushBlock = [&](MiddleOpList& lambdaBlock, const int newId, const BlockType_e blockType = BlockType_e::code)
 	{
 		MiddleBlock_s newBlock;
 		newBlock.blockId = newId;
@@ -1044,17 +1121,15 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 	auto currentBlockType = BlockType_e::code;
 	string blockName = "";
 
-	while (i < lines.size())
+	while (i < static_cast<int>(lines.size()))
 	{
         if (lines[i].parts[0] == "@flags")
-		{					
-			
-
-			for (auto x = 1; x < lines[i].parts.size(); ++x)
+		{							
+			for (auto x = 1; x < static_cast<int>(lines[i].parts.size()); ++x)
 			{
 				// expire a segment after the TTL is up
 				if (lines[i].parts[x] == "ttl" && 
-					lines[i].parts.size() > x + 2 &&
+					static_cast<int>(lines[i].parts.size()) > x + 2 &&
 					lines[i].parts[x + 1] == "=")
 				{
 					if (isNumeric(lines[i].parts[x + 2]))
@@ -1074,7 +1149,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 				// auto refresh a segment
 				if (lines[i].parts[x] == "refresh" &&
-					lines[i].parts.size() > x + 2 &&
+					static_cast<int>(lines[i].parts.size()) > x + 2 &&
 					lines[i].parts[x + 1] == "=")
 				{
 					if (isNumeric(lines[i].parts[x + 2]))
@@ -1104,14 +1179,14 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			LineParts varList;
 
-			for (auto x = 3; x < lines[i].parts.size(); x++)
+            // fix: +=2
+			for (auto x = 3; x < static_cast<int>(lines[i].parts.size()); x += 2)
 			{
 				// functions don't need (), def some_func: is valid in pyql
 				if (lines[i].parts[x] == "__MARKER__" ||
 					lines[i].parts[x] == ")")
 					break;
 				varList.push_back(lines[i].parts[x]);
-				++x; // skip the comma which will next 
 			}
 
 			for (auto v = varList.rbegin(); v != varList.rend(); ++v)
@@ -1126,8 +1201,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 			currentBlockType = BlockType_e::function;
 			blockName = functionName;
 		}
-		else if (lines[i].parts[0] == "if" ||
-			lines[i].parts[0] == "elif")
+		else if (lines[i].parts[0] == "if" || lines[i].parts[0] == "elif")
 		{
 			// process conditions get lambda
 			++blockCounter;
@@ -1152,18 +1226,20 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 		/*
 		patterns:
 
-			match
-			match event
-			match # events
+            for row in rows
+	        continue for row in rows
+
+            for item in container
 
 		*/
-		else if (lines[i].parts[0] == "for")
+		else if (lines[i].parts[0] == "for" || 
+            (static_cast<int>(lines[i].parts.size()) > 2 && lines[i].parts[0] == "continue" && lines[i].parts[1] == "for"))
 		{
 			LineParts left;
 
 			auto idx = 1;
 
-			for (; idx < lines[i].parts.size(); ++idx)
+			for (; idx < static_cast<int>(lines[i].parts.size()); ++idx)
 			{
 				if (lines[i].parts[idx] == ",")
 					continue;
@@ -1174,10 +1250,14 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 				left.push_back(lines[i].parts[idx]);
 			}
 
+            const auto isIn = idx != static_cast<int>(lines[i].parts.size()) && lines[i].parts[idx] == "in";
+            const auto isRows = isIn && static_cast<int>(lines[i].parts.size()) > idx + 1 && lines[i].parts[idx + 1] == "rows";
+
 			// basic parse error check, or did we fail to capture anything?
-			if (idx == lines[i].parts.size() ||
-				lines[i].parts[idx] != "in" ||
-				left.size() == 0 || left.size() > 2)
+			if (!isRows && 
+                (idx == static_cast<int>(lines[i].parts.size()) ||
+				!isIn ||
+				left.size() == 0 || left.size() > 2))
 				throw ParseFail_s{
 					errors::errorClass_e::parse,
 					errors::errorCode_e::syntax_error,
@@ -1187,67 +1267,168 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 
 			++idx;
 
-			LineParts right;
+            // special version of `for` for row iteration
+            if (isIn && isRows)
+            {
+                const auto isContinue = lines[i].parts[0] == "continue";
+                const auto isLimit = isNumeric(lines[i].parts[isContinue ? 2 : 1]);                
+                const auto rowVar = lines[i].parts[1 + (isLimit ? 1 : 0) + (isContinue ? 1 : 0)];
+                const auto limit = isLimit ? stoll(lines[i].parts[isContinue ? 2 : 1]) : 9999999;
 
-			for (; idx < lines[i].parts.size(); ++idx)
-			{
-				if (lines[i].parts[idx] == "__MARKER__")
-					break;
+                idx++;
+                LineParts condition;
 
-				right.push_back(lines[i].parts[idx]);
-			}
+                if (idx != static_cast<int>(lines[i].parts.size()) &&
+                    lines[i].parts[idx] == "if")
+                {
+                    ++idx; // move past `if`
 
-			parseConditions(
-				right,
-				block,
-				0,
-				lines[i].debug,
-				false);
+                    for (; idx < static_cast<int>(lines[i].parts.size()); ++idx)
+                    {
+                        if (lines[i].parts[idx] == "__MARKER__")
+                            break;
 
-			/* For iterators:
-			 *
-			 * The left side variables are added to uservars and pushed 
-			 * as special usridx ops, which initially contain
-			 * the variable name, and on final compile pass get turned
-			 * into indexes to those variables
-			 * 
-			 * Upon compiling the 
-			 * 
-			 * The right-side (for now) is a stack variable, pushed
-			 * before the indexes. Stack:
-			 *    right
-			 *    left index 2
-			 *    left index 1
-			 */
+                        condition.push_back(lines[i].parts[idx]);
+                    }
+                }
 
-			for_each(left.rbegin(), left.rend(), [&](auto item)
-		         {
+                // Index Hinting --------------
+                // default hintMap is "_", create it, if need be, and get a reference to it.
+                if (!hintMap.count("_"))
+                {
+                    hintNames.push_back("_");
+                    hintMap.emplace("_", LineParts{});
+                }
+
+                auto& hints = hintMap["_"];
+
+                // if there are process conditions get lambda
+                // we don't index `where` when it occurs in if/elif/else blocks
+                // or within function calls - we cannot guarantee that indexes built 
+                // using blocks in functions or conditionals will not exclude people
+                // that should be evaluated
+
+                if (condition.size() && !lines[i].isConditional && !lines[i].isFunction)
+                {
+                    if (hints.size())
+                        hints.emplace_back("nest_and");
+
+                    hints.emplace_back("(");
+                    for (const auto &value : condition)
+                        hints.push_back(value);
+                    hints.emplace_back(")");
+                }
+                //-----------------
+
+                // add the `row` variable and mark it as `isRowObject`, these
+                // will be parsed differently than regular variables
+                if (!isVar(vars.userVars, rowVar)) {
+                    auto tempVar = Variable_s{ rowVar, rowVar, "" }; 
+                    tempVar.isRowObject = true;
+                    vars.userVars.emplace(rowVar, tempVar );
+                }
+
+                int64_t lambdaId = -1;
+
+                // if there was a "where" in this iterator
+                // then lets turn it into an eval lambda
+                // 
+                if (!condition.empty())
+                {
+                    ++blockCounter;
+                    lambdaId = blockCounter;
+                    MiddleOpList lambdaBlock;
+
+                    parseConditions(
+                        condition,
+                        lambdaBlock,
+                        0,
+                        lines[i].debug,
+                        false);
+
+                    pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
+                }
+
+               // push a reference to the `for` iterator value variable
+               block.emplace_back(
+                    OpCode_e::PSHUSRVREF,
+                    rowVar,
+                    lines[i].debug);
+               
+                // push an interator instruction (iterator instruction is essentially a marshal)
+                block.emplace_back(
+                    isContinue ? OpCode_e::ITFORRC : OpCode_e::ITFORR,
+                    lines[i].block,
+                    lines[i].debug,
+                    lambdaId);
+
+                block.back().params = limit;
+            }
+            else // normal case for for iterators
+            {
+
+                LineParts right;
+
+                for (; idx < static_cast<int>(lines[i].parts.size()); ++idx)
+                {
+                    if (lines[i].parts[idx] == "__MARKER__")
+                        break;
+
+                    right.push_back(lines[i].parts[idx]);
+                }
+
+                parseConditions(
+                    right,
+                    block,
+                    0,
+                    lines[i].debug,
+                    false);
+
+                /* For iterators:
+                 *
+                 * The left side variables are added to uservars and pushed
+                 * as special usridx ops, which initially contain
+                 * the variable name, and on final compile pass get turned
+                 * into indexes to those variables
+                 *
+                 * Upon compiling the
+                 *
+                 * The right-side (for now) is a stack variable, pushed
+                 * before the indexes. Stack:
+                 *    right
+                 *    left index 2
+                 *    left index 1
+                 */
+
+                for_each(left.rbegin(), left.rend(), [&](auto item)
+                {
                     if (isColumnVar(item))
                     {
-			            block.emplace_back(
-				             OpCode_e::COLIDX, // fancy placeholder, map to index on final pass opcode
-				             item,
-				             lines[i].debug);
+                        block.emplace_back(
+                            OpCode_e::COLIDX, // fancy placeholder, map to index on final pass opcode
+                            item,
+                            lines[i].debug);
                     }
                     else
                     {
-			            vars.userVars.emplace(lines[i].parts[0], Variable_s{lines[i].parts[0], ""});
+                        vars.userVars.emplace(lines[i].parts[0], Variable_s{ lines[i].parts[0], "" });
 
-			            block.emplace_back(
-				             OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
-				             item,
-				             lines[i].debug);
+                        block.emplace_back(
+                            OpCode_e::VARIDX, // fancy placeholder, map to index on final pass opcode
+                            item,
+                            lines[i].debug);
                     }
-		         });
+                });
 
-			block.emplace_back(
-				OpCode_e::ITFOR,
-				lines[i].block,
-				lines[i].debug);
+                block.emplace_back(
+                    OpCode_e::ITFOR,
+                    lines[i].block,
+                    lines[i].debug);
 
-			block.back().params = left.size();
+                block.back().params = left.size();
+            }
 		}
-		else if (
+		/*else if (
 			lines[i].parts[0] == "match" ||
 			lines[i].parts[0] == "reverse_match")
 		{
@@ -1335,7 +1516,7 @@ void QueryParser::tokenizeBlock(FirstPass& lines, int blockId, BlockList& blockL
 				lambdaId);
 
 			block.back().params = iterCount;
-		}
+		}*/
 		// left side variable with indexing
 		else if (lines[i].parts.size() >= 2 && lines[i].parts[1] == "[")
 		{
@@ -1686,16 +1867,16 @@ bool QueryParser::isSplice(LineParts& conditions, const int index)
 	return false;
 }
 
-int QueryParser::search(LineParts& conditions, string value, int startIdx)
+int QueryParser::search(LineParts& conditions, const string& value, int startIdx)
 {
-    if (startIdx >= conditions.size())
+    if (startIdx >= static_cast<int>(conditions.size()))
         return -1;
 
-    for (; startIdx < conditions.size(); ++startIdx)
+    for (; startIdx < static_cast<int>(conditions.size()); ++startIdx)
         if (conditions[startIdx] == value)
             break;
 
-    return (startIdx == conditions.size()) ? -1 : startIdx;
+    return (startIdx == static_cast<int>(conditions.size())) ? -1 : startIdx;
 }
 
 QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, const int startIdx, int& reinsertIdx)
@@ -1706,7 +1887,7 @@ QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, const
 	auto index = startIdx;
 
 	// this variable is not dereferencing a container
-	if (index + 1 < conditions.size() &&
+	if (index + 1 < static_cast<int>(conditions.size()) &&
 		conditions.at(index + 1) != "[")
 	{
 		bracketComplete = true;
@@ -1716,14 +1897,14 @@ QueryParser::LineParts QueryParser::extractVariable(LineParts& conditions, const
 	{
 		auto brackets = 0;
 
-		while (index < conditions.size()) // look for ending two brackets
+		while (index < static_cast<int>(conditions.size())) // look for ending two brackets
 		{
 			if (conditions[index] == "[")
 				++brackets;
 			if (conditions[index] == "]")
 				--brackets;
 
-			if ((brackets == 0 && index == conditions.size()-1) ||
+			if ((brackets == 0 && index == static_cast<int>(conditions.size())-1) ||
 				(brackets == 0 && conditions[index + 1] != "["))
 			{
 				bracketComplete = true;
@@ -1822,32 +2003,30 @@ void QueryParser::extractFunction(LineParts& conditions, const int startIdx, int
 	auto index = startIdx;
 
 	// this variable is not dereferencing a container
-	if (index + 1 < conditions.size() &&
+	if (index + 1 < static_cast<int>(conditions.size()) &&
 		conditions[index + 1] != "(")
 	{
 		endIdx = startIdx;
 		return;
 	}
-	else
+
+    auto brackets = 0;
+
+	++index;
+
+	while (index < static_cast<int>(conditions.size())) // look for ending two brackets
 	{
-		auto brackets = 0;
+		if (conditions[index] == "(")
+			++brackets;
+		if (conditions[index] == ")")
+			--brackets;
 
-		++index;
-
-		while (index < conditions.size()) // look for ending two brackets
+		if (brackets == 0)
 		{
-			if (conditions[index] == "(")
-				++brackets;
-			if (conditions[index] == ")")
-				--brackets;
-
-			if (brackets == 0)
-			{
-				bracketComplete = true;
-				break;
-			}
-			++index;
+			bracketComplete = true;
+			break;
 		}
+		++index;
 	}
 
 	if (!bracketComplete)
@@ -1864,7 +2043,7 @@ void QueryParser::extractParam(LineParts& conditions, const int startIdx, int& e
 	auto index = startIdx;
 	auto brackets = 0;
 
-	while (index < conditions.size()) // look for ending two brackets
+	while (index < static_cast<int>(conditions.size())) // look for ending two brackets
 	{
 		if (conditions[index] == "(" || conditions[index] == "[")
 			++brackets;
@@ -1899,9 +2078,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
 	//for (auto& line : lines)
 	while (true)
 	{
-		if (lineIndex == lines.size())
+		if (lineIndex == static_cast<int>(lines.size()))
 			break;
-
 
 		auto changes = false;
 		auto changeCounter = 0;
@@ -1921,8 +2099,50 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 			changes = false;
 
-			while (index < conditions.size())
+			while (index < static_cast<int>(conditions.size()))
 			{
+
+                /* Capture row iterator variables
+                 *  
+                 * row iterator variables only contain a row number
+                 * they are parsed differently than regular `var["member"]` type
+                 * variables.
+                 */
+
+                auto isRowIter = false;
+
+                if (conditions[0] == "for" ||
+                    (static_cast<int>(conditions.size()) > 2 && conditions[0] == "continue" && conditions[1] == "for"))
+                {
+                    auto inPos = -1;
+                    for (auto i = 0; i < static_cast<int>(conditions.size()); ++i)
+                    {
+                        if (conditions[i] == "in")
+                        {
+                            inPos = i;
+                            break;
+                        }
+                    }
+
+                    // look for `rows`, if it's rows we know this is a 
+                    // row itorator variable
+                    if (inPos != -1 && 
+                        static_cast<int>(conditions.size()) > inPos + 1 &&
+                        conditions[inPos + 1] == "rows")
+                    {
+                        const auto& rowVar = conditions[inPos - 1];
+
+                        // add the row var, and flag it as `isRowObject`
+                        if (!isVar(vars.userVars, rowVar)) {
+                            auto tempVar = Variable_s{ rowVar, rowVar, "" };
+                            tempVar.isRowObject = true;
+                            vars.userVars.emplace(rowVar, tempVar);
+                        }
+
+                        isRowIter = true;
+                    }
+                }
+
 				/* Convert list declarations into function calls
 				 *
 				 * i.e.
@@ -1935,11 +2155,16 @@ void QueryParser::lineTranslation(FirstPass& lines)
 				 *
 				 *  Note: next/whhere in clauses are translated into multiple OR 
 				 *        statements so they will be evaulated by the query optimizer
+				 *        
+				 *       
+				 *        
 				 */
 
-				if (conditions.size() > index + 1 &&
+				if (static_cast<int>(conditions.size()) > index + 1 &&
 					conditions[index] == "[" &&
-					conditions[0] != "match" && // not next/where
+					//(conditions[0] != "match" && // not next/where
+                    //(conditions[0] != "continue" && conditions[1] != "for") &&
+                    (!isRowIter || (isRowIter && index > 4)) &&
 					index > 1 &&
 					(conditions[index - 1] == "," ||
 						conditions[index - 1] == "=" ||
@@ -1955,7 +2180,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 					const auto originalIndex = index;
 
-					while (index < conditions.size()) // look for ending two brackets
+					while (index < static_cast<int>(conditions.size())) // look for ending two brackets
 					{
 						if (conditions[index] == "[")
 							++brackets;
@@ -1992,7 +2217,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 				// TRANSLATE NOTIN: convert 'not in' into 'notin'
 				if (conditions[index] == "not" &&
-					index + 1 < conditions.size() &&
+					index + 1 < static_cast<int>(conditions.size()) &&
 					conditions[index + 1] == "in")
 				{
 					conditions.erase(conditions.begin() + index + 1);
@@ -2047,7 +2272,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     std::string with = "";
                     if (const auto withIdx = search(conditions, "with", index); withIdx != -1)
                     {                       
-                        if (withIdx + 1 >= conditions.size())
+                        if (withIdx + 1 >= static_cast<int>(conditions.size()))
                         {
                             throw ParseFail_s{
                                 errors::errorClass_e::parse,
@@ -2138,7 +2363,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 									1
 								},
                                 { // indent at 2 - under where
-                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "stamp", ")", "+", "':'", "+", "event" },
                                     lastDebug,
                                     2
                                 },
@@ -2191,7 +2416,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                                     1
                                 },
                                 { // indent at 2 - under where
-                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "stamp", ")", "+", "':'", "+", "event" },
                                     lastDebug,
                                     2
                                 },
@@ -2324,7 +2549,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                                     1
                                 },
                                 { // indent at 2 - under where
-                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "__stamp", ")", "+", "':'", "+", "__action" },
+                                    { "__agg_key", "=", "str", "(", with, ")", "+", "':'", "+", "str", "(", "stamp", ")", "+", "':'", "+", "event" },
                                     lastDebug,
                                     2
                                 },
@@ -2422,7 +2647,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 				 *    some_dict = __internal_make_dict('this', 'that', 'up', 'down')
 				 */
 
-				if (conditions.size() > index + 1 &&
+				if (static_cast<int>(conditions.size()) > index + 1 &&
 					conditions[index] == "del")
 				{
 					/* Here we are taking something that looks like this:
@@ -2470,14 +2695,14 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 
-				if (conditions.size() > index + 1 &&
+				if (static_cast<int>(conditions.size()) > index + 1 &&
 					conditions[index] == "{")
 				{
 					const auto originalIndex = index;
 					auto brackets = 0;
 					auto allCounted = false;
 
-					while (index < conditions.size()) // look for ending two brackets
+					while (index < static_cast<int>(conditions.size())) // look for ending two brackets
 					{
 						if (conditions[index] == "{")
 							++brackets;
@@ -2515,18 +2740,22 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 
-				if (conditions.size() > index + 2 &&
+				if (static_cast<int>(conditions.size()) > index + 2 &&
 					(conditions[index + 1] == "in" ||
 					 conditions[index + 1] == "notin") &&
-					conditions[index + 2] != "[" && // this forces make_dict to be parsed first
-					//conditions[0] != "match" &&
-					conditions[0] != "for")
+					(conditions[index + 2]) != "[" && // this forces make_dict to be parsed first
+                    (!isRowIter || (isRowIter && index > 4)))
+                    //(conditions[0] != "continue" && conditions[1] != "for") &&
+					//(conditions[0] != "for"))
 				{
-					// there a three kinds of "in" we care about
+					// there a for kinds of "in" we care about
 					// 1. for x in y
 					// 2. x in [y0,y1,y2,y3] # when used in where clause
 					// 3. x in y # as in:  if x in y
-					// this is the `in` #2
+                    // 4. row in rows
+
+					// This covers scenario #3
+
 					const auto in = conditions[index + 1];
 
 					int reinsertIdx;
@@ -2578,14 +2807,15 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 				
-				if (conditions.size() > index + 2 &&
+				if (static_cast<int>(conditions.size()) > index + 2 &&
 					conditions[index + 1] == "in" &&
-					conditions[0] == "match" &&
+					//conditions[0] == "match" &&
+                    (isRowIter && index > 4) &&
                     conditions[index + 2] == "[")
 				{
 					const auto var = conditions[index];
 
-					if (conditions.size() < index + 4)
+					if (static_cast<int>(conditions.size()) < index + 4)
 						throw ParseFail_s{ 
 							errors::errorClass_e::parse,
 							errors::errorCode_e::syntax_in_clause,
@@ -2593,11 +2823,15 @@ void QueryParser::lineTranslation(FirstPass& lines)
 							line.debug
 						};
 
-					// there a three kinds of in we care about
-					// 1. for x in y
-					// 2. x in [y0,y1,y2,y3] # when used in where clause
-					// 3. x in y # as in:  if x in y
-					if (conditions[index + 2] != "[")
+                    // there a for kinds of "in" we care about
+                    // 1. for x in y
+                    // 2. x in [y0,y1,y2,y3] # when used in where clause
+                    // 3. x in y # as in:  if x in y
+                    // 4. row in rows
+                    
+				    // this covers scenario #2
+
+				    if (conditions[index + 2] != "[")
 						throw ParseFail_s{
 							errors::errorClass_e::parse,
 							errors::errorCode_e::syntax_in_clause,
@@ -2614,7 +2848,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 					auto brackets = 1;
 
-					for (auto idx = index; idx < conditions.size(); idx++)
+					for (auto idx = index; idx < static_cast<int>(conditions.size()); idx++)
 					{
 						if (conditions[idx] == "[")
 							++brackets;
@@ -2651,7 +2885,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 						if (orParts.size() > 1)
 							orParts.push_back("or");
 						orParts.push_back(var);
-						orParts.push_back("is");
+						orParts.push_back("==");
 						orParts.push_back(in);
 					}
 					orParts.push_back(")");
@@ -2776,7 +3010,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					LineParts inParts;
 
 
-					for (auto idx = index; idx < conditions.size(); idx++)
+					for (auto idx = index; idx < static_cast<int>(conditions.size()); idx++)
 					{
 						if (conditions[idx] == "(")
 							++brackets;
@@ -2816,6 +3050,13 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					break;
 				}
 
+                    /*if (conditions[index] == "people")
+                    {
+                        conditions[index] = "person";
+                        changes = true;
+                        break;
+                    }*/
+                /*
 				if (conditions[index] == "people")
 				{
 					conditions[index] = "__uuid";
@@ -2843,11 +3084,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
 					conditions[index] = "__action";
 					changes = true;
 					break;
-				}
+				}*/
 
 				// TRANSLATE ISNOT: convert 'is not' into 'isnot'
 				if (conditions[index] == "is" &&
-					index + 1 < conditions.size() &&
+					index + 1 < static_cast<int>(conditions.size()) &&
 					conditions[index + 1] == "not")
 				{
 					conditions.erase(conditions.begin() + index + 1);
@@ -2866,7 +3107,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 				// TRANSLATE ISNOT: convert 'break all' or 'break top' into 'break "all"' or 'break "top"'
 				if (conditions[index] == "break" &&
-					index + 1 < conditions.size() &&
+					index + 1 < static_cast<int>(conditions.size()) &&
 					(conditions[index + 1] == "all" ||
 						conditions[index + 1] == "top"))
 				{
@@ -2876,7 +3117,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 				}
 
 				// TRANSLATE TIME CONSTANTS: convert two word time constants to underscore names
-				if (index + 1 < conditions.size() &&
+				if (index + 1 < static_cast<int>(conditions.size()) &&
 					(
 						(conditions[index] == "row" && conditions[index + 1] == "time") ||
 						(conditions[index] == "last" && conditions[index + 1] == "event") ||
@@ -2897,7 +3138,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
 				// TRANSLATE TIME convert days, minutes, hours, seconds to math
 				// we convert: x seconds -> (x * 60)
-				if (index + 1 < conditions.size() &&
+				if (index + 1 < static_cast<int>(conditions.size()) &&
 					TimeConstants.count(conditions[index + 1]))
 				{
 					const auto item = conditions[index];
@@ -2940,7 +3181,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 		if (changeCounter)
 		{
 			std::string translation = "";
-			for (const auto c : lines[lineIndex].parts)
+			for (const auto& c : lines[lineIndex].parts)
 				translation += c + " ";
 			lines[lineIndex].debug.translation.assign(translation);
 		}
@@ -2955,7 +3196,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 	// make some space
 	result.reserve(lines.size());
 
-	for (auto i = 0; i < lines.size(); i++)
+	for (auto i = 0; i < static_cast<int>(lines.size()); i++)
 	{
 		LineParts parts;
 		string debugText;
@@ -2972,7 +3213,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 			line.parts.back() == "\\")
 		{
 
-			for (; i < lines.size(); i++)
+			for (; i < static_cast<int>(lines.size()); i++)
 			{
 				debugText += (!debugText.length()) ?
 					lines[i].debug.text :
@@ -3006,10 +3247,13 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 				line.parts[0] == "elif" ||
 				line.parts[0] == "else" ||
 				line.parts[0] == "for" ||
+                (static_cast<int>(lines[i].parts.size()) > 2 && 
+                    lines[i].parts[0] == "continue" && 
+                    lines[i].parts[1] == "for") ||
 				line.parts[0] == "match" ||
 				line.parts[0] == "reverse_match"))
 		{
-			for (; i < lines.size(); i++)
+			for (; i < static_cast<int>(lines.size()); i++)
 			{
 				debugText += (!debugText.length()) ?
 					lines[i].debug.text :
@@ -3028,7 +3272,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 					// TODO check for values that cannot exist in 
 					// logic like assignment operators
 
-					if (p == "__MARKER__" && idx == lines[i].parts.size() - 1)
+					if (p == "__MARKER__" && idx == static_cast<int>(lines[i].parts.size()) - 1)
 						goto completed;
 					parts.push_back(p);
 					++idx;
@@ -3062,7 +3306,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 
 			auto brackets = 0; // we don't care what type they are as long as they add up
 
-			for (; i < lines.size(); i++)
+			for (; i < static_cast<int>(lines.size()); i++)
 			{
 				debugText += (!debugText.length()) ?
 					lines[i].debug.text :
@@ -3111,7 +3355,7 @@ QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
 	return result;
 }
 
-int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opList, int64_t index, const bool stopOnConditions)
+int64_t QueryParser::parseHintConditions(const LineParts& conditions, HintOpList& opList, int64_t index, const bool stopOnConditions)
 {
 	LineParts accumulation;
 
@@ -3125,20 +3369,20 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 
 		if (opIter == Operators.end())
 		{
-			auto logIter = LogicalOperators.find(op);
+		    const auto logIter = LogicalOperators.find(op);
 			if (logIter == LogicalOperators.end())
 				return HintOp_e::UNSUPPORTED;
-			auto iter = OpToHintOp.find(logIter->second);
+		    const auto iter = OpToHintOp.find(logIter->second);
 			return iter != OpToHintOp.end() ? iter->second : HintOp_e::UNSUPPORTED;
 		}
 
-		auto iter = OpToHintOp.find(opIter->second);
+	    const auto iter = OpToHintOp.find(opIter->second);
 		return iter != OpToHintOp.end() ? iter->second : HintOp_e::UNSUPPORTED;
 	};
 
 	// store textual values as we come across them
 	// we will call store when we hit a logical operator
-	const auto accumulate = [&accumulation](string item)
+	const auto accumulate = [&accumulation](const string& item)
 	{
 		accumulation.push_back(item);
 	};
@@ -3182,7 +3426,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			}
 		}
 
-		if (accumulation.size() > 3)
+		if (accumulation.size() == 2  || accumulation.size() > 3)
 		{
 			// this accumulation likely contains math or
 			// function calls, either way, we can't optimize
@@ -3205,8 +3449,8 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 			return;
 		}
 
-		auto leftIsTableVar = isNonuserVar(left);
-		auto rightIsTableVar = isNonuserVar(right);
+	    const auto leftIsTableVar = isNonuserVar(left);
+	    const auto rightIsTableVar = isNonuserVar(right);
 
 		if (leftIsTableVar && rightIsTableVar)
 		{
@@ -3380,7 +3624,7 @@ int64_t QueryParser::parseHintConditions(LineParts& conditions, HintOpList& opLi
 	return index;
 }
 
-void QueryParser::evaluateHints(const string hintName, HintOpList& hintOps)
+void QueryParser::evaluateHints(const string& hintName, HintOpList& hintOps)
 {
 	const auto hint = hintMap.find(hintName);
 
@@ -3468,6 +3712,8 @@ void QueryParser::build(
 		v.second.schemaColumn = schemaInfo->idx;
 		v.second.schemaType = schemaInfo->type;
         v.second.isSet = schemaInfo->isSet;
+        v.second.isProp = schemaInfo->isProp;
+
 		finVars.tableVars.push_back(v.second);
 	}
 
@@ -3680,6 +3926,7 @@ void QueryParser::build(
 							c.debug);
 						break;
 
+                    case OpCode_e::SETROW:
 					case OpCode_e::POPUSRVAR:
 					case OpCode_e::POPUSROBJ:
 						finCode.emplace_back(
@@ -3730,8 +3977,10 @@ void QueryParser::build(
 							0,
 							c.debug);
 						break;
-					case OpCode_e::ITNEXT:
-					case OpCode_e::ITPREV:
+					/*case OpCode_e::ITNEXT:
+					case OpCode_e::ITPREV:*/
+                    case OpCode_e::ITFORR:
+                    case OpCode_e::ITFORRC:
 						finCode.emplace_back(
 							c.op,
 							c.value, // value for the moment is block_id
@@ -3857,8 +4106,10 @@ void QueryParser::build(
 			case OpCode_e::CNDIF:
 			case OpCode_e::CNDELIF:
 			case OpCode_e::ITFOR:
-			case OpCode_e::ITNEXT:
-			case OpCode_e::ITPREV:
+			//case OpCode_e::ITNEXT:
+			//case OpCode_e::ITPREV:
+            case OpCode_e::ITFORR:
+            case OpCode_e::ITFORRC:
 				// map index to index of BlockID
 				f.index = blockIndex[f.index];
 				// map lambda (extra) to index of BlockId
@@ -3920,11 +4171,11 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 		tableColumns = columnsPtr;
 
 		vars.tableVars.emplace(
-			"__stamp",
-			Variable_s{ "__stamp", "grid" });
+			"stamp",
+			Variable_s{ "stamp", "grid" });
 		vars.tableVars.emplace(
-			"__action",
-			Variable_s{ "__action", "grid" });
+			"event",
+			Variable_s{ "event", "grid" });
 
 		// breaks it out into lines
 		auto firstPass = extractLines(query);
@@ -3956,10 +4207,10 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 		});
 
 
-		if (useSessions && vars.tableVars.count("__session") == 0)
+		if (useSessions && vars.tableVars.count("session") == 0)
 			vars.tableVars.emplace(
-				"__session",
-				Variable_s{ "__session", "grid" });
+				"session",
+				Variable_s{ "session", "grid" });
 
 		// fill class variable 'macro' with the built code.
 		// the macro structure can be passed to the interpretor
@@ -3996,7 +4247,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 		if (macros.useSessions)
 		{
 			for (auto &c: macros.vars.tableVars)
-				if (c.actual == "__session"s)
+				if (c.actual == "session"s)
 				{
 					macros.sessionColumn = c.index;
 					break;
@@ -4063,7 +4314,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
 	
 }
 
-std::string QueryParser::fixIndent(const std::string source)
+std::string QueryParser::fixIndent(const std::string& source)
 {
     std::vector<string> res;
 
@@ -4088,7 +4339,7 @@ std::string QueryParser::fixIndent(const std::string source)
         if (indent == -1)
         {
             indent = 0;
-            for (auto i = 0; i < p.length(); ++i)
+            for (auto i = 0; i < static_cast<int>(p.length()); ++i)
             {
                 indent = i;
                 if (p[i] != ' ')
@@ -4103,7 +4354,7 @@ std::string QueryParser::fixIndent(const std::string source)
 
     std::string outputString;
 
-    for (const auto r : res)
+    for (const auto& r : res)
         outputString += r + "\n";
 
     return outputString;
@@ -4126,7 +4377,7 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
     std::string sectionType;
     std::string sectionName;
 
-    auto storeSection = [&]()
+    const auto storeSection = [&]()
     {
         string code;
 
@@ -4153,8 +4404,7 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
         params.dict(); // clear them
         flags.dict();
     };
-
-
+    
 	while (c < end)
 	{
 		switch (*c)
@@ -4208,12 +4458,12 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
                             sectionType = sectionParts[0];
                             sectionName = sectionParts[1];
 
-                            for (auto idx = 2; idx < sectionParts.size(); ++idx)
+                            for (auto idx = 2; idx < static_cast<int>(sectionParts.size()); ++idx)
                             {
                                 auto keyVal = split(sectionParts[idx], '=');
                                 
                                 if (keyVal.size() == 1)
-                                    keyVal.push_back("True");
+                                    keyVal.emplace_back("True");
 
                                 if (keyVal[0] == "ttl" || keyVal[0] == "refresh") // these are special and allow for time appends like 's' or 'm', or 'd'
                                     flags[keyVal[0]] = expandTime(keyVal[1]) * 1000;
@@ -4256,7 +4506,7 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
 
 string padding(string text, const int length, const bool left = true, const char filler = ' ')
 {
-	while (text.length() < length)
+	while (static_cast<int>(text.length()) < length)
 		text = (left) ? filler + text : text + filler;
 	return text;
 }
@@ -4270,7 +4520,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 {
 	stringstream ss;
 
-	auto outSpacer = [&ss]()
+    const auto outSpacer = [&ss]()
 	{
 		ss << "--------------------------------------------------------------------------------------------------------------------------------------------------------" << endl;
 	};
@@ -4363,6 +4613,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 
 			ss << padding(type, 9, false) << " | ";
 
+            /*
 			if (v.actual == "__uuid")
 				ss << "actual for 'person' or 'people'";
 			else if (v.actual == "__action")
@@ -4371,6 +4622,8 @@ string openset::query::MacroDbg(Macro_s& macro)
 				ss << "actual for 'stamp'";
 			else if (v.actual == "__session")
 				ss << "actual for 'session'";
+            */
+
 			ss << endl;
 		}
 	}
@@ -4396,6 +4649,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 			ss << padding(v.actual, 20, false) << " | ";
 			ss << padding(v.alias, 20, false) << " | ";
 
+            /*
 			if (v.actual == "__uuid")
 				ss << "from 'person' or 'people'  ";
 			else if (v.actual == "__action")
@@ -4404,6 +4658,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 				ss << "from 'stamp'  ";
 			else if (v.actual == "__session")
 				ss << "from 'session'  ";
+            */
 
 			if (v.distinctColumnName != v.actual)
 				ss << "distinct: " << v.distinctColumnName;
@@ -4422,7 +4677,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 	outSpacer();
 	if (macro.marshalsReferenced.size())
 	{
-		auto getMarshalName = [](Marshals_e marshalCode)->std::string
+	    const auto getMarshalName = [](const Marshals_e marshalCode)->std::string
 		{
 			for (auto &m : Marshals)
 				if (m.second == marshalCode)
@@ -4458,8 +4713,7 @@ string openset::query::MacroDbg(Macro_s& macro)
 	}
 	else
 		ss << "NONE" << endl;
-	outSpacer();
-
+    outSpacer();
 
 	for (auto& pair : macro.indexes)
 	{
@@ -4518,9 +4772,9 @@ string openset::query::MacroDbg(Macro_s& macro)
 		const auto opString = OpDebugStrings.find(m.op)->second;
 		ss << padding(count, 4, true, '0') << " | ";
 		ss << padding(opString, 12, false) << " | ";
-		ss << ((m.value == 9999999) ? padding("INF", 13, left) : padding(m.value, 13, left)) << " | ";
-		ss << padding(m.index, 8, left) << " | ";
-		ss << padding(m.extra, 8, left) << " | ";
+		ss << (m.value == 9999999 ? padding("INF", 13) : padding(m.value, 13)) << " | ";
+		ss << padding(m.index, 8) << " | ";
+		ss << padding(m.extra, 8) << " | ";
 		ss << ((m.debug.number == -1) ? "    " : padding( "#" + to_string(m.debug.number), 4)) << " | ";
 		ss << m.debug.text;
 		ss << endl;

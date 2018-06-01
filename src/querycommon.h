@@ -83,9 +83,12 @@ namespace openset
 			CNDELIF, // condition else if
 			CNDELSE, // condition else
 
-			ITNEXT, // next iterator
-			ITPREV, // prev iterator
-			ITFOR, // for iterator
+			//ITNEXT, // next iterator
+			//ITPREV, // prev iterator
+            ITFORR, // row iterator
+            ITFORRC, // row iterator in continue mode
+			ITFOR, // for iterator'
+            SETROW, // set the row pointer to a specific row
 
 			MATHADD, // and last two stack items
 			MATHSUB, // sub last two stack items
@@ -123,11 +126,9 @@ namespace openset
 		{
 			marshal_tally,
 			marshal_now,
-			marshal_event_time,
+			//marshal_event_time,
 			marshal_last_event,
 			marshal_first_event,
-			marshal_prev_match,
-			marshal_first_match,
 			marshal_bucket,
 			marshal_round,
 			marshal_trunc,
@@ -153,13 +154,13 @@ namespace openset
 			marshal_round_quarter,
 			marshal_get_year,
 			marshal_round_year,
-			marshal_iter_get,
-			marshal_iter_set,
+			/*marshal_iter_get,
+			marshal_iter_set,*/
 			marshal_iter_move_first,
 			marshal_iter_move_last,
-			marshal_iter_next,
-			marshal_iter_prev,
-			marshal_event_count,
+			/*marshal_iter_next,
+			marshal_iter_prev,*/
+			marshal_row_count,
 			marshal_iter_within,
 			marshal_iter_between,
 			marshal_population,
@@ -204,7 +205,8 @@ namespace openset
 			marshal_str_replace,
 			marshal_str_slice,
 			marshal_str_strip,
-			marshal_url_decode
+			marshal_url_decode,
+            marshal_get_row
 		};
 
 		// enum used for query index optimizer
@@ -292,7 +294,6 @@ namespace openset
 					{"live", MakeHash("live")},
 					{"first_event", MakeHash("first_event")},
 					{"last_event", MakeHash("last_event")},
-					{"prev_match", MakeHash("prev_match")},
 					{"previous_match", MakeHash("previous_match")},
 					{"first_match", MakeHash("first_match")},
 			};
@@ -388,9 +389,13 @@ namespace openset
 					{OpCode_e::CNDELIF, "CNDELIF"},
 					{OpCode_e::CNDELSE, "CNDELSE"},
 
-					{OpCode_e::ITNEXT, "ITNEXT"},
-					{OpCode_e::ITPREV, "ITPREV"},
+					//{OpCode_e::ITNEXT, "ITNEXT"},
+					//{OpCode_e::ITPREV, "ITPREV"},
+                    { OpCode_e::ITFORR, "ITFORR" },
+                    { OpCode_e::ITFORRC, "ITFORRC" },
+
 					{OpCode_e::ITFOR, "ITFOR"},
+                    {OpCode_e::SETROW, "SETROW"},
 
 					{OpCode_e::MATHADD, "MATHADD"},
 					{OpCode_e::MATHSUB, "MATHSUB"},
@@ -450,8 +455,6 @@ namespace openset
 		static const unordered_set<string> RedundantSugar =
 			{
 					{"of"},
-					{"events"},
-					{"event"}
 			};
 
 		using MarshalSet = std::unordered_set<openset::query::Marshals_e>;
@@ -461,11 +464,9 @@ namespace openset
 			{
 					{"tally", Marshals_e::marshal_tally},
 					{"now", Marshals_e::marshal_now},
-					{"event_time", Marshals_e::marshal_event_time},
+					//{"event_time", Marshals_e::marshal_event_time},
 					{"last_event", Marshals_e::marshal_last_event},
 					{"first_event", Marshals_e::marshal_first_event},
-					{"prev_match", Marshals_e::marshal_prev_match},
-					{"first_match", Marshals_e::marshal_first_match},
 					{"bucket", Marshals_e::marshal_bucket},
 					{"round", Marshals_e::marshal_round},
 					{"trunc", Marshals_e::marshal_trunc},
@@ -493,13 +494,13 @@ namespace openset
 					{"date_year", Marshals_e::marshal_round_year},
 					{"emit", Marshals_e::marshal_emit},
 					{"schedule", Marshals_e::marshal_schedule},
-					{"iter_get", Marshals_e::marshal_iter_get },
-					{"iter_set", Marshals_e::marshal_iter_set },
+					/*{"iter_get", Marshals_e::marshal_iter_get },
+					{"iter_set", Marshals_e::marshal_iter_set },*/
 					{"iter_move_first", Marshals_e::marshal_iter_move_first },
 					{"iter_move_last", Marshals_e::marshal_iter_move_last },
-					{"iter_next", Marshals_e::marshal_iter_next },
-					{"iter_prev", Marshals_e::marshal_iter_prev },
-					{"event_count", Marshals_e::marshal_event_count },
+					/*{"iter_next", Marshals_e::marshal_iter_next },
+					{"iter_prev", Marshals_e::marshal_iter_prev },*/
+					{"row_count", Marshals_e::marshal_row_count },
 					{"iter_within", Marshals_e::marshal_iter_within},
 					{"iter_between", Marshals_e::marshal_iter_between},
 					{"population", Marshals_e::marshal_population },
@@ -541,7 +542,8 @@ namespace openset
 					{ "__slice", Marshals_e::marshal_str_slice },
 					{ "__strip", Marshals_e::marshal_str_strip},
 					{ "range", Marshals_e::marshal_range },
-					{ "url_decode", Marshals_e::marshal_url_decode }
+					{ "url_decode", Marshals_e::marshal_url_decode },
+                    { "get_row", Marshals_e::marshal_get_row}
 			};
 
 		static const unordered_set<Marshals_e> SegmentMathMarshals =
@@ -563,11 +565,12 @@ namespace openset
 		static const unordered_set<string> MacroMarshals =
 			{
 					{"now"},
-					{"event_time"},
+					//{"event_time"},
 					{"last_event"},
 					{"first_event"},
-					{"prev_match"},
-					{"first_match"},
+					//{"prev_match"},
+                    //{"last_match" },
+					//{"first_match"},
 					{"session_count"},
 					{"__internal_init_dict"},
 					{"__internal_init_list"},
@@ -713,14 +716,16 @@ namespace openset
 			string actual; // actual name
 			string alias; // alias
 			string space; // namespace
-			string distinctColumnName{"__action"}; // name of column used for aggregators
+			string distinctColumnName{"event"}; // name of column used for aggregators
 			Modifiers_e modifier{Modifiers_e::value}; // default is value
 			int index{-1}; // index
 			int column{-1}; // column in grid
 			int schemaColumn{-1}; // column in schema
-			int distinctColumn{openset::db::COL_ACTION}; // column containing distinct key
+			int distinctColumn{openset::db::COL_EVENT}; // column containing distinct key
 			db::columnTypes_e schemaType{db::columnTypes_e::freeColumn};
             bool isSet{ false };
+            bool isProp{ false };
+            bool isRowObject{ false };
 			int popRefs{0}; // reference counter for pops
 			int pushRefs{0}; // reference counter for pushes
 			int sortOrder{-1}; // used for sorting in column order
@@ -768,6 +773,8 @@ namespace openset
 
 				schemaType = source.schemaType;
                 isSet = source.isSet;
+                isProp = source.isProp;
+                isRowObject = source.isRowObject;
 				popRefs = source.popRefs;
 				pushRefs = source.pushRefs;
 				sortOrder = source.sortOrder;

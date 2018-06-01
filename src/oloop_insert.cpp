@@ -91,7 +91,7 @@ void OpenLoopInsert::run()
 		cjson row(*insertIter, cjson::Mode_e::string);		
 
 		// we will take profile or table to specify the table name
-		auto uuidString = row.xPathString("/person", "");
+		auto uuidString = row.xPathString("/id", "");
 		toLower(uuidString);
 
 	    const auto attr = row.xPath("/_");

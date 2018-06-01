@@ -31,6 +31,7 @@ namespace openset
 				int32_t idx{0};
 				columnTypes_e type{ columnTypes_e::freeColumn };
 				bool isSet{ false };
+                bool isProp{ false };
 				bool deleted{ false };
 			};
 
@@ -61,6 +62,7 @@ namespace openset
                 const string name, 
                 const columnTypes_e type, 
                 const bool isSet, 
+                const bool isProp = false,
                 const bool deleted = false);
 
             static bool validColumnName(std::string name);

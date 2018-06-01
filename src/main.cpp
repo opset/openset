@@ -68,6 +68,8 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 	// Fire this bad boy up (main loop)
 	openset::Service::start();
+
+    auto res = (100 + 1/0.3) - 100;
 }
 
 int main(const int argc, char* argv[])

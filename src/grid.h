@@ -20,23 +20,10 @@ namespace openset
         class Grid;
         struct ColumnMap_s;
 
-		const uint16_t TYPE_AND_MASK = 0b0111'0000'0000'0000;
-		const uint16_t TYPE_CLEAR_MASK = 0b0000'1111'1111'1111;
-
 		const int64_t int16_min = numeric_limits<int16_t>::min();
 		const int64_t int16_max = numeric_limits<int16_t>::max();
 		const int64_t int32_min = numeric_limits<int32_t>::min();
 		const int64_t int32_max = numeric_limits<int32_t>::max();
-
-		enum class columnType_e : uint16_t
-		{
-			row = 0, // 0 - new row - like \n
-			null = 0b0001'0000'0000'0000, // 4096  - no data in cell
-			copydown = 0b0010'0000'0000'0000, // 8192  - copy last rows cell
-			int16 = 0b0011'0000'0000'0000, // 12288 - is int16 sized number
-			int32 = 0b0100'0000'0000'0000, // 16384 - is int32 sized number
-			int64 = 0b0101'0000'0000'0000 // 20480
-		};
 
 #pragma pack(push,1)
 		/**
@@ -76,6 +63,7 @@ namespace openset
 			// single 2 byte section filled with 0 (feature_eof). This allows us
 			// to cast and check the buffer. 
 		};
+#pragma pack(pop)
 
         class IndexDiffing
         {
@@ -104,7 +92,7 @@ namespace openset
             void iterRemoved(const std::function<void(int32_t,int64_t)> cb);
         };
 
-
+#pragma pack(push,1)
 		struct PersonData_s
 		{
 			/*
@@ -181,7 +169,8 @@ namespace openset
 			int64_t cols[MAXCOLUMNS];
 		};
 
-		using Rows = vector<Col_s*>;
+        using Row = Col_s;
+		using Rows = vector<Row*>;
 
         struct SetInfo_s
         {
@@ -214,17 +203,12 @@ namespace openset
 			const static int sizeOfCastHeader = sizeof(Cast_s::columnNum);
 			const static int sizeOfCast = sizeof(Cast_s);
 
-			// mapping
-			//int32_t columnMap[MAXCOLUMNS]{}; // TODO - FIX THIS
-			//int32_t reverseMap[MAXCOLUMNS]{}; // TODO - AND THIS
-			//int16_t isSet[MAXCOLUMNS]{}; // TODO - AND THIS
             ColumnMap_s* colMap{ nullptr };
-
-			//unordered_map<int64_t, int32_t> insertMap;
 
 			// we will get our memory via stack
 			// so rows have tight cache affinity 
 			HeapStack mem;
+            Row* propRow{ nullptr }; // full unmapped row
 			Rows rows;
             SetVector setData;
 			PersonData_s* rawData{ nullptr };
@@ -242,8 +226,6 @@ namespace openset
 			~Grid();
 
 			/**
-			* \brief maps schema to the columnMap
-			*
 			* Why? The schema can have up to 8192 columns. These columns have
 			* numeric indexes that allow allocated columns to be distributed
 			* throughout that range. The Column map is a sequential list of
@@ -266,9 +248,7 @@ namespace openset
 			PersonData_s* addFlag(const flagType_e flagType, const int64_t reference, const int64_t context, const int64_t value);
 			PersonData_s* clearFlag(const flagType_e flagType, const  int64_t reference, const int64_t context);
 
-			/**
-			* \brief re-encodes and compresses the row data after inserts
-			*/
+			// re-encodes and compresses the row data after inserts
 			PersonData_s* commit();
 
             // remove old records, or trim sets that have gotten to large.
@@ -310,6 +290,11 @@ namespace openset
 			{
 				return &rows;
 			}
+
+            const Row* getPropRow() const
+            {
+                return propRow;
+            }
 
             const SetVector& getSetData() const
 			{

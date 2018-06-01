@@ -133,6 +133,7 @@ namespace openset
 			// database objects
 			const Grid* grid{ nullptr };
 			const Rows* rows{ nullptr };
+            const Row* propRow{ nullptr };
 			int rowCount{ 0 };
 
 			AttributeBlob* blob{ nullptr };
@@ -156,8 +157,8 @@ namespace openset
 			std::vector<IndexBits*> segmentIndexes;
 
 			// row match values
-			int64_t matchStampTop{ 0 };
-			vector<int64_t> matchStampPrev{ 0 };
+			//int64_t matchStampTop{ 0 };
+			//vector<int64_t> matchStampPrev{ 0 };
 
 			// switches
 			InterpretMode_e interpretMode{ InterpretMode_e::query };
@@ -259,6 +260,8 @@ namespace openset
 			void marshal_strip(const int paramCount) const;
 
 			void marshal_url_decode(const int paramCount) const;
+
+            void marshal_get_row(const int paramCount) const;
 
 			// get a string from the literals script block by ID
 			string getLiteral(const int64_t id) const;

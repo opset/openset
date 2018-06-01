@@ -40,13 +40,13 @@ void openset::db::Table::initialize()
 	globalVars.dict(); 
 
 	// set the default required columns
-	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
-	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
-	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
 	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
 	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
 	columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-	columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
 
 	createMissingPartitionObjects();
 }
@@ -153,6 +153,7 @@ void Table::serializeTable(cjson* doc)
 			columnRecord->set("type", type);
 			columnRecord->set("deleted", c.deleted);
 			columnRecord->set("is_set", c.isSet);
+            columnRecord->set("is_prop", c.isProp);
 		}
 }
 
@@ -193,7 +194,8 @@ void Table::deserializeTable(const cjson* doc)
 		auto colName = item->xPathString("/name", "");
 		auto type = item->xPathString("/type", "");
 		auto index = item->xPathInt("/index", -1);
-		auto isProp = item->xPathBool("/is_set", false);
+		auto isSet = item->xPathBool("/is_set", false);
+        auto isProp = item->xPathBool("/is_prop", false);
 		// was it deleted? > 0 = deleted, value is epoch time of deletion
 		auto deleted = item->xPathInt("/deleted", 0);
 		
@@ -213,7 +215,7 @@ void Table::deserializeTable(const cjson* doc)
 		else
 			return; // skip 
 
-		columns.setColumn(index, colName, colType, isProp, deleted);
+		columns.setColumn(index, colName, colType, isSet, isProp, deleted);
 		count++;
 	};
 
@@ -259,13 +261,13 @@ void Table::deserializeTable(const cjson* doc)
 
 
 	// set the default required columns
-	columns.setColumn(COL_STAMP, "__stamp", columnTypes_e::intColumn, false);
-	columns.setColumn(COL_ACTION, "__action", columnTypes_e::textColumn, false);
-	columns.setColumn(COL_UUID, "__uuid", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
+	columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
 	columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
 	columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
 	columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-	columns.setColumn(COL_SESSION, "__session", columnTypes_e::intColumn, false);
+	columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
 
 	// load the columns
 	const auto columnNode = doc->xPath("/columns");

@@ -10,7 +10,7 @@ using namespace openset::async;
 
 OpenLoopPerson::OpenLoopPerson(
     Shuttle<int>* shuttle, 
-    openset::db::Database::TablePtr,
+    const openset::db::Database::TablePtr table,
     const int64_t uuid) :
     OpenLoop(table->getName(), oloopPriority_e::realtime),
     shuttle(shuttle),

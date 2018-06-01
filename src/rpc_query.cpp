@@ -533,12 +533,14 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
     if (sortMode != ResultSortMode_e::key && sortColumnName.size())
     {
+        /*
         if (sortColumnName == "person" || sortColumnName == "people")
             sortColumnName = "__uuid";
         else if (sortColumnName == "stamp")
             sortColumnName = "__stamp";
         else if (sortColumnName == "session")
             sortColumnName = "__session";
+        */
 
         auto set = false;
         auto idx = -1;
@@ -1465,7 +1467,7 @@ void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matche
     }
 
     const auto partitions = openset::globals::async;
-    const auto targetPartition = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
+    const auto targetPartition = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
     const auto mapper = globals::mapper->getPartitionMap();
 
     auto owners = mapper->getNodesByPartitionId(targetPartition);
