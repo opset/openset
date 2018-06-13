@@ -214,7 +214,11 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                 distinctKey.set(
                     resCol.index,
                     resCol.modifier == Modifiers_e::var ? fixToInt(resCol.value) : columns->cols[resCol.distinctColumn],
-                    resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person ? 0 : currentRow, //columns->cols[COL_STAMP],
+                    resCol.schemaColumn == 
+                        COL_UUID || resCol.modifier == 
+                            Modifiers_e::dist_count_person ? 
+                                0 : 
+                                (macros.useStampedRowIds ? columns->cols[COL_STAMP] : currentRow),
                     reinterpret_cast<int64_t>(resultColumns)
                 );
 
@@ -539,6 +543,28 @@ void openset::query::Interpreter::marshal_dt_within(const int paramCount, const 
 
 	*stackPtr = within(compareStamp, rowStamp, milliseconds);
 	++stackPtr;
+}
+
+void openset::query::Interpreter::marshal_ISO8601_to_stamp(const int paramCount, const int64_t rowStamp)
+{
+	if (paramCount != 1)
+	{
+		error.set(
+			errors::errorClass_e::run_time,
+			errors::errorCode_e::sdk_param_count,
+			"between clause requires two parameters");
+		*stackPtr = NONE;
+		++stackPtr;
+		return;
+	}
+
+	auto stamp = *(stackPtr-1);
+
+	if (stamp.typeof() == cvar::valueType::STR)
+		stamp = Epoch::ISO8601ToEpoch(stamp);
+
+    *stackPtr = stamp;
+    
 }
 
 void openset::query::Interpreter::marshal_dt_between(const int paramCount, const int64_t rowStamp)
@@ -1564,7 +1590,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		--stackPtr;
 		break;
 */
-	case Marshals_e::marshal_iter_move_first:
+	/*case Marshals_e::marshal_iter_move_first:
 		currentRow = 0;
 		//rows->begin() + currentRow;
 		break;
@@ -1573,7 +1599,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 		if (currentRow < 0)
 			throw std::runtime_error("iter_set_last called on empty set");
 		//rows->begin() + currentRow;
-		break;
+		break;*/
 /*
 	case Marshals_e::marshal_iter_next:
 	{
@@ -1978,6 +2004,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
 				// push a column value
             {
 
+                // if it's row iterator variable, we get its value, otherwise we use the current row
+                const int64_t readRow = inst->extra != NONE ? macros.vars.userVars[inst->extra].value : currentRow;
+
                 // we pop the actual user id in this case
                 if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)
                 {
@@ -1995,7 +2024,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
                 }
                 else
                 {
-			        colValue = (*rows)[currentRow]->cols[macros.vars.tableVars[inst->index].column];
+			        colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
                 }
 
                 switch (macros.vars.tableVars[inst->index].schemaType)

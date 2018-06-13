@@ -103,7 +103,7 @@ int main(const int argc, char* argv[])
 		}
 	}
 
-  	if (test)
+  	//if (test)
 	{
 		const auto testRes = unitTest();
 		exit(testRes ? 0 : 1); // exit with 1 on test fail

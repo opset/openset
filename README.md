@@ -172,15 +172,19 @@ curl \
 # our pyql script
 
 aggregate: # define our output columns
-    count person
+    count id
     count product_name as purchased
-    sum product_price as total_spent
+    sum product_price as total_spent with product_name
 
 # iterate events where the product_group set contains 'outdoor'
-match where 'outdoor' in product_group:
+# and product_name is 'fly_rod' or 'guilded_spoon'
+for row in rows if
+        'outdoor' in product_group and
+        product_name in ['fly rod', 'gilded spoon']:
+
     # make a branch: /day_of_week/product_name
     # and aggregate person, product purchase, and total
-    tally(get_day_of_week(event_time()), product_name)
+    tally(get_day_of_week(row['stamp']), product_name)
 
 #end of pyql script
 PYQL
@@ -248,26 +252,34 @@ curl \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
-@segment products_home ttl=300s use_cached refresh=300s:
-    # match one of these
-    match where product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
-        tally
+@segment products_home ttl=300s use_cached=True refresh=300s
 
-@segment products_yard ttl=300s use_cached refresh=300s:
-    # match one of these
-    match where product_group in ['basement', 'garage']:
-        tally
+# match one of these
+for row in rows if
+        product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
+    tally
 
-@segment products_outdoor ttl=300s use_cached refresh=300s:
-    # match one of these
-    match where product_group in ['outdoor', 'angling']:
-        tally
+@segment products_yard ttl=300s use_cached=True refresh=300s
 
-@segment products_commercial ttl=300s use_cached refresh=300s:
-    # match one of these
-    match where product_group == 'restaurant':
-        tally
-        
+# match one of these
+for row in rows if
+        product_group in ['basement', 'garage']:
+    tally
+
+@segment products_outdoor ttl=300s use_cached=True refresh=300s
+
+# match one of these
+for row in rows if
+        product_group in ['outdoor', 'angling']:
+    tally
+
+@segment products_commercial ttl=300s use_cached=True refresh=300s
+
+# match one of these
+for row in rows if
+        product_group == 'restaurant':
+    tally        
+
 #end of pyql script
 PYQL
 ```
@@ -466,7 +478,7 @@ curl \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
-return SUM total where total != None # inline aggregation
+return SUM total if total != None # inline aggregation
 
 #end of pyql script
 PYQL
@@ -551,52 +563,53 @@ curl \
 # our pyql script
 
 aggregate: # define our output columns
-    count person
+    count id
     count product_name as purchased
     sum product_price as total_revenue
 
 # STEP 1
 # search for a purchase events
-match where action == 'purchase':
-    # store the order_id
-    first_order_id = order_id
+for purchase_row in rows
+    if event == 'purchase':
 
-    # products will hold the product names that
-    # were purchased in STEP 1
+    # products will hold the `product_name`s that
+    # are found in the `cart_item`s associated with
+    # the above purchase
     products = set()
 
     # STEP 2
-    # gather the product names in the subsequent
-    # 'cart_item' rows that have the same order_id
-    # as the above match
-    match where action == 'cart_item' and
-            order_id == first_order_id:
-        products.add(product_name)
+    # gather the product names for the above purchase
+    continue for item_row in rows if
+            event == 'cart_item' and
+            order_id == purchase_row['order_id']:
+
+        products.add(item_row['product_name'])
 
     # STEP 3
-    # find the NEXT purchase
-    match 1 where action == 'purchase' and
-        order_id != first_order_id: # match one
-
-        # store this subsequent
-        subsequent_order_id = order_id
+    # find the just the NEXT purchase (continue for 1)
+    continue for 1 sub_purchase_row in rows if
+            event == 'purchase' and
+            order_id != purchase_row['order_id']: # match one
 
         # STEP 4
         # for each 'cart_item' row
-        # iterate the products capture in 
+        # iterate the products capture in
         # Step 2 with the product_name in the row
-        match where action == 'cart_item' and
-                order_id == subsequent_order_id:
+        continue for sub_item_row in rows if
+                event == 'cart_item' and
+                order_id == sub_purchase_row['order_id']:
 
             for product in products:
-                # Tally counts for 
-                # sub-sequent product name under name
-                # under product_name in this row
-                if product == product_name:
-                    continue                                
-                tally(product, product_name)
+                # Tally counts for each product in the
+                # subusequent purchase for each product in
+                # the first match
 
-    # loop to top
+                if product == sub_item_row['product_name']:
+                    continue
+
+                tally(product, sub_item_row['product_name'])
+
+# loop to top
 
 #end of pyql script
 PYQL

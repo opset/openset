@@ -25,17 +25,17 @@ inline Tests test_db()
 	auto user1_raw_inserts = R"raw_inserts(
 	[
 		{
-			"person": "user1@test.com",
+			"id": "user1@test.com",
 			"stamp": 1458820830,
-			"action": "page_view",
+			"event": "page_view",
 			"_":{				
 				"page": "blog"
 			}
 		},
 		{
-			"person": "user1@test.com",
+			"id": "user1@test.com",
 			"stamp": 1458820840,
-			"action": "page_view",
+			"event": "page_view",
 			"_":{				
 				"page": "home page",
 				"referral_source": "google.co.uk",
@@ -43,9 +43,9 @@ inline Tests test_db()
 			}
 		},
 		{
-			"person": "user1@test.com",
+			"id": "user1@test.com",
 			"stamp": 1458820841,
-			"action": "page_view",
+			"event": "page_view",
 			"_":{				
 				"page": "home page",
 				"referral_source": "google.co.uk",
@@ -53,9 +53,9 @@ inline Tests test_db()
 			}
 		},
 		{
-			"person": "user1@test.com",
+			"id": "user1@test.com",
 			"stamp": 1458820900,
-			"action": "page_view",
+			"event": "page_view",
 			"_":{				
 				"page": "about"
 			}
@@ -66,43 +66,41 @@ inline Tests test_db()
 
 	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 		count page
 		count referral_source
 		var ref
 
-	match where page is not None:
+	for row in rows if page is not None:
         for ref in referral_search:
-		    tally(person, page, referral_source, ref)
+		    tally(row['id'], row['page'], row['referral_source'], ref)
 	)pyql");
 
 	auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 		count {{attr_page}}
 		{{attr_ref}}
 
-	match:
-		tally(person, {{attr_page}}, {{attr_ref}})
+	for row in rows:
+		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
 	)pyql");
 
 	auto test_within_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 		count page
 
-	match where page is 'home page':		
-		iter_next()
-		match where iter_within(10 seconds, prev_match):
-			tally('test1', 'home_page', page)
+	for row in rows if page is 'home page':		
+
+		continue for sub_row in rows if iter_within(10 seconds, row['stamp']):
+			tally('test1', 'home_page', sub_row['page'])
 		break
+	
+	for row in rows if page is 'home page':		
 
-	iter_move_first()
-
-	match where page is 'home page':		
-		iter_next()
-		match where iter_within(100 seconds, prev_match):
-			tally('test2', 'home_page', page)
+		continue for sub_row in rows if iter_within(100 seconds, row['stamp']):
+			tally('test2', 'home_page', sub_row['page'])
 		break
 
 	)pyql");
@@ -211,7 +209,7 @@ inline Tests test_db()
 				auto json = grid->toJSON(); // non-condensed
 
 				// NOTE - uncomment if you want to see the results
-				// cout << cjson::Stringify(&json, true) << endl;
+				//cout << cjson::stringify(&json, true) << endl;
 
 				std::unordered_set<int64_t> timeStamps;
 				std::unordered_set<std::string> referral_sources;
@@ -232,7 +230,7 @@ inline Tests test_db()
 					if (r->find("stamp"))
 						timeStamps.insert(r->xPath("stamp")->getInt());
 
-					auto attr = r->xPath("attr");
+					auto attr = r->xPath("_");
 			
 					if (attr->find("referral_source"))
 						referral_sources.insert(attr->xPath("referral_source")->getString());

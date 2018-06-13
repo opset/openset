@@ -239,7 +239,8 @@ namespace openset
 			void marshal_log(const int paramCount);
 			void marshal_break(const int paramCount);
 			void marshal_dt_within(const int paramCount, const int64_t rowStamp);
-			void marshal_dt_between(const int paramCount, const int64_t rowStamp);
+		    void marshal_ISO8601_to_stamp(int paramCount, int64_t rowStamp);
+		    void marshal_dt_between(const int paramCount, const int64_t rowStamp);
 			void marshal_bucket(const int paramCount);
 			void marshal_round(const int paramCount);
 			void marshal_fix(const int paramCount);

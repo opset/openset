@@ -87,8 +87,8 @@ namespace openset
 					isConditional(false)
 				{}
 
-				FirstPass_s(const LineParts parts, 
-					        const Debug_s debug, 
+				FirstPass_s(const LineParts& parts, 
+					        const Debug_s& debug, 
 					        const int indent):
 					FirstPass_s()
 				{
@@ -146,10 +146,9 @@ namespace openset
 				int64_t deferredInt{ 0 }; // dito
 
 				// constructors for emplace_back
-				MiddleOp_s()
-				{}
+				MiddleOp_s() = default;
 
-				MiddleOp_s(const OpCode_e op, const int64_t value) :
+			    MiddleOp_s(const OpCode_e op, const int64_t value) :
 					op(op),
 					value(value)
 				{}

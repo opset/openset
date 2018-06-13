@@ -171,7 +171,7 @@ cjson Grid::toJSON() const
 	cjson doc;
 
 	doc.set("id_string", this->rawData->getIdStr());
-	doc.set("id_key", this->rawData->id);
+	doc.set("id", this->rawData->id);
 
 	auto rowDoc = doc.setArray("rows");
 	auto columns = table->getColumns();
@@ -220,7 +220,7 @@ cjson Grid::toJSON() const
 		rootObj->set("stamp", row->cols[COL_STAMP]);
 		rootObj->set("stamp_iso", Epoch::EpochToISO8601(row->cols[COL_STAMP]));
 		rootObj->set("event", attributes->blob->getValue(COL_EVENT, row->cols[COL_EVENT]));
-		auto rowObj = rootObj->setObject("attr");
+		auto rowObj = rootObj->setObject("_");
 
 		for (auto c = 0; c < colMap->columnCount; ++c)
 		{

@@ -23,45 +23,45 @@ inline Tests test_pyql_language()
 	auto user1_raw_inserts = R"raw_inserts(
 	[
 		{
-			"person": "user1_@test.com",
+			"id": "user1_@test.com",
 			"stamp": 1458820830,
-			"action" : "purchase", 
+			"event" : "purchase", 
 			"_":{				
 				"fruit": "orange",
 				"price": 5.55
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"id": "user1_@test.com",
 			"stamp": 1458820831,
-			"action" : "purchase", 
+			"event" : "purchase", 
 			"_":{
 				"fruit": "apple",
 				"price": 9.95
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"id": "user1_@test.com",
 			"stamp": 1458820832,
-			"action" : "purchase", 
+			"event" : "purchase", 
 			"_":{
 				"fruit": "pear",
 				"price": 12.49
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"id": "user1_@test.com",
 			"stamp": 1458820833,
-			"action" : "purchase", 
+			"event" : "purchase", 
 			"_":{
 				"fruit": "banana",
 				"price": 2.49
 			}
 		},
 		{
-			"person": "user1_@test.com",
+			"id": "user1_@test.com",
 			"stamp": 1458820834,
-			"action" : "purchase", 
+			"event" : "purchase", 
 			"_":{
 				"fruit": "orange",
 				"price": 5.55
@@ -73,12 +73,12 @@ inline Tests test_pyql_language()
 	// test loop
 	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	counter = 0
 
-	match:
-		tally(person)
+	for row in rows:
+		tally(id)
 		counter = counter + 1
 
 	debug(counter)
@@ -88,12 +88,12 @@ inline Tests test_pyql_language()
 	// test loop with break
 	auto test2_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	counter = 0
 
-	match:
-		tally(person)
+	for row in rows:
+		tally(id)
 		counter = counter + 1
 		break
 
@@ -104,16 +104,18 @@ inline Tests test_pyql_language()
 	// test nested loop with breaks
 	auto test3_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	outercount = 0
 	innercount = 0
 
-	match:
-		tally(person)
-		match:
+	for row in rows:
 
-			tally(person)
+		tally(id)
+
+		continue for sub_row_1 in rows:
+
+			tally(id)
 			innercount = innercount + 1
 			if innercount == 2 or innercount == 4:
 				break
@@ -130,14 +132,14 @@ inline Tests test_pyql_language()
 	// test nested loops, break with depth
 	auto test4_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	outercount = 0
 	innercount = 0
 
-	match:
-		# push(__group, person)
-		match:
+	for row in rows:
+
+		continue for sub_row_1 in rows:
 
 			tally(person)
 			innercount = innercount + 1
@@ -145,6 +147,7 @@ inline Tests test_pyql_language()
 				break 2
 
 		outercount = outercount + 1
+
 		if outercount == 2:
 			break
 
@@ -156,41 +159,47 @@ inline Tests test_pyql_language()
 	// test nested loops, 'break top'
 	auto test5_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	outercount = 0
 	innercount = 0
 
-	match:
-		tally(person)
-		match:
-			tally(person)
-			match:
-				tally(person)
+	for row in rows:
+		tally(id)
+
+		continue for sub_row_1 in rows:
+			tally(id)
+
+			continue for sub_row_2 in rows:
+
+				tally(id)
+
 				innercount = innercount + 1
 				break top
 
 		outercount = outercount + 1
 
-	debug(outercount)  # should be 4
-	debug(innercount)  # should be 4
+	debug(outercount)  # should be 3
+	debug(innercount)  # should be 5
 
 	)pyql");
 
 	// test nested loops, 'break all'
 	auto test6_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	outercount = 0
 	innercount = 0
 
-	match:
-		tally(person)
-		match:
-			tally(person)
-			match:
-				tally(person)
+	for row in rows:
+		tally(id)
+
+		continue for sub_row_1 in rows:
+			tally(id)
+
+			continue for sub_row_2 in rows:
+				tally(id)
 				innercount = innercount + 1
 				break all
 
@@ -204,19 +213,21 @@ inline Tests test_pyql_language()
 	// test nested loops, 'continue'
 	auto test7_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	outercount = 0
 	innercount = 0
 
-	match:
-		tally(person)
+	for row in rows:
+		tally(id)
 	    # log(__group, " level 1")
-		match:
-			tally(person)
+
+		continue for sub_row_1 in rows:
+			tally(id)
 			# log(__group, " level 2")
-			match:
-				tally(person)
+
+			continue for sub_row_2 in rows:
+				tally(id)
 				# log(__group, " level 3")
 				innercount = innercount + 1			
 
@@ -225,21 +236,23 @@ inline Tests test_pyql_language()
 		outercount = outercount + 1
 
 	debug(outercount)  # should be 0
-	debug(innercount)  # should be 35
+	debug(innercount)  # should be 10
 
 	)pyql");
 
 	// test nested loops, 'break ###' to deep
 	auto test8_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
-	match:
-		tally(person)
-		match:
-			tally(person)
-			match:
-				tally(person)
+	for row in rows:
+		tally(id)
+
+		continue for sub_row_1 in rows:
+			tally(id)
+
+			continue for sub_row_2 in rows:
+				tally(id)
 				break 9
 
 	)pyql");
@@ -247,63 +260,46 @@ inline Tests test_pyql_language()
 	// test event manipulators
 	auto test9_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
-	debug(event_count()) # should be 5
+	debug(row_count()) # should be 5
 
 	counter = 0
-
-	iter_next() # advance one row leaving 4
 		
-	match:
+	for row in rows:
 		counter = counter + 1
 
-	debug(counter); # should be 4
+	debug(counter); # should be 5
 
 	)pyql");
 
 	// test over advance
 	auto test10_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
 	counter = 0
 	
-	match:
-		iter_next()
-		counter = counter + 1
-		iter_next()
-		counter = counter + 1
-		iter_next()
-		counter = counter + 1
-		iter_next()
-		counter = counter + 1	
-		iter_next() # should fail
+	for 2 row in rows:		
 		counter = counter + 1	
 
-	debug(counter) # should be 4
+	debug(counter) # should be 2
 	
 	)pyql");
 
 	// test over advance - silent mainloop exit
 	auto test11_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
-		count person
+		count id
 
-	count = 0
+	counter = 0
 	
-	iter_next()
-	debug(1)
-	iter_next()
-	debug(2)
-	iter_next()
-	debug(3)
-	iter_next()
-	debug(4)
-	iter_next()
-	debug(5)
+	for 1 row in rows:		
 
-	# should exit at 4
+        continue for sub_row in rows:
+		    counter = counter + 1	
+
+	debug(counter) # should exit at 4
 
 	)pyql");
 
@@ -474,10 +470,10 @@ inline Tests test_pyql_language()
 	// test inline accumulators `sum/count/avg/min/max where` 
 	auto test15_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 
-	capture_stuff( 1 + 2, DISTINCT fruit where \
+	capture_stuff( 1 + 2, COUNT DISTINCT fruit if \
 		fruit is not 'banana', "rain" + " in " + "spain")
 
-	capture_stuff2( 1 + 2, (3 + 4) / 2.0, DISTINCT fruit where \
+	capture_stuff2( 1 + 2, (3 + 4) / 2.0, COUNT DISTINCT fruit if \
 		fruit is not 'banana' and (2 + 2 == 4))
 
 	def capture_stuff(junk1, the_sum, junk2):
@@ -486,25 +482,25 @@ inline Tests test_pyql_language()
 	def capture_stuff2(junk1, junk2, the_sum):
 		debug(the_sum == 3)
 
-	test_sum = SUM price where \
+	test_sum = SUM price if \
 		fruit is not 'banana'
 
-	test_avg = AVG price where \
+	test_avg = AVG price if \
 		fruit is not 'banana'
 
-	test_max = MAX price where \
+	test_max = MAX price if \
 		fruit is not 'banana'
 
-	test_min = MIN price where \
+	test_min = MIN price if \
 		fruit is not 'banana'
 
-	test_count = COUNT fruit where \
+	test_count = COUNT fruit if \
 		fruit is not 'banana'
 
-	test_distinct = DISTINCT fruit where \
+	test_distinct = COUNT DISTINCT fruit if \
 		fruit is not 'banana'
 
-	test_distinct2 = DISTINCT fruit
+	test_distinct2 = COUNT DISTINCT fruit
 
 	debug(round(test_sum,2) == 33.54)
 	debug(round(test_avg,2) == 8.39)
@@ -756,8 +752,6 @@ inline Tests test_pyql_language()
 
 					int col = 1000;
 
-					// Add event column - TODO: make a primary column type
-					columns->setColumn(++col, "event", columnTypes_e::textColumn, false, 0);
 					columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, 0);
 					columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, 0);
 
@@ -1042,7 +1036,7 @@ inline Tests test_pyql_language()
 
 					ASSERT(debug->size() == 2);
 					ASSERT(debug->at(0) == 5);
-					ASSERT(debug->at(1) == 5);
+					ASSERT(debug->at(1) == 3);
 				}
 				},
 				{
@@ -1148,7 +1142,7 @@ inline Tests test_pyql_language()
 
 					ASSERT(debug->size() == 2);
 					ASSERT(debug->at(0) == 0);
-					ASSERT(debug->at(1) == 35);
+					ASSERT(debug->at(1) == 10);
 				}
 				},
 				{
@@ -1248,7 +1242,7 @@ inline Tests test_pyql_language()
 
 					ASSERT(debug->size() == 2);
 					ASSERT(debug->at(0) == 5);
-					ASSERT(debug->at(1) == 4);
+					ASSERT(debug->at(1) == 5);
 				}
 				},
 				{
@@ -1300,7 +1294,7 @@ inline Tests test_pyql_language()
 					auto debug = &interpreter->debugLog;
 
 					ASSERT(debug->size() == 1);
-					ASSERT(debug->at(0) == 4);
+					ASSERT(debug->at(0) == 2);
 				}
 				},
 				{
@@ -1351,7 +1345,8 @@ inline Tests test_pyql_language()
 
 					auto debug = &interpreter->debugLog;
 
-					ASSERT(debug->size() == 4);					
+					ASSERT(debug->size() == 1);
+                    ASSERT(debug->at(0) == 4);					
 				}
 				},
 				{
@@ -1519,7 +1514,7 @@ inline Tests test_pyql_language()
 					p.compileQuery(test15_pyql.c_str(), table->getColumns(), queryMacros);
 					ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
 
-					//cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+					//cout << openset::query::MacroDbg(queryMacros) << endl;
 
 					// mount the compiled query to an interpretor
 					auto interpreter = new openset::query::Interpreter(queryMacros);
