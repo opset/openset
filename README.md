@@ -9,8 +9,8 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 | Platform    | Version   | Info                     | Status                                                                                                                                                                     |
 | :-----------| :-------: | :------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64  | 0.1.2     | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
-| Windows x64 | 0.1.2     | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64  | 0.2.0     | gcc7.2, release, debug           | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              | 
+| Windows x64 | 0.2.0     | Visual C++ 2017, release, debug  | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
 :coffee: **OpenSet is currently in alpha.**
 
