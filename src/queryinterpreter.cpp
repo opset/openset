@@ -1464,7 +1464,7 @@ string openset::query::Interpreter::getLiteral(const int64_t id) const
 	return "";
 }
 
-bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
+bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentRow)
 {
 	// index maps to function in the enumerator marshals_e
 	// extra maps to the param count (items on stack)
@@ -1942,7 +1942,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int& currentRow)
 	return false; 
 }
 
-void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
+void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentRow)
 {
 	// count allows for now row pointer, and no mounted person
 	if ((!rows || rows->empty()) && interpretMode != InterpretMode_e::count)
@@ -2005,7 +2005,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int currentRow)
             {
 
                 // if it's row iterator variable, we get its value, otherwise we use the current row
-                const int64_t readRow = inst->extra != NONE ? macros.vars.userVars[inst->extra].value : currentRow;
+                const int64_t readRow = inst->extra != NONE ? macros.vars.userVars[inst->extra].value.getInt64() : currentRow;
 
                 // we pop the actual user id in this case
                 if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)

@@ -267,8 +267,8 @@ namespace openset
 			// get a string from the literals script block by ID
 			string getLiteral(const int64_t id) const;
 
-			bool marshal(Instruction_s* inst, int& currentRow);
-			void opRunner(Instruction_s* inst, int currentRow = 0);
+			bool marshal(Instruction_s* inst, int64_t& currentRow);
+			void opRunner(Instruction_s* inst, int64_t currentRow = 0);
 
 			void setScheduleCB(const function<void (int64_t functionHash, int seconds)> &cb);
 			void setEmitCB(const function<void (string emitMessage)> &cb);
