@@ -15,9 +15,9 @@ namespace openset
 	{
 		class AttributeBlob
 		{
+		public:
 			bigRing<attr_key_s, char*> attributesBlob{ ringHint_e::lt_1_million };
 			HeapStack mem;
-		public:
 
 			CriticalSection cs;
 			AttributeBlob() = default;

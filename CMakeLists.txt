@@ -184,6 +184,8 @@ set(SOURCE_FILES
         test/test_db.h
         test/test_lib_var.h
         test/test_pyql_language.h
+		test/test_sessions.h
+		test/test_count_methods.h
         test/testing.h
         test/unittests.h
 )

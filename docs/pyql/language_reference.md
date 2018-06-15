@@ -90,7 +90,7 @@ Floating point types converted to integers will be truncated. There are no conve
 
 Converts non-floating point types into integer types. When `float` fails to convert it will return a zero value.
 ```python
-some_float = int("1234.567")
+some_float = float("1234.567")
 ```
 There are no conversion for container types to float.
 
@@ -102,7 +102,7 @@ Convert non-string types into strings.
 some_string = str(1234)
 ```
 
-There are no conversion for container types to string.
+There are no conversions for container types (list, set, object) to string.
 
 ##### len
 
@@ -122,6 +122,7 @@ my_dict = {
     "hello": "goodbye",
 	"many": [1,2,3,4]
 }
+
 # pop will return a random entry from the dictionary
 random_pair = my_dict.pop()
 
@@ -132,6 +133,7 @@ ramdom_item = my_set.pop()
 
 # pop from a list
 my_list = ["this", "is", "cool", 1234]
+
 # pop the last item from the list
 last_item = my_list.pop()
 ```
@@ -227,150 +229,82 @@ some_keys = my_dict.keys()
 
 ## Row Iterators
 
-##### match
+##### for/rows
 
-`match` is a row Iterator. When a user record is mounted, a PyQL script started is started with the iterator on the first row of their event list. `match` can be nested, and will maintain an independent iterator for each level of `match`
+`for` when iterating `rows` becomes a specialized iterator. A user record contains a sorted list of events, a `for/rows` iterator will move the row cursor, starting at row `0`. `for/rows` can be nested and continued.
 
 ```python
-match:
+for row in rows:
     do_something() # on each row
 ```
 
 ```python
-match 5:
+for 5 row in rows:
     do_something() # on the first five matches
 ```
 
 ```python
-match where some_column is 'some_value':
+for row in rows if row['some_column'] is 'some_value':
     do_something() # on each row that matches the filter
 ```
 
 ```python
-match 1 where some_column is 'some_value':
+for 1 row in rows if row['some_column'] == 'some_value':
     do_something() # on the first match that matches the filter
 ```
 
-Nested, both matches are maintaining their own iterator. The inner match (the second match) will start on the exact row the outer match (the first match)  matched on.
 ```python
-match where action is 'purchase': 
-   match 1 where iter_within(12 hours, last_match):
-       do_something() # on rows within 12 hours of last_event
-```
-
-##### iter_get
-
-`iter_get()` returns the exact location of the current iterator. If you are inside a match block, you will receive the iterator location for that block. If called from outside a `match` the iterator will be it's default (row 0) or last position.
-
-```python
-my_iter_pos = iter_get() # get the position
-# do something
-iter_set(my_iter_pos)
-```
-
-##### iter_set
-
-`iter_set(position)` will set the position of the current iterator. If you are inside a match block, you will be setting the iterator position for that block.
-
-```python
-my_iter_pos = iter_get() # get the position
-# do something
-iter_set(my_iter_pos)
-```
-
-##### iter_move_first
-
-`iter_move_first()` moves the current iterator to the first row in the users event set. This can be useful when you want to run multiple `match` blocks in the same query or if you are using `match` to test for the presence of a value prior to performing an analysis. 
-
-```python
-match 1 where product is 'rubber duck':
-    iter_move_first() # reset the iterator
-    match:
-        do_something() # do_something() will be called on all rows
-```
-
-##### iter_move_last
-
-`iter_move_last()`, exactly the same as `iter_move_first()` but moves to the very last row in the event set.
-
-##### iter_next
-
-`iter_next()` moves to the current iterator to the next available event. This is useful when nesting `match` blocks if you do not want the nested `match` to evaluate the same event as the the outer `match`. 
-
-```python
-match where action is 'purchase': 
-  iter_next() # move past match purchase, look for more purchases
-   match 1 where action is 'purchase':
-       do_something() 
-```
-
-> :pushpin: `iter_next()` takes into consideration virtual rows in complex events, and will move past virtual rows in the same event to the first row in the next event.
-
-##### iter_prev
-
-> :pushpin: Reverse iteration is coming soon.
-
-##### iter_reset_event
-
-> :pushpin: Not implemented. iter_reset_event is coming shortly.
-
-When dealing with a complex event containing virtual rows (i.e. an event that has multiple permutation) a `match` could be made on any of these virtual rows. If you need to perform an evaluation of the entire event on an inner `match` it is useful to temporarily reset the iterator to the top of the event.
-
-```python
-# This would return a tree of products that are commonly purchased together.
-# This assumes a complex event is used with product line items.
-match where action is 'purchase':
+for 1 row in rows if row['some_column'] == 'some_value':
+    do_something() # on the first match that matches the filter
     
-    saved_product = product
-    
-    saved_iter = iter_get() # save iterator (could be on virtual row)
-    iter_reset_event() # move to the first row or virtual row
-    
-    # match 1 will iterate all virtual rows in the current event
-    match 1 where action is 'purchase':  
-       tally(saved_product, product)
-       
-    iter_set(save_iter) # resume the outer match where it left off
+    continue for 1 sub_row in rows if sub_row['some_column'] == 'something':
+        do_something_else() # on firt matching row after the last match
 ```
+:pushpin: Nested matches maintain their own iterators. The inner match (the second match in the last example) will start on the row following the the first match because the `continue for` keyword was used. If `continue` is not specified, nested iterators will start at row `0`.
 
-##### event_count
+##### row_count
 
-`event_count()` returns the number of events in the event set. 
+`row_count()` returns the number of events (rows) in the event set. 
 
 ```python
-tally(bucket( event_count(), 5)) # count people by event_count in groups of 5
+# count people by row_count rounded to the nearest 5
+tally(bucket( row_count(), 5)) 
 ```
-> :pushpin: `event_count()` takes into consideration virtual rows in complex event sets, and will count the actual number of events, not the virtual rows. This is an expensive function, as such, the value is cached to reduce the cost of subsequent calls.
 
 ##### iter_within
 Is the timestamp for the current row iterator between two dates.
 
 Match rows within 5 days of the users first event. Notice the `5 days` notation, in PyQL you can use `# unit` where unit is `seconds`, `minutes`, `hours` or `days`
 ```python
-match where iter_within(5 days, first_event):
+for row in rows if iter_within(5 days, first_event):
    do_something() # on rows within 5 days of first_event
 ```
 Match rows within 12 hours of the users last event.
 ```python
-match where iter_within(12 hours, last_event):
+for row in rows if iter_within(12 hours, last_event):
    do_something() # on rows within 12 hours of last_event
 ```
 Nested match, where the inner match event is within 12 hours of the outer match (`first_match`, `prev_match`, `last_event` and `first_event` are automatically created and can be used in your filters, or any other function).
 ```python
-match where action is 'purchase': 
-   match 1 where iter_within(12 hours, last_match):
-       do_something() # on rows within 12 hours of last_event
+for row in rows if row['event'] is 'purchase': 
+   continue for 1 sub_row in rows if iter_within(12 hours, last_match):
+   
+       do_something() # on rows within 12 hours of last_event in dataset
 ```
 
-See the [time](#) section for useful data_values for `iter_within`. 
+See the [time](#) section to learn more about `iter_within`. 
 
 ##### iter_between
 
 Match between two dates (ISO 8601 strings, Unix epoch seconds/milliseconds).
 ```python
-match where iter_between('2017-09-21T22:00:00Z', '2017-09-21T22:59:59Z'):
+for row in rows if 
+      iter_between('2017-09-21T22:00:00Z', '2017-09-21T22:59:59Z'):
+      
    do_something() # on rows between these dates
 ```
+
+See the [time](#) section to learn more about `iter_between`. 
 
 ## Functions, Iterators and Flow Control
 
@@ -400,8 +334,7 @@ def ten_x(some_number):
     return some_number * 10
 ```
 ```python
-def ten_x(some_value, another_value):
-    # do something
+def ten_x(some_value, another_value):    
     return { 'value1': some_value, 'value2': anotehr_value }
 ```
 
@@ -418,7 +351,7 @@ else:
     do_something_neutral()
 ```
 
-##### for / in
+##### for / in (regular)
 
 PyQL supports `for`/`in` loops. 
 
@@ -486,21 +419,22 @@ match 1 where action is 'purchase': # just match first found
 how_long_ago = now - first_match_time          
 ```
 
-##### event_time
+##### event time
 
-Returns the the `event_time` in Unix epoch milliseconds at the current event iterator position.
+The event time can be accessed using the built in column variable `stamp`.
 
 ```python
-match 1 where action is 'purchase': # match first purchase
+first_match_time = None
 
-   first_match_time = event_time # save the time of this event
-   iter_next()
-   
-   match where action is 'purchase': # match remaining purchases
-       last_match_time = event_time
+for row in rows if event is 'purchase': # match first purchase
+  
+   if first_match_time == None:
+       first_match_time = row['stamp']
        
-# time between first and last purcahse
-time_between = last_match_time - first_match_time
+   last_match_time = row['stamp'] # save the time of this event
+       
+# time between first and last purchase (in milliseconds) converted to days
+days_between = to_days(last_match_time - first_match_time)
 ```
 
 ##### first_event
@@ -508,7 +442,7 @@ time_between = last_match_time - first_match_time
 `first_event` will return the Unix epoch milliseconds for the first event in the users event set.
 
 ```python
-user_active_span = last_event - first_event
+user_active_span_in_weeks = to_days(last_event - first_event) / 7
 ```
 
 ##### last_event
@@ -516,33 +450,12 @@ user_active_span = last_event - first_event
 `last_event` will return the Unix epoch milliseconds for the last event in the users event set.
 
 ```python
-user_active_span = last_event - first_event
+user_active_span_ms = last_event - first_event
 ```
-
-##### prev_match
-
-`prev_match` is useful for nested `match` iterators. The timestamp of the event that triggered the last match (the nearest outer match) will be returned.
-
-```python
-match where action is 'purchase': # match all purchase events
-
-   # note - prev_match was set on the match above
-   iter_next()
-   
-   match where action is 'purchase': # match remaining purchases
-       if event_time - prev_match > 30 days:
-           do_something() # 30 or more days between these purchases
-```
-
-> :pushpin: `prev_match` will be correct at all depths in a nested `match` loop. If you `break` a loop `prev_match` will contain the correct value for the new level of loop nesting.
-
-##### first_match
-
-See `prev_match`. The difference between `first_match` and `prev_match` is that on deeply nested `match` loops, `first_match` will always contain the match time for the very most outer loop.
 
 ##### fix
 
-`fix` converts an integer, floating point or string (contain a number) into a fixed decimal place string. Bankers rounding is applied.
+`fix` converts an integer, floating point or string (contain a number) into a fixed decimal place string. Banker rounding is applied.
 
 The first parameter is the value to fix. The second parameter is the number of decimal places. If you simply want to truncate (and round) you can pass 0.
 
@@ -598,6 +511,16 @@ match where action is 'purchase': # match all purchase events
     tally(date_month(event_time))
 ```
 
+##### inline time spans
+
+PyQL supports basic written formats for time spans, these are expanded into their equivalent value in milliseconds
+```
+ten_seconds = 10 seconds
+ten_hours = 10 hours
+ten_minutes = 10 minutes
+ten_days = 10 days
+```
+
 ## Tally, Emit, Schedule
 
 ##### emit
@@ -609,7 +532,7 @@ The `emit` function is used in OpenSet triggers, it is used to emit a named even
 # emit an event and schedule a folloup tirgger to run in 90 days
 def on_insert():
     counter = 0    
-    match where action is 'purchase' and product_sku is not None:
+    for row on rows if event == 'purchase' and product_sku != None:
         counter += 1
         if counter >= 100:
             schedule(90 days, "check_for_200")
@@ -664,16 +587,18 @@ Generally tally is used to create useful pivots. For example if your events cont
 agg:
     people
     
-match where product is not None and country is not None:
-    tally(country, product)
+for row in rows if product != None and country != None:
+    tally(row['country'], row['product'])
 ```
+
 or, if you wanted to see `country` by `product`:
+
 ```python
 agg:
     people
     
-match where product is not None and country is not None:
-    tally(product, country)
+for row in rows if product != None and country != None:
+    tally(row['product'], row['country'])
 ```
 
 > :pushpin: Tally used for segmentation will be discussed in a segmentation document.
@@ -682,19 +607,72 @@ match where product is not None and country is not None:
 ## Session Functions
 
 ##### session
-coming soon
+
+Sessions are calculated at run-time and are enumerated from 1. Session time is defaulted at 30 minutes, however, when a query is requested a session timeout can be specified and sessions will be enumerated using that value.
+
+```python
+agg:
+    people
+    
+for row in rows if row['session'] == 5:
+    do_something() # do something if row is on the 5th session
+```
+
+:pushpin: sessions are based on periods of continued activity, an inactivity period longer than the session timeout will increment the session count for the subsequent activity period.
 
 ##### session_count
-coming soon
+
+returns the number of sessions in a persons row set.
 
 ## Inline Aggregators
 
-##### DISTINCT
 ##### COUNT
+
+returns a `count` for a column matching an optional filter.
+
+```
+product_pages_viewed = COUNT page if page_group = 'product'
+```
+
 ##### SUM
+
+returns a `sum` for a column matching an optional filter.
+
+```
+total_spent = SUM cart_total if page_group = 'product'
+```
+
 ##### MIN
+
+returns the `min` value for a column with optional filter.
+
+```
+smallest_cart = MIN cart_total if page_group = 'product'
+```
+
 ##### MAX
+
+returns the `max` value for a column with optional filter.
+
+```
+largest_cart = MAX cart_total if page_group = 'product'
+```
+
 ##### AVG
+
+returns the `avg` value for a column with optional filter.
+
+```
+avg_cart_size = AVG cart_total if page_group = 'product'
+```
+
+##### COUNT DISTINCT
+
+returns the `avg` value for a column with optional filter.
+
+```
+unique_products = COUNT DISTINCT product_name if product_group = 'outdoor'
+```
 
 ## Segment Math
 
@@ -707,9 +685,40 @@ coming soon
 ## Misc 
 
 ##### bucket
+
+`bucket(value, size)`
+
+Rounds `value` down to the nearest multiple of `size`. Supports integer and decimal values.
+
+```
+nearest_50_cents = bucket(23.26, 0.50) # returns 23.00
+nearest_50_cents = bucket(23.55, 0.50) # returns 23.50
+nearest_25_dollars = bucket(27.11, 25) # returns 25
+```
+
 ##### round
+
+rounds a decimal number up or down (banker rounding) to it's nearest integer.
+
+```
+rounded_value = round(0.5) # returns 1
+rounded_value = round(0.5) # return 0
+```
+
 ##### trunc
+
+truncates (chops off) the decimal part of a number and returns an integer (rounds down)
+
+```
+truncated_value = round(5.5) # returns 5
+```
+
 ##### fix
 
+`fix(value, decimals)`
 
+rounds a decimal number to a fixed set of decimal places. Returns a string.
 
+```
+dollars_cents = fix(24.9499, 2) # returns "24.95"
+```

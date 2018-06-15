@@ -34,12 +34,13 @@ openset::web::Rest::Rest(const int64_t routeId, const std::string& server):
     host(server),
     routeId(routeId)
 {
+    //client.io_service = globals::global_io_service;
     client.config.timeout_connect = 2; // two seconds to connect or fail
     client.config.timeout = 30; // 30 seconds to connect or fail
 }
 
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
-                                 char* payload, const size_t length, RestCbJson cb)
+                                 char* payload, const size_t length, const RestCbJson& cb)
 {
     //csLock lock(cs);
 
@@ -47,7 +48,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
     //if (payload && length)
       //  buffer.write(payload, length);
 
-    SimpleWeb::string_view buffer(payload, length);
+    const SimpleWeb::string_view buffer(payload, length);
     const auto url = path + makeParams(params);
 
     //Logger::get().debug("http://" + host + url);
@@ -59,14 +60,14 @@ void openset::web::Rest::request(const string& method, const string& path, const
         {},
         [cb](shared_ptr<HttpClient::Response> response, const SimpleWeb::error_code& ec)
         {
-            auto length = response->content.size();
-            auto data = static_cast<char*>(PoolMem::getPool().getPtr(length));
+            const auto length = response->content.size();
+            const auto data = static_cast<char*>(PoolMem::getPool().getPtr(length));
             response->content.read(data, length);
 
-            auto status = response->status_code.length() && response->status_code[0] == '2'
+            const auto status = response->status_code.length() && response->status_code[0] == '2'
                 ? http::StatusCode::success_ok
                 : http::StatusCode::client_error_bad_request;
-            auto isError = (status != http::StatusCode::success_ok || ec);
+            const auto isError = (status != http::StatusCode::success_ok || ec);
             cb(status, isError, cjson(data, length));
 
             PoolMem::getPool().freePtr(data);
@@ -78,7 +79,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
 }
 
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
-                                 char* payload, const size_t length, RestCbBin cb)
+                                 char* payload, const size_t length, const RestCbBin& cb)
 {
     //csLock lock(cs);
 
@@ -86,9 +87,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
     //if (payload && length)
       //  buffer.write(payload, length);
 
-    SimpleWeb::string_view buffer(payload, length);
-
-
+    const SimpleWeb::string_view buffer(payload, length);
     const auto url = path + makeParams(params);
 
     //Logger::get().debug("http://" + host + url);
@@ -100,13 +99,15 @@ void openset::web::Rest::request(const string& method, const string& path, const
         {},
         [cb](shared_ptr<HttpClient::Response> response, const SimpleWeb::error_code& ec)
         {
-            auto length = response->content.size();
-            auto data = length ? static_cast<char*>(PoolMem::getPool().getPtr(length)) : nullptr;
+            const auto length = response->content.size();
+            const auto data = length ? static_cast<char*>(PoolMem::getPool().getPtr(length)) : nullptr;
             response->content.read(data, length);
-            auto status = response->status_code.length() && response->status_code[0] == '2'
+
+            const auto status = response->status_code.length() && response->status_code[0] == '2'
                 ? http::StatusCode::success_ok
                 : http::StatusCode::client_error_bad_request;
-            auto isError = (status != http::StatusCode::success_ok || ec);
+            const auto isError = (status != http::StatusCode::success_ok || ec);
+
             cb(status, isError, data, length);
         }
     );

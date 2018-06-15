@@ -17,8 +17,9 @@ namespace openset
 		public:
 
 			// structure for parse exception handling
-			struct ParseFail_s
+			class ParseFail_s : public std::exception
 			{
+            public:
 				errors::errorClass_e eClass;
 				errors::errorCode_e eCode;
 				std::string message;
@@ -27,20 +28,20 @@ namespace openset
 				ParseFail_s(
 					const errors::errorClass_e eClass,
 					const errors::errorCode_e eCode,
-					const string message) :
+					const string &message) :
 					eClass(eClass),
 					eCode(eCode),
-					message(std::string{ message })
-				{}
+					message(message)
+                {}
 
 				ParseFail_s(
 					const errors::errorClass_e eClass,
 					const errors::errorCode_e eCode,
-					const string message,
+					const string &message,
 					const Debug_s debug) :
 					eClass(eClass),
 					eCode(eCode),
-					message(std::string{ message }),
+					message(message),
 					debug(debug)
 				{}
 			
@@ -86,8 +87,8 @@ namespace openset
 					isConditional(false)
 				{}
 
-				FirstPass_s(const LineParts parts, 
-					        const Debug_s debug, 
+				FirstPass_s(const LineParts& parts, 
+					        const Debug_s& debug, 
 					        const int indent):
 					FirstPass_s()
 				{
@@ -145,10 +146,9 @@ namespace openset
 				int64_t deferredInt{ 0 }; // dito
 
 				// constructors for emplace_back
-				MiddleOp_s()
-				{}
+				MiddleOp_s() = default;
 
-				MiddleOp_s(const OpCode_e op, const int64_t value) :
+			    MiddleOp_s(const OpCode_e op, const int64_t value) :
 					op(op),
 					value(value)
 				{}
@@ -237,14 +237,15 @@ namespace openset
 			std::string rawScript;
 
 			explicit QueryParser(const parseMode_e parseMode = parseMode_e::query);
-			~QueryParser();
+            ~QueryParser() = default;
+            
 
-			static bool isVar(VarMap& vars, const string name)
+			static bool isVar(VarMap& vars, const string& name)
 			{
 				return (vars.find(name) != vars.end());
 			}
 
-			static Variable_s& getVar(VarMap& vars, const string name)
+			static Variable_s& getVar(VarMap& vars, const string& name)
 			{
 				return vars.find(name)->second;
 			}
@@ -275,6 +276,14 @@ namespace openset
 			{
 				return (vars.userVars.find(name) != vars.userVars.end());
 			}
+
+            bool isRowObject(const string& name)
+            {
+                if (const auto var = vars.userVars.find(name); 
+                    var != vars.userVars.end() && var->second.isRowObject)
+                    return true;
+                return false;
+            }
 
 			bool isGroupVar(const string& name)
 			{
@@ -309,12 +318,12 @@ namespace openset
 			}
 
 			static bool isDigit(char value);
-			static bool isNumeric(const string value);
-			static bool isFloat(const string value);
-			static bool isString(const string value);
-            static bool isBool(const string value);
-			static bool isTextual(const string value);
-			static bool isValue(const string value);
+			static bool isNumeric(const string& value);
+			static bool isFloat(const string& value);
+			static bool isString(const string& value);
+            static bool isBool(const string& value);
+			static bool isTextual(const string& value);
+			static bool isValue(const string& value);
 
 			static bool checkBrackets(LineParts& conditions);
 
@@ -324,7 +333,7 @@ namespace openset
 			// python uses [] and : in a few ways, this to see if this is an arrray/string slice
 			static bool isSplice(LineParts& conditions, const int index); 
 
-            static int search(LineParts& conditions, string value, int startIdx = 0);
+            static int search(LineParts& conditions, const string& value, int startIdx = 0);
 			static LineParts extractVariable(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static LineParts extractVariableReverse(LineParts& conditions, int startIdx, int& reinsertIdx);
 			static void extractFunction(LineParts& conditions, int startIdx, int& endIdx);
@@ -346,18 +355,19 @@ namespace openset
 			int64_t extractBlocks(int indent, FirstPass& lines, BlockList& blockList);
 			static BlockList_s* getBlockByID(int64_t blockId, BlockList& blockList);
 
-			int64_t parseHintConditions(LineParts& conditions, HintOpList& opList, int64_t index, bool stopOnConditions);
-			void evaluateHints(std::string hintName, HintOpList& hintOps);
+			int64_t parseHintConditions(const LineParts& conditions, HintOpList& opList, int64_t index, bool stopOnConditions);
+			void evaluateHints(const std::string& hintName, HintOpList& hintOps);
 
 			// convert conditions, maths and function calls into stack
-			int64_t parseConditions(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug, bool stopOnConditions, string stackOp = "");
+			int64_t parseConditions(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug, bool stopOnConditions,
+			                        const string& stackOp = "");
 			int64_t parseCall(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug);
 
 			// parse dictionaries - they have an evil format
 			// int64_t parseDictionary(LineParts& conditions, MiddleOpList& opList, int64_t index, Debug_s& debug);
 
 			// convert a code block into tokens
-			void tokenizeBlock(FirstPass& lines, int blockId, BlockList &blockList, MiddleBlockList& outputBlocks);
+			void tokenizeBlock(FirstPass& lines, const int blockId, BlockList &blockList, MiddleBlockList& outputBlocks);
 
 			void build(
 				Columns* columnsPtr,
@@ -374,7 +384,7 @@ namespace openset
             // this detects the indent level and pulls it out and returns
             // a new string void of empty lines, tabs expanded and 
             // de-indented so the pyql parser can process it
-		    static std::string fixIndent(const std::string source);
+		    static std::string fixIndent(const std::string& source);
             
             struct SectionDefinition_s
             {

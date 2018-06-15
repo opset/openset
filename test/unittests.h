@@ -6,6 +6,7 @@
 #include "test_pyql_language.h"
 #include "test_zorder.h"
 #include "test_sessions.h"
+#include "test_count_methods.h"
 #include "../src/logger.h"
 
 bool unitTest()
@@ -25,6 +26,7 @@ bool unitTest()
 	add(test_pyql_language());
 	add(test_zorder());
 	add(test_sessions());
+    add(test_count_methods());
 
 	return runTests(allTests).size() == 0; // true if zero
 }

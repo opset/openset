@@ -471,7 +471,7 @@ public:
 	Set* getSet() const
 	{
 		if (type != valueType::SET)
-			throw std::runtime_error("not a list");
+			throw std::runtime_error("not a set");
 
 		if (!setValue)
 			setValue = new Set();

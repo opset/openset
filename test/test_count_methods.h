@@ -18,7 +18,7 @@
 #include <unordered_set>
 
 // Our tests
-inline Tests test_sessions()
+inline Tests test_count_methods()
 {
 	
 	// An array of JSON events to insert, we are going to 
@@ -33,79 +33,48 @@ inline Tests test_sessions()
 			"event": "some event",
 			"_":{				
 				"some_val": 100,
-	            "some_str": "rabbit"
+	            "some_thing": "rabbit",
+                "some_color": "orange" 
 			}
 		},
 		{
 			"id": "user1@test.com",
-			"stamp": 1458800100,
+			"stamp": 1458800000,
 			"event": "some event",
 			"_":{				
-				"some_val": 101,
-	            "some_str": "train"
+				"some_val": 100,
+	            "some_thing": "rabbit",
+                "some_color": "purple" 
 			}
 		},
 		{
 			"id": "user1@test.com",
-			"stamp": 1458800200,
+			"stamp": 1458801000,
 			"event": "some event",
 			"_":{				
-				"some_val": 102,
-	            "some_str": "cat"
+				"some_val": 200,
+	            "some_thing": "goat",
+                "some_color": "green" 
 			}
 		},
 		{
 			"id": "user1@test.com",
-			"stamp": 1545220000,
+			"stamp": 1458801000,
 			"event": "some event",
 			"_":{				
-				"some_val": 103,
-	            "some_str": "dog"
+				"some_val": 200,
+	            "some_thing": "goat",
+                "some_color": "golden" 
 			}
 		},
 		{
 			"id": "user1@test.com",
-			"stamp": 1545220100,
+			"stamp": 1458801000,
 			"event": "some event",
 			"_":{				
-				"some_val": 104,
-	            "some_str": "cat"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1545220900,
-			"event": "some event",
-			"_":{				
-				"some_val": 105,
-	            "some_str": "rabbit"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631600000,
-			"event": "some event",
-			"_":{				
-				"some_val": 106,
-	            "some_str": "train"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631600400,
-			"event": "some event",
-			"_":{				
-				"some_val": 107,
-	            "some_str": "plane"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631601200,
-			"event": "some event",
-			"_":{				
-				"some_val": 108,
-	            "some_str": "automobile"
+				"some_val": 200,
+	            "some_thing": "goat",
+                "some_color": "cyan" 
 			}
 		},
 	]
@@ -114,15 +83,12 @@ inline Tests test_sessions()
 	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
 	agg:
 		count id
-		count session
-        count some_val
+        count some_thing
+        count some_color
+        sum some_val
 
 	for row in rows:
-		tally("all", row['some_str'])
-		if session == 2:
-			debug(true)
-
-	debug(session_count == 3)
+		tally(row['some_thing'], row['some_color'])
 
 	)pyql");
 
@@ -162,10 +128,10 @@ inline Tests test_sessions()
 
 	return {
 		{
-			"test_sessions: create and prepare a table", [=] {
+			"test_count_methods: create and prepare a table", [=] {
 
 				// prepare our table
-				auto table = openset::globals::database->newTable("__testsessions__");
+				auto table = openset::globals::database->newTable("__testcountmethods__");
 
 				// add some columns
 				auto columns = table->getColumns();
@@ -173,7 +139,8 @@ inline Tests test_sessions()
 
 				// content (adding to 2000 range, these typically auto enumerated on create)
 				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
-				columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
+				columns->setColumn(2001, "some_thing", openset::db::columnTypes_e::textColumn, false);
+                columns->setColumn(2002, "some_color", openset::db::columnTypes_e::textColumn, false);
 			
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				auto personRaw = parts->people.getmakePerson("user1@test.com");
@@ -197,19 +164,16 @@ inline Tests test_sessions()
 					person.insert(e);
 				}
 
-				auto grid = person.getGrid();
-				auto json = grid->toJSON(); // non-condensed
-
 				person.commit();
 
 			}
 		},
 		{
-			"test_sessions: loop", [=]
+			"test_count_methods: normal count", [=]
 			{
 				auto database = openset::globals::database;
 
-				auto table = openset::globals::database->getTable("__testsessions__");
+				auto table = openset::globals::database->getTable("__testcountmethods__");
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
 				openset::query::Macro_s queryMacros; // this is our compiled code block
@@ -280,7 +244,7 @@ inline Tests test_sessions()
 				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
 				// NOTE - uncomment if you want to see the results
-				//cout << cjson::Stringify(&resultJSON, true) << endl;
+				//cout << cjson::stringify(&resultJSON, true) << endl;
 
 				ASSERTDEBUGLOG(interpreter->debugLog);
 
@@ -288,13 +252,113 @@ inline Tests test_sessions()
 				ASSERT(underScoreNode != nullptr);
 
 				auto dataNodes = underScoreNode->getNodes();
-				ASSERT(dataNodes.size() == 1);
+				ASSERT(dataNodes.size() == 2);
 
-				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::stringify(totalsNode);
+				auto totalsNode1 = dataNodes[0]->xPath("/c");
+				auto values1 = cjson::stringify(totalsNode1);
 
-				ASSERT(values == "[1,3,9]");
+                auto totalsNode2 = dataNodes[1]->xPath("/c");
+				auto values2 = cjson::stringify(totalsNode2);
 
+				ASSERT(values1 == "[1,3,3,600]" && values2 == "[1,2,2,200]");
+			}
+		},
+		{
+			"test_count_methods: date count", [=]
+			{
+				auto database = openset::globals::database;
+
+				auto table = openset::globals::database->getTable("__testcountmethods__");
+				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+
+				openset::query::Macro_s queryMacros; // this is our compiled code block
+				openset::query::QueryParser p;
+
+				// compile this
+				p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
+				ASSERT(p.error.inError() == false);
+
+                // count using time stamp based row identifies (allows for multiple rows to be treated as one)
+                queryMacros.useStampedRowIds = true;
+
+				// mount the compiled query to an interpretor
+				auto interpreter = new openset::query::Interpreter(queryMacros);
+
+				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
+				interpreter->setResultObject(&resultSet);
+
+				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+				ASSERT(personRaw != nullptr);
+				auto mappedColumns = interpreter->getReferencedColumns();
+
+				// MappedColumns? Why? Because the basic mapTable function (without a 
+				// columnList) maps all the columns in the table - which is what we want when 
+				// inserting or updating rows but means more processing and less data affinity
+				// when performing queries
+
+				Person person; // Person overlay for personRaw;
+				person.mapTable(table.get(), 0, mappedColumns);
+
+				person.mount(personRaw); // this tells the person object where the raw compressed data is
+				person.prepare(); // this actually decompresses
+
+								  // this mounts the now decompressed data (in the person overlay)
+								  // into the interpreter
+				interpreter->mount(&person);
+
+				// run it
+				interpreter->exec();
+				ASSERT(interpreter->error.inError() == false);
+
+				// just getting a pointer to the results for nicer readability
+				auto result = interpreter->result;
+
+				ASSERT(result->results.size() != 0);
+
+				// we are going to sort the list, this is done for merging, but
+				// being we have one partition in this test we won't actually be merging.
+				result->makeSortedList();
+
+				// the merger was made to merge a fancy result structure, we
+				// are going to manually stuff our result into this
+				std::vector<openset::result::ResultSet*> resultSets;
+
+				// populate or vector of results, so we can merge
+				//responseData.push_back(&res);
+				resultSets.push_back(interpreter->result);
+
+				// this is the merging object, it merges results from multiple 
+				// partitions into a result that can serialized to JSON, or to 
+				// binary for distributed queries
+				openset::result::ResultMuxDemux merger;
+
+				// we are going to populate this
+				cjson resultJSON;
+
+				// make some JSON
+				//auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
+                //merger.mergeMacroLiterals(queryMacros, resultSets);
+				//auto text = merger.mergeResultText(resultSets);
+				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+
+				// NOTE - uncomment if you want to see the results
+				//cout << cjson::stringify(&resultJSON, true) << endl;
+
+				ASSERTDEBUGLOG(interpreter->debugLog);
+
+				auto underScoreNode = resultJSON.xPath("/_");
+				ASSERT(underScoreNode != nullptr);
+
+				auto dataNodes = underScoreNode->getNodes();
+				ASSERT(dataNodes.size() == 2);
+
+				auto totalsNode1 = dataNodes[0]->xPath("/c");
+				auto values1 = cjson::stringify(totalsNode1);
+
+                auto totalsNode2 = dataNodes[1]->xPath("/c");
+				auto values2 = cjson::stringify(totalsNode2);
+
+				ASSERT(values1 == "[1,1,3,200]" && values2 == "[1,1,2,100]");
 			}
 		},
 

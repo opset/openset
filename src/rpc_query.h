@@ -14,16 +14,16 @@ namespace openset::comms
     {
     public:
         // POST /v1/query/{table}/event
-        static void event(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void event(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/segment
-        static void segment(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void segment(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/column/{name}?{various optional query params}
-        static void column(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void column(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // GET /v1/query/{table}/person?{id|idstr}={user_id_key}
-        static void person(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void person(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/histogram/{name}
-        static void histogram(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void histogram(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/batch
-        static void batch(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void batch(const openset::web::MessagePtr& message, const RpcMapping& matches);
     };
 }

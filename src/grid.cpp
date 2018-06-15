@@ -114,6 +114,7 @@ void Grid::reset()
 	rows.clear(); // release the rows - likely to not free vector internals
 	mem.reset(); // release the memory to the pool - will always leave one page
 	rawData = nullptr;
+    propRow = nullptr;
 }
 
 void Grid::reinit()
@@ -122,20 +123,8 @@ void Grid::reinit()
 	table = nullptr;
 	blob = nullptr;
 	attributes = nullptr;
-	//memset(columnMap, 0, sizeof(columnMap)); // all zeros
-	//memset(isSet, 0, sizeof(isSet)); // all false
 }
 
-/**
- * \brief maps schema to the columnMap
- *
- * Why? The schema can have up to 8192 columns. These columns have 
- * numeric indexes that allow allocated columns to be distributed 
- * throughout that range. The Column map is a sequential list of 
- * indexes into the actual schema, allowing us to create compact 
- * grids that do not contain 8192 columns (which would be bulky 
- * and slow)
- */
 bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr)
 {
 	// if we are already mapped on this object, skip all this
@@ -182,12 +171,10 @@ cjson Grid::toJSON() const
 	cjson doc;
 
 	doc.set("id_string", this->rawData->getIdStr());
-	doc.set("id_key", this->rawData->id);
+	doc.set("id", this->rawData->id);
 
 	auto rowDoc = doc.setArray("rows");
 	auto columns = table->getColumns();
-
-    std::vector<openset::db::Col_s*> accumulator;
 
     const auto convertToJSON = [&](cjson* branch, Columns::Columns_s* colInfo, int64_t value, bool isArray)
     {
@@ -227,344 +214,39 @@ cjson Grid::toJSON() const
 		}       
     };
 
-	for (auto iter = rows.begin(); iter != rows.end(); ++iter)
+	for (auto row : rows)
 	{
-		accumulator.push_back(*iter);
+		auto rootObj = rowDoc->pushObject();
+		rootObj->set("stamp", row->cols[COL_STAMP]);
+		rootObj->set("stamp_iso", Epoch::EpochToISO8601(row->cols[COL_STAMP]));
+		rootObj->set("event", attributes->blob->getValue(COL_EVENT, row->cols[COL_EVENT]));
+		auto rowObj = rootObj->setObject("_");
 
-		// if we are at the end or the next one is a different group, lets push 
-		// out some JSON 
-		if (iter + 1 == rows.end() || 
-			HashPair((*(iter + 1))->cols[COL_STAMP], (*(iter + 1))->cols[COL_ACTION]) !=
-			HashPair( (*iter)->cols[COL_STAMP], (*iter)->cols[COL_ACTION]))
+		for (auto c = 0; c < colMap->columnCount; ++c)
 		{
-			// just one row? easy!
-			if (accumulator.size() == 1)
-			{
-				auto rootObj = rowDoc->pushObject();
-				rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
-				rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
-				rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
-			    auto rowObj = rootObj->setObject("attr");
+			// get the column information
+			const auto colInfo = columns->getColumn(colMap->columnMap[c]);
 
-				for (auto c = 0; c < colMap->columnCount; ++c)
-				{
-					// get the column information
-					const auto colInfo = columns->getColumn(colMap->columnMap[c]);
+			if (colInfo->idx < 1000) // first 1000 are reserved
+				continue;
 
-					if (colInfo->idx < 1000) // first 1000 are reserved
-						continue;
+			const auto value = row->cols[c];
 
-					const auto value = accumulator[0]->cols[c];
+			if (value == NONE)
+				continue;
 
-					if (value == NONE)
-						continue;
-
-                    if (colInfo->isSet)
-                    {
-                        const auto set = rowObj->setArray(colInfo->name);
-                        const auto ol = reinterpret_cast<const SetInfo_s*>(&value);
-                        for (auto offset = ol->offset; offset < ol->offset + ol->length; ++offset)
-                            convertToJSON(set, colInfo, this->setData[offset], true); 
-                    }
-                    else
-                    {
-                        convertToJSON(rowObj, colInfo, value, false);
-                    }
-				}
-			}
-            else // more than one row... kindof annoying
+            if (colInfo->isSet)
             {
-                // pair is pair<column,value>, .second is count
-                unordered_map<std::pair<int64_t, int64_t>, int64_t> counts;
-
-                auto rootObj = rowDoc->pushObject();
-                rootObj->set("stamp_iso", Epoch::EpochToISO8601((*iter)->cols[COL_STAMP]));
-                rootObj->set("stamp", (*iter)->cols[COL_STAMP]);
-                rootObj->set("action", attributes->blob->getValue(COL_ACTION, (*iter)->cols[COL_ACTION]));
-
-                // values that are the same on all rows get put under "attr":{}
-                const auto attrObj = rootObj->setObject("attr");
-                
-                // every combination of column:value counted
-                for (auto r : accumulator)
-                    for (auto c = 0; c < colMap->columnCount; ++c)
-                        if (r->cols[c] != NONE)
-                        {
-                            const auto key = make_pair(c, r->cols[c]);
-                            if (!counts.count(key))
-                                counts[key] = 1;
-                            else
-                                counts[key]++;
-                        }
-
-                // these values are the same on all rows in the rowset
-                // these will end up in the root
-                unordered_set<int64_t> sameOnAllRows;
-                for (auto &c : counts)
-                {
-                    if (c.second == accumulator.size())
-                        sameOnAllRows.emplace(c.first.first);
-                }
-
-                // this is the number of variations (in value) a column has
-                unordered_map<int64_t, int> columnCountMap; 
-                for (auto &c : counts)
-                {                    
-                    if (auto found = columnCountMap.find(c.first.first); found != columnCountMap.end())
-                        ++found->second;
-                    else
-                        columnCountMap[c.first.first] = 1;
-                }
-
-                // this counts the size of common groups in the rewset, for example
-                // product_name and product_price both occur 3 times, the set size is 2 (columns)
-                unordered_map<int64_t, int> setSizes;
-                for (auto &cc : columnCountMap)
-                {
-                    if (auto found = setSizes.find(cc.second); found != setSizes.end())
-                        ++found->second;
-                    else
-                        setSizes[cc.second] = 1;
-                }
-
-                // this fills the sorted vector with column id and size of it's set,
-                // ideally we want things that are most together at the front, and things
-                // that are highly variant on the end. We fudge the "sameOnAllRows" columns
-                // to sort to the front
-                vector<std::pair<int64_t, int>> sorted;
-                for (auto &cc : columnCountMap)
-                {
-                    std::pair<int64_t, int> value{ cc.first, 0 };
-                    if (const auto t = setSizes.find(cc.second); t != setSizes.end())
-                        value.second = t->second;
-                    if (sameOnAllRows.count(cc.first))
-                       value.second = 999999;
-
-                    sorted.push_back(value);
-                }
-
-                // sort the list
-                sort(sorted.begin(), sorted.end(), [](const auto& a, const auto &b) {
-                    return a.second > b.second;                   
-                });
-
-
-                auto setKeyValue = [&](cjson* current, Columns::Columns_s* colInfo, int64_t value)
-                {
-                    switch (colInfo->type)
-                    {
-                    case columnTypes_e::freeColumn:
-                        return;
-                    case columnTypes_e::intColumn:
-                        current->set(colInfo->name, value);
-                        break;
-                    case columnTypes_e::doubleColumn:
-                        current->set(colInfo->name, value / 10000.0);
-                        break;
-                    case columnTypes_e::boolColumn:
-                        current->set(colInfo->name, value != 0);
-                        break;
-                    case columnTypes_e::textColumn:
-                    {
-                        // value here is the hashed value							
-                        if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-                            current->set(colInfo->name, text);
-                    }
-                    break;
-                    }
-                };
-
-                auto isKeyValue = [&](cjson* current, Columns::Columns_s* colInfo, int64_t value)->bool
-                {
-                    if (auto t = current->find(colInfo->name); !t)
-                        return false;
-                    else
-                        switch (colInfo->type)
-                        {
-                        case columnTypes_e::freeColumn:
-                            return false;
-                        case columnTypes_e::intColumn:
-                            return (t->getInt() == value);
-                        case columnTypes_e::doubleColumn:
-                            return (t->getDouble() == value / 10000.0);
-                        case columnTypes_e::boolColumn:
-                            return (t->getBool() == (value != 0));
-                        case columnTypes_e::textColumn:
-                            // value here is the hashed value							
-                            if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
-                                return (t->getString() == string{ text });
-                            else
-                                return false;
-                        }
-                    return false;
-                };
-
-
-                cjson branch;
-
-                // This will make an overly verbose tree, there will be way more branches than
-                // required. The recurive `fold` and `tailCondense` lambdas will 
-                // clean this up.
-                for (auto row : accumulator)
-                {
-                    auto current = &branch;
-
-                    for (auto &c : sorted)
-                    {
-                        const auto ac = c.first; // actual column
-                        const auto colInfo = columns->getColumn(colMap->columnMap[ac]);
-
-                        if (colInfo->idx < 1000) // first 1000 are reserved
-                            continue;
-
-                        const auto value = row->cols[ac];
-
-                        if (const auto t = current->find("_"); t)
-                            current = t->membersHead;
-                        else
-                        {
-                            current = current->setArray("_");
-                            current = current->pushObject();
-                        }
-
-                        auto nodes = current->parentNode->getNodes();
-
-                        // this "_" array has no objects?
-                        cjson* foundNode = nullptr;
-                        cjson* notFoundNode = nullptr;
-                        for (auto n : nodes)
-                        {
-                            if (isKeyValue(n, colInfo, value))
-                            {
-                                foundNode = n;
-                                break;
-                            }
-                            if (!n->find(colInfo->name))
-                                notFoundNode = n;
-                        }
-
-                        if (foundNode)
-                            current = foundNode;
-                        else
-                        {                           
-                            if (notFoundNode)
-                                current = notFoundNode;
-                            else
-                                current = current->parentNode->pushObject();
-                            
-                            setKeyValue(current, colInfo, value);
-                        }
-
-                    }
-                }
-
-                // this will clean lists of end-nodes (leafs) that
-                // contain just one value by turning them into arrays
-                function<void(cjson*)> tailCondense;
-                tailCondense = [&tailCondense](cjson* current)
-                {
-
-                    if (!current)
-                        return;
-
-                    auto nodes = current->getNodes();
-
-                    unordered_set<string> propCounter;
-
-                    for (auto n: nodes)
-                    {
-                        if (auto tNode = n->find("_"); tNode)
-                            tailCondense(tNode);
-                        auto props = n->getNodes();
-                        for (auto p : props)
-                            if (p->name().length())
-                                propCounter.emplace(p->name());
-                    }
-
-                    if (propCounter.size() == 1)
-                    {
-                        auto propName = *propCounter.begin();
-                        auto newNode = current->parentNode->setArray(propName);
-                        
-                        for (auto n : nodes)
-                        {
-                            auto props = n->getNodes();
-                            for (auto p : props)
-                            {
-                                if (p->name() == propName)
-                                {
-                                    switch (p->type())
-                                    {
-                                        case cjson::Types_e::VOIDED: break;
-                                        case cjson::Types_e::NUL: break;
-                                        case cjson::Types_e::OBJECT: break;
-                                        case cjson::Types_e::ARRAY: break;
-                                        case cjson::Types_e::INT: 
-                                            newNode->push(p->getInt());
-                                        break;
-                                        case cjson::Types_e::DBL: 
-                                            newNode->push(p->getDouble());
-                                        break;
-                                        case cjson::Types_e::STR: 
-                                            newNode->push(p->getString());
-                                        break;
-                                        case cjson::Types_e::BOOL: 
-                                            newNode->push(p->getBool());
-                                        break;
-                                        default: ;
-                                    }
-                                }
-                            }                            
-                        }
-
-                        current->removeNode();
-                    }
-
-                };
-
-                // this will remove all the extra nodes by packing down
-                // nodes with just one member into their parent recursively until
-                // it's done.
-                function<void(cjson*)> fold;
-                fold = [&fold](cjson* current)
-                {
-
-                    if (!current)
-                        return;
-
-                    auto nodes = current->getNodes();
-
-                    for (auto n : nodes)
-                    {
-                        if (auto tNode = n->find("_"); tNode)
-                            fold(tNode);
-                    }
-
-                    if (current->memberCount == 1)
-                    {                       
-                        auto members = current->membersHead->getNodes(); // array then object
-
-                        current->parentNode->find("_")->removeNode();
-                       
-                        for (auto m: members)
-                            current->parentNode->push(m);
-                    }                                                
-
-                };
-
-                // fold and condense
-                fold(branch.find("_"));
-                tailCondense(branch.find("_"));
-
-                // this Parses the `branch` document into the attributes node using
-                // using Stringify (not great, but not overly slow)
-                cjson::parse(cjson::stringify(&branch), attrObj, true);
-
-			}
-
-			accumulator.clear();
+                const auto set = rowObj->setArray(colInfo->name);
+                const auto ol = reinterpret_cast<const SetInfo_s*>(&value);
+                for (auto offset = ol->offset; offset < ol->offset + ol->length; ++offset)
+                    convertToJSON(set, colInfo, this->setData[offset], true); 
+            }
+            else
+            {
+                convertToJSON(rowObj, colInfo, value, false);
+            }
 		}
-
 	}
 
 	return doc;
@@ -618,6 +300,7 @@ void Grid::prepare()
 	auto session = 0;
 	int64_t lastSessionTime = 0;
     auto columns = table->getColumns();
+    auto isProp = false;
 
 	while (read < end)
 	{
@@ -640,8 +323,15 @@ void Grid::prepare()
 				lastSessionTime = row->cols[COL_STAMP];
 				row->cols[colMap->sessionColumn] = session;
 			}
-			
-			rows.push_back(row);
+            
+            // if we are parsing the property row we do not
+            // push it, we store it under `propRow`
+		    if (!isProp)
+			    rows.push_back(row);
+            else
+                propRow = row;
+
+            isProp = false;
 			row = newRow();
 			read += sizeOfCastHeader;
 			continue;
@@ -651,6 +341,13 @@ void Grid::prepare()
 
         if (const auto colInfo = columns->getColumn(cursor->columnNum); colInfo)
         {
+
+            // zero time stamp signifies a properties row
+            if (colInfo->idx == COL_STAMP && cursor->val64 == 0) 
+            {
+                isProp = true;
+            }
+
             if (colInfo->isSet)
             {
                 read += sizeof(int16_t); // += 2
@@ -824,11 +521,14 @@ PersonData_s* Grid::commit()
     
     // this is the worst case scenario temp buffer size for this data.
     // (columns * rows) + (columns * row headers) + number_of_set_values
+
+    const auto rowCount = rows.size() + (propRow ? 1 : 0);
+
     const auto tempBufferSize = 
-        (rows.size() * (colMap->columnCount * sizeOfCast)) + 
-        (rows.size() * sizeOfCastHeader) + 
+        (rowCount * (colMap->columnCount * sizeOfCast)) + 
+        (rowCount * sizeOfCastHeader) + 
         (setData.size() * sizeof(int64_t)) + // the set data
-        ((rows.size() * colMap->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
+        ((rowCount * colMap->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
 
 	// make an intermediate buffer that is fully uncompresed
 	const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
@@ -838,9 +538,9 @@ PersonData_s* Grid::commit()
     auto bytesNeeded = 0;
 
     auto columns = table->getColumns();
-
-	for (auto r : rows)
-	{
+    
+    const auto pushRow = [&](Row* r)
+    {
 		for (auto c = 0; c < colMap->columnCount; ++c)
 		{
             const auto actualColumn = colMap->columnMap[c];
@@ -898,8 +598,15 @@ PersonData_s* Grid::commit()
 		// END OF ROW - write a "row" marker at the end of the row
 		cursor->columnNum = -1;
 		write += sizeOfCastHeader;
-        bytesNeeded += sizeOfCastHeader;
-	}
+        bytesNeeded += sizeOfCastHeader;        
+    };
+
+    // if we have properties, push them first
+    if (propRow)
+        pushRow(propRow);
+
+	for (auto r : rows)
+        pushRow(r);
         
 	const auto maxBytes = LZ4_compressBound(bytesNeeded);
 	const auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
@@ -1019,22 +726,25 @@ void Grid::insert(cjson* rowData)
 	// ensure we have ms on the time stamp
 	const auto stampNode = rowData->xPath("/stamp");
 
-	if (!stampNode)
-		return;
+	//if (!stampNode)
+		//return;
 
-	const auto stamp = (stampNode->type() == cjson::Types_e::STR) ?
-		Epoch::fixMilli(Epoch::ISO8601ToEpoch(stampNode->getString())) :
-		Epoch::fixMilli(stampNode->getInt());
+	int64_t stamp = 0;
+        
+    if (stampNode && stampNode->type() == cjson::Types_e::STR) 
+		stamp = Epoch::fixMilli(Epoch::ISO8601ToEpoch(stampNode->getString()));
+    else if (stampNode)
+		stamp = Epoch::fixMilli(stampNode->getInt());
 
 	if (stamp < 0)
 		return;
 
-	const auto action = rowData->xPathString("/action", "");
+	const auto event = rowData->xPathString("/event", "");
 	const auto attrNode = rowData->xPath("/_");
 	
 	decltype(newRow()) row = nullptr;
 
-	if (!attrNode || !action.length())
+	if (!attrNode || !event.length())
 		return;
 
     // over row limit, and first event older than time window? cull
@@ -1047,7 +757,7 @@ void Grid::insert(cjson* rowData)
     auto rowCount = rows.size();
 
 	// move the action into the attrs so it will be integrated into the row set
-	attrNode->set("__action", action);
+	attrNode->set("event", event);
 	auto columns = table->getColumns();
 
 #if defined(_DEBUG) || defined(NDEBUG)
@@ -1061,9 +771,11 @@ void Grid::insert(cjson* rowData)
         debugColumns.push_back(info);
     }
 #endif
-    
+  
     const auto insertRow = newRow();
 
+    const auto lastRowStamp = rows.size() ? rows.back()->cols[COL_STAMP] : 0;
+    
     insertRow->cols[COL_STAMP] = stamp;
 
     const auto attrColumns = attrNode->getNodes();
@@ -1076,6 +788,9 @@ void Grid::insert(cjson* rowData)
             const auto schemaCol = colMap->columnMap[iter->second];            
             const auto colInfo = columns->getColumn(schemaCol);
             const auto col = iter->second;
+
+            if (colInfo->isProp && !propRow)
+                propRow = newRow();
 
             attributes->getMake(schemaCol, NONE);
             attributes->setDirty(this->rawData->linId, schemaCol, NONE);
@@ -1257,19 +972,33 @@ void Grid::insert(cjson* rowData)
                         continue;
                     }
 
-                    if (colInfo->type == columnTypes_e::textColumn)
-                        attributes->getMake(schemaCol, tstr);
-                    else
-                        attributes->getMake(schemaCol, tval);
+                    // if it's pure prop, or it's not a prop at all, or it is a prop with an event
+                    // and this event is the same or more recent than the last prop in the dataset
+                    if (stamp == 0 ||
+                        !colInfo->isProp ||
+                        (colInfo->isProp && stamp >= lastRowStamp))
+                    {
+                        if (colInfo->type == columnTypes_e::textColumn)
+                            attributes->getMake(schemaCol, tstr);
+                        else
+                            attributes->getMake(schemaCol, tval);
 
-                    attributes->setDirty(this->rawData->linId, schemaCol, tval);
+                        attributes->setDirty(this->rawData->linId, schemaCol, tval);
 
-                    setData.push_back(tval);
+                        setData.push_back(tval);
+                    }
                 }
 
-                // let our row use an encoded value for the column.
-                SetInfo_s info{ static_cast<int>(setData.size() - startIdx), static_cast<int>(startIdx) };
-                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                // if it's pure prop, or it's not a prop at all, or it is a prop with an event
+                // and this event is the same or more recent than the last prop in the dataset
+                if (stamp == 0 ||
+                    !colInfo->isProp ||
+                    (colInfo->isProp && stamp >= lastRowStamp))
+                {
+                    // let our row use an encoded value for the column.
+                    SetInfo_s info{ static_cast<int>(setData.size() - startIdx), static_cast<int>(startIdx) };
+                    insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                }
             }
             continue; // special handler for ARRAY
 
@@ -1277,22 +1006,31 @@ void Grid::insert(cjson* rowData)
                 continue;
             }
 
-            if (colInfo->type == columnTypes_e::textColumn)
-                attributes->getMake(schemaCol, tstr);
-            else
-                attributes->getMake(schemaCol, tval);
-
-            attributes->setDirty(this->rawData->linId, schemaCol, tval);
-
-            if (colInfo->isSet)
+            // if it's pure prop, or it's not a prop at all, or it is a prop with an event
+            // and this event is the same or more recent than the last prop in the dataset
+            if (stamp == 0 ||
+                !colInfo->isProp ||
+                (colInfo->isProp && stamp >= lastRowStamp))
             {
-                SetInfo_s info{ 1, static_cast<int>(setData.size()) };
-                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
-                setData.push_back(tval);
-            }
-            else
-            {
-                insertRow->cols[col] = tval;
+
+                if (colInfo->type == columnTypes_e::textColumn)
+                    attributes->getMake(schemaCol, tstr);
+                else
+                    attributes->getMake(schemaCol, tval);
+
+                attributes->setDirty(this->rawData->linId, schemaCol, tval);
+
+                if (colInfo->isSet)
+                {
+                    SetInfo_s info{ 1, static_cast<int>(setData.size()) };
+                    insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                    setData.push_back(tval);
+                }
+                else
+                {
+                    insertRow->cols[col] = tval;
+                }
+
             }
         }
         else
@@ -1333,7 +1071,7 @@ void Grid::insert(cjson* rowData)
     
     auto insertBefore = -1; // where a new row will be inserted if needed
 
-	const auto hashedAction = MakeHash(action);
+	const auto hashedAction = MakeHash(event);
 	//const auto insertRowGroup = HashPair(stamp, hashedAction); 
 
 	const auto zOrderInts = table->getZOrderHashes();
@@ -1387,7 +1125,7 @@ void Grid::insert(cjson* rowData)
 			// we have found rows with same stamp
 			if (rows[i]->cols[0] == stamp)
 			{
-				auto zOrder = getZOrder(rows[i]->cols[COL_ACTION]);				
+				auto zOrder = getZOrder(rows[i]->cols[COL_EVENT]);				
 
 				// we have found rows in this stamp with the same zOrder
 				if (zOrder == insertZOrder)
@@ -1396,7 +1134,7 @@ void Grid::insert(cjson* rowData)
 					// match (as in, we are replacing a row)
 					for (; i < static_cast<int>(rowCount); i++)
 					{
-						zOrder = getZOrder(rows[i]->cols[COL_ACTION]);
+						zOrder = getZOrder(rows[i]->cols[COL_EVENT]);
 
 						// we have moved passed replacable rows, so insert here
 						if (rows[i]->cols[COL_STAMP] > stamp ||

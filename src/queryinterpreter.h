@@ -133,6 +133,7 @@ namespace openset
 			// database objects
 			const Grid* grid{ nullptr };
 			const Rows* rows{ nullptr };
+            const Row* propRow{ nullptr };
 			int rowCount{ 0 };
 
 			AttributeBlob* blob{ nullptr };
@@ -156,8 +157,8 @@ namespace openset
 			std::vector<IndexBits*> segmentIndexes;
 
 			// row match values
-			int64_t matchStampTop{ 0 };
-			vector<int64_t> matchStampPrev{ 0 };
+			//int64_t matchStampTop{ 0 };
+			//vector<int64_t> matchStampPrev{ 0 };
 
 			// switches
 			InterpretMode_e interpretMode{ InterpretMode_e::query };
@@ -238,7 +239,8 @@ namespace openset
 			void marshal_log(const int paramCount);
 			void marshal_break(const int paramCount);
 			void marshal_dt_within(const int paramCount, const int64_t rowStamp);
-			void marshal_dt_between(const int paramCount, const int64_t rowStamp);
+		    void marshal_ISO8601_to_stamp(int paramCount, int64_t rowStamp);
+		    void marshal_dt_between(const int paramCount, const int64_t rowStamp);
 			void marshal_bucket(const int paramCount);
 			void marshal_round(const int paramCount);
 			void marshal_fix(const int paramCount);
@@ -260,11 +262,13 @@ namespace openset
 
 			void marshal_url_decode(const int paramCount) const;
 
+            void marshal_get_row(const int paramCount) const;
+
 			// get a string from the literals script block by ID
 			string getLiteral(const int64_t id) const;
 
-			bool marshal(Instruction_s* inst, int& currentRow);
-			void opRunner(Instruction_s* inst, int currentRow = 0);
+			bool marshal(Instruction_s* inst, int64_t& currentRow);
+			void opRunner(Instruction_s* inst, int64_t currentRow = 0);
 
 			void setScheduleCB(const function<void (int64_t functionHash, int seconds)> &cb);
 			void setEmitCB(const function<void (string emitMessage)> &cb);

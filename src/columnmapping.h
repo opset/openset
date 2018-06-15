@@ -6,11 +6,27 @@
 #include "common.h"
 #include "threads/locks.h"
 
+/*
+ * Map Objects are used to map Schema Column Indexes (which may not be sequential)
+ * into sequential index based lookups.
+ * 
+ * The PyQL compiler converst column references into 0 based indexes. If a Table has
+ * 1000 columns, but a query uses 3 of those, the PyQL compiler will enumerate those three
+ * columns.
+ * 
+ * When rowsets are expanded, only the columns that are referenced will be extrated,
+ * this results in a tightly packed (high cache affinity) result set.
+ * 
+ * To make all this possible these structures were made to translate from the referenced
+ * index to the schema index and back.
+ * 
+ * Note: These structures are bulky, so they are also shared, this makes sense as the same
+ *       query is often running accross multiple cores.
+ */
 namespace openset
 {
     namespace db
     {
-
         class Table;
         class Attributes;
 

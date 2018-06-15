@@ -68,6 +68,8 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 	// Fire this bad boy up (main loop)
 	openset::Service::start();
+
+    auto res = (100 + 1/0.3) - 100;
 }
 
 int main(const int argc, char* argv[])
@@ -101,7 +103,7 @@ int main(const int argc, char* argv[])
 		}
 	}
 
-  	if (test)
+  	//if (test)
 	{
 		const auto testRes = unitTest();
 		exit(testRes ? 0 : 1); // exit with 1 on test fail

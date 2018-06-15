@@ -27,7 +27,7 @@ namespace openset
             
             explicit OpenLoopPerson(
                 Shuttle<int>* shuttle,
-                openset::db::Database::TablePtr table,
+                const openset::db::Database::TablePtr table,
                 const int64_t uuid);
 
             void prepare() final;

@@ -101,7 +101,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
 
     for (auto row : rows)
     {
-        const auto personNode = row->xPath("/person");
+        const auto personNode = row->xPath("/id");
         if (!personNode || 
             (personNode->type() != cjson::Types_e::INT && personNode->type() != cjson::Types_e::STR))
             continue;

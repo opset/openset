@@ -40,10 +40,10 @@ namespace openset::web
 		}
 
 		void request(const std::string& method, const std::string& path, const QueryParams& params, 
-                     char* payload, const size_t length, RestCbJson cb);;
+                     char* payload, const size_t length, const RestCbJson& cb);
 
 		void request(const std::string& method, const std::string& path, const QueryParams& params, 
-                     char* payload, const size_t length, RestCbBin cb);;
+                     char* payload, const size_t length, const RestCbBin &cb);
 
 	};
 

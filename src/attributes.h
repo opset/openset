@@ -13,7 +13,7 @@ namespace openset::db
 {
 
 	const int32_t COL_STAMP = 0;
-	const int32_t COL_ACTION = 1; 
+	const int32_t COL_EVENT = 1; 
 	const int32_t COL_UUID = 2; 
 	// below are fake columns used for indexing
 	const int32_t COL_TRIGGERS = 3; 

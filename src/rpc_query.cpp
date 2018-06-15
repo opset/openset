@@ -65,8 +65,8 @@ enum class queryFunction_e : int32_t
 * in memory and marged by the originator.
 */
 shared_ptr<cjson> forkQuery(
-    Database::TablePtr table,
-    const openset::web::MessagePtr message,
+    const Database::TablePtr& table,
+    const openset::web::MessagePtr& message,
     const int resultColumnCount,
     const int resultSetCount,
     const ResultSortMode_e sortMode = ResultSortMode_e::column,
@@ -202,24 +202,6 @@ shared_ptr<cjson> forkQuery(
         }
     }
 
-    /*
-    for (auto r: resultSets)
-    {
-        cjson tDoc;
-
-        std::vector<openset::result::ResultSet*> tSet;
-        tSet.push_back(r);
-
-        ResultMuxDemux::resultSetToJson(
-            resultColumnCount,
-            setCount,
-            tSet,
-            &tDoc);
-
-        cout << cjson::stringify(&tDoc, true ) << endl;       
-    }
-    */
-
     auto resultJson = make_shared<cjson>();
     ResultMuxDemux::resultSetToJson(
         resultColumnCount,
@@ -326,8 +308,7 @@ shared_ptr<cjson> forkQuery(
     //auto dataJson = metaJson->setObject("data");
     //fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
     //fillMeta(queryMacros.vars.groupVars, dataJson->setArray("groups"));
-
-
+    
     //metaJson->set("query_time", queryTime);
     //metaJson->set("pop_evaluated", population);
     //metaJson->set("pop_total", totalPopulation);
@@ -340,7 +321,7 @@ shared_ptr<cjson> forkQuery(
     return resultJson;
 }
 
-openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr message)
+openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr& message)
 {
     /*
     * Build a map of variable names and vars that will
@@ -390,7 +371,7 @@ openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr mess
     return paramVars;
 }
 
-void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     auto database = openset::globals::database;
@@ -402,6 +383,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
     const auto debug = message->getParamBool("debug");
     const auto isFork = message->getParamBool("fork");
+    const auto useStampCounts = message->getParamBool("stamp_counts");
 
     const auto trimSize = message->getParamInt("trim", -1);
     const auto sortOrder = message->getParamString("order", "desc") == "asc" ? ResultSortOrder_e::Asc : ResultSortOrder_e::Desc;
@@ -417,8 +399,6 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
     const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
-
-    const auto startTime = Now();
 
     if (!tableName.length())
     {
@@ -465,6 +445,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
     try
     {
         p.compileQuery(queryCode.c_str(), table->getColumns(), queryMacros, &paramVars);
+        queryMacros.useStampedRowIds = useStampCounts;
     }
     catch (const std::runtime_error &ex)
     {
@@ -515,14 +496,9 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
     // through the to oloop_query, the person object and finally the grid
     queryMacros.sessionTime = sessionTime;
 
-    const auto compileTime = Now() - startTime;
-    const auto queryStart = Now();
-
     if (debug)
     {
         auto debugOutput = openset::query::MacroDbg(queryMacros);
-
-        // TODO - add functions for reply content types and error codes
 
         // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
@@ -533,13 +509,6 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 
     if (sortMode != ResultSortMode_e::key && sortColumnName.size())
     {
-        if (sortColumnName == "person" || sortColumnName == "people")
-            sortColumnName = "__uuid";
-        else if (sortColumnName == "stamp")
-            sortColumnName = "__stamp";
-        else if (sortColumnName == "session")
-            sortColumnName = "__session";
-
         auto set = false;
         auto idx = -1;
         for (auto &c : queryMacros.vars.columnVars)
@@ -670,7 +639,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
     const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
-        [queryMacros, table, resultSets, startTime, queryStart, compileTime]
+        [queryMacros, table, resultSets]
     (vector<openset::async::response_s<CellQueryResult_s>> &responses,
         openset::web::MessagePtr message,
         voidfunc release_cb) mutable
@@ -681,7 +650,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
             if (r.data.error.inError())
             {
                 // any error that is recorded should be considered a hard error, so report it
-                auto errorMessage = r.data.error.getErrorJSON();
+                const auto errorMessage = r.data.error.getErrorJSON();
                 message->reply(http::StatusCode::client_error_bad_request, errorMessage);
 
                 // clean up stray resultSets
@@ -739,7 +708,7 @@ void RpcQuery::event(const openset::web::MessagePtr message, const RpcMapping& m
 }
 
 
-void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
@@ -750,8 +719,6 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
 
     const auto debug = message->getParamBool("debug");
     const auto isFork = message->getParamBool("fork");
-
-    const auto startTime = Now();
 
     const auto log = "Inbound counts query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
@@ -840,9 +807,6 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
     //      counts are high).
     std::vector<ResultSet*> resultSets;
 
-    const auto compileTime = Now() - startTime;
-    const auto queryStart = Now();
-
     if (debug)
     {
         std::string debugOutput;
@@ -852,8 +816,6 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
             "Script: " + m.first +
             "\n=====================================================================================\n\n" +
             openset::query::MacroDbg(m.second);
-
-        // TODO - add functions for reply content types and error codes
 
         // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
@@ -946,7 +908,7 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
     auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
-        [queries, table, resultSets, startTime, queryStart, compileTime]
+        [queries, table, resultSets]
     (const vector<openset::async::response_s<CellQueryResult_s>> &responses,
         openset::web::MessagePtr message,
         voidfunc release_cb) mutable
@@ -1004,7 +966,7 @@ void RpcQuery::segment(const openset::web::MessagePtr message, const RpcMapping&
     Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 
-void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
@@ -1113,7 +1075,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
         {
             queryInfo.rx = std::regex(message->getParamString("rx"));
         }
-        catch (const std::runtime_error& ex)
+        catch (const std::runtime_error&)
         {
             isError = true;
         }
@@ -1372,7 +1334,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
             if (r.data.error.inError())
             {
                 // any error that is recorded should be considered a hard error, so report it
-                auto errorMessage = r.data.error.getErrorJSON();
+                const auto errorMessage = r.data.error.getErrorJSON();
                 message->reply(http::StatusCode::client_error_bad_request, errorMessage);
 
                 // clean up stray resultSets
@@ -1387,7 +1349,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 
         // 1. Merge the rows
         int64_t bufferLength = 0;
-        auto buffer = ResultMuxDemux::multiSetToInternode(
+        const auto buffer = ResultMuxDemux::multiSetToInternode(
             1,
             queryInfo.segments.size(),
             resultSets,
@@ -1414,7 +1376,7 @@ void RpcQuery::column(openset::web::MessagePtr message, const RpcMapping& matche
 
 }
 
-void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     auto uuString = message->getParamString("sid");
@@ -1465,7 +1427,7 @@ void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matche
     }
 
     const auto partitions = openset::globals::async;
-    const auto targetPartition = cast<int32_t>(std::abs(uuid) % partitions->getPartitionMax());
+    const auto targetPartition = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
     const auto mapper = globals::mapper->getPartitionMap();
 
     auto owners = mapper->getNodesByPartitionId(targetPartition);
@@ -1527,7 +1489,7 @@ void RpcQuery::person(openset::web::MessagePtr message, const RpcMapping& matche
     }
 }
 
-void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
     const auto partitions = openset::globals::async;
@@ -1547,8 +1509,6 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
 
     const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
-
-    const auto startTime = Now();
 
     if (!tableName.length())
     {
@@ -1657,14 +1617,9 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     // through the to oloop_query, the person object and finally the grid
     queryMacros.sessionTime = sessionTime;
 
-    const auto compileTime = Now() - startTime;
-    const auto queryStart = Now();
-
     if (debug)
     {
         auto debugOutput = openset::query::MacroDbg(queryMacros);
-
-        // TODO - add functions for reply content types and error codes
 
         // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
@@ -1789,7 +1744,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
     const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
-        [queryMacros, table, resultSets, startTime, queryStart, compileTime]
+        [queryMacros, table, resultSets]
     (vector<openset::async::response_s<CellQueryResult_s>> &responses,
         openset::web::MessagePtr message,
         voidfunc release_cb) mutable
@@ -1800,7 +1755,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
             if (r.data.error.inError())
             {
                 // any error that is recorded should be considered a hard error, so report it
-                auto errorMessage = r.data.error.getErrorJSON();
+                const auto errorMessage = r.data.error.getErrorJSON();
                 message->reply(http::StatusCode::client_error_bad_request, errorMessage);
 
                 // clean up stray resultSets
@@ -1854,7 +1809,7 @@ void RpcQuery::histogram(openset::web::MessagePtr message, const RpcMapping& mat
 
 openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset::query::SegmentList segments, openset::query::QueryParser::SectionDefinitionList queries)
 {
-    const auto runMax = 4; // maximum concurrent queries allowed.
+    const auto runMax = 1; // maximum concurrent queries allowed.
 
     CriticalSection cs;
     auto iter = queries.begin();
@@ -1864,41 +1819,37 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
     auto sendCount = 0; // number of queries sent
     auto running = 0; // number currently running
 
-    std::function<void()> sendOne;
-
     openset::mapping::Mapper::Responses result;
 
-    auto completeCallback = [&](const openset::http::StatusCode status, const bool, char* data, const size_t size)
+    const auto completeCallback = [&](const openset::http::StatusCode status, const bool, char* data, const size_t size)
     {
-        {
-            csLock lock(cs);
-            auto dataCopy = static_cast<char*>(PoolMem::getPool().getPtr(size));
-            memcpy(dataCopy, data, size);
-            result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ dataCopy, size, status });
-            --running;
-            ++receivedCount;
-        }
-
-        sendOne();
+        csLock lock(cs);
+        const auto dataCopy = static_cast<char*>(PoolMem::getPool().getPtr(size));
+        memcpy(dataCopy, data, size);
+        result.responses.emplace_back(openset::mapping::Mapper::DataBlock{ dataCopy, size, status });
+        --running;
+        ++receivedCount;
     };
 
-    sendOne = [&]()
+    const auto sendOne = [&]() -> bool
     {
         std::string method = "GET";
         std::string path;
         openset::web::QueryParams params;
         std::string payload;
-
         {
+            if (doneSending)
+                return false;
+
             csLock lock(cs);
 
-            if (running > runMax) // send up to RunMax, fill any that are complete
-                return;
+            //if (running > runMax) // send up to RunMax, fill any that are complete
+            //  return;
 
-            if (iter == queries.end())
+            if (iter == queries.end() || result.routeError)
             {
                 doneSending = true;
-                return;
+                return false;
             }
 
             ++running;
@@ -1941,7 +1892,7 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
         }
 
         // fire these queries off
-        auto success = openset::globals::mapper->dispatchAsync(
+        const auto success = openset::globals::mapper->dispatchAsync(
             openset::globals::running->nodeId, // fork to self
             method,
             path,
@@ -1953,20 +1904,23 @@ openset::mapping::Mapper::Responses queryDispatch(std::string tableName, openset
         if (!success)
             result.routeError = true;
 
-        sendOne();
+        //nextQuery();
+        return true;
     };
 
-    sendOne();
+    while (sendOne())
+    {
+        while (running > runMax)
+            ThreadSleep(55);
+    };
 
     while (!doneSending && sendCount != receivedCount)
-    {
         ThreadSleep(50); // replace with semaphore
-    }
 
-    return std::move(result);
+    return result;
 }
 
-void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database = openset::globals::database;
 
@@ -2015,10 +1969,8 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
 
     thread runner([=]() {
 
-        openset::query::ParamVars paramVars = getInlineVaraibles(message);
         // get the functions extracted and de-indented as named code blocks
         auto subQueries = openset::query::QueryParser::extractSections(queryCode.c_str());
-
 
         query::QueryParser::SectionDefinitionList segmentList;
         query::QueryParser::SectionDefinitionList queryList;
@@ -2125,10 +2077,10 @@ void RpcQuery::batch(openset::web::MessagePtr message, const RpcMapping& matches
 
             for (auto &r : results.responses)
             {
-                auto insertAt = resultBranch->pushObject();
+                const auto insertAt = resultBranch->pushObject();
                 cjson resultItemJson{ std::string{ r.data, r.length }, cjson::Mode_e::string };
 
-                if (auto item = resultItemJson.xPath("/_/0"); item)
+                if (const auto item = resultItemJson.xPath("/_/0"); item)
                     cjson::parse(cjson::stringify(item), insertAt, true);
             }
 

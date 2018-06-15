@@ -51,6 +51,7 @@ void Columns::setColumn(
     const string name, 
     const columnTypes_e type, 
     const bool isSet, 
+    const bool isProp,
     const bool deleted)
 {
 	csLock _lck(lock);
@@ -72,6 +73,7 @@ void Columns::setColumn(
 	columns[index].name = name;
 	columns[index].type = type;
 	columns[index].isSet = isSet;
+    columns[index].isProp = isProp;
 	columns[index].deleted = deleted;
 
 	columnCount = 0;
