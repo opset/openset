@@ -166,7 +166,7 @@ namespace openset
 
 		struct Col_s
 		{
-			int64_t cols[MAXCOLUMNS];
+			int64_t cols[MAX_COLUMNS];
 		};
 
         using Row = Col_s;

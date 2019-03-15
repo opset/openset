@@ -38,7 +38,7 @@ namespace openset
 			// shared lock (uses spin locks)
 			CriticalSection lock;
 
-			Columns_s columns[MAXCOLUMNS];
+			Columns_s columns[MAX_COLUMNS];
 			unordered_map<string, Columns_s*> nameMap;
 			int columnCount{ 0 };
 

@@ -352,8 +352,8 @@ void AsyncPool::runner(int32_t workerId) noexcept
 
 			auto delay = (nextRun == -1) ? 250 : nextRun - Now();
 
-			if (delay < 0) 
-				delay = 0;
+			if (delay <= 1) 
+				delay = 1;
 
 			if (delay && !worker->triggered)
 			{

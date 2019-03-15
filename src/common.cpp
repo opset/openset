@@ -12,21 +12,21 @@ int64_t Now()
 		(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-static const int64_t HASHSEED = 0xDEADCAFEBEEFBABELL;
+static const int64_t HASH_SEED = 0xDEADCAFEBEEFBABELL;
 
 int64_t MakeHash(const char* buffer, const int64_t len) 
 {
-	return XXH64(buffer, len, HASHSEED);
+	return XXH64(buffer, len, HASH_SEED);
 }
 
 int64_t MakeHash(const char* buffer) 
 {
-	return XXH64(buffer, strlen(buffer), HASHSEED);
+	return XXH64(buffer, strlen(buffer), HASH_SEED);
 }
 
 int64_t MakeHash(const std::string& buffer) 
 {
-	return XXH64(buffer.c_str(), buffer.length(), HASHSEED);
+	return XXH64(buffer.c_str(), buffer.length(), HASH_SEED);
 }
 int64_t AppendHash(const int64_t value, const int64_t last)
 {

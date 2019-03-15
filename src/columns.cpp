@@ -9,7 +9,7 @@ using namespace openset::db;
 Columns::Columns()
 {
 	// so when addressed by pointer we get the index
-	for (auto i = 0; i < MAXCOLUMNS; i++)
+	for (auto i = 0; i < MAX_COLUMNS; i++)
 		columns[i].idx = i;
 }
 
