@@ -5,6 +5,6 @@
 [submodule "vendor/lz4"]
 	path = vendor/lz4
 	url = https://github.com/lz4/lz4.git
-[submodule "vendor/vendor/simple-web-server"]
-	path = vendor/vendor/simple-web-server
+[submodule "vendor/simple-web-server"]
+	path = vendor/simple-web-server
 	url = https://gitlab.com/eidheim/Simple-Web-Server.git
