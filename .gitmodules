@@ -1,3 +1,10 @@
 [submodule "vender/simple-web-server"]
 	path = vender/simple-web-server
 	url = https://gitlab.com/eidheim/Simple-Web-Server.git
+[submodule "vendor/asio"]
+	path = vendor/asio
+	url = https://github.com/chriskohlhoff/asio.git
+	branch = asio-1-12-branch
+[submodule "vendor/lz4"]
+	path = vendor/lz4
+	url = https://github.com/lz4/lz4.git
