@@ -1,4 +1,4 @@
-[submodule "vender/simple-web-server"]
+[submodule "vendor/simple-web-server"]
 	path = vender/simple-web-server
 	url = https://gitlab.com/eidheim/Simple-Web-Server.git
 [submodule "vendor/asio"]
