@@ -1,3 +1,4 @@
+#define USE_STANDALONE_ASIO 
 // main.cpp : Entry point for OpenSetDB
 //
 #include "common.h"
@@ -54,7 +55,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 #ifdef _MSC_VER
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
 #endif
-	cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2017, Perple Corp." << endl;
+	cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Crowd Conduct Corp." << endl;
 	cout << "\x1b[0m\b\b\b\b        " << endl;
 
 #ifdef _MSC_VER
@@ -68,8 +69,6 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 	// Fire this bad boy up (main loop)
 	openset::Service::start();
-
-    auto res = (100 + 1/0.3) - 100;
 }
 
 int main(const int argc, char* argv[])
@@ -113,8 +112,8 @@ int main(const int argc, char* argv[])
 	{
 		cout << "Command line options:" << endl << endl;
 		cout << "    --host <ip, defaults to 0.0.0.0>" << endl;
-		cout << "    --port <port, defaults to 2020>" << endl;
-		cout << "    --hostext <host/ip, defaults to hostname>   ; optional external host/ip" << endl;
+		cout << "    --port <port, defaults to 8080>" << endl;
+		cout << "    --hostext <host/ip, defaults to hostname>  ; optional external host/ip" << endl;
 		cout << "    --portext <port, defaults to --port value> ; optional external port" << endl;
 		cout << "    --data <relative or absolute path>         ; where commits will be stored" << endl;
 		cout << "    --test                                     ; will run unit tests" << endl;
