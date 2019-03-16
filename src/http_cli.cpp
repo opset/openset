@@ -66,7 +66,9 @@ void openset::web::Rest::request(const string& method, const string& path, const
         }
     );
 
-    client.io_service->reset();
+    //client.io_service->reset();   
+    if (client.io_service->stopped())
+        client.io_service->restart();
     client.io_service->run();
 }
 
@@ -96,6 +98,8 @@ void openset::web::Rest::request(const string& method, const string& path, const
         }
     );
 
-    client.io_service->reset();
+    //client.io_service->reset();
+    if (client.io_service->stopped())
+        client.io_service->restart();
     client.io_service->run();
 }
