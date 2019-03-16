@@ -42,16 +42,8 @@ openset::web::Rest::Rest(const int64_t routeId, const std::string& server):
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
                                  char* payload, const size_t length, const RestCbJson& cb)
 {
-    //csLock lock(cs);
-
-    //stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
-    //if (payload && length)
-      //  buffer.write(payload, length);
-
     const SimpleWeb::string_view buffer(payload, length);
     const auto url = path + makeParams(params);
-
-    //Logger::get().debug("http://" + host + url);
 
     client.request(
         method, 
@@ -81,16 +73,8 @@ void openset::web::Rest::request(const string& method, const string& path, const
 void openset::web::Rest::request(const string& method, const string& path, const QueryParams& params,
                                  char* payload, const size_t length, const RestCbBin& cb)
 {
-    //csLock lock(cs);
-
-    //stringstream buffer(stringstream::in | stringstream::out | stringstream::binary);
-    //if (payload && length)
-      //  buffer.write(payload, length);
-
     const SimpleWeb::string_view buffer(payload, length);
     const auto url = path + makeParams(params);
-
-    //Logger::get().debug("http://" + host + url);
 
     client.request(
         method, 

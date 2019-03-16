@@ -1,9 +1,10 @@
+[submodule "vendor/asio"]
+	path = vendor/asio
+	url = https://github.com/chriskohlhoff/asio.git
+	branch = asio-1-12-branch
 [submodule "vendor/lz4"]
 	path = vendor/lz4
 	url = https://github.com/lz4/lz4.git
-[submodule "vendor/asio"]
-	path = vendor/asio
-	url = https://github.com/chriskohlhoff/asio/
 [submodule "vendor/simple-web-server"]
 	path = vendor/simple-web-server
-	url = https://github.com/eidheim/Simple-Web-Server.git
+	url = https://gitlab.com/eidheim/Simple-Web-Server.git
