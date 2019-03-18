@@ -121,7 +121,6 @@ private:
 	void logLoop()
 	{
 		using namespace std::string_literals;
-		backlog = 0;
 
 #ifndef _MSC_VER
 		openlog("openset", LOG_NDELAY, LOG_USER);
@@ -139,9 +138,9 @@ private:
             std::vector<Line> availableLines;
 
 		    cs.lock();
-			backlog -= lines.size();
             availableLines.swap(lines);
 			lines.clear();
+			backlog = 0;
 			cs.unlock();
 
 		    const auto now = std::chrono::duration_cast<std::chrono::seconds>
@@ -149,7 +148,7 @@ private:
 
 			for (const auto &line : availableLines)
 			{
-			    const std::string level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
+			    const auto level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
 
 				auto txt = Epoch::EpochToISO8601(now) + " " + level + " " + line.msg + "\n";
 
