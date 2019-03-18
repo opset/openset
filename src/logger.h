@@ -44,8 +44,7 @@ class Logger
 		runner.detach();
 	}
 
-	~Logger()
-	{}
+    ~Logger() = default;
 
 public:
 	void info(std::string msg)
