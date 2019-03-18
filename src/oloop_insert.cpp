@@ -53,7 +53,6 @@ bool OpenLoopInsert::run()
 
     int64_t readHandle = 0;
     auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 5 : 25, readHandle);
-    auto insertIter = inserts.begin();
 
 	if (inserts.empty())
 	{
@@ -85,6 +84,7 @@ bool OpenLoopInsert::run()
 	// which can be expensive as they both call LZ4 (which is fast, but still
 	// has it's overhead)
 	std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
+    auto insertIter = inserts.begin();
 
 	for (; insertIter != inserts.end(); ++insertIter)
 	{

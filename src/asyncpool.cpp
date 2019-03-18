@@ -348,8 +348,6 @@ void AsyncPool::runner(int32_t workerId) noexcept
 
 		if (!runAgain)
 		{ // scoped because we don't need the lock, so we will exit the moment we have it
-
-
 			auto delay = nextRun == 0 ? 0 : (nextRun == -1 ? 55 : nextRun - Now());
 
 			if (delay < 0) 
@@ -366,7 +364,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 				worker->conditional.wait_until(lock, timeout, [&]() -> bool
 				{
 					return (worker->triggered || globalAsyncInitSuspend);
-				}); 
+				});
 			}
 			worker->triggered = false;
 		}
@@ -374,12 +372,10 @@ void AsyncPool::runner(int32_t workerId) noexcept
 		if (globalAsyncInitSuspend || globalAsyncLockDepth)
 			continue;
 		
-		runAgain = 0;
-
 		// jobs is a list of partitions
 		// we will grab a job (s) and run it.
-
 		nextRun = -1; // -1 means not set yet
+        runAgain = 0;
 
 		for (auto s : worker->jobs)
 		{		
