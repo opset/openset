@@ -5,7 +5,6 @@
 #include <thread>
 #include <vector>
 #include <string>
-#include <iostream>
 
 #include "time/epoch.h"
 #include "threads/spinlock.h"
@@ -133,7 +132,7 @@ private:
 
 			if (!backlog)
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(55));
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
                 continue;
             }
 

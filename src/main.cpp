@@ -1,4 +1,3 @@
-#define USE_STANDALONE_ASIO 
 // main.cpp : Entry point for OpenSetDB
 //
 #include "common.h"
@@ -89,9 +88,9 @@ int main(const int argc, char* argv[])
 				args.hostLocal = nextArg;
 			else if (arg == "--port"s)
 				args.portLocal = std::stoi(nextArg);
-			if (arg == "--hostext"s)
+			if (arg == "--os-host"s)
 				args.hostExternal = argv[i + 1];
-			else if (arg == "--portext"s)
+			else if (arg == "--os-port"s)
 				args.portExternal = std::stoi(nextArg);
 			else if (arg == "--data"s)
 				args.path = argv[i + 1];
@@ -111,12 +110,12 @@ int main(const int argc, char* argv[])
 	if (help)
 	{
 		cout << "Command line options:" << endl << endl;
-		cout << "    --host <ip, defaults to 0.0.0.0>" << endl;
-		cout << "    --port <port, defaults to 8080>" << endl;
-		cout << "    --hostext <host/ip, defaults to hostname>  ; optional external host/ip" << endl;
-		cout << "    --portext <port, defaults to --port value> ; optional external port" << endl;
-		cout << "    --data <relative or absolute path>         ; where commits will be stored" << endl;
-		cout << "    --test                                     ; will run unit tests" << endl;
+		cout << "    --host     <ip, defaults to 0.0.0.0>" << endl;
+		cout << "    --port     <port, defaults to 8080>" << endl;
+		cout << "    --os-host  <host/ip, defaults to hostname>  ; optional external host/ip" << endl;
+		cout << "    --os-port  <port, defaults to --port value> ; optional external port" << endl;
+		cout << "    --data     <relative or absolute path>      ; where commits will be stored" << endl;
+		cout << "    --test                                      ; will run unit tests" << endl;
 		cout << endl;
 		exit(0);
 	}

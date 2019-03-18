@@ -348,7 +348,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 
 		if (!runAgain)
 		{ // scoped because we don't need the lock, so we will exit the moment we have it
-			auto delay = nextRun == 0 ? 0 : (nextRun == -1 ? 55 : nextRun - Now());
+			auto delay = nextRun == 0 ? 0 : (nextRun == -1 ? 250 : nextRun - Now());
 
 			if (delay < 0) 
 				delay = 0;

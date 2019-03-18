@@ -6,7 +6,7 @@ OpenSet is written in modern C++ (using some of the latest features from C++11/1
 
 OpenSet incorporates the following amazing and wonderful open source projects:
 
-- [Simple-Web-Server](https://github.com/eidheim/Simple-Web-Server), a great library by Ole Christian Eidheim that leverages ASIO to provide asynchronous http and https client and server functionality to any C++ project.
+- [Simple-Web-Server](https://gitlab.com/eidheim/Simple-Web-Server), a great library by Ole Christian Eidheim that leverages ASIO to provide asynchronous http and https client and server functionality to any C++ project.
 - [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by Yann Collet. Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
 - [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  Yann Collet. A good hash is hard to find, a fast hash is even harder --- Yann has created both.
 
