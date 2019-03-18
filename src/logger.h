@@ -128,6 +128,8 @@ private:
 		openlog("openset", LOG_NDELAY, LOG_USER);
 #endif
 
+        return;
+
 		while (true)
 		{
 
@@ -148,7 +150,7 @@ private:
 		    const auto now = std::chrono::duration_cast<std::chrono::seconds>
 				(std::chrono::system_clock::now().time_since_epoch()).count();
 
-			for (const auto line : localLines)
+			for (const auto &line : localLines)
 			{
 			    const std::string level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
 

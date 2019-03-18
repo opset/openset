@@ -79,7 +79,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     //auto clusterErrors = false;
     const auto startTime = Now();
 
-    // a cluster error (missing partition, etc), or a map changed happenned
+    // a cluster error (missing partition, etc), or a map changed happened
     // during this insert, then re-insert
     if (openset::globals::sentinel->wasDuringMapChange(startTime - 500, startTime))
     {
