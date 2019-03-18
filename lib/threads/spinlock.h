@@ -38,7 +38,7 @@ public:
 
 	__forceinline bool tryLock()
 	{
-		return !locked.exchange(true, std::memory_order_acquire);
+		return !locked.exchange(true, std::memory_order_acq_rel);
 	}
 
 	__forceinline void lock()
@@ -48,14 +48,14 @@ public:
 
 		do
 		{
-			while (locked.load(std::memory_order_relaxed));
+			while (locked.load(std::memory_order_acquire))
 #ifdef _MSC_VER
 				_mm_pause();
 #else
-				asm("pause");
+				__asm__ __volatile__ ("pause");
 #endif
 		}
-		while (locked.exchange(true, std::memory_order_acquire));
+		while (locked.exchange(true, std::memory_order_acq_rel));
 	}
 
 	__forceinline void unlock()
