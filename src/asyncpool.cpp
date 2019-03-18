@@ -360,8 +360,10 @@ void AsyncPool::runner(int32_t workerId) noexcept
 				// using a C++11 conditional lock (eventing) so that if
 				// we aren't tasked up, we can wait for a cell to be added, or 250ms
 
+                auto const timeout = std::chrono::steady_clock::now() + std::chrono::milliseconds(delay);
+
 				unique_lock<std::mutex> lock(worker->lock);
-				worker->conditional.wait_for(lock, std::chrono::milliseconds(delay), [&]() -> bool
+				worker->conditional.wait_until(lock, timeout, [&]() -> bool
 				{
 					return (worker->triggered || globalAsyncInitSuspend);
 				}); 
