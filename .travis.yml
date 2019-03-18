@@ -6,8 +6,8 @@ addons:
             - llvm-toolchain-precise
             - ubuntu-toolchain-r-test
         packages:
-            - g++-7
-            - gcc-7
+            - g++-8
+            - gcc-8
 
 install:
   - DEPS_DIR="${TRAVIS_BUILD_DIR}/deps"
@@ -30,7 +30,7 @@ before_script:
   - cd ${TRAVIS_BUILD_DIR}
   - mkdir $BUILD
   - cd $BUILD
-  - cmake .. -DCMAKE_C_COMPILER=gcc-7 -DCMAKE_CXX_COMPILER=g++-7 -DCMAKE_BUILD_TYPE=$BUILD
+  - cmake .. -DCMAKE_C_COMPILER=gcc-8 -DCMAKE_CXX_COMPILER=g++-8 -DCMAKE_BUILD_TYPE=$BUILD
 script:
   - make
   - ctest -R openset-unit-test
