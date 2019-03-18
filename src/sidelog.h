@@ -129,7 +129,7 @@ namespace openset::db
 
         void trimSideLog()
         {           
-            if (lastTrim + 5'000 < Now())
+            if (lastTrim + 60'000 < Now())
             {
                 lastTrim = Now();
                 Logger::get().debug("transaction log at " + to_string(logSize) + " transactions");

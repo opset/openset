@@ -118,7 +118,7 @@ bool OpenLoopSegment::nextMacro()
 	// lambda callback used by interpretor when executing segment
 	// queries to get segments not caculated in the current query 
 	// i.e. get save segments (those created with TTLs)
-	auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
+	const auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
 	{
 		// try for local bits (made during this query) first as they 
 		// may be fresher
@@ -294,19 +294,19 @@ void OpenLoopSegment::prepare()
 		
 }
 
-void OpenLoopSegment::run()
+bool OpenLoopSegment::run()
 {
 	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())
-			break; // let some other cells run
+			return true; // let some other cells run
 
 		if (!interpreter && !nextMacro())
-			return;
+			return false;
 
 		if (!interpreter)
-			return;
+			return false;
 
 		// if there was an error, exit
 		if (interpreter->error.inError())
@@ -323,7 +323,7 @@ void OpenLoopSegment::run()
 			);
 
 			suicide();
-			return;
+			return false;
 		}
 
 		// are we out of bits to analyze?
@@ -357,12 +357,12 @@ void OpenLoopSegment::run()
                 result->setAccTypesFromMacros(macros);
 
 				suicide();
-				return;
+				return false;
 			}
 
 			// we have more macros, loop to the top and try again
 			//continue;
-			return;
+			return true;
 		}
 		
 		if (currentLinId < maxLinearId && 

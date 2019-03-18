@@ -65,7 +65,7 @@ namespace openset
 			bool nextMacro();
 
 			void prepare() final;
-			void run() final;
+			bool run() final;
 			void partitionRemoved() final;
 		};
 	}

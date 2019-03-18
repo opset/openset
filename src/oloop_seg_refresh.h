@@ -49,7 +49,7 @@ namespace openset
 
 			void prepare() final;
 		    void respawn();
-		    void run() final;
+		    bool run() final;
 			void partitionRemoved() final {};
 		};
 	}

@@ -52,7 +52,7 @@ namespace openset
 
 			// these must be overridden (preferrably final) in derived classes
 			virtual void prepare() = 0;
-			virtual void run() = 0;			
+			virtual bool run() = 0;			
 			virtual void partitionRemoved() = 0; // allow for error handling if a partition is removed
 		};
 	};

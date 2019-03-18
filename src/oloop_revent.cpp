@@ -55,7 +55,7 @@ void OpenLoopRevent::respawn(int64_t runIn)
     suicide(); // kill this cell.    
 }
 
-void OpenLoopRevent::run()
+bool OpenLoopRevent::run()
 {
     const auto maxLinearId = parts->people.peopleCount();
     const auto now = Now();
@@ -75,7 +75,7 @@ void OpenLoopRevent::run()
 
 		    const auto diff = lowestStamp - Now();
             respawn(diff);
-			return;
+			return false;
 		}
 
         if (auto personData = parts->people.getPersonByLIN(linearId);
@@ -129,4 +129,6 @@ void OpenLoopRevent::run()
 		}
 		++linearId;						
 	}
+
+    return true;
 }

@@ -33,7 +33,7 @@ namespace openset
 
 			void prepare() final;
             void respawn(int64_t runIn);
-			void run() final;
+			bool run() final;
 			void partitionRemoved() final {};
 		};
 	};

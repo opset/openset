@@ -276,7 +276,8 @@ openset::mapping::Mapper::DataBlockPtr openset::mapping::Mapper::dispatchSync(
 	while (!ready)
 	{
 		unique_lock<std::mutex> lock(nextLock);
-		nextReady.wait_for(lock, 250ms, [&ready]()
+        auto const timeout = std::chrono::steady_clock::now() + 250ms;
+		nextReady.wait_until(lock, timeout, [&ready]()
 		{
 			return ready;
 		});
@@ -403,7 +404,8 @@ openset::mapping::Mapper::Responses openset::mapping::Mapper::dispatchCluster(
 	while (!callbackState->isComplete())
 	{
 		unique_lock<std::mutex> lock(continueLock);
-		continueReady.wait_for(lock, 50ms, [callbackState]()
+        auto const timeout = std::chrono::steady_clock::now() + 50ms;
+		continueReady.wait_until(lock, timeout, [callbackState]()
 		{
 			return callbackState->isComplete();
 		});

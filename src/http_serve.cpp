@@ -168,11 +168,11 @@ namespace openset::web
 	{
 		using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
-        openset::globals::global_io_service = std::make_shared<asio::io_service>();
-        const auto server_io = openset::globals::global_io_service;//std::make_shared<asio::io_service>();
+        //openset::globals::global_io_service = std::make_shared<asio::io_service>();
+        //const auto server_io = openset::globals::global_io_service;//std::make_shared<asio::io_service>();
 
 		HttpServer server;
-        server.io_service = server_io;
+        //server.io_service = server_io;
 		server.config.port = port;
 		server.config.address = ip;
 		server.config.reuse_address = false; // we want an error if this is already going
@@ -183,12 +183,25 @@ namespace openset::web
 		server.default_resource["GET"] = [](std::shared_ptr<HttpServer::Response> response, std::shared_ptr<HttpServer::Request> request) {
 			response->write("{\"error\":\"unknown request\""s);
 		};
+
+        server.on_error = [](shared_ptr<HttpServer::Request> /*request*/, const SimpleWeb::error_code & /*ec*/) {
+            // Handle errors here
+            // Note that connection timeouts will also call this handle with ec set to SimpleWeb::errc::operation_canceled
+          };
+
     
 	    // Start server
-		server.start();
+        thread server_thread([&server]() {
+            // Start server
+            server.start();
+        });
 		
 		Logger::get().info("REST server listening on "s + ip + ":"s + to_string(port) + "."s);
 
-        server_io->run();
+        ThreadSleep(250);
+        //openset::globals::global_io_service = server.io_service;
+
+        // wait here forever
+        server_thread.join();
 	}
 }
