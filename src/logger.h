@@ -92,7 +92,7 @@ public:
 		}
 	}
 
-	void fatal(const bool isGood, const std::string line) 
+	void fatal(const bool isGood, const std::string &line) 
 	{
 		if (!isGood)
 		{
@@ -102,7 +102,7 @@ public:
 		}
 	}
 
-	void fatal(const std::string line)
+	void fatal(const std::string &line)
 	{
 		fatal(false, line);
 	}
@@ -128,29 +128,27 @@ private:
 		openlog("openset", LOG_NDELAY, LOG_USER);
 #endif
 
-        return;
-
 		while (true)
 		{
 
-			if (!backlog || !cs.tryLock())
-			{
-				std::this_thread::sleep_for(std::chrono::milliseconds(55));
-				continue;
-			}
+			if (!backlog)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(55));
+                continue;
+            }
 
-			std::vector<Line> localLines;
+            std::vector<Line> availableLines;
 
+		    cs.lock();
 			backlog -= lines.size();
-			localLines.swap(lines);
+            availableLines.swap(lines);
 			lines.clear();
-
 			cs.unlock();
 
 		    const auto now = std::chrono::duration_cast<std::chrono::seconds>
 				(std::chrono::system_clock::now().time_since_epoch()).count();
 
-			for (const auto &line : localLines)
+			for (const auto &line : availableLines)
 			{
 			    const std::string level = (line.level == level_e::info) ? "INFO"s : (line.level == level_e::error) ? "ERROR"s : "DEBUG"s;
 
