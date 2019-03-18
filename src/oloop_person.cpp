@@ -21,14 +21,14 @@ OpenLoopPerson::OpenLoopPerson(
 void OpenLoopPerson::prepare() 
 {}
 
-void OpenLoopPerson::run()
+bool OpenLoopPerson::run()
 {
     auto parts = table->getPartitionObjects(loop->partition, false );
 
     if (!parts)
     {
         suicide();
-        return;
+        return false;
     }
 
     const auto personData = parts->people.getPersonByID(uuid);
@@ -44,7 +44,7 @@ void OpenLoopPerson::run()
         }.getErrorJSON()
         );
         suicide();
-        return;
+        return false;
     }
 
     db::Person person; // Person overlay for personRaw;
@@ -52,7 +52,7 @@ void OpenLoopPerson::run()
     {
         partitionRemoved();
 	    suicide();
-        return;       
+        return false;       
     }
 
     person.mount(personData);
@@ -68,6 +68,7 @@ void OpenLoopPerson::run()
 
     // were done
     suicide();
+    return false;
 }
 
 void OpenLoopPerson::partitionRemoved()

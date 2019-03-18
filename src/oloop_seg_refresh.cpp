@@ -220,17 +220,17 @@ void OpenLoopSegmentRefresh::respawn()
     suicide(); // kill this cell.
 }
 
-void OpenLoopSegmentRefresh::run()
+bool OpenLoopSegmentRefresh::run()
 {
 	if (!interpreter && 
 		!nextExpired())
 	{
 		respawn();
-		return;
+		return false;
 	}
 
 	if (!interpreter)
-		return;
+		return false;
 
 	openset::db::PersonData_s* personData;
 	//while (true)
@@ -255,7 +255,7 @@ void OpenLoopSegmentRefresh::run()
 
             // either we are done, or we will do more on the next
             // loop
-            return;
+            return false;
 		}
 		
 		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
@@ -269,4 +269,6 @@ void OpenLoopSegmentRefresh::run()
 
 		//++count;
 	}
+
+    return true;
 }

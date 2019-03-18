@@ -60,7 +60,7 @@ namespace openset
 			~OpenLoopHistogram() final;
 
 			void prepare() final;
-			void run() final;
+			bool run() final;
 			void partitionRemoved() final;
 		};
 	}

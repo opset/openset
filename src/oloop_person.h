@@ -31,7 +31,7 @@ namespace openset
                 const int64_t uuid);
 
             void prepare() final;
-            void run() final;
+            bool run() final;
             void partitionRemoved() final;
         };
                

@@ -347,13 +347,13 @@ void AsyncPool::runner(int32_t workerId) noexcept
 		}
 
 		if (!runAgain)
-		{ // we don't need the lock, so we will exit the moment we have it
+		{ // scoped because we don't need the lock, so we will exit the moment we have it
 
 
-			auto delay = (nextRun == -1) ? 250 : nextRun - Now();
+			auto delay = nextRun == 0 ? 0 : (nextRun == -1 ? 55 : nextRun - Now());
 
-			if (delay <= 1) 
-				delay = 1;
+			if (delay < 0) 
+				delay = 0;
 
 			if (delay && !worker->triggered)
 			{
@@ -377,7 +377,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 		// jobs is a list of partitions
 		// we will grab a job (s) and run it.
 
-		nextRun = -1;
+		nextRun = -1; // -1 means not set yet
 
 		for (auto s : worker->jobs)
 		{		
@@ -393,7 +393,7 @@ void AsyncPool::runner(int32_t workerId) noexcept
 				++runAgain;			
 		}
 
-		if (runAgain)
+		if (runAgain) // loops requested immediate re-run
 			nextRun = 0;
 	}
 }

@@ -36,7 +36,7 @@ void OpenLoopInsert::prepare()
     Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
-void OpenLoopInsert::run()
+bool OpenLoopInsert::run()
 {       
     const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
@@ -47,7 +47,8 @@ void OpenLoopInsert::run()
 		// the inserts until our state changes, then we will perform inserts
 		Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
 		this->scheduleFuture(1000);
-		return;
+        sleepCounter = 0;
+		return false;
 	}
 
     int64_t readHandle = 0;
@@ -57,11 +58,9 @@ void OpenLoopInsert::run()
 	if (inserts.empty())
 	{
         SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
-		if (sleepCounter > 50)
-			sleepCounter = 50;
-		scheduleFuture(sleepCounter * 10); // lazy backoff function
+		scheduleFuture((sleepCounter > 10 ? 10 : sleepCounter) * 100); // lazy back-off function
 		++sleepCounter; // inc after, this will make it run one more time before sleeping
-		return;
+		return false;
 	}
 
 	sleepCounter = 0;
@@ -74,8 +73,9 @@ void OpenLoopInsert::run()
 	// map a table, partition and entire schema to the Person object
 	if (!person.mapTable(tablePartitioned->table, loop->partition))
 	{
+        // deleted partition - remove worker loop
 	    suicide();
-        return;
+        return false;
 	}
     
 	// we are going to convert the events into JSON, and in the process
@@ -130,4 +130,6 @@ void OpenLoopInsert::run()
 	}
 
 	tablePartitioned->attributes.clearDirty();
+
+    return true;
 }

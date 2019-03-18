@@ -122,13 +122,13 @@ void OpenLoopQuery::prepare()
 	startTime = Now();
 }
 
-void OpenLoopQuery::run()
+bool OpenLoopQuery::run()
 {
 	
 	while (true)
 	{
 		if (sliceComplete())
-			break;
+			return true;
 
     	// are we done? This will return the index of the 
 		// next set bit until there are no more, or maxLinId is met
@@ -145,7 +145,7 @@ void OpenLoopQuery::run()
 				});
 			
 			suicide();
-			return;
+			return false;
 		}
 
         if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)

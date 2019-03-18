@@ -27,13 +27,13 @@ namespace openset
 		    db::TablePartitioned* parts { nullptr };
 
 		public:
-			explicit OpenLoopCleaner(openset::db::Database::TablePtr table);
+			explicit OpenLoopCleaner(const openset::db::Database::TablePtr table);
 			~OpenLoopCleaner() final = default;
 
             void respawn();
 
 			void prepare() final;
-			void run() final;
+			bool run() final;
 			void partitionRemoved() final {};
 		};
 	};

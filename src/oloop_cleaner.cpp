@@ -10,7 +10,7 @@ using namespace std;
 using namespace openset::async;
 using namespace openset::db;
 
-OpenLoopCleaner::OpenLoopCleaner(openset::db::Database::TablePtr table) :
+OpenLoopCleaner::OpenLoopCleaner(const openset::db::Database::TablePtr table) :
 	OpenLoop(table->getName()),
 	table(table),
 	linearId(0)
@@ -43,19 +43,21 @@ void OpenLoopCleaner::respawn()
     suicide(); // kill this cell.    
 }
 
-void OpenLoopCleaner::run()
+bool OpenLoopCleaner::run()
 {
     const auto maxLinearId = parts->people.peopleCount();
 
     auto dirty = false;
 
-	//while (true)
+    Logger::get().info("+ cleaner running for " + table->getName() + ".");
+    
+	while (true)
 	{
 		if (sliceComplete())
         {
             if (dirty)
                 parts->attributes.clearDirty();
-			return; // let some other open loops run
+			return true; // let some other open loops run
         }
 
 		if (linearId > maxLinearId)
@@ -63,7 +65,7 @@ void OpenLoopCleaner::run()
             if (dirty)
                 parts->attributes.clearDirty();					
             respawn();
-			return;
+			return false;
 		}
 
         if (const auto personData = parts->people.getPersonByLIN(linearId); personData)

@@ -47,7 +47,7 @@ namespace openset
 			~OpenLoopQuery() final;
 
 			void prepare() final;
-			void run() final;
+			bool run() final;
 			void partitionRemoved() final;
 		};
 	}

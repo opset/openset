@@ -76,7 +76,7 @@ bool OpenLoop::checkCondition()
 
 bool OpenLoop::checkTimer(const int64_t milliNow)
 {
-	return (milliNow >= runAt) ? true : false;
+    return (milliNow > runAt);
 }
 
 void OpenLoop::partitionRemoved() 

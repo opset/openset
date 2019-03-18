@@ -223,7 +223,7 @@ void OpenLoopColumn::prepare()
     groupsIter = groups.begin();
 }
 
-void OpenLoopColumn::run()
+bool OpenLoopColumn::run()
 {
 
     while (true)
@@ -234,7 +234,7 @@ void OpenLoopColumn::run()
         while (groupsIter != groups.end())
         {
             if (sliceComplete())
-                return;
+                return true;
 
             const auto bucket = groupsIter->first;
 
@@ -304,7 +304,7 @@ void OpenLoopColumn::run()
             }
             );
             suicide();
-            return;
+            return false;
         }
 
     }

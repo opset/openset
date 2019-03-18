@@ -130,14 +130,15 @@ bool AsyncLoop::run(int64_t &nextRun)
 			w->state == oloopState_e::running) // check - some cells will complete in prepare
 		{
 			w->runStart = now;
-			w->run();
+
+            // count runs that have asked for an immediate re-run (returned true)
+            if (w->run()) 
+                ++runCount;
 
 			// look for next scheduled (future) run operation
 			if (w->state == oloopState_e::running && 
 				w->runAt > now && (nextRun == -1 || w->runAt < nextRun))
 				nextRun = w->runAt;
-			
-			++runCount;
 		}
 
         if (w->state == oloopState_e::done)

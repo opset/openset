@@ -211,12 +211,12 @@ void OpenLoopHistogram::prepare()
 	startTime = Now();
 }
 
-void OpenLoopHistogram::run()
+bool OpenLoopHistogram::run()
 {
 	while (true)
 	{
 		if (sliceComplete())
-			break;
+			return true;
 
     	// are we done? This will return the index of the 
 		// next set bit until there are no more, or maxLinId is met
@@ -231,7 +231,7 @@ void OpenLoopHistogram::run()
 				});
 		
 			suicide();
-			return;
+			return false;
 		}
 
         if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
