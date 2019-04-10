@@ -75,7 +75,7 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 
         if (g.modifier == query::Modifiers_e::var)
         {
-            switch (g.value.typeof())
+            switch (g.value.typeOf())
             {
                 case cvar::valueType::INT32: 
                 case cvar::valueType::INT64: 

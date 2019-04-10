@@ -2,7 +2,7 @@
 
 size_t std::hash<cvar>::operator()(const cvar& v) const
 {
-	switch (v.typeof())
+	switch (v.typeOf())
 	{
 		case cvar::valueType::STR:
 			return std::hash<std::string>{}(v.getString());

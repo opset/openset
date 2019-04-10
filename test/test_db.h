@@ -20,9 +20,9 @@
 // Our tests
 inline Tests test_db()
 {
-	
-	// An array of JSON events to insert. 
-	auto user1_raw_inserts = R"raw_inserts(
+    // An array of JSON events to insert. 
+    auto user1_raw_inserts =
+        R"raw_inserts(
 	[
 		{
 			"id": "user1@test.com",
@@ -62,9 +62,9 @@ inline Tests test_db()
 		}
 	]
 	)raw_inserts";
-	
 
-	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
+    auto test1_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
 	agg:
 		count id
 		count page
@@ -76,7 +76,8 @@ inline Tests test_db()
 		    tally(row['id'], row['page'], row['referral_source'], ref)
 	)pyql");
 
-	auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(R"pyql(
+    auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
 	agg:
 		count id
 		count {{attr_page}}
@@ -86,243 +87,262 @@ inline Tests test_db()
 		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
 	)pyql");
 
-	auto test_within_pyql = openset::query::QueryParser::fixIndent(R"pyql(
+    auto test_within_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
 	agg:
 		count id
 		count page
 
-	for row in rows if page is 'home page':		
-
-		continue for sub_row in rows if iter_within(10 seconds, row['stamp']):
+	for row in reverse rows if page == 'home page':		
+		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
 			tally('test1', 'home_page', sub_row['page'])
 		break
 	
-	for row in rows if page is 'home page':		
-
-		continue for sub_row in rows if iter_within(100 seconds, row['stamp']):
+	for row in reverse rows if page == 'home page':		
+		continue for sub_row in reverse rows if row_within(100 seconds, row['stamp']):
 			tally('test2', 'home_page', sub_row['page'])
 		break
 
 	)pyql");
 
+    auto test_continue_from = openset::query::QueryParser::fixIndent(
+        R"pyql(
+	agg:
+		count id
+        count page
 
-	/* In order to make the engine start there are a few required objects as 
-	 * they will get called in the background during testing:
-	 *   
-	 *  - cfg::manager must exist // cfg::initConfig)
-	 *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
-	 *  - Databse must exist // databases contain tabiles
-	 *  
-	 *  These objects will be created on the heap, although in practice during
-	 *  the construction phase these are created as local objects to other classes.
-	 */
+	for 1 row in rows if page is 'home page':		
+        tally('should_be_one')
 
-	// need config objects to run this
-	openset::config::CommandlineArgs args;
-	openset::globals::running = new openset::config::Config(args); 
+    debug(row == 1)
+    
+    start_from = row + 1
 
-	// stop load/save objects from doing anything
-	openset::globals::running->testMode = true; 
+    debug(start_from == 2)
+	
+	continue from start_from for 1 row in rows if page is 'home page':		
+        tally('should_also_be_one')
 
-	// we need an async engine, although we won't really be using it, 
-	// it's wired into the into features such as tablePartitioned (shared locks mostly)
-	openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
+	)pyql");
 
-	openset::mapping::PartitionMap partitionMap;
-	// this must be on heap to keep it in scope
-	openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
-	mapper->startRouter();
+    /* In order to make the engine start there are a few required objects as 
+     * they will get called in the background during testing:
+     *   
+     *  - cfg::manager must exist // cfg::initConfig)
+     *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
+     *  - Databse must exist // databases contain tabiles
+     *  
+     *  These objects will be created on the heap, although in practice during
+     *  the construction phase these are created as local objects to other classes.
+     */
 
-	// put engine in a wait state otherwise we will throw an exception
-	async->suspendAsync();
+    // need config objects to run this
+    openset::config::CommandlineArgs args;
+    openset::globals::running = new openset::config::Config(args);
 
-	return {
-		{
-			"db: create and prepare a table", [=] {
+    // stop load/save objects from doing anything
+    openset::globals::running->testMode = true;
 
-				// prepare our table
-				auto table = openset::globals::database->newTable("__test001__");
+    // we need an async engine, although we won't really be using it, 
+    // it's wired into the into features such as tablePartitioned (shared locks mostly)
+    openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
 
-				// add some columns
-				auto columns = table->getColumns();
-				ASSERT(columns != nullptr);
+    openset::mapping::PartitionMap partitionMap;
+    // this must be on heap to keep it in scope
+    openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
+    mapper->startRouter();
 
-				// content (adding to 2000 range, these typically auto enumerated on create)
-				columns->setColumn(2000, "page", openset::db::columnTypes_e::textColumn, false);
-				// referral (adding to 3000 range)
-				columns->setColumn(3000, "referral_source", openset::db::columnTypes_e::textColumn, false);
-				columns->setColumn(3001, "referral_search", openset::db::columnTypes_e::textColumn, true);
+    // put engine in a wait state otherwise we will throw an exception
+    async->suspendAsync();
 
-				// do we have 10 columns (7 built ins plus 3 we added)
-				ASSERT(table->getColumns()->columnCount == 10);
-			
-				// built-ins
-				ASSERT(table->getColumns()->nameMap.count("__triggers"));
-				ASSERT(table->getColumns()->nameMap.count("id"));
-				ASSERT(table->getColumns()->nameMap.count("__emit"));
+    return {
+        {
+            "db: create and prepare a table",
+            [=]
+            {
+                // prepare our table
+                auto table = openset::globals::database->newTable("__test001__");
 
-				// columns we've added
-				ASSERT(table->getColumns()->nameMap.count("page"));
-				ASSERT(table->getColumns()->nameMap.count("referral_source"));
-				ASSERT(table->getColumns()->nameMap.count("referral_search"));
-				//auto names = table.getColumns()->nameMap();
+                // add some columns
+                auto columns = table->getColumns();
+                ASSERT(columns != nullptr);
 
-			}
-		},
-		{
-			"db: add events to user", [=]() {
+                // content (adding to 2000 range, these typically auto enumerated on create)
+                columns->setColumn(2000, "page", columnTypes_e::textColumn, false);
+                // referral (adding to 3000 range)
+                columns->setColumn(3000, "referral_source", columnTypes_e::textColumn, false);
+                columns->setColumn(3001, "referral_search", columnTypes_e::textColumn, true);
 
-				auto table = openset::globals::database->getTable("__test001__");
-				ASSERT(table != nullptr);
+                // do we have 10 columns (7 built ins plus 3 we added)
+                ASSERT(table->getColumns()->columnCount == 10);
 
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				ASSERT(parts != nullptr);
+                // built-ins
+                ASSERT(table->getColumns()->nameMap.count("__triggers"));
+                ASSERT(table->getColumns()->nameMap.count("id"));
+                ASSERT(table->getColumns()->nameMap.count("__emit"));
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com");
-				ASSERT(personRaw != nullptr);
-				ASSERT(personRaw->getIdStr() == "user1@test.com");
-				ASSERT(personRaw->id == MakeHash("user1@test.com"));
-				ASSERT(personRaw->bytes == 0);
-				ASSERT(personRaw->linId == 0); // first user in this partition should be zero
+                // columns we've added
+                ASSERT(table->getColumns()->nameMap.count("page"));
+                ASSERT(table->getColumns()->nameMap.count("referral_source"));
+                ASSERT(table->getColumns()->nameMap.count("referral_search"));
+                //auto names = table.getColumns()->nameMap();
+            }
+        },
+        {
+            "db: add events to user",
+            [=]()
+            {
+                auto table = openset::globals::database->getTable("__test001__");
+                ASSERT(table != nullptr);
 
-				Person person; // Person overlay for personRaw;
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test
+                ASSERT(parts != nullptr);
 
-				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-				person.mount(personRaw);
+                auto personRaw = parts->people.getmakePerson("user1@test.com");
+                ASSERT(personRaw != nullptr);
+                ASSERT(personRaw->getIdStr() == "user1@test.com");
+                ASSERT(personRaw->id == MakeHash("user1@test.com"));
+                ASSERT(personRaw->bytes == 0);
+                ASSERT(personRaw->linId == 0); // first user in this partition should be zero
 
-				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
+                Person person; // Person overlay for personRaw;
 
-				// get vector of cjson nodes for each element in root array
-				auto events = insertJSON.getNodes();
+                person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
+                person.mount(personRaw);
 
-				for (auto e : events)
-				{
-					ASSERT(e->xPathInt("/stamp", 0) != 0);
-					ASSERT(e->xPath("/_") != nullptr);
+                // parse the user1_raw_inserts raw JSON text block
+                cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
-					person.insert(e);
-				}
+                // get vector of cjson nodes for each element in root array
+                auto events = insertJSON.getNodes();
 
-				auto grid = person.getGrid();
+                for (auto e : events)
+                {
+                    ASSERT(e->xPathInt("/stamp", 0) != 0);
+                    ASSERT(e->xPath("/_") != nullptr);
 
-				auto json = grid->toJSON(); // non-condensed
+                    person.insert(e);
+                }
 
-				// NOTE - uncomment if you want to see the results
-				//cout << cjson::stringify(&json, true) << endl;
+                auto grid = person.getGrid();
 
-				std::unordered_set<int64_t> timeStamps;
-				std::unordered_set<std::string> referral_sources;
-				std::unordered_set<std::string> referral_searches;
-				std::unordered_set<std::string> pages;
+                auto json = grid->toJSON(); // non-condensed
 
-				auto rows = json.xPath("rows");
+                // NOTE - uncomment if you want to see the results
+                //cout << cjson::stringify(&json, true) << endl;
 
-				ASSERT(rows != nullptr);
+                std::unordered_set<int64_t> timeStamps;
+                std::unordered_set<std::string> referral_sources;
+                std::unordered_set<std::string> referral_searches;
+                std::unordered_set<std::string> pages;
 
-				auto rowVector = rows->getNodes();
+                auto rows = json.xPath("rows");
 
-				ASSERT(rowVector.size() == 4);
+                ASSERT(rows != nullptr);
 
-				for (auto r: rowVector)
-				{				
+                auto rowVector = rows->getNodes();
 
-					if (r->find("stamp"))
-						timeStamps.insert(r->xPath("stamp")->getInt());
+                ASSERT(rowVector.size() == 4);
 
-					auto attr = r->xPath("_");
-			
-					if (attr->find("referral_source"))
-						referral_sources.insert(attr->xPath("referral_source")->getString());
+                for (auto r : rowVector)
+                {
+                    if (r->find("stamp"))
+                        timeStamps.insert(r->xPath("stamp")->getInt());
+
+                    auto attr = r->xPath("_");
+
+                    if (attr->find("referral_source"))
+                        referral_sources.insert(attr->xPath("referral_source")->getString());
                     if (attr->find("referral_search"))
                     {
                         auto rsNodes = attr->xPath("referral_search")->getNodes();
-                        for (auto n: rsNodes)
+                        for (auto n : rsNodes)
                             referral_searches.insert(n->getString());
                     }
-					if (attr->find("page"))
-						pages.insert(attr->xPath("page")->getString());
-				}
+                    if (attr->find("page"))
+                        pages.insert(attr->xPath("page")->getString());
+                }
 
-				ASSERT(timeStamps.size() == 4);
-				ASSERT(referral_sources.size() == 1);
-				ASSERT(referral_searches.size() == 5);
-				ASSERT(pages.size() == 3);
+                ASSERT(timeStamps.size() == 4);
+                ASSERT(referral_sources.size() == 1);
+                ASSERT(referral_searches.size() == 5);
+                ASSERT(pages.size() == 3);
 
-				// store this person
-				person.commit();
+                // store this person
+                person.commit();
+            }
+        },
+        {
+            "db: query a user",
+            [=]()
+            {
+                auto table = openset::globals::database->getTable("__test001__");
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
-			}
-		},
-		{
-			"db: query a user", [=]() {
+                openset::query::Macro_s queryMacros; // this is our compiled code block
+                openset::query::QueryParser p;
 
-				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                // compile this
+                p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
+                ASSERT(!p.error.inError());
+                // cout << openset::query::MacroDbg(queryMacros) << endl;
 
-				openset::query::Macro_s queryMacros; // this is our compiled code block
-				openset::query::QueryParser p;
+                // mount the compiled query to an interpretor
+                auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				// compile this
-				p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
-				ASSERT(!p.error.inError());
-                              
-				// mount the compiled query to an interpretor
-				auto interpreter = new openset::query::Interpreter(queryMacros);
+                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
+                interpreter->setResultObject(&resultSet);
 
-				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-				interpreter->setResultObject(&resultSet);
-				
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
-				ASSERT(personRaw != nullptr);
-				auto mappedColumns = interpreter->getReferencedColumns();
-				ASSERT(mappedColumns.size() == 6);
+                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                ASSERT(personRaw != nullptr);
+                auto mappedColumns = interpreter->getReferencedColumns();
+                ASSERT(mappedColumns.size() == 6);
 
-				// MappedColumns? Why? Because the basic mapTable function (without a 
-				// columnList) maps all the columns in the table - which is what we want when 
-				// inserting or updating rows but means more processing and less data affinity
-				// when performing queries
+                // MappedColumns? Why? Because the basic mapTable function (without a 
+                // columnList) maps all the columns in the table - which is what we want when 
+                // inserting or updating rows but means more processing and less data affinity
+                // when performing queries
 
-				Person person; // Person overlay for personRaw;
-				person.mapTable(table.get(), 0, mappedColumns);
+                Person person; // Person overlay for personRaw;
+                person.mapTable(table.get(), 0, mappedColumns);
 
-				person.mount(personRaw); // this tells the person object where the raw compressed data is
-				person.prepare(); // this actually decompresses
-	
-				// this mounts the now decompressed data (in the person overlay)
-				// into the interpreter
-				interpreter->mount(&person);
+                person.mount(personRaw); // this tells the person object where the raw compressed data is
+                person.prepare();        // this actually decompresses
 
-				// run it
-				interpreter->exec();
-				ASSERT(p.error.inError() == false);
+                // this mounts the now decompressed data (in the person overlay)
+                // into the interpreter
+                interpreter->mount(&person);
 
-				// just getting a pointer to the results for nicer readability
-				auto result = interpreter->result;
+                // run it
+                interpreter->exec();
+                ASSERT(p.error.inError() == false);
 
-				ASSERT(result->results.size() != 0);
+                // just getting a pointer to the results for nicer readability
+                auto result = interpreter->result;
 
-				// we are going to sort the list, this is done for merging, but
-				// being we have one partition in this test we won't actually be merging.
-				result->makeSortedList();
+                ASSERT(result->results.size() != 0);
 
-				// the merger was made to merge a fancy result structure, we
-				// are going to manually stuff our result into this
-				std::vector<openset::result::ResultSet*> resultSets;
+                // we are going to sort the list, this is done for merging, but
+                // being we have one partition in this test we won't actually be merging.
+                result->makeSortedList();
 
-				// populate or vector of results, so we can merge
-				//responseData.push_back(&res);
-				resultSets.push_back(interpreter->result);
-				
-				// this is the merging object, it merges results from multiple 
-				// partitions into a result that can serialized to JSON, or to 
-				// binary for distributed queries
-				openset::result::ResultMuxDemux merger;
+                // the merger was made to merge a fancy result structure, we
+                // are going to manually stuff our result into this
+                std::vector<openset::result::ResultSet*> resultSets;
 
-				// we are going to populate this
-				cjson resultJSON; 
+                // populate or vector of results, so we can merge
+                //responseData.push_back(&res);
+                resultSets.push_back(interpreter->result);
 
-				// make some JSON
+                // this is the merging object, it merges results from multiple 
+                // partitions into a result that can serialized to JSON, or to 
+                // binary for distributed queries
+                openset::result::ResultMuxDemux merger;
+
+                // we are going to populate this
+                cjson resultJSON;
+
+                // make some JSON
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
                 /*
 				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
@@ -331,90 +351,91 @@ inline Tests test_db()
 				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
                 */
 
-				// NOTE - uncomment if you want to see the results
-				// cout << cjson::Stringify(&resultJSON, true) << endl;
+                // NOTE - uncomment if you want to see the results
+                // cout << cjson::Stringify(&resultJSON, true) << endl;
 
-				auto underScoreNode = resultJSON.xPath("/_");
-				ASSERT(underScoreNode != nullptr);
+                auto underScoreNode = resultJSON.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
 
-				auto dataNodes = underScoreNode->getNodes();
-				ASSERT(dataNodes.size() == 1);
-				
-				auto totalsNode = dataNodes[0]->xPath("/c");				
-				auto values = cjson::stringify(totalsNode);
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 1);
 
-				ASSERT(values == "[1,2,2,6]");
-			}
-		},
-		{
-			"db: query another user", [=]() {
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values     = cjson::stringify(totalsNode);
 
-				openset::query::ParamVars params;
+                ASSERT(values == "[1,2,2,6]");
+            }
+        },
+        {
+            "db: query another user",
+            [=]()
+            {
+                openset::query::ParamVars params;
 
-				params["attr_page"] = "page";
-				params["attr_ref"] = "referral_source";
-				params["attr_keyword"] = "referral_search";
-				params["root_name"] = "root";
-				
-				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                params["attr_page"]    = "page";
+                params["attr_ref"]     = "referral_source";
+                params["attr_keyword"] = "referral_search";
+                params["root_name"]    = "root";
 
-				openset::query::Macro_s queryMacros; // this is our compiled code block
-				openset::query::QueryParser p;
+                auto table = openset::globals::database->getTable("__test001__");
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
-				// compile this - passing in the template vars
-				p.compileQuery(test_pluggable_pyql.c_str(), table->getColumns(), queryMacros, &params);
+                openset::query::Macro_s queryMacros; // this is our compiled code block
+                openset::query::QueryParser p;
+
+                // compile this - passing in the template vars
+                p.compileQuery(test_pluggable_pyql.c_str(), table->getColumns(), queryMacros, &params);
 
                 // cout << openset::query::MacroDbg(queryMacros) << endl;
 
-				// mount the compiled query to an interpretor
-				auto interpreter = new openset::query::Interpreter(queryMacros);
+                // mount the compiled query to an interpretor
+                auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-				interpreter->setResultObject(&resultSet);
+                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
+                interpreter->setResultObject(&resultSet);
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
-				ASSERT(personRaw != nullptr);
-				auto mappedColumns = interpreter->getReferencedColumns();
-				ASSERT(mappedColumns.size() == 5);
+                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                ASSERT(personRaw != nullptr);
+                auto mappedColumns = interpreter->getReferencedColumns();
+                ASSERT(mappedColumns.size() == 5);
 
-				Person person; // Person overlay for personRaw;
-				person.mapTable(table.get(), 0, mappedColumns);
+                Person person; // Person overlay for personRaw;
+                person.mapTable(table.get(), 0, mappedColumns);
 
-				person.mount(personRaw); // this tells the person object where the raw compressed data is
-				person.prepare(); // this actually decompresses
+                person.mount(personRaw); // this tells the person object where the raw compressed data is
+                person.prepare();        // this actually decompresses
 
-								  // this mounts the now decompressed data (in the person overlay)
-								  // into the interpreter
-				interpreter->mount(&person);
+                // this mounts the now decompressed data (in the person overlay)
+                // into the interpreter
+                interpreter->mount(&person);
 
-				// run it
-				interpreter->exec();
-				ASSERT(p.error.inError() == false);
+                // run it
+                interpreter->exec();
+                ASSERT(p.error.inError() == false);
 
-				// just getting a pointer to the results for nicer readability
-				auto result = interpreter->result;
+                // just getting a pointer to the results for nicer readability
+                auto result = interpreter->result;
 
-				//ASSERT(result->results.size() != 0);
+                //ASSERT(result->results.size() != 0);
 
-				// we are going to sort the list, this is done for merging, but
-				// being we have one partition in this test we won't actually be merging.
-				result->makeSortedList();
+                // we are going to sort the list, this is done for merging, but
+                // being we have one partition in this test we won't actually be merging.
+                result->makeSortedList();
 
-				// the merger was made to merge a fancy result structure, we
-				// are going to manually stuff our result into this
-				std::vector<openset::result::ResultSet*> resultSets;
-				// populate or vector of results, so we can merge
-				//responseData.push_back(&res);
-				resultSets.push_back(interpreter->result);
+                // the merger was made to merge a fancy result structure, we
+                // are going to manually stuff our result into this
+                std::vector<openset::result::ResultSet*> resultSets;
+                // populate or vector of results, so we can merge
+                //responseData.push_back(&res);
+                resultSets.push_back(interpreter->result);
 
-				// this is the merging object, it merges results from multiple 
-				// partitions into a result that can serialized to JSON, or to 
-				// binary for distributed queries
-				openset::result::ResultMuxDemux merger;
-				cjson resultJSON; // we are going to populate this
+                // this is the merging object, it merges results from multiple 
+                // partitions into a result that can serialized to JSON, or to 
+                // binary for distributed queries
+                openset::result::ResultMuxDemux merger;
+                cjson resultJSON; // we are going to populate this
 
-  			    // make some JSON
+                // make some JSON
                 /*
 				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
                 merger.mergeMacroLiterals(queryMacros, resultSets);
@@ -423,90 +444,90 @@ inline Tests test_db()
                 */
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
-				// NOTE - uncomment if you want to see the results
-				// cout << cjson::Stringify(&resultJSON, true) << endl;
+                // NOTE - uncomment if you want to see the results
+                // cout << cjson::Stringify(&resultJSON, true) << endl;
 
-				auto underScoreNode = resultJSON.xPath("/_");
-				ASSERT(underScoreNode != nullptr);
+                auto underScoreNode = resultJSON.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
 
-				auto dataNodes = underScoreNode->getNodes();
-				ASSERT(dataNodes.size() == 1);
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 1);
 
-				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::stringify(totalsNode);
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values     = cjson::stringify(totalsNode);
 
-				ASSERT(values == "[1,4,2]");
+                ASSERT(values == "[1,4,2]");
+            }
+        },
+        {
+            "db: test within()",
+            [=]()
+            {
+                openset::query::ParamVars params;
 
-			}
-		},
-		{
-			"db: test within()", [=]() {
+                params["attr_page"]    = "page";
+                params["attr_ref"]     = "referral_source";
+                params["attr_keyword"] = "referral_search";
+                params["root_name"]    = "root";
 
-				openset::query::ParamVars params;
+                auto table = openset::globals::database->getTable("__test001__");
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
 
-				params["attr_page"] = "page";
-				params["attr_ref"] = "referral_source";
-				params["attr_keyword"] = "referral_search";
-				params["root_name"] = "root";
+                openset::query::Macro_s queryMacros; // this is our compiled code block
+                openset::query::QueryParser p;
 
-				auto table = openset::globals::database->getTable("__test001__");
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                // compile this - passing in the template vars
+                p.compileQuery(test_within_pyql.c_str(), table->getColumns(), queryMacros, &params);
 
-				openset::query::Macro_s queryMacros; // this is our compiled code block
-				openset::query::QueryParser p;
+                //cout << openset::query::MacroDbg(queryMacros) << endl;
 
-				// compile this - passing in the template vars
-				p.compileQuery(test_within_pyql.c_str(), table->getColumns(), queryMacros, &params);
+                // mount the compiled query to an interpretor
+                auto interpreter = new openset::query::Interpreter(queryMacros);
 
-				//cout << openset::query::MacroDbg(queryMacros) << endl;
-				
-				// mount the compiled query to an interpretor
-				auto interpreter = new openset::query::Interpreter(queryMacros);
+                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
+                interpreter->setResultObject(&resultSet);
 
-				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-				interpreter->setResultObject(&resultSet);
+                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                ASSERT(personRaw != nullptr);
+                auto mappedColumns = interpreter->getReferencedColumns();
+                ASSERT(mappedColumns.size() == 4);
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
-				ASSERT(personRaw != nullptr);
-				auto mappedColumns = interpreter->getReferencedColumns();
-				ASSERT(mappedColumns.size() == 4);
+                Person person; // Person overlay for personRaw;
+                person.mapTable(table.get(), 0, mappedColumns);
 
-				Person person; // Person overlay for personRaw;
-				person.mapTable(table.get(), 0, mappedColumns);
+                person.mount(personRaw); // this tells the person object where the raw compressed data is
+                person.prepare();        // this actually decompresses
 
-				person.mount(personRaw); // this tells the person object where the raw compressed data is
-				person.prepare(); // this actually decompresses
+                // this mounts the now decompressed data (in the person overlay)
+                // into the interpreter
+                interpreter->mount(&person);
 
-								  // this mounts the now decompressed data (in the person overlay)
-								  // into the interpreter
-				interpreter->mount(&person);
+                // run it
+                interpreter->exec();
+                ASSERT(p.error.inError() == false);
 
-				// run it
-				interpreter->exec();
-				ASSERT(p.error.inError() == false);
+                // just getting a pointer to the results for nicer readability
+                auto result = interpreter->result;
 
-				// just getting a pointer to the results for nicer readability
-				auto result = interpreter->result;
+                //ASSERT(result->results.size() != 0);
 
-				//ASSERT(result->results.size() != 0);
+                // we are going to sort the list, this is done for merging, but
+                // being we have one partition in this test we won't actually be merging.
+                result->makeSortedList();
 
-				// we are going to sort the list, this is done for merging, but
-				// being we have one partition in this test we won't actually be merging.
-				result->makeSortedList();
+                // the merger was made to merge a fancy result structure, we
+                // are going to manually stuff our result into this
+                std::vector<openset::result::ResultSet*> resultSets;
+                // populate or vector of results, so we can merge
+                //responseData.push_back(&res);
+                resultSets.push_back(interpreter->result);
 
-				// the merger was made to merge a fancy result structure, we
-				// are going to manually stuff our result into this
-				std::vector<openset::result::ResultSet*> resultSets;
-				// populate or vector of results, so we can merge
-				//responseData.push_back(&res);
-				resultSets.push_back(interpreter->result);
-
-				// this is the merging object, it merges results from multiple 
-				// partitions into a result that can serialized to JSON, or to 
-				// binary for distributed queries
-				openset::result::ResultMuxDemux merger;
-				cjson resultJSON; // we are going to populate this
-								  // make some JSON
+                // this is the merging object, it merges results from multiple 
+                // partitions into a result that can serialized to JSON, or to 
+                // binary for distributed queries
+                openset::result::ResultMuxDemux merger;
+                cjson resultJSON; // we are going to populate this
+                // make some JSON
 
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
                 merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
@@ -517,40 +538,145 @@ inline Tests test_db()
 				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
                 */
 
-				// NOTE - uncomment if you want to see the results
-				//cout << cjson::stringify(&resultJSON, true) << endl;
+                // NOTE - uncomment if you want to see the results
+                //cout << cjson::stringify(&resultJSON, true) << endl;
 
-				auto underScoreNode = resultJSON.xPath("/_");
-				ASSERT(underScoreNode != nullptr);
+                auto underScoreNode = resultJSON.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
 
-				/* This test runs two nearly identical matches. 
-				 * 
-				 * The difference the `iter_within` timing, in "test1" it checks
-				 * within 10 seconds, and there can be only one match.
-				 * 
-				 * In "test2" it checks within 100 seconds and there are two matches.
-				 * 
-				 * The results are sorted, so the second test shows up first.
-				 * 
-				 * On the root "_" node the first "c" should be [1,2]
-				 * In the second row "c" should be [1,1]
-				 * 
-				 * Note: you can see it by uncommenting the stringify above)
-				 */
+                /* This test runs two nearly identical matches. 
+                 * 
+                 * The difference the `iter_within` timing, in "test1" it checks
+                 * within 10 seconds, and there can be only one match.
+                 * 
+                 * In "test2" it checks within 100 seconds and there are two matches.
+                 * 
+                 * The results are sorted, so the second test shows up first.
+                 * 
+                 * On the root "_" node the first "c" should be [1,2]
+                 * In the second row "c" should be [1,1]
+                 * 
+                 * Note: you can see it by uncommenting the stringify above)
+                 */
 
-				auto dataNodes = underScoreNode->getNodes();
-				ASSERT(dataNodes.size() == 2);
-				
-				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::stringify(totalsNode);
-				ASSERT(values == "[1,2]");
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 2);
 
-				totalsNode = dataNodes[1]->xPath("/c");
-				values = cjson::stringify(totalsNode);
-				ASSERT(values == "[1,1]");
-				
-			}
-		}
-	};
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,2]");
 
+                totalsNode = dataNodes[1]->xPath("/c");
+                values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,1]");
+            }
+        },
+        {
+            "db: test continue from",
+            [=]()
+            {
+                openset::query::ParamVars params;
+
+                params["attr_page"]    = "page";
+                params["attr_ref"]     = "referral_source";
+                params["attr_keyword"] = "referral_search";
+                params["root_name"]    = "root";
+
+                auto table = openset::globals::database->getTable("__test001__");
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+
+                openset::query::Macro_s queryMacros; // this is our compiled code block
+                openset::query::QueryParser p;
+
+                // compile this - passing in the template vars
+                p.compileQuery(test_continue_from.c_str(), table->getColumns(), queryMacros, &params);
+
+                //cout << openset::query::MacroDbg(queryMacros) << endl;
+
+                // mount the compiled query to an interpreter
+                auto interpreter = new openset::query::Interpreter(queryMacros);
+
+                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
+                interpreter->setResultObject(&resultSet);
+
+                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                ASSERT(personRaw != nullptr);
+                auto mappedColumns = interpreter->getReferencedColumns();
+                ASSERT(mappedColumns.size() == 4);
+
+                Person person; // Person overlay for personRaw;
+                person.mapTable(table.get(), 0, mappedColumns);
+
+                person.mount(personRaw); // this tells the person object where the raw compressed data is
+                person.prepare();        // this actually decompresses
+
+                // this mounts the now decompressed data (in the person overlay)
+                // into the interpreter
+                interpreter->mount(&person);
+
+                // run it
+                interpreter->exec();
+                ASSERT(p.error.inError() == false);
+
+                // just getting a pointer to the results for nicer readability
+                auto result = interpreter->result;
+
+                //ASSERT(result->results.size() != 0);
+
+                // we are going to sort the list, this is done for merging, but
+                // being we have one partition in this test we won't actually be merging.
+                result->makeSortedList();
+
+                // the merger was made to merge a fancy result structure, we
+                // are going to manually stuff our result into this
+                std::vector<openset::result::ResultSet*> resultSets;
+                // populate or vector of results, so we can merge
+                //responseData.push_back(&res);
+                resultSets.push_back(interpreter->result);
+
+                // this is the merging object, it merges results from multiple 
+                // partitions into a result that can serialized to JSON, or to 
+                // binary for distributed queries
+                openset::result::ResultMuxDemux merger;
+                cjson resultJSON; // we are going to populate this
+                // make some JSON
+
+                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
+
+                // NOTE - uncomment if you want to see the results
+                //cout << cjson::stringify(&resultJSON, true) << endl;
+
+                auto underScoreNode = resultJSON.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
+
+                /* This test runs two nearly identical matches. 
+                 * 
+                 * The difference the `iter_within` timing, in "test1" it checks
+                 * within 10 seconds, and there can be only one match.
+                 * 
+                 * In "test2" it checks within 100 seconds and there are two matches.
+                 * 
+                 * The results are sorted, so the second test shows up first.
+                 * 
+                 * On the root "_" node the first "c" should be [1,2]
+                 * In the second row "c" should be [1,1]
+                 * 
+                 * Note: you can see it by uncommenting the stringify above)
+                 */
+
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 2);
+
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,1]");
+
+                totalsNode = dataNodes[1]->xPath("/c");
+                values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,1]");
+            }
+        }
+
+    };
 }

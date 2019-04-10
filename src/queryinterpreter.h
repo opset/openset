@@ -34,10 +34,10 @@ namespace openset
 
             EventDistinct_s() = default;
 
-            void set(const int64_t value, const int64_t distinct, const int64_t stamp, const int64_t column)
+            void set(const int64_t value, const int64_t distinct, const int64_t countKey, const int64_t column)
             {
                 hash1 = XXH64(&distinct, 8, column);        
-                hash2 = XXH64(&value, 8, stamp);        
+                hash2 = XXH64(&value, 8, countKey);        
             }
 
             bool operator ==(const EventDistinct_s& right) const
@@ -144,6 +144,8 @@ namespace openset
 			// indexing
 			IndexBits* bits{ nullptr };
 			int maxBitPop{ 0 }; // largest linear user_id in table/partition
+
+            int propsIndex{ 0 };
 
 			// counters
 			int loopCount{ 0 };

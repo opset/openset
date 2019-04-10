@@ -100,11 +100,11 @@ void openset::mapping::Mapper::addRoute(const std::string routeName, const int64
 			        ? "127.0.0.1"s 
 			        : globals::running->host;
 
-			routes.insert({ routeId,{ host, globals::running->port } }).first; // local route answers on local ip:port
+			routes.insert({ routeId, { host, globals::running->port } }); // local route answers on local ip:port
         }
 		else
         {
-			routes.insert({ routeId, { ip, port }}).first; // make it
+			routes.insert({ routeId, { ip, port }}); // make it
         }
     }
 }

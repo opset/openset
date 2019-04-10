@@ -20,6 +20,9 @@ HeapStack::~HeapStack()
 
 void HeapStack::Release()
 {
+    // if the stack is empty we will just reset the class members
+    // for good measure, if it was full we will remove all linked 
+    // pages except the first, which will reset to initial state
 	if (head)
 	{
 		auto block = head->nextBlock;

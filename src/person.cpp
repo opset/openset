@@ -98,7 +98,7 @@ void Person::prepare()
 
 void Person::insert(cjson* rowData)
 {
-	grid.insert(rowData);
+	grid.insertEvent(rowData);
 }
 
 PersonData_s* Person::commit()
