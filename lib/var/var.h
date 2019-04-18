@@ -94,6 +94,9 @@ THE SOFTWARE.
 
 class cvar;
 
+const int64_t None = static_cast<int64_t>(LLONG_MIN);
+
+
 namespace std
 {
 	template <>
@@ -153,8 +156,6 @@ private:
     cvar* reference = nullptr;
 
 public:
-
-    const static int64_t None { static_cast<int64_t>(LLONG_MIN) };
 
     using l = std::vector<cvar>;
     using o = std::pair<cvar, cvar>;
