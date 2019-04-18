@@ -47,7 +47,7 @@ public:
 
 private:
 
-    static __forceinline void serializeRecursive(const cvar& var, HeapStack& mem)
+    static void serializeRecursive(const cvar& var, HeapStack& mem)
     {
         switch (var.type)
         {
@@ -116,7 +116,7 @@ private:
     // this was prettier before it got faster, but this recursive function
     // unpacks serialized cvar objects recursively using move semantics to
     // help minimize the number of objects created and copied.
-    static __forceinline cvar deserializeRecursive(char* & read)
+    static cvar deserializeRecursive(char* & read)
     {
         switch (reinterpret_cast<overlay_s*>(read)->type)
         {
@@ -193,7 +193,7 @@ private:
 	return XXH64(buffer, strlen(buffer), HASH_SEED);
 
      */
-    static __forceinline void hashRecursive(const cvar& var, int64_t& hash)
+    static void hashRecursive(const cvar& var, int64_t& hash)
     {
         // hash in the type
         hash = XXH64(reinterpret_cast<const void*>(&var.type), 1, hash);
