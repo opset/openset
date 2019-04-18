@@ -1190,7 +1190,9 @@ void QueryParser::tokenizeBlock(
                 if (lines[i].parts[idx] == "in")
                     break;
                 left.push_back(lines[i].parts[idx]);
-            } /*const auto isIn = idx != static_cast<int>(lines[i].parts.size()) && lines[i].parts[idx] == "in";
+            } 
+            
+            /*const auto isIn = idx != static_cast<int>(lines[i].parts.size()) && lines[i].parts[idx] == "in";
             const auto isRows = isIn && static_cast<int>(lines[i].parts.size()) > idx + 1 && lines[i].parts[idx + 1]
                 == "rows";
 
@@ -1348,7 +1350,7 @@ void QueryParser::tokenizeBlock(
             
             {*/
             LineParts right;
-            for (; idx < static_cast<int>(lines[i].parts.size()); ++idx)
+            for (++idx; idx < static_cast<int>(lines[i].parts.size()); ++idx)
             {
                 if (lines[i].parts[idx] == "__MARKER__")
                     break;
@@ -1384,7 +1386,9 @@ void QueryParser::tokenizeBlock(
                     }
                     else
                     {
-                        vars.userVars.emplace(lines[i].parts[0], Variable_s { lines[i].parts[0], "" });
+                        //vars.userVars.emplace(lines[i].parts[0], Variable_s { lines[i].parts[0], "" });
+                        // FIX??
+                        vars.userVars.emplace(item, Variable_s { item, "" });
                         block.emplace_back(
                             OpCode_e::VARIDX,
                             // fancy placeholder, map to index on final pass opcode

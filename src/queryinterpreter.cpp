@@ -98,6 +98,36 @@ void openset::query::Interpreter::mount(Person* person)
     rows     = grid->getRows(); // const
     rowCount = rows->size();
 
+    if (firstRun)
+    {
+        // this script references global cvariables, so
+        // we will copy them from the table object when this
+        // interpretor is run for it's first time (that way
+        // we get the most recent values)
+        if (macros.useGlobals || macros.useProps)
+        {
+            // find the global in this script!
+            for (auto& s : macros.vars.userVars)
+            {
+                if (macros.useGlobals && s.actual == "globals")
+                {
+                    s.value = this->grid->getTable()->getGlobals();
+                    if (!s.value.contains("segment"))
+                        s.value["segment"] = cvar(cvar::valueType::DICT);
+                }
+
+                if (macros.useProps && s.actual == "props")
+                {
+                    s.value = cvar(cvar::valueType::DICT);
+                    propsIndex = s.index;
+                }
+
+            }
+        }
+        firstRun = false;
+    }
+
+
     if (macros.useProps && propsIndex != -1 && grid)
         macros.vars.userVars[propsIndex].value = grid->getProps();
 
@@ -874,7 +904,7 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
         error.set(
             errors::errorClass_e::run_time,
             errors::errorCode_e::set_math_param_invalid,
-            "compliment - set could not be found");
+            "difference - set could not be found");
         *stackPtr = NONE;
         ++stackPtr;
         return;
@@ -889,7 +919,7 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
         error.set(
             errors::errorClass_e::run_time,
             errors::errorCode_e::set_math_param_invalid,
-            "compliment - set could not be found");
+            "difference - set could not be found");
         *stackPtr = NONE;
         ++stackPtr;
         return;
@@ -1115,7 +1145,7 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
         return;
 
     const auto currentRow = (stackPtr - 1)->getInt32();
-    cvar result           = cvar::o();
+    cvar result(cvar::valueType::DICT); //FIXcvar::o();
     for (const auto& tableVar : macros.vars.tableVars)
     {
         auto key = tableVar.actual; // we pop the actual user id in this case
@@ -1960,7 +1990,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             for (auto x = 0; x < inst->extra - 1; ++x)
             {
                 --stackPtr;
-                tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
+                // throw if missing key while popping
+                tcvar = tcvar->getMemberPtr(*stackPtr, true); // *stackPtr is our key
             }
             --stackPtr;
             const auto key = std::move(*stackPtr); // TODO - use ref?
@@ -2041,17 +2072,22 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         case OpCode_e::ITFOR:
         {
             --stackPtr;
+
             const int64_t keyIdx = *stackPtr; // we are going to look back one instruction to see if we 
             // are putting values into a user variable or a column variable
             const auto isColumn = (inst - 1)->op == OpCode_e::COLIDX;
+
             int64_t valueIdx    = 0;
+
             if (inst->value == 2)
             {
                 --stackPtr;
                 valueIdx = *stackPtr;
             }
+
             --stackPtr;
             auto source = move(*stackPtr);
+
             if (source.typeOf() == cvar::valueType::DICT)
             {
                 // enter loop, increment nest 
@@ -2136,6 +2172,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             else if (source.typeOf() == cvar::valueType::SET)
             {
                 const auto from = source.getSet();
+
                 for (auto& x : *from)
                 {
                     if (loopState == LoopState_e::in_exit || error.inError())
@@ -2146,11 +2183,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         --recursion;
                         return;
                     }
+
                     if (isColumn)
                         macros.vars.columnVars[keyIdx].value = x;
                     else
                         macros.vars.userVars[keyIdx].value = x;
+
                     opRunner(&macros.code.front() + inst->index, currentRow);
+
                     if (loopState == LoopState_e::in_break || inReturn)
                     {
                         if (breakDepth == 1 || nestDepth == 1)
@@ -2731,35 +2771,7 @@ void openset::query::Interpreter::execReset()
     stackPtr   = stack; //matchStampPrev.clear();
     eventDistinct.clear();
     for (auto i = 0; i < STACK_DEPTH; ++i)
-        stack[i].clear();
-    if (firstRun)
-    {
-        // this script references global cvariables, so
-        // we will copy them from the table object when this
-        // interpretor is run for it's first time (that way
-        // we get the most recent values)
-        if (macros.useGlobals)
-        {
-            // find the global in this script!
-            for (auto& s : macros.vars.userVars)
-            {
-                if (s.actual == "globals")
-                {
-                    s.value = this->grid->getTable()->getGlobals();
-                    if (!s.value.contains("segment"))
-                        s.value["segment"] = cvar::o{};
-                }
-
-                if (s.actual == "props")
-                {
-                    s.value = cvar::o{};
-                    propsIndex = s.index;
-                }
-
-            }
-        }
-        firstRun = false;
-    }
+        stack[i].clear();   
 }
 
 void openset::query::Interpreter::exec()

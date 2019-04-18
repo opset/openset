@@ -503,6 +503,7 @@ namespace openset
             { "last_event" },
             { "first_event" },
             { "session_count" },
+            { "row_count" },
             { "__internal_init_dict" },
             { "__internal_init_list" },
         }; // Comparatives

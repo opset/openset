@@ -87,6 +87,7 @@ PersonData_s* People::getmakePerson(string userIdString)
 			newUser->flagRecords = 0;
 			newUser->bytes = 0;
 			newUser->comp = 0;
+            newUser->props = nullptr;
 			newUser->setIdStr(userIdString);
 
             if (!isReuse)

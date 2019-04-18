@@ -154,6 +154,8 @@ private:
 
 public:
 
+    const static int64_t None { static_cast<int64_t>(LLONG_MIN) };
+
     using l = std::vector<cvar>;
     using o = std::pair<cvar, cvar>;
     using s = Set;
@@ -356,12 +358,12 @@ public:
     // makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
     void none()
     {
-        *this = static_cast<int64_t>(LLONG_MIN);
+        *this = None;
     }
 
     bool isNone() const
     {
-        return *this == static_cast<int64_t>(LLONG_MIN);
+        return *this == None;
     }
 
     // does this evaulate to false?
@@ -509,12 +511,35 @@ public:
         throw std::runtime_error("not a dictionary/list/set");
     }
 
-    cvar* getMemberPtr(cvar& key) const
+    cvar* getMemberPtr(cvar& key, const bool throwIfMissing = false) const
     {
+        if (key == None) 
+            throw std::runtime_error("invalid key: None");
+
         if (type == valueType::LIST)
-            return (listValue && key.getInt32() < static_cast<int>(listValue->size())) ? &(*listValue)[key.getInt32()] : nullptr;
+        {
+            if (throwIfMissing &&                 
+                (!listValue ||
+                key.getInt64() < 0 &&
+                key.getInt64() >= static_cast<int64_t>(listValue->size()
+               )))
+               throw std::runtime_error("index out of range '" + key.getString() + "' not in dictionary");
+
+            return 
+                listValue &&
+                key.getInt64() >= 0 &&
+                key.getInt64() < static_cast<int64_t>(listValue->size())
+                    ? &(*listValue)[key.getInt64()] 
+                    : nullptr;
+        }
         if (type == valueType::DICT)
-            return dictValue ? &(*dictValue)[key] : nullptr;
+        {
+            if (throwIfMissing && (!dictValue || (*dictValue).find(key) == dictValue->end()))
+                throw std::runtime_error("key '" + key.getString() + "' not in dictionary");
+            return dictValue ? &(*dictValue)[key] : nullptr;  
+        }
+        if (throwIfMissing)
+            throw std::runtime_error("cannot access member in non dictionary or list type");
         return nullptr;
     }
 

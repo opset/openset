@@ -100,6 +100,7 @@ void Grid::reset()
     rows.clear(); // release the rows - likely to not free vector internals
     mem.reset();  // release the memory to the pool - will always leave one page
     rawData = nullptr;
+    propHash = 0;
 }
 
 void Grid::reinit()
@@ -231,7 +232,7 @@ Col_s* Grid::newRow()
 cvar Grid::getProps() const
 {
     if (!rawData->props)
-        return cvar::o{};
+        return cvar(cvar::valueType::DICT);
 
     cvar var;
 

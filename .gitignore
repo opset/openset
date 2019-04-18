@@ -83,6 +83,10 @@ ipch/
 *.vspx
 *.sap
 
+# vs code
+.vscode
+.vs
+
 # JetBrains Rider
 .idea/
 *.sln.iml

@@ -69,11 +69,25 @@ inline Tests test_db()
 		count id
 		count page
 		count referral_source
-		var ref
+
+    if 'test' not in props:
+        props['test'] = dict()
+
+    # set some props
+    props['test']['this'] = 'hello'
+    some_var = props['test']['this']
+
+    props['fav_beers'] = set('cold', 'free')
+    props['opposites'] = {
+        'bows': 'arrows',
+        'up': 'down',
+        'inside': 'outside'
+    }
+
 
 	for row in rows if page is not None:
         for ref in referral_search:
-		    tally(row['id'], row['page'], row['referral_source'], ref)
+		    tally(row['id'], row['page'], row['referral_source'])
 	)pyql");
 
     auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(
@@ -93,6 +107,11 @@ inline Tests test_db()
 		count id
 		count page
 
+    # test props are still set
+    debug(len(props['fav_beers']) == 2)
+    debug('cold' in props['fav_beers'] and 'free' in props['fav_beers'])
+    debug(props['this'] == 'hello')
+  
 	for row in reverse rows if page == 'home page':		
 		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
 			tally('test1', 'home_page', sub_row['page'])
@@ -285,7 +304,7 @@ inline Tests test_db()
                 // compile this
                 p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERT(!p.error.inError());
-                // cout << openset::query::MacroDbg(queryMacros) << endl;
+                //cout << openset::query::MacroDbg(queryMacros) << endl;
 
                 // mount the compiled query to an interpretor
                 auto interpreter = new openset::query::Interpreter(queryMacros);
@@ -315,7 +334,7 @@ inline Tests test_db()
 
                 // run it
                 interpreter->exec();
-                ASSERT(p.error.inError() == false);
+                ASSERT(interpreter->error.inError() == false);
 
                 // just getting a pointer to the results for nicer readability
                 auto result = interpreter->result;
@@ -363,7 +382,9 @@ inline Tests test_db()
                 auto totalsNode = dataNodes[0]->xPath("/c");
                 auto values     = cjson::stringify(totalsNode);
 
-                ASSERT(values == "[1,2,2,6]");
+                ASSERT(values == "[1,2,2]");
+
+                ASSERTDEBUGLOG(interpreter->debugLog);
             }
         },
         {
@@ -569,6 +590,8 @@ inline Tests test_db()
                 totalsNode = dataNodes[1]->xPath("/c");
                 values     = cjson::stringify(totalsNode);
                 ASSERT(values == "[1,1]");
+
+                ASSERTDEBUGLOG(interpreter->debugLog);
             }
         },
         {
@@ -675,6 +698,7 @@ inline Tests test_db()
                 totalsNode = dataNodes[1]->xPath("/c");
                 values     = cjson::stringify(totalsNode);
                 ASSERT(values == "[1,1]");
+
             }
         }
 

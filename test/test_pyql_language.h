@@ -758,23 +758,26 @@ inline Tests test_pyql_language()
             []
             {
                 using namespace openset::query;
-                auto escapeing_and_brackets_in_text = R"raw(this "is ('some text' \") \\ \"\t'" other '\"\'[()]\'")raw";
-                auto parts                          = QueryParser::breakLine(escapeing_and_brackets_in_text);
+                const auto EscapingAndBracketsInText = R"raw(this "is ('some text' \") \\ \"\t'" other '\"\'[()]\'")raw";
+                auto parts = QueryParser::breakLine(EscapingAndBracketsInText);
+
                 ASSERT(parts.size() == 4);
-                auto goodBrackets = "this[that[((thing{that}){more})(here[there]{everywhere})]]";
-                parts             = QueryParser::breakLine(goodBrackets);
+                const auto goodBrackets = "this[that[((thing{that}){more})(here[there]{everywhere})]]";
+                parts = QueryParser::breakLine(goodBrackets);
                 ASSERT(QueryParser::checkBrackets(parts));
-                auto badBrackets = "this[that[((thing{that}{more})(here[there]{everywhere})]]";
-                parts            = QueryParser::breakLine(badBrackets);
+                const auto badBrackets = "this[that[((thing{that}{more})(here[there]{everywhere})]]";
+                parts = QueryParser::breakLine(badBrackets);
                 ASSERT(!QueryParser::checkBrackets(parts)); // returns false
-                auto testLineMiddle = "somevar = this['is']['a'][container['nested']] + blah"s;
-                parts               = QueryParser::breakLine(testLineMiddle);
+                const auto testLineMiddle = "somevar = this['is']['a'][container['nested']] + blah"s;
+                parts = QueryParser::breakLine(testLineMiddle);
                 ASSERT(parts.size() == 17);
+
                 int reinsertIdx;
                 auto capture = QueryParser::extractVariable(parts, 2, reinsertIdx);
                 ASSERT(reinsertIdx == 2);
                 ASSERT(capture.size() == 13);
                 ASSERT(parts.size() == 4); // back track from last ] and capture var and deref
+
                 parts   = QueryParser::breakLine(testLineMiddle);
                 capture = QueryParser::extractVariableReverse(parts, 14, reinsertIdx);
                 ASSERT(reinsertIdx == 2);
@@ -823,15 +826,20 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -840,6 +848,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -858,15 +867,19 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test2_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -875,6 +888,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -891,15 +905,19 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test3_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -908,6 +926,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -927,15 +946,19 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test4_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -944,6 +967,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -965,14 +989,19 @@ inline Tests test_pyql_language()
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test5_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
+
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+                
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -981,6 +1010,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1002,14 +1032,18 @@ inline Tests test_pyql_language()
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test6_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+                
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+                
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1018,6 +1052,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1039,14 +1074,18 @@ inline Tests test_pyql_language()
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test7_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1055,6 +1094,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1076,14 +1116,18 @@ inline Tests test_pyql_language()
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test8_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1092,6 +1136,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1109,14 +1154,18 @@ inline Tests test_pyql_language()
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test9_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1125,6 +1174,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1147,7 +1197,8 @@ inline Tests test_pyql_language()
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test10_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
@@ -1181,12 +1232,16 @@ inline Tests test_pyql_language()
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
+                
                 p.compileQuery(test11_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                // cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+                
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
@@ -1198,6 +1253,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1216,16 +1272,21 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this                
                 p.compileQuery(test12_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); //cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                ASSERT(p.error.inError() == false); 
+                
+                //cout << OpenSet::query::MacroDbg(queryMacros) << endl;
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+                
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1234,6 +1295,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1251,16 +1313,21 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test13_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERT(p.error.inError() == false); //cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+                
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+                
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1269,6 +1336,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1286,17 +1354,22 @@ inline Tests test_pyql_language()
                 auto table    = database->getTable("__test003__");
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
-                openset::query::QueryParser p;                       // compile this
+                openset::query::QueryParser p;                       
+                
+                // compile this
                 p.compileQuery(test14_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
+                
                 //cout << openset::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                // mount the compiled query to an interpreter
+
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1305,6 +1378,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1329,7 +1403,7 @@ inline Tests test_pyql_language()
                 
                 //cout << openset::query::MacroDbg(queryMacros) << endl;
 
-                // mount the compiled query to an interpretor
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
@@ -1370,7 +1444,7 @@ inline Tests test_pyql_language()
                 ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
 
                 //cout << OpenSet::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
@@ -1405,16 +1479,23 @@ inline Tests test_pyql_language()
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
+
                 p.compileQuery(test17_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
+
                 //cout << openset::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                // mount the compiled query to an interpreter
+
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
+
+
+
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+                
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1423,6 +1504,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+                
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
@@ -1437,19 +1519,24 @@ inline Tests test_pyql_language()
             {
                 auto database = openset::globals::database;
                 auto table    = database->getTable("__test003__");
-                auto parts    = table->getPartitionObjects(0, true); // partition zero for test
+                auto parts    = table->getPartitionObjects(0, true); 
+                
+                // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       // compile this
                 p.compileQuery(test18_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERTMSG(p.error.inError() == false, p.error.getErrorJSON());
+
                 // cout << openset::query::MacroDbg(queryMacros) << endl;
-                // mount the compiled query to an interpretor
+                // mount the compiled query to an interpreter
+
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
+
                 // MappedColumns? Why? Because the basic mapTable function (without a
                 // columnList) maps all the columns in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
@@ -1458,6 +1545,7 @@ inline Tests test_pyql_language()
                 person.mapTable(table.get(), 0, mappedColumns);
                 person.mount(personRaw); // this tells the person object where the raw compressed data is
                 person.prepare();        // this actually decompresses
+
                 // this mounts the now decompressed data (in the person overlay)
                 // into the interpreter
                 interpreter->mount(&person); // run it
