@@ -158,7 +158,7 @@ response:
 
 **6**. Let's insert some json data from the `openset_samples/data` folder:
 
-> clone the (opset/openset_samples)[]
+> clone the [openset_samples](https://github.com/opset/openset_samples)
 
 ```bash
 curl \
