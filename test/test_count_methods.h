@@ -243,8 +243,11 @@ inline Tests test_count_methods()
 				//auto text = merger.mergeResultText(resultSets);
 				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
+                // sort descending on second column (1)
+                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
+
 				// NOTE - uncomment if you want to see the results
-				//cout << cjson::stringify(&resultJSON, true) << endl;
+				// cout << cjson::stringify(&resultJSON, true) << endl;
 
 				ASSERTDEBUGLOG(interpreter->debugLog);
 
@@ -340,6 +343,9 @@ inline Tests test_count_methods()
                 //merger.mergeMacroLiterals(queryMacros, resultSets);
 				//auto text = merger.mergeResultText(resultSets);
 				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+
+                // sort descending on third column (2)
+                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 2);
 
 				// NOTE - uncomment if you want to see the results
 				//cout << cjson::stringify(&resultJSON, true) << endl;

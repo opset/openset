@@ -178,8 +178,12 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     {
         csLock lock(openset::globals::mapper->cs);
     	auto routes = openset::globals::mapper->routes;
-        for (const auto &r : routes)
-            routesList->push(r.second.first + ":" + to_string(r.second.second));
+        for (const auto &r : routes) {
+            if (r.first == globals::running->nodeId) // fix for broadcast bug shouting local host and port
+                routesList->push(globals::running->hostExternal + ":" + to_string(globals::running->portExternal));
+            else
+                routesList->push(r.second.first + ":" + to_string(r.second.second));
+        }
     }
 
     message->reply(http::StatusCode::success_ok, response);      

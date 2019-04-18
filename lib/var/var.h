@@ -86,11 +86,16 @@ THE SOFTWARE.
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <unordered_set>
 #include <cstring>
 #include <climits>
+#include <iostream>
 
 class cvar;
+
+const int64_t None = static_cast<int64_t>(LLONG_MIN);
+
 
 namespace std
 {
@@ -104,147 +109,150 @@ namespace std
 using namespace std;
 
 class cvar
-{	
+{
 public:
 
-	enum class valueType : int
-	{
-		INT32,
-		INT64,
-		FLT,
-		DBL,
-		STR,
-		BOOL,
-		LIST,
-		DICT,
-		SET,
-		REF
-	};
+    enum class valueType : int8_t
+    {
+        INT32,
+        INT64,
+        FLT,
+        DBL,
+        STR,
+        BOOL,
+        LIST,
+        DICT,
+        SET,
+        REF
+    };
 
-	using List = std::vector<cvar>;
-	using Dict = std::unordered_map<cvar, cvar>;
-	using Set = std::unordered_set<cvar>;
+    using List = std::vector<cvar>;
+    using Dict = std::unordered_map<cvar, cvar>;
+    using Set = std::unordered_set<cvar>;
+
+    union dataUnion
+    {
+        int64_t asInt64;
+        int32_t asInt32;
+        double asDouble;
+        float asFloat;
+        bool asBool;
+    };
 
 private:
 
-	union dataUnion
-	{
-		int64_t asInt64;
-		int32_t asInt32;
-		double asDouble;
-		float asFloat;
-		bool asBool;
-	};
+    friend class varBlob;
 
-	valueType type;
-	dataUnion value = {0};
-	dataUnion lastValue = {0}; // used as temporary buffer during conversion so we don't overwrite originals
+    valueType type;
+    dataUnion value = { 0 };
+    dataUnion lastValue = { 0 }; // used as temporary buffer during conversion so we don't overwrite originals
 
-	std::string valueString;
+    std::string valueString;
 
-	mutable List* listValue = nullptr;
-	mutable Dict* dictValue = nullptr;
-	mutable Set* setValue = nullptr;
+    mutable List* listValue = nullptr;
+    mutable Dict* dictValue = nullptr;
+    mutable Set* setValue = nullptr;
 
-	cvar* reference = nullptr;
+    cvar* reference = nullptr;
 
 public:
 
-	using l = std::vector<cvar>;
-	using o = std::pair<cvar, cvar>;
+    using l = std::vector<cvar>;
+    using o = std::pair<cvar, cvar>;
+    using s = Set;
 
-	cvar() :
-		type(valueType::INT64) // default type 
-	{
-		value.asInt64 = 0; // sets all values to 0
-	}
+    cvar() :
+        type(valueType::INT64) // default type 
+    {
+        value.asInt64 = 0; // sets all values to 0
+    }
 
-	cvar(cvar&& source) noexcept
-	{
-		this->type = source.type;
-		this->value = source.value;
-		this->valueString = std::move(source.valueString);
+    cvar(cvar&& source) noexcept
+    {
+        this->type = source.type;
+        this->value = source.value;
+        this->valueString = std::move(source.valueString);
 
-		if (source.dictValue)
-		{
-			this->dictValue = source.dictValue;
-			source.dictValue = nullptr;
-		}
+        if (source.dictValue)
+        {
+            this->dictValue = source.dictValue;
+            source.dictValue = nullptr;
+        }
 
-		if (source.setValue)
-		{
-			this->setValue = source.setValue;
-			source.setValue = nullptr;
-		}
+        if (source.setValue)
+        {
+            this->setValue = source.setValue;
+            source.setValue = nullptr;
+        }
 
-		if (source.listValue)
-		{
-			this->listValue = source.listValue;
-			source.listValue = nullptr;
-		}
+        if (source.listValue)
+        {
+            this->listValue = source.listValue;
+            source.listValue = nullptr;
+        }
 
-		source.type = valueType::INT64;
-		source.value.asInt64 = 0;
-	}
+        source.type = valueType::INT64;
+        source.value.asInt64 = 0;
+    }
 
-	cvar(const cvar& source)
-	{
-		this->type = source.type;
-		this->value = source.value;
-		this->valueString = source.valueString;
+    cvar(const cvar& source)
+    {
+        this->type = source.type;
+        this->value = source.value;
+        this->valueString = source.valueString;
 
-		if (source.dictValue && this->type == valueType::DICT)
-		{
-			this->dict();
-			*dictValue = *source.dictValue;
-		}
+        if (source.dictValue && this->type == valueType::DICT)
+        {
+            this->dict();
+            *dictValue = *source.dictValue;
+        }
 
-		if (source.setValue && this->type == valueType::SET)
-		{
-			this->set();
-			*setValue = *source.setValue;
-		}
+        if (source.setValue && this->type == valueType::SET)
+        {
+            this->set();
+            *setValue = *source.setValue;
+        }
 
-		if (source.listValue && this->type == valueType::LIST)
-		{
-			this->list();
-			*listValue = *source.listValue;
-		}
-	}
+        if (source.listValue && this->type == valueType::LIST)
+        {
+            this->list();
+            *listValue = *source.listValue;
+        }
+    }
 
-	// assignment constructors 
-	// so you can go:
-	// cvar mycvar = 5;
+    // assignment constructors 
+    // so you can go:
+    // cvar mycvar = 5;
 
-	cvar(const valueType type):
-		type(type)
-	{
-		switch (type)
-		{
-			case valueType::LIST: 
-				list();
-			break;
-			case valueType::DICT: 
-				dict();
-			break;
-			case valueType::SET: 
-				set();
-			break;
-			default: ;
-		}
-	}
+    cvar(const valueType type) :
+        type(type)
+    {
+        switch (type)
+        {
+        case valueType::LIST:
+            list();
+            break;
+        case valueType::DICT:
+            dict();
+            break;
+        case valueType::SET:
+            set();
+            break;
+        default:;
+        }
+    }
 
-	cvar(const int val) :
-		type(valueType::INT32)
-	{
-		value.asInt32 = val;
-	}
+    cvar(const int val) :
+        type(valueType::INT32)
+    {
+        value.asInt32 = val;
+    }
 
-	cvar(const int64_t val) :
-		type(valueType::INT64)
-	{
-		value.asInt64 = val;
-	}
+    cvar(const int64_t val) :
+        type(valueType::INT64)
+    {
+        value.asInt64 = val;
+    }
 
 #ifndef _MSC_VER
     cvar(const long long int val) :
@@ -254,73 +262,80 @@ public:
     }
 #endif
 
-	cvar(const float val) :
-		type(valueType::FLT)
-	{
-		value.asFloat = val;
-	}
+    cvar(const float val) :
+        type(valueType::FLT)
+    {
+        value.asFloat = val;
+    }
 
-	cvar(const double val) :
-		type(valueType::DBL)
-	{
-		value.asDouble = val;
-	}
+    cvar(const double val) :
+        type(valueType::DBL)
+    {
+        value.asDouble = val;
+    }
 
-	cvar(const char* val) :
-		type(valueType::STR)
-	{
-		valueString.assign(val);
-	}
+    cvar(const char* val) :
+        type(valueType::STR)
+    {
+        valueString.assign(val);
+    }
 
-	cvar(const std::string& val) :
-		type(valueType::STR)
-	{
-		value.asInt64 = -1;
-		valueString = val;
-	}
+    cvar(const std::string& val) :
+        type(valueType::STR)
+    {
+        value.asInt64 = -1;
+        valueString = val;
+    }
 
-	cvar(const bool val) :
-		type(valueType::BOOL)
-	{
-		value.asBool = val;
-	}
-			
-	cvar(const std::vector<cvar> &val) :
-		type(valueType::LIST)
-	{
-		listValue = new List();
-		*listValue = val;
-	}
+    cvar(const bool val) :
+        type(valueType::BOOL)
+    {
+        value.asBool = val;
+    }
 
-	cvar(cvar* reference) :
-		type(valueType::REF),
-		reference(reference)
-	{
-	}
-		
-	template<typename K, typename V>
-	cvar(const std::pair<K, V>& source)
-	{
-		dict();
-		(*dictValue)[source.first] = source.second;
-	}
+    cvar(const std::vector<cvar> &val) :
+        type(valueType::LIST)
+    {
+        listValue = new List();
+        *listValue = val;
+    }
 
-	//cvar(const std::initializer_list<cvar>& source);
+    cvar(const std::unordered_set<cvar> &val) :
+        type(valueType::SET)
+    {
+        setValue = new Set();
+        *setValue = val;
+    }
 
-	cvar(const std::initializer_list<std::pair<cvar,cvar>> &source) : cvar()
-	{
-		dict();
-		for (const auto &item : source)
-			(*dictValue)[cvar{ item.first }] = cvar{ item.second };
-	}
+    cvar(cvar* reference) :
+        type(valueType::REF),
+        reference(reference)
+    {
+    }
 
-	~cvar()
-	{
+    template<typename K, typename V>
+    cvar(const std::pair<K, V>& source)
+    {
+        dict();
+        (*dictValue)[source.first] = source.second;
+    }
+
+    //cvar(const std::initializer_list<cvar>& source);
+
+    cvar(const std::initializer_list<std::pair<cvar, cvar>> &source) : cvar()
+    {
+        dict();
+        for (const auto &item : source)
+            (*dictValue)[cvar{ item.first }] = cvar{ item.second };
+    }
+
+    ~cvar()
+    {
         clear();
-	}		
+    }
 
     void clear()
-	{
+    {
         if (listValue)
         {
             delete listValue;
@@ -339,177 +354,205 @@ public:
         type = valueType::INT64;
         value.asInt64 = 0;
         reference = nullptr;
-	}
+    }
 
-	// makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
-	void none()
-	{
-		*this = static_cast<int64_t>(LLONG_MIN);
-	}
+    // makes a variable have a None value (We use LLONG_MIN, because it's improbable to occur in a script)
+    void none()
+    {
+        *this = None;
+    }
 
-	bool isNone() const
-	{
-		return *this == static_cast<int64_t>(LLONG_MIN);
-	}
+    bool isNone() const
+    {
+        return *this == None;
+    }
 
-	// does this evaulate to false?
-	bool isEvalFalse() const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return this->getInt64() == 0;
-		case valueType::BOOL:
-			return this->getBool() == false;
-		case valueType::FLT:
-		case valueType::DBL:
-			return this->getDouble() == 0;
-		case valueType::STR:
-			return this->valueString.length() == 0;
-		case valueType::LIST:
-			return this->listValue->size() == 0;
-		case valueType::DICT:
-			return this->dictValue->size() == 0;
-		case valueType::SET:
-			return this->setValue->size() == 0;
-		default:
-			return true;
-		}
-	}
+    // does this evaulate to false?
+    bool isEvalFalse() const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return this->getInt64() == 0;
+        case valueType::BOOL:
+            return this->getBool() == false;
+        case valueType::FLT:
+        case valueType::DBL:
+            return this->getDouble() == 0;
+        case valueType::STR:
+            return this->valueString.length() == 0;
+        case valueType::LIST:
+            return this->listValue->size() == 0;
+        case valueType::DICT:
+            return this->dictValue->size() == 0;
+        case valueType::SET:
+            return this->setValue->size() == 0;
+        default:
+            return true;
+        }
+    }
 
-	bool isEvalTrue() const
-	{
-		return !isEvalFalse();
-	}
+    bool isEvalTrue() const
+    {
+        return !isEvalFalse();
+    }
 
-	// turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
-	void dict()
-	{
-		if (listValue) // do any needed cleanup
-		{
-			delete listValue;
-			listValue = nullptr;
-		}
-		if (setValue)
-		{
-			delete setValue;
-			setValue = nullptr;
-		}
+    // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
+    void dict()
+    {
+        if (listValue) // do any needed cleanup
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
+        if (setValue)
+        {
+            delete setValue;
+            setValue = nullptr;
+        }
 
-		type = valueType::DICT;
-		if (!dictValue)
-			dictValue = new Dict();
-		else
-			dictValue->clear();
-	}
+        type = valueType::DICT;
+        if (!dictValue)
+            dictValue = new Dict();
+        else
+            dictValue->clear();
+    }
 
-	// turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
-	void set()
-	{
-		if (listValue) // do any needed cleanup
-		{
-			delete listValue;
-			listValue = nullptr;
-		}
-		if (dictValue) // do any needed cleanup
-		{
-			delete dictValue;
-			dictValue = nullptr;
-		}
+    // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
+    void set()
+    {
+        if (listValue) // do any needed cleanup
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
+        if (dictValue) // do any needed cleanup
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
 
-		type = valueType::SET;
-		if (!setValue)
-			setValue = new Set();
-		else
-			setValue->clear();
-	}
+        type = valueType::SET;
+        if (!setValue)
+            setValue = new Set();
+        else
+            setValue->clear();
+    }
 
-	// turns cvar into empty List like python/js: some_list = [] or some_list = list()
-	void list()
-	{
-		if (dictValue) // do any needed cleanup
-		{
-			delete dictValue;
-			dictValue = nullptr;
-		}
-		if (setValue)
-		{
-			delete setValue;
-			setValue = nullptr;
-		}
+    // turns cvar into empty List like python/js: some_list = [] or some_list = list()
+    void list()
+    {
+        if (dictValue) // do any needed cleanup
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
+        if (setValue)
+        {
+            delete setValue;
+            setValue = nullptr;
+        }
 
-		type = valueType::LIST;
-		if (!listValue)
-			listValue = new List();
-		else
-			listValue->clear();
-	}
+        type = valueType::LIST;
+        if (!listValue)
+            listValue = new List();
+        else
+            listValue->clear();
+    }
 
-	Dict* getDict() const
-	{
-		if (type != valueType::DICT)
-			throw std::runtime_error("not a dictionary");
+    Dict* getDict() const
+    {
+        if (type != valueType::DICT)
+            throw std::runtime_error("not a dictionary");
 
-		if (!dictValue)
-			dictValue = new Dict();
+        if (!dictValue)
+            dictValue = new Dict();
 
-		return dictValue;
-	}
+        return dictValue;
+    }
 
-	List* getList() const
-	{
-		if (type != valueType::LIST)
-			throw std::runtime_error("not a list");
+    List* getList() const
+    {
+        if (type != valueType::LIST)
+            throw std::runtime_error("not a list");
 
-		if (!listValue)
-			listValue = new List();
+        if (!listValue)
+            listValue = new List();
 
-		return listValue;
-	}
+        return listValue;
+    }
 
-	Set* getSet() const
-	{
-		if (type != valueType::SET)
-			throw std::runtime_error("not a set");
+    Set* getSet() const
+    {
+        if (type != valueType::SET)
+            throw std::runtime_error("not a set");
 
-		if (!setValue)
-			setValue = new Set();
+        if (!setValue)
+            setValue = new Set();
 
-		return setValue;
-	}
+        return setValue;
+    }
 
-	bool contains(const cvar& key) const
-	{
-		if (type == valueType::LIST)
-			//return (listValue && key.getInt32() < listValue->size()) ? true : false;
-		{
-			for (auto&& item : *listValue)
-				if (item == key)
-					return true;
-			return false;
-		}
-		if (type == valueType::DICT)
-			return dictValue ? dictValue->count(key) : false;
-		if (type == valueType::SET)
-			return setValue ? setValue->count(key) : false;
+    bool contains(const cvar& key) const
+    {
+        if (type == valueType::LIST)
+            //return (listValue && key.getInt32() < listValue->size()) ? true : false;
+        {
+            for (auto&& item : *listValue)
+                if (item == key)
+                    return true;
+            return false;
+        }
+        if (type == valueType::DICT)
+            return dictValue ? dictValue->count(key) : false;
+        if (type == valueType::SET)
+            return setValue ? setValue->count(key) : false;
 
-		throw std::runtime_error("not a dictionary/list/set");
-	}
+        throw std::runtime_error("not a dictionary/list/set");
+    }
 
-	cvar* getMemberPtr(cvar& key) const
-	{
-		if (type == valueType::LIST)
-			return (listValue && key.getInt32() < static_cast<int>(listValue->size())) ? &(*listValue)[key.getInt32()] : nullptr;
-		if (type == valueType::DICT)
-			return dictValue ? &(*dictValue)[key] : nullptr;
-		return nullptr;
-	}
+    cvar* getMemberPtr(cvar& key, const bool throwIfMissing = false) const
+    {
+        if (key == None) 
+            throw std::runtime_error("invalid key: None");
 
-	valueType typeof() const
-	{
-		return type;
-	}
+        if (type == valueType::LIST)
+        {
+            if (throwIfMissing &&                 
+                (!listValue ||
+                key.getInt64() < 0 &&
+                key.getInt64() >= static_cast<int64_t>(listValue->size()
+               )))
+               throw std::runtime_error("index out of range '" + key.getString() + "' not in dictionary");
+
+            return 
+                listValue &&
+                key.getInt64() >= 0 &&
+                key.getInt64() < static_cast<int64_t>(listValue->size())
+                    ? &(*listValue)[key.getInt64()] 
+                    : nullptr;
+        }
+        if (type == valueType::DICT)
+        {
+            if (throwIfMissing && (!dictValue || (*dictValue).find(key) == dictValue->end()))
+                throw std::runtime_error("key '" + key.getString() + "' not in dictionary");
+            return dictValue ? &(*dictValue)[key] : nullptr;  
+        }
+        if (throwIfMissing)
+            throw std::runtime_error("cannot access member in non dictionary or list type");
+        return nullptr;
+    }
+
+    valueType typeOf() const
+    {
+        return type;
+    }
+
+    dataUnion valueOf() const
+    {
+        return value;
+    }
 
 private:
 
@@ -806,7 +849,10 @@ public:
 	}
 
 	template<typename K, typename V>
-	cvar& operator=(const std::unordered_map<K, V>& source);
+    cvar& operator=(const std::map<K, V>& source);
+
+    template<typename K, typename V>
+    cvar& operator=(const std::unordered_map<K, V>& source);
 
 	template<typename K, typename V>
 	cvar& operator=(const std::pair<K, V>& source);
@@ -1243,16 +1289,16 @@ private:
 		if (type != valueType::SET)
 			throw std::runtime_error("set subtraction can only be called on sets");
 
-		if (other.typeof() == valueType::DICT)
+		if (other.typeOf() == valueType::DICT)
 			throw std::runtime_error("dictionaries cannot be subtracted from sets");
 
-		if (other.typeof() == valueType::LIST)
+		if (other.typeOf() == valueType::LIST)
 		{
 			for (auto &i : *(other.getList()))
 				if (setValue->count(i))
 					setValue->erase(i);				
 		}
-		else if (other.typeof() == valueType::SET)
+		else if (other.typeOf() == valueType::SET)
 		{
 			for (auto &i : *(other.getSet()))
 				if (setValue->count(i))
@@ -1270,19 +1316,19 @@ private:
 		if (type != valueType::DICT)
 			throw std::runtime_error("dict subtraction can only be called on dicts");
 
-		if (other.typeof() == valueType::DICT)
+		if (other.typeOf() == valueType::DICT)
 		{
 			for (auto &i : *(other.getDict()))
 				if (dictValue->count(i))
 					dictValue->erase(i);
 		}
-		if (other.typeof() == valueType::LIST)
+		if (other.typeOf() == valueType::LIST)
 		{
 			for (auto &i : *(other.getList()))
 				if (dictValue->count(i))
 					dictValue->erase(i);
 		}
-		else if (other.typeof() == valueType::SET)
+		else if (other.typeOf() == valueType::SET)
 		{
 			for (auto &i : *(other.getSet()))
 				if (dictValue->count(i))
@@ -1308,7 +1354,7 @@ private:
 		std::vector<cvar> result;
 		std::unordered_set<cvar> otherItems;
 
-		if (other.typeof() == valueType::DICT)
+		if (other.typeOf() == valueType::DICT)
 		{
 			for (auto &i : *(other.getDict()))
 				otherItems.insert(i.first);
@@ -1317,7 +1363,7 @@ private:
 					result.push_back(i);
 			*listValue = result;
 		}
-		if (other.typeof() == valueType::LIST)
+		if (other.typeOf() == valueType::LIST)
 		{
 			for (auto &i : *(other.getList()))
 				otherItems.insert(i);
@@ -1326,7 +1372,7 @@ private:
 					result.push_back(i);
 			*listValue = result;
 		}
-		else if (other.typeof() == valueType::SET)
+		else if (other.typeOf() == valueType::SET)
 		{
 			for (auto &i : *(other.getSet()))
 				otherItems.insert(i);
@@ -2265,6 +2311,27 @@ public:
 };
 
 template <typename K, typename V>
+cvar& cvar::operator=(const std::map<K, V>& source)
+{
+	if (setValue)
+	{
+		delete setValue;
+		setValue = nullptr;
+	}
+
+	if (listValue)
+	{
+		delete listValue;
+		listValue = nullptr;
+	}
+
+	dict();
+	for (const auto& item : source)
+		(*dictValue)[cvar{ item.first }] = cvar{ item.second };
+	return *this;
+}
+
+template <typename K, typename V>
 cvar& cvar::operator=(const std::unordered_map<K, V>& source)
 {
 	if (setValue)
@@ -2280,7 +2347,7 @@ cvar& cvar::operator=(const std::unordered_map<K, V>& source)
 	}
 
 	dict();
-	for (const std::pair<const K,V>& item : source)
+	for (const auto& item : source)
 		(*dictValue)[cvar{ item.first }] = cvar{ item.second };
 	return *this;
 }

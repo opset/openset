@@ -90,6 +90,7 @@ set(SOURCE_FILES
         lib/time/epoch.h
         lib/var/var.cpp
         lib/var/var.h
+		lib/var/varblob.h
 		src/ver.h
         src/asyncloop.cpp
         src/asyncloop.h

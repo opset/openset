@@ -73,7 +73,7 @@ public:
 	int8_t     used;
 
 
-#pragma pack(pop,1)
+#pragma pack(pop)
 
 	ssDictPage(sspool* mem) :
 		used(0),

@@ -5,7 +5,7 @@
 #include "sba/sba.h"
 #include "threads/locks.h"
 
-string openset::web::Rest::makeParams(const QueryParams& params) 
+string openset::web::Rest::makeParams(const QueryParams& params)
 {
     string result;
 
@@ -46,10 +46,10 @@ void openset::web::Rest::request(const string& method, const string& path, const
     const auto url = path + makeParams(params);
 
     client.request(
-        method, 
-        url, 
-        buffer, 
-        {},
+        method,
+        url,
+        buffer,
+        SimpleWeb::CaseInsensitiveMultimap{{"Content-Type", "application/json"}},
         [cb](shared_ptr<HttpClient::Response> response, const SimpleWeb::error_code& ec)
         {
             const auto length = response->content.size();
@@ -57,8 +57,8 @@ void openset::web::Rest::request(const string& method, const string& path, const
             response->content.read(data, length);
 
             const auto status = response->status_code.length() && response->status_code[0] == '2'
-                ? http::StatusCode::success_ok
-                : http::StatusCode::client_error_bad_request;
+                                    ? http::StatusCode::success_ok
+                                    : http::StatusCode::client_error_bad_request;
             const auto isError = (status != http::StatusCode::success_ok || ec);
             cb(status, isError, cjson(data, length));
 
@@ -66,9 +66,7 @@ void openset::web::Rest::request(const string& method, const string& path, const
         }
     );
 
-    //client.io_service->reset();   
-    if (client.io_service->stopped())
-        client.io_service->restart();
+    client.io_service->reset();
     client.io_service->run();
 }
 
@@ -79,10 +77,10 @@ void openset::web::Rest::request(const string& method, const string& path, const
     const auto url = path + makeParams(params);
 
     client.request(
-        method, 
-        url, 
-        buffer, 
-        {},
+        method,
+        url,
+        buffer,
+        SimpleWeb::CaseInsensitiveMultimap{{"Content-Type", "application/json"}},
         [cb](shared_ptr<HttpClient::Response> response, const SimpleWeb::error_code& ec)
         {
             const auto length = response->content.size();
@@ -90,16 +88,14 @@ void openset::web::Rest::request(const string& method, const string& path, const
             response->content.read(data, length);
 
             const auto status = response->status_code.length() && response->status_code[0] == '2'
-                ? http::StatusCode::success_ok
-                : http::StatusCode::client_error_bad_request;
+                                    ? http::StatusCode::success_ok
+                                    : http::StatusCode::client_error_bad_request;
             const auto isError = (status != http::StatusCode::success_ok || ec);
 
             cb(status, isError, data, length);
         }
     );
 
-    //client.io_service->reset();
-    if (client.io_service->stopped())
-        client.io_service->restart();
+    client.io_service->reset();
     client.io_service->run();
 }

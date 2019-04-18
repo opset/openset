@@ -7,6 +7,7 @@
 #include "logger.h"
 #include "../test/unittests.h"
 #include <string>
+#include "var/var.h"
 
 #ifdef _MSC_VER
 #include <WinSock2.h>
@@ -72,7 +73,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
 int main(const int argc, char* argv[])
 {
-	openset::config::CommandlineArgs args;
+    openset::config::CommandlineArgs args;
 
 	auto help = false;
 	auto test = false;
