@@ -496,6 +496,9 @@ public:
 
     bool contains(const cvar& key) const
     {
+        if (key.type == valueType::LIST || key.type == valueType::DICT || key.type == valueType::SET)
+            throw std::runtime_error("cannot test for list/dict/set in list/dict/set");
+
         if (type == valueType::LIST)
             //return (listValue && key.getInt32() < listValue->size()) ? true : false;
         {

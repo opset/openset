@@ -304,7 +304,7 @@ inline Tests test_db()
                 // compile this
                 p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
                 ASSERT(!p.error.inError());
-                //cout << openset::query::MacroDbg(queryMacros) << endl;
+                // cout << openset::query::MacroDbg(queryMacros) << endl;
 
                 // mount the compiled query to an interpretor
                 auto interpreter = new openset::query::Interpreter(queryMacros);
@@ -560,7 +560,7 @@ inline Tests test_db()
                 */
 
                 // NOTE - uncomment if you want to see the results
-                //cout << cjson::stringify(&resultJSON, true) << endl;
+                // cout << cjson::stringify(&resultJSON, true) << endl;
 
                 auto underScoreNode = resultJSON.xPath("/_");
                 ASSERT(underScoreNode != nullptr);

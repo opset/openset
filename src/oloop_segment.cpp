@@ -201,7 +201,7 @@ bool OpenLoopSegment::nextMacro()
 		}
 
 		// we need a new interpreter object
-		if (interpreter)
+		if (interpreter) 
 			delete interpreter;
 
 		interpreter = new Interpreter(macros, openset::query::InterpretMode_e::count);
@@ -345,6 +345,8 @@ bool OpenLoopSegment::run()
 
 				storeSegments();
 
+                result->setAccTypesFromMacros(macros);
+
 				shuttle->reply(
 					0,
 					CellQueryResult_s{
@@ -353,8 +355,6 @@ bool OpenLoopSegment::run()
 						error
 					}
 				);
-
-                result->setAccTypesFromMacros(macros);
 
 				suicide();
 				return false;
@@ -372,7 +372,52 @@ bool OpenLoopSegment::run()
 			person.mount(personData);
 			person.prepare();
 			interpreter->mount(&person);
-			interpreter->exec();
+			interpreter->exec();            	    
+
+		    if (interpreter->error.inError())
+            {
+                openset::errors::Error error;
+			    error = interpreter->error;
+    			delete interpreter;
+                interpreter = nullptr;
+
+		        storeSegments();
+
+                result->setAccTypesFromMacros(macros);
+
+		        shuttle->reply(
+			        0,
+			        CellQueryResult_s{
+			            instance,
+                        {},
+			            error
+		            }
+		        );
+                this->suicide();
+                return false;
+            }
+
+            // get return values from script
+            auto returns = interpreter->getLastReturn();
+
+            // any returns, are they true?
+            const auto inSegment = (returns.size() && returns[0].getBool() == true);
+
+            // if we have bits (we should always have bits)
+            if (interpreter->bits)
+            {                
+                if (inSegment)
+                    interpreter->bits->bitSet(currentLinId); // add to segment
+                else
+                    interpreter->bits->bitClear(currentLinId); // remove from segment
+            }
+
+            //loopState = LoopState_e::in_exit;
+            //*stackPtr = 0;
+            //++stackPtr;
+            //return true;
+
+                
 		}
 	}
 }

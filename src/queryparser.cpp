@@ -91,9 +91,11 @@ QueryParser::LineParts QueryParser::breakLine(const string& text)
             partList.push_back(part);
         part.clear();
     };
+
     string part;
     auto c         = text.c_str(); // cursor
     const auto end = c + text.length();
+
     while (c < end)
     {
         if (c[0] == '#')
@@ -215,7 +217,9 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
         case '\t':
             current.text += "    "; // convert tab to 4 spaces
             break;
-        case 0: case 0x1a: case '\n':
+        case 0: 
+        case 0x1a: 
+        case '\n':
         {
             ++lineCount;
             auto tabDepth = 0; // count our spaces
@@ -223,6 +227,8 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
             {
                 if (s == ' ')
                     ++tabDepth;
+                else if (s == '\t')
+                    tabDepth += 4;
                 else
                     break;
             }
@@ -1893,7 +1899,9 @@ void QueryParser::extractParam(LineParts& conditions, const int startIdx, int& e
 
 void QueryParser::lineTranslation(FirstPass& lines)
 {
-    auto lineIndex = 0; //for (auto& line : lines)
+
+    // FIRST PASS
+    auto lineIndex = 0; 
     while (true)
     {
         if (lineIndex == static_cast<int>(lines.size()))
@@ -1960,8 +1968,17 @@ void QueryParser::lineTranslation(FirstPass& lines)
                  *       
                  *        
                  */
-                if (static_cast<int>(conditions.size()) > index + 1 && conditions[index] == "[" && (!isRowIter || (
+                /*
+                if (static_cast<int>(conditions.size()) > index + 1 && 
+                    conditions[index] == "[" && 
+                    (!isRowIter || (
                     isRowIter && index > 4)) && index > 1 && (conditions[index - 1] == "," || conditions[index - 1] ==
+                    "=" || conditions[index - 1] == "+" || conditions[index - 1] == "in" || conditions[index - 1] ==
+                    "notin" || conditions[index - 1] == "-" || conditions[index - 1] == "(" || conditions[index - 1] ==
+                    "__MARKER__"))                
+                 */
+                if (static_cast<int>(conditions.size()) > index + 1 && 
+                    conditions[index] == "[" && index > 1 && (conditions[index - 1] == "," || conditions[index - 1] ==
                     "=" || conditions[index - 1] == "+" || conditions[index - 1] == "in" || conditions[index - 1] ==
                     "notin" || conditions[index - 1] == "-" || conditions[index - 1] == "(" || conditions[index - 1] ==
                     "__MARKER__"))
@@ -2488,144 +2505,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     changes = true;
                     break;
                 }
-                if (static_cast<int>(conditions.size()) > index + 2 && (conditions[index + 1] == "in" || conditions[
-                        index + 1] == "notin") && (conditions[index + 2]) != "[" &&
-                    // this forces make_dict to be parsed first
-                    conditions[0] != "continue" && // regular continue will never have an in on the same line
-                    !isRowIter && conditions[0] != "for" && conditions[0].find("__row") == std::string::npos)
-                    //((!isRowIter && conditions[0] != "for") || 
-                    //(conditions[1] != "from" && isRowIter && index > 4) || 
-                    //(conditions[1] == "from" && isRowIter && index > 6))
-                    //(conditions[0] != "continue" && conditions[1] != "for") &&
-                    //(conditions[0] != "for"))
-                {
-                    // for row in rows
-                    // continue for row in rows
-                    // continue for 1 row in rows
-                    // continue from blah for 1 row in rows
-                    // there a for kinds of "in" we care about
-                    // 1. for x in y
-                    // 2. x in [y0,y1,y2,y3] # when used in where clause
-                    // 3. x in y # as in:  if x in y
-                    // 4. row in rows
-                    // This covers scenario #3
-                    const auto in = conditions[index + 1];
-                    int reinsertIdx;
-                    auto left = extractVariableReverse(conditions, index, reinsertIdx);
-                    // conditions at this point no longer contains
-                    // the left side variable
-                    index = reinsertIdx + 1; // move to after the word 'in'
-                    LineParts right;
-                    // is this a variable with an accessor, or is it a function (with or without params)
-                    if (conditions.size() - 1 > index + 1 && conditions[index + 1] == "[") // variable
-                    {
-                        int reinsert = 0;
-                        right        = extractVariable(conditions, index, reinsert); // strip out old in clause
-                        conditions.erase(conditions.begin() + reinsertIdx, conditions.begin() + index);
-                    }
-                    else // function or normal variable without accessors 
-                    {
-                        int funcEndIdx;
-                        extractFunction(conditions, index, funcEndIdx);
-                        if (funcEndIdx == -1)
-                            funcEndIdx = conditions.size() - 1;
-                        right.insert(
-                            right.begin(),
-                            conditions.begin() + index,
-                            conditions.begin() + (funcEndIdx + 1)); // strip out old in clause
-                        conditions.erase(conditions.begin() + reinsertIdx, conditions.begin() + (funcEndIdx + 1));
-                    } /* convert to: 
-                     *    __contains(key,container)
-                     *    
-                     *  TODO - optimize for second param being reference type
-                     *  
-                     */
-                    LineParts replacement {
-                        in == "in"
-                            ? "__contains"
-                            : "__notcontains",
-                        "("
-                    };
-                    replacement.insert(replacement.end(), left.begin(), left.end());
-                    replacement.push_back(",");
-                    replacement.insert(replacement.end(), right.begin(), right.end());
-                    replacement.push_back(")");
-                    conditions.insert(
-                        conditions.begin() + reinsertIdx,
-                        replacement.begin(),
-                        replacement.end()); // start over
-                    changes = true;         // loop again
-                    break;
-                }
-                if (static_cast<int>(conditions.size()) > index + 2 && conditions[index + 1] == "in" &&
-                    //conditions[0] == "match" &&
-                    (isRowIter && index > 4) && conditions[index + 2] == "[")
-                {
-                    const auto var = conditions[index];
-                    if (static_cast<int>(conditions.size()) < index + 4)
-                        throw ParseFail_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_in_clause,
-                            "in-clause error",
-                            line.debug
-                        }; // there a for kinds of "in" we care about
-                    // 1. for x in y
-                    // 2. x in [y0,y1,y2,y3] # when used in where clause
-                    // 3. x in y # as in:  if x in y
-                    // 4. row in rows
-                    // this covers scenario #2
-                    if (conditions[index + 2] != "[")
-                        throw ParseFail_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_in_clause,
-                            "expecting opening brace",
-                            line.debug
-                        };
-                    const auto startIdx = index;
-                    index += 3; // move past first [
-                    auto closingIdx = index;
-                    LineParts inParts;
-                    auto brackets = 1;
-                    for (auto idx = index; idx < static_cast<int>(conditions.size()); idx++)
-                    {
-                        if (conditions[idx] == "[")
-                            ++brackets;
-                        if (conditions[idx] == ",")
-                            continue;
-                        if (conditions[idx] == "]")
-                        {
-                            --brackets;
-                            if (!brackets) // closing bracket
-                            {
-                                closingIdx = idx + 1;
-                                break;
-                            }
-                        }
-                        inParts.push_back(conditions[idx]);
-                    }
-                    if (!inParts.size())
-                        throw ParseFail_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_missing_subscript,
-                            "expecting in-clause values",
-                            line.debug
-                        };
-                    LineParts orParts;
-                    orParts.push_back("(");
-                    for (auto& in : inParts)
-                    {
-                        if (orParts.size() > 1)
-                            orParts.push_back("or");
-                        orParts.push_back(var);
-                        orParts.push_back("==");
-                        orParts.push_back(in);
-                    }
-                    orParts.push_back(")"); //parseConditions(orParts, opList, 0, debug, stopOnConditions, stackOp);
-                    conditions.erase(conditions.begin() + startIdx, conditions.begin() + closingIdx);
-                    conditions.insert(conditions.begin() + startIdx, orParts.begin(), orParts.end());
-                    changes = true; // loop again
-                    break;
-                }
+
                 if (RedundantSugar.count(conditions[index]))
                 {
                     conditions.erase(conditions.begin() + index);
@@ -2943,9 +2823,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
                 ++index;
             }
-        }
-        while (changes);
-
+        } while (changes);
 
         if (changeCounter)
         {
@@ -2955,7 +2833,179 @@ void QueryParser::lineTranslation(FirstPass& lines)
             lines[lineIndex].debug.translation.assign(translation);
         }
         ++lineIndex;
+
     }
+
+    // SECOND PASS
+    lineIndex = 0; //for (auto& line : lines)
+    while (true)
+    {
+        if (lineIndex == static_cast<int>(lines.size()))
+            break;
+        auto changes       = false;
+        auto changeCounter = 0; // loop until there are no changes on this line.
+        // this allows for changes that are nested.
+        do // I never DO these
+        {
+            auto& line       = lines.at(lineIndex);
+            auto& conditions = line.parts;
+            lastDebug        = line.debug;
+            auto index       = 0;
+            if (changes)
+                ++changeCounter;
+            changes = false;
+            while (index < static_cast<int>(conditions.size()))
+            {
+                if (static_cast<int>(conditions.size()) > index + 2 && (conditions[index + 1] == "in" || conditions[
+                        index + 1] == "notin") && (conditions[index + 2]) != "[" &&
+                    //((!isRowIter && conditions[0] != "for") || 
+                    //(conditions[1] != "from" && isRowIter && index > 4) || 
+                    //(conditions[1] == "from" && isRowIter && index > 6))
+                    //(conditions[0] != "continue" && conditions[1] != "for") &&
+                    conditions[0] != "for")
+                {
+                    // for row in rows
+                    // continue for row in rows
+                    // continue for 1 row in rows
+                    // continue from blah for 1 row in rows
+                    // there a for kinds of "in" we care about
+                    // 1. for x in y
+                    // 2. x in [y0,y1,y2,y3] # when used in where clause
+                    // 3. x in y # as in:  if x in y
+                    // 4. row in rows
+                    // This covers scenario #3
+                    const auto in = conditions[index + 1];
+                    int reinsertIdx;
+                    auto left = extractVariableReverse(conditions, index, reinsertIdx);
+                    // conditions at this point no longer contains
+                    // the left side variable
+                    index = reinsertIdx + 1; // move to after the word 'in'
+                    LineParts right;
+                    // is this a variable with an accessor, or is it a function (with or without params)
+                    if (conditions.size() - 1 > index + 1 && conditions[index + 1] == "[") // variable
+                    {
+                        int reinsert = 0;
+                        right        = extractVariable(conditions, index, reinsert); // strip out old in clause
+                        conditions.erase(conditions.begin() + reinsertIdx, conditions.begin() + index);
+                    }
+                    else // function or normal variable without accessors 
+                    {
+                        int funcEndIdx;
+                        extractFunction(conditions, index, funcEndIdx);
+                        if (funcEndIdx == -1)
+                            funcEndIdx = conditions.size() - 1;
+                        right.insert(
+                            right.begin(),
+                            conditions.begin() + index,
+                            conditions.begin() + (funcEndIdx + 1)); // strip out old in clause
+                        conditions.erase(conditions.begin() + reinsertIdx, conditions.begin() + (funcEndIdx + 1));
+                    } /* convert to: 
+                     *    __contains(key,container)
+                     *    
+                     *  TODO - optimize for second param being reference type
+                     *  
+                     */
+                    LineParts replacement {
+                        in == "in"
+                            ? "__contains"
+                            : "__notcontains",
+                        "("
+                    };
+                    replacement.insert(replacement.end(), left.begin(), left.end());
+                    replacement.push_back(",");
+                    replacement.insert(replacement.end(), right.begin(), right.end());
+                    replacement.push_back(")");
+                    conditions.insert(
+                        conditions.begin() + reinsertIdx,
+                        replacement.begin(),
+                        replacement.end()); // start over
+                    changes = true;         // loop again
+                    break;
+                }
+                if (static_cast<int>(conditions.size()) > index + 2 && conditions[index + 1] == "in" &&
+                    //conditions[0] == "match" &&
+                    //(isRowIter && index > 4) && 
+                    conditions[index + 2] == "[")
+                {
+                    const auto var = conditions[index];
+                    if (static_cast<int>(conditions.size()) < index + 4)
+                        throw ParseFail_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_in_clause,
+                            "in-clause error",
+                            line.debug
+                        }; // there a for kinds of "in" we care about
+                    // 1. for x in y
+                    // 2. x in [y0,y1,y2,y3] # when used in where clause
+                    // 3. x in y # as in:  if x in y
+                    // 4. row in rows
+                    // this covers scenario #2
+                    if (conditions[index + 2] != "[")
+                        throw ParseFail_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_in_clause,
+                            "expecting opening brace",
+                            line.debug
+                        };
+                    const auto startIdx = index;
+                    index += 3; // move past first [
+                    auto closingIdx = index;
+                    LineParts inParts;
+                    auto brackets = 1;
+                    for (auto idx = index; idx < static_cast<int>(conditions.size()); idx++)
+                    {
+                        if (conditions[idx] == "[")
+                            ++brackets;
+                        if (conditions[idx] == ",")
+                            continue;
+                        if (conditions[idx] == "]")
+                        {
+                            --brackets;
+                            if (!brackets) // closing bracket
+                            {
+                                closingIdx = idx + 1;
+                                break;
+                            }
+                        }
+                        inParts.push_back(conditions[idx]);
+                    }
+                    if (!inParts.size())
+                        throw ParseFail_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_missing_subscript,
+                            "expecting in-clause values",
+                            line.debug
+                        };
+                    LineParts orParts;
+                    orParts.push_back("(");
+                    for (auto& in : inParts)
+                    {
+                        if (orParts.size() > 1)
+                            orParts.push_back("or");
+                        orParts.push_back(var);
+                        orParts.push_back("==");
+                        orParts.push_back(in);
+                    }
+                    orParts.push_back(")"); //parseConditions(orParts, opList, 0, debug, stopOnConditions, stackOp);
+                    conditions.erase(conditions.begin() + startIdx, conditions.begin() + closingIdx);
+                    conditions.insert(conditions.begin() + startIdx, orParts.begin(), orParts.end());
+                    changes = true; // loop again
+                    break;
+                }               
+                ++index;
+            }
+        } while (changes);
+
+        if (changeCounter)
+        {
+            std::string translation = "";
+            for (const auto& c : lines[lineIndex].parts)
+                translation += c + " ";
+            lines[lineIndex].debug.translation.assign(translation);
+        }
+        ++lineIndex;
+
+     }
 }
 
 QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
@@ -3173,21 +3223,28 @@ int64_t QueryParser::parseHintConditions(
         }
         const auto leftIsTableVar  = isNonuserVar(left);
         const auto rightIsTableVar = isNonuserVar(right);
-        if (leftIsTableVar && rightIsTableVar)
+
+        if (left == "id" || right == "id")
+        {
+            opList.emplace_back(HintOp_e::PUSH_NOP);
+            accumulation.clear();
+            return;            
+        }
+        else if (leftIsTableVar && rightIsTableVar)
         {
             // skip column to column comparisons, emit a NOP placeholder
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
             return;
         }
-        if (!leftIsTableVar && !rightIsTableVar)
+        else if (!leftIsTableVar && !rightIsTableVar)
         {
             // skip non-table variable comparisons, emit a NOP placeholder
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
             return;
         }
-        if (isUserVar(left) || isUserVar(right))
+        else if (isUserVar(left) || isUserVar(right))
         {
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
@@ -3513,11 +3570,14 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 case OpCode_e::COLIDX:
                     finCode.emplace_back(c.op, vars.columnVars[c.valueString].index, 0, 0, c.debug);
                     break;
-                case OpCode_e::PSHLITTRUE: case OpCode_e::PSHLITFALSE:
+                case OpCode_e::PSHLITTRUE: 
+                case OpCode_e::PSHLITFALSE:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
                     break;
-                case OpCode_e::PSHUSROBJ: case OpCode_e::PSHUSRVAR: case OpCode_e::PSHUSRVREF: case OpCode_e::PSHUSROREF
-                :
+                case OpCode_e::PSHUSROBJ: 
+                case OpCode_e::PSHUSRVAR: 
+                case OpCode_e::PSHUSRVREF: 
+                case OpCode_e::PSHUSROREF:                
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
                 case OpCode_e::PSHLITSTR:
@@ -3541,10 +3601,12 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         0,
                         c.debug);
                     break;
-                case OpCode_e::PSHPAIR: case OpCode_e::PSHLITNUL:
+                case OpCode_e::PSHPAIR: 
+                case OpCode_e::PSHLITNUL:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
                     break; //case OpCode_e::SETROW:
-                case OpCode_e::POPUSRVAR: case OpCode_e::POPUSROBJ:
+                case OpCode_e::POPUSRVAR: 
+                case OpCode_e::POPUSROBJ:
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
                 case OpCode_e::POPTBLCOL:
@@ -3582,8 +3644,12 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         c.debug);
                     break; /*case OpCode_e::ITNEXT:
                         case OpCode_e::ITPREV:*/
-                case OpCode_e::ITFORR: case OpCode_e::ITFORRC: case OpCode_e::ITFORRCF: case OpCode_e::ITRFORR: case
-                OpCode_e::ITRFORRC: case OpCode_e::ITRFORRCF:
+                case OpCode_e::ITFORR: 
+                case OpCode_e::ITFORRC: 
+                case OpCode_e::ITFORRCF: 
+                case OpCode_e::ITRFORR: 
+                case OpCode_e::ITRFORRC: 
+                case OpCode_e::ITRFORRCF:
                     finCode.emplace_back(
                         c.op,
                         c.value,
@@ -3593,13 +3659,26 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         // extra maps to lambda
                         c.debug);
                     break;
-                case OpCode_e::MATHADD: case OpCode_e::MATHSUB: case OpCode_e::MATHMUL: case OpCode_e::MATHDIV: case
-                OpCode_e::OPGT: case OpCode_e::OPLT: case OpCode_e::OPGTE: case OpCode_e::OPLTE: case OpCode_e::OPEQ:
-                case OpCode_e::OPNEQ: case OpCode_e::OPWTHN: case OpCode_e::OPNOT: case OpCode_e::LGCAND: case OpCode_e
-                ::LGCOR:
+                case OpCode_e::MATHADD: 
+                case OpCode_e::MATHSUB: 
+                case OpCode_e::MATHMUL: 
+                case OpCode_e::MATHDIV: 
+                case OpCode_e::OPGT: 
+                case OpCode_e::OPLT: 
+                case OpCode_e::OPGTE: 
+                case OpCode_e::OPLTE: 
+                case OpCode_e::OPEQ:
+                case OpCode_e::OPNEQ: 
+                case OpCode_e::OPWTHN: 
+                case OpCode_e::OPNOT: 
+                case OpCode_e::LGCAND: 
+                case OpCode_e::LGCOR:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
                     break;
-                case OpCode_e::MATHADDEQ: case OpCode_e::MATHSUBEQ: case OpCode_e::MATHMULEQ: case OpCode_e::MATHDIVEQ:
+                case OpCode_e::MATHADDEQ: 
+                case OpCode_e::MATHSUBEQ: 
+                case OpCode_e::MATHMULEQ: 
+                case OpCode_e::MATHDIVEQ:
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
                 case OpCode_e::MARSHAL: // these should not appear in generated code
@@ -3662,10 +3741,15 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
     {
         switch (f.op)
         {
-        case OpCode_e::CNDIF: case OpCode_e::CNDELIF: case OpCode_e::ITFOR: //case OpCode_e::ITNEXT:
-            //case OpCode_e::ITPREV:
-        case OpCode_e::ITFORR: case OpCode_e::ITFORRC: case OpCode_e::ITFORRCF: case OpCode_e::ITRFORR: case OpCode_e::
-        ITRFORRC: case OpCode_e::ITRFORRCF: // map index to index of BlockID
+        case OpCode_e::CNDIF: 
+        case OpCode_e::CNDELIF: 
+        case OpCode_e::ITFOR:
+        case OpCode_e::ITFORR: 
+        case OpCode_e::ITFORRC: 
+        case OpCode_e::ITFORRCF: 
+        case OpCode_e::ITRFORR: 
+        case OpCode_e::ITRFORRC: 
+        case OpCode_e::ITRFORRCF: // map index to index of BlockID
             f.index = blockIndex[f.index];  // map lambda (extra) to index of BlockId
             f.extra = blockIndex[f.extra];
             break;
@@ -3915,8 +3999,8 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
             if (current.length() && current[0] != '#')
             {
                 // add the tabs back in
-                if (tabDepth > 1)
-                    for (auto i = 0; i < tabDepth - 1; ++i)
+                if (tabDepth) // FIX
+                    for (auto i = 0; i < tabDepth; ++i)
                         current = "    " + current;
                 if (current[0] == '@')
                 {

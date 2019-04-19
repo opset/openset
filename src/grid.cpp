@@ -106,6 +106,9 @@ void Grid::reset()
 void Grid::reinit()
 {
     reset();
+    if (colMap && table)
+        table->getColumnMapper()->releaseMap(colMap);
+    colMap = nullptr;
     table = nullptr;
     blob = nullptr;
     attributes = nullptr;

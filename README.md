@@ -8,10 +8,12 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 | Platform    | Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | 0.2.12  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 | 0.2.12  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   | 0.2.13  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 | 0.2.13  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: **OpenSet is currently in alpha. Please see v0.2.12 release notes below **
+:fire: **UPGRADE TO 0.2.13.** version 0.2.12 was a bad build.
+
+:coffee: OpenSet is currently in alpha. Please see v0.2.13 release notes below.
 
 ## Links
 
@@ -93,7 +95,7 @@ git clone https://github.com/opset/openset_samples.git
 **2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.2.12
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.2.13
 ```
 
 > **Note** The newest docker build can be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -212,19 +214,11 @@ response (counts are people, count product, sum price):
     "_": [
         {
             "g": 2,
-            "c": [1, 3, 155.93],
+            "c": [1, 1, 99.95],
             "_": [
-                {
-                    "g": "triple hook jigger",
-                    "c": [1, 1, 27.99]
-                },
                 {
                     "g": "fly rod",
                     "c": [1, 1, 99.95]
-                },
-                {
-                    "g": "deluxe spinner",
-                    "c": [1, 1, 27.99]
                 }
             ]
         },
@@ -240,19 +234,15 @@ response (counts are people, count product, sum price):
         },
         {
             "g": 7,
-            "c": [1, 3, 145.9299],
+            "c": [1, 2, 127.94],
             "_": [
-                {
-                    "g": "gilded spoon",
-                    "c": [1, 1, 27.99]
-                },
                 {
                     "g": "fly rod",
                     "c": [1, 1, 99.95]
                 },
                 {
-                    "g": "double spinner",
-                    "c": [1, 1, 17.9899]
+                    "g": "gilded spoon",
+                    "c": [1, 1, 27.99]
                 }
             ]
         }
@@ -260,7 +250,7 @@ response (counts are people, count product, sum price):
 }
 ```
 
-**8**. Let's make 4 segments (this script can be found at `openset_samples/pyql/segments.pyql` folder):
+**8**. Let's make 4 segments (this script can be found at `openset_samples/pyql/segments.pyql`):
 
 ```bash
 curl \
@@ -272,31 +262,38 @@ curl \
 
 # match one of these
 for row in rows if
-        product_group in ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom']:
-    tally
+        'basement' in product_group or    # product_group is a set
+        'garage' in product_group or
+        'kitchen' in product_group or
+        'bedroom' in product_group or
+        'bathroom' in product_group:
+    return True
 
 @segment products_yard ttl=300s use_cached=True refresh=300s
 
 # match one of these
 for row in rows if
-        product_group in ['basement', 'garage']:
-    tally
+        'basement' in product_group or
+        'garage' in product_group:
+    return True
 
 @segment products_outdoor ttl=300s use_cached=True refresh=300s
 
 # match one of these
 for row in rows if
-        product_group in ['outdoor', 'angling']:
-    tally
+        'outdoor' in product_group or
+        'angling' in product_group:
+    return True
 
 @segment products_commercial ttl=300s use_cached=True refresh=300s
 
 # match one of these
 for row in rows if
-        product_group == 'restaurant':
-    tally
+        'restaurant' in product_group:
+    return True
 
 #end of pyql script
+
 PYQL
 ```
 
@@ -746,7 +743,7 @@ Unfortunately, we had to say no. We didn't have the technology or the capacity t
 
 Failure got me thinking, and here we are today.
 
-## OpenSet 0.2.12 release notes
+## OpenSet 0.2.1 release notes
 
 -   support for properties by way of the `props` variable within your scripts. A property can be read or modified during any query, segment, or trigger. The script compiler will optimize if `props` are not used. Reading `props` will slow down execution of your scripts. Writing `props` will slow down execution a little bit more. Expect a 2x slowdown when getting and setting props. It should be noted only changed `props` are written back:
 
@@ -833,7 +830,7 @@ or
    row_content = get_row(FIRST ROW if fruit == "pear")
 ```
 
-> Important - there is currently a limitation with `props` in regards to replication and failover. In build 0.2.12 properties are not replicated. This will be addressed. For now, you can run a query script to recreate the missing props.
+> Important - there is currently a limitation with `props` in regards to replication and failover. In build 0.2.13 properties are not replicated. This will be addressed. For now, you can run a query script to recreate the missing props.
 
 # Licensing
 
