@@ -62,8 +62,8 @@ void ResultSet::makeSortedList()
 
 void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 {
-
-    const auto resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
+    // fix const auto 
+    resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
 
     accTypes.resize(resultWidth, ResultTypes_e::Int);
     accModifiers.resize(resultWidth, query::Modifiers_e::sum);

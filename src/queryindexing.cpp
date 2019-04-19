@@ -28,7 +28,10 @@ void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber,
 	// in a vector of indexes using an std::pair of name and index
 	bool countable;
 	for (auto &p : queryMacros.indexes)
-		indexes.emplace_back(p.first, buildIndex(p.second, countable), countable);
+    {
+        const auto index = buildIndex(p.second, countable);
+		indexes.emplace_back(p.first, index, countable);
+    }
 }
 
 // returns an index by name
@@ -55,6 +58,8 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 	if (!stopBit)
 	{
+        // fix 
+        countable = false;
 		IndexBits bits;
 		bits.makeBits(maxLinId, 1);
 		return bits;
@@ -242,14 +247,14 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 	{
 		IndexBits bits;
 		bits.makeBits(maxLinId, 1);
-		countable = true;
+		countable = false;
 		return bits;
 	}
 
 	auto res = s.top();
 
 	if (res.placeHolder)
-		cout << "fucked" << endl;
+		cout << "borked" << endl;
 
 	s.pop();
 

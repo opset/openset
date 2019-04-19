@@ -627,9 +627,11 @@ def on_insert():
 
 #### tally
 
-The `tally` function has two modes, one for queries, and the other for segmentation.
+The `tally` function has defines pivot layout of result set.
 
-When used in a query, the `tally` takes one or more grouping parameters. Results returned by OpenSet are in a tree format. Aggregators specified in the the `agg:` section will be executed using the current event iterator for each level of the tree.
+Columns will be totaled at all points on the specified path forming a tree.
+
+Aggregators specified in the the `agg:` section will be executed using the current event iterator for each level of the tree.
 
 The following PyQL will generate a tree:
 
@@ -671,8 +673,6 @@ agg:
 for row in rows if product != None and country != None:
     tally(row['product'], row['country'])
 ```
-
-> :pushpin: Tally used for segmentation will be discussed in a segmentation document.
 
 ## Session Functions
 

@@ -1260,14 +1260,15 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     case Marshals_e::marshal_tally:
     {
         if (interpretMode == InterpretMode_e::count)
-        {
+            return true;
+        /*{
             if (bits)
                 bits->bitSet(linid);
             loopState = LoopState_e::in_exit;
             *stackPtr = 0;
             ++stackPtr;
             return true;
-        }
+        }*/
         marshal_tally(inst->extra, (*rows)[currentRow], currentRow);
     }
     break;
@@ -1765,125 +1766,125 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         {
             // if it's row iterator variable, we get its value, otherwise we use the current row
             const int64_t readRow = inst->extra != NONE
-                                        ? macros.vars.userVars[inst->extra].value.getInt64()
-                                        : currentRow; // we pop the actual user id in this case
+                ? macros.vars.userVars[inst->extra].value.getInt64()
+                : currentRow; // we pop the actual user id in this case
+
             if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)
             {
                 *stackPtr = this->grid->getUUIDString();
-                ++stackPtr;
-                break;
-            }
-            auto colValue = NONE; // extract property value from grid->propRow
-            if (macros.vars.tableVars[inst->index].isProp)
-            {
-                colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
             }
             else
             {
-                colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
-            }
-            switch (macros.vars.tableVars[inst->index].schemaType)
-            {
-            case columnTypes_e::freeColumn:
-                *stackPtr = NONE;
-                break;
-            case columnTypes_e::intColumn:
-                if (colValue == NONE)
+                auto colValue = NONE; // extract property value from grid->propRow
+                
+                if (macros.vars.tableVars[inst->index].isProp)
                 {
-                    if (macros.vars.tableVars[inst->index].isSet)
-                        stackPtr->set();
-                    else
-                        *stackPtr = NONE;
-                }
-                else if (macros.vars.tableVars[inst->index].isSet)
-                {
-                    auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
-                    const auto setData = grid->getSetData();
-                    stackPtr->set();
-                    const auto end = info.offset + info.length;
-                    for (auto idx  = info.offset; idx < end; ++idx)
-                        stackPtr->getSet()->emplace(setData[idx]);
+                    colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
                 }
                 else
-                    *stackPtr = colValue;
-                break;
-            case columnTypes_e::doubleColumn:
-                if (colValue == NONE)
                 {
-                    if (macros.vars.tableVars[inst->index].isSet)
-                        stackPtr->set();
-                    else
-                        *stackPtr = NONE;
+                    colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
                 }
-                else if (macros.vars.tableVars[inst->index].isSet)
+
+                switch (macros.vars.tableVars[inst->index].schemaType)
                 {
-                    auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
-                    const auto setData = grid->getSetData();
-                    stackPtr->set();
-                    const auto end = info.offset + info.length;
-                    for (auto idx  = info.offset; idx < end; ++idx)
-                        stackPtr->getSet()->emplace(setData[idx] / 10000.0);
-                }
-                else
-                    *stackPtr = colValue / 10000.0;
-                break;
-            case columnTypes_e::boolColumn:
-                if (colValue == NONE)
-                {
-                    if (macros.vars.tableVars[inst->index].isSet)
-                        stackPtr->set();
-                    else
-                        *stackPtr = NONE;
-                }
-                else if (macros.vars.tableVars[inst->index].isSet)
-                {
-                    auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
-                    const auto setData = grid->getSetData();
-                    stackPtr->set();
-                    const auto end = info.offset + info.length;
-                    for (auto idx  = info.offset; idx < end; ++idx)
-                        stackPtr->getSet()->emplace(
-                            setData[idx]
-                                ? true
-                                : false);
-                }
-                else
-                    *stackPtr = colValue
-                                    ? true
-                                    : false;
-                break;
-            case columnTypes_e::textColumn:
-                if (colValue == NONE)
-                {
-                    if (macros.vars.tableVars[inst->index].isSet)
-                        stackPtr->set();
-                    else
-                        *stackPtr = NONE;
-                }
-                else if (macros.vars.tableVars[inst->index].isSet)
-                {
-                    auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
-                    const auto setData = grid->getSetData();
-                    stackPtr->set();
-                    const auto end = info.offset + info.length;
-                    for (auto idx  = info.offset; idx < end; ++idx)
+                case columnTypes_e::freeColumn:
+                    *stackPtr = NONE;
+                    break;
+                case columnTypes_e::intColumn:
+                    if (colValue == NONE)
                     {
-                        const auto attr = attrs->get(macros.vars.tableVars[inst->index].schemaColumn, setData[idx]);
-                        if (attr && attr->text)
-                            stackPtr->getSet()->emplace(std::string(attr->text));
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
                     }
-                }
-                else
-                {
-                    const auto attr = attrs->get(macros.vars.tableVars[inst->index].schemaColumn, colValue);
-                    if (attr && attr->text)
-                        *stackPtr = attr->text;
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx  = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx]);
+                    }
                     else
                         *stackPtr = colValue;
+                    break;
+                case columnTypes_e::doubleColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx  = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(setData[idx] / 10000.0);
+                    }
+                    else
+                        *stackPtr = colValue / 10000.0;
+                    break;
+                case columnTypes_e::boolColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx  = info.offset; idx < end; ++idx)
+                            stackPtr->getSet()->emplace(
+                                setData[idx] ? true : false);
+                    }
+                    else
+                        *stackPtr = colValue ? true : false;
+                    break;
+                case columnTypes_e::textColumn:
+                    if (colValue == NONE)
+                    {
+                        if (macros.vars.tableVars[inst->index].isSet)
+                            stackPtr->set();
+                        else
+                            *stackPtr = NONE;
+                    }
+                    else if (macros.vars.tableVars[inst->index].isSet)
+                    {
+                        auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
+                        const auto setData = grid->getSetData();
+                        stackPtr->set();
+                        const auto end = info.offset + info.length;
+                        for (auto idx  = info.offset; idx < end; ++idx)
+                        {
+                            const auto attr = attrs->get(macros.vars.tableVars[inst->index].schemaColumn, setData[idx]);
+                            if (attr && attr->text)
+                                stackPtr->getSet()->emplace(std::string(attr->text));
+                        }
+                    }
+                    else
+                    {
+                        const auto attr = attrs->get(macros.vars.tableVars[inst->index].schemaColumn, colValue);
+                        if (attr && attr->text)
+                            *stackPtr = attr->text;
+                        else
+                            *stackPtr = colValue;
+                    }
+                    break;
+                default:
+                    break;
                 }
-                break;
-            default:
-                break;
             }
             ++stackPtr;
         }
