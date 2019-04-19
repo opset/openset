@@ -268,6 +268,7 @@ for row in rows if
         'bedroom' in product_group or
         'bathroom' in product_group:
     return True
+return False
 
 @segment products_yard ttl=300s use_cached=True refresh=300s
 
@@ -276,6 +277,7 @@ for row in rows if
         'basement' in product_group or
         'garage' in product_group:
     return True
+return False
 
 @segment products_outdoor ttl=300s use_cached=True refresh=300s
 
@@ -284,6 +286,7 @@ for row in rows if
         'outdoor' in product_group or
         'angling' in product_group:
     return True
+return False
 
 @segment products_commercial ttl=300s use_cached=True refresh=300s
 
@@ -291,6 +294,7 @@ for row in rows if
 for row in rows if
         'restaurant' in product_group:
     return True
+return False
 
 #end of pyql script
 
