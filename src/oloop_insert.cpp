@@ -10,6 +10,7 @@
 #include "tablepartitioned.h"
 #include "sidelog.h"
 #include "internoderouter.h"
+#include "queryinterpreter.h"
 
 using namespace std;
 using namespace openset::async;
@@ -40,6 +41,9 @@ bool OpenLoopInsert::run()
 {       
     const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
+    // check partition segment data against master and update if necessary
+    tablePartitioned->checkForSegmentChanges();
+    
 	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
 		mapInfo != openset::mapping::NodeState_e::active_clone)
 	{
@@ -107,24 +111,38 @@ bool OpenLoopInsert::run()
 	// now insert without locks
 	for (auto& uuid : evtByPerson)
 	{
-	    const auto personData = tablePartitioned->people.getmakePerson(uuid.first);
+	    const auto personData = tablePartitioned->people.getMakePerson(uuid.first);
 		person.mount(personData);
 		person.prepare();
-
-		auto triggers = tablePartitioned->triggers->getTriggerMap();
-		for (auto trigger : triggers)
-		{
-			trigger.second->mount(&person);
-			trigger.second->preInsertTest();
-		}
 
 		// insert events for this uuid
 		for (auto &json : uuid.second)
 			person.insert(&json);
 
+        // run any segments flagged for "onInsert" in proper z-order
+        const auto insertSegments = tablePartitioned->getOnInsertSegments();
+        for (auto segment : insertSegments)
+        {
+            // ensure we have bits mounted for this segment
+            segment->prepare(tablePartitioned->attributes);
+            // get a cached interpeter (or make one) and set the bits
+            const auto interpreter = segment->getInterpreter(tablePartitioned->people.peopleCount());
+
+            // mount the person
+            interpreter->mount(&person);
+			interpreter->exec();
+
+            // get return values from script
+            auto returns = interpreter->getLastReturn();
+
+            // set bit according to interpreter results
+            const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
+
+        }
+
 		// check status after insert
-		for (auto trigger : triggers)
-			trigger.second->postInsertTest();
+		//for (auto trigger : triggers)
+			//trigger.second->postInsertTest();
 
 		person.commit();
 	}

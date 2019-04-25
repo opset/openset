@@ -63,7 +63,7 @@ void Revent::init()
 	bits = new IndexBits();
 	bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
-	// this call back will be called by the 'schedule' marshal in the interpretor
+	// this call back will be called by the 'schedule' marshal in the interpreter
 	const auto schedule_cb = [&](int64_t functionHash, int seconds) -> bool
 	{
 
@@ -73,7 +73,7 @@ void Revent::init()
 			settings->id, // this is the trigger id
 			functionHash); // context contains the function name
 
-						   // add it
+		// add it
 		auto newPerson = this->person->getGrid()->addFlag(
 			openset::db::flagType_e::future_trigger,
 			settings->id, // this is the trigger id

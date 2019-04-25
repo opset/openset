@@ -33,13 +33,9 @@ namespace openset
 
 			// will return a "found" person if one exists
 			// or create a new one
-			PersonData_s* getmakePerson(string userIdString);
+			PersonData_s* getMakePerson(string userIdString);
 
-			void replacePersonRecord(PersonData_s* newRecord)
-			{
-				if (newRecord)
-					peopleLinear[newRecord->linId] = newRecord;
-			}
+            void replacePersonRecord(PersonData_s* newRecord);
 
 			int64_t peopleCount() const;
 

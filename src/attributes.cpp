@@ -223,7 +223,9 @@ void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newB
 	// index to point to it, and free the old one up.
 	// update the Attr pointer directly in the index
 	attrPair->second = destAttr;
-	//PoolMem::getPool().freePtr(attr);
+
+    // FIX - memory leak
+	PoolMem::getPool().freePtr(attr);
 }
 
 AttributeBlob* Attributes::getBlob() const

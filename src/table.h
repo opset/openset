@@ -14,7 +14,6 @@ using namespace std;
 
 namespace openset
 {
-
 	namespace trigger
 	{
 		struct reventSettings_s;
@@ -30,30 +29,48 @@ namespace openset
 		struct SegmentTtl_s
 		{
 			string segmentName;
-			int64_t TTL;
+			int64_t TTL {0};
 
-			SegmentTtl_s(const std::string segmentName, const int64_t TTL) :
+			SegmentTtl_s(
+                    const std::string& segmentName, 
+                    const int64_t TTL) :
 				segmentName(segmentName),
 				TTL(TTL)
 			{}
+
+            SegmentTtl_s() {};
 		};
 
 		struct SegmentRefresh_s
 		{
 			string segmentName;
-			int64_t refreshTime;
+			int64_t refreshTime{ 86400 };
 			query::Macro_s macros;
 
+            int zIndex {100};
+            int64_t lastModified {0};
+            int64_t lastHash {0};
+            bool    onInsert {false};
+
 			SegmentRefresh_s(
-				const std::string segmentName,
-				const query::Macro_s macros,
-				const int64_t refreshTime) :
+				    const std::string& segmentName,
+				    const query::Macro_s& macros,
+				    const int64_t refreshTime,
+                    const int zIndex,
+                    const bool onInsert) :
 				segmentName(segmentName),
 				refreshTime(refreshTime),
-				macros(macros)
-			{}
+				macros(macros),
+                zIndex(zIndex),
+                onInsert(onInsert)
+			{
+			    lastModified = Now();
+                lastHash = MakeHash(macros.rawScript);
+			}
 
-			int64_t getRefresh() const
+            SegmentRefresh_s() = default;
+
+            int64_t getRefresh() const
 			{
 				return refreshTime;
 			}
@@ -231,19 +248,18 @@ namespace openset
 				return &triggerConf;
 			}
 
-			void setSegmentRefresh(std::string& segmentName, const query::Macro_s& macros, const int64_t refreshTime)
-			{
-				csLock lock(segmentCS);
-				segmentRefresh.emplace(segmentName, SegmentRefresh_s{ segmentName, macros, refreshTime });
-			}
+            void setSegmentRefresh(
+                const std::string& segmentName, 
+                const query::Macro_s& macros, 
+                const int64_t refreshTime, 
+                const int zIndex, 
+                const bool onInsert);
 
 			void setSegmentTtl(std::string segmentName, const int64_t TTL)
 			{
 				csLock lock(segmentCS);
 				segmentTTL.emplace(segmentName, SegmentTtl_s{ segmentName, TTL });
 			}
-
-            
 
 			void serializeTable(cjson* doc);
 			void serializeTriggers(cjson* doc);

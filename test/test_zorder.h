@@ -205,7 +205,7 @@ inline Tests test_zorder()
 				zOrderInts->emplace(MakeHash("cappa"), 2);
 				
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				auto personRaw = parts->people.getmakePerson("user1@test.com");
+				auto personRaw = parts->people.getMakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
 

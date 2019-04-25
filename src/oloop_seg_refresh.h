@@ -7,6 +7,7 @@
 #include "queryindexing.h"
 #include "queryinterpreter.h"
 #include "result.h"
+#include "tablepartitioned.h"
 
 namespace openset
 {
@@ -30,20 +31,25 @@ namespace openset
 			openset::query::Interpreter* interpreter;
 			int instance;
 			int runCount;
+            int64_t startPopulation {0};
 
 			openset::query::Indexing indexing;
-			openset::db::IndexBits* index;
+			openset::db::IndexBits* index {nullptr};
+            openset::db::IndexBits* bits {nullptr};
 
+            std::unordered_map<std::string, SegmentPartitioned_s>::iterator segmentsIter;
+
+            SegmentPartitioned_s* segmentInfo {nullptr};
+                
 			std::string segmentName;
 			query::Macro_s macros;
-			std::string resultName;
 
 			explicit OpenLoopSegmentRefresh(openset::db::Database::TablePtr table);
 
 			~OpenLoopSegmentRefresh() final;
 
 			// store segments that have a TTL
-			void storeSegment(IndexBits* bits) const;
+			void storeSegment() const;
 
 			bool nextExpired();
 

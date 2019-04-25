@@ -8,6 +8,7 @@
 #include "queryindexing.h"
 #include "queryinterpreter.h"
 #include "result.h"
+#include "tablepartitioned.h"
 
 namespace openset
 {
@@ -26,25 +27,24 @@ namespace openset
 			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
 			openset::db::Database::TablePtr table;
 			openset::db::TablePartitioned* parts;
-			int64_t maxLinearId;
+
+		    int64_t maxLinearId;
 			int64_t currentLinId;
 			Person person;
 			openset::query::Interpreter* interpreter;
 			int instance;
 			int runCount;
 			int64_t startTime;
-			int population;
-			int popEvaluated;
+            SegmentPartitioned_s* segmentInfo {nullptr};
+
 			openset::query::Indexing indexing;
 			openset::db::IndexBits* index;
 			openset::result::ResultSet* result;
 
-			std::unordered_set<std::string> segmentWasCached;
-
 			query::QueryPairs::iterator macroIter;
-			query::Macro_s macros;
+			//query::Macro_s macros;
 
-			openset::query::BitMap resultBits;
+			//openset::query::BitMap resultBits;
 
 			std::string resultName;
 
@@ -57,7 +57,7 @@ namespace openset
 
 			~OpenLoopSegment() final;
 
-			void storeResult(std::string name, int64_t count) const;
+			void storeResult(std::string& name, int64_t count) const;
 
 			// store segments that have a TTL
 			void storeSegments();

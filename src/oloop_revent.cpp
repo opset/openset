@@ -116,6 +116,7 @@ bool OpenLoopRevent::run()
                     const auto tp = person.getGrid()->getMeta();
                     if (personData != tp)
                     {
+                        
                         personData = tp;
                         flagIter = personData->getFlags() + i;
                     }

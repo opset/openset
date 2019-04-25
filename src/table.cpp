@@ -8,6 +8,7 @@
 #include "database.h"
 #include "asyncpool.h"
 #include "internoderouter.h"
+#include "queryinterpreter.h"
 
 using namespace openset::db;
 
@@ -98,6 +99,30 @@ void Table::releasePartitionObjects(const int32_t partition)
         zombies.push(part->second);
         partitions.erase(partition);
     }
+}
+
+void Table::setSegmentRefresh(
+    const std::string& segmentName, 
+    const openset::query::Macro_s& macros, 
+    const int64_t refreshTime,
+    const int zIndex,
+    const bool onInsert)
+{
+    csLock lock(segmentCS);
+
+    const auto scriptHash = MakeHash(macros.rawScript);
+
+    // lets see if it exists and if the script has a different hash we will replace it.
+    if (segmentRefresh.count(segmentName))
+    {
+        if (segmentRefresh[segmentName].lastHash == scriptHash &&
+            segmentRefresh[segmentName].zIndex == zIndex &&
+            segmentRefresh[segmentName].refreshTime == refreshTime &&
+            segmentRefresh[segmentName].onInsert == onInsert)
+            return;
+    }
+
+    segmentRefresh.emplace(segmentName, SegmentRefresh_s { segmentName, macros, refreshTime, zIndex, onInsert });
 }
 
 void Table::serializeTable(cjson* doc)
@@ -385,4 +410,3 @@ void Table::deserializeTriggers(const cjson* doc)
 		Logger::get().info("initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
 	}
 }
-

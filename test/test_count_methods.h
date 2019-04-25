@@ -143,7 +143,7 @@ inline Tests test_count_methods()
                 columns->setColumn(2002, "some_color", openset::db::columnTypes_e::textColumn, false);
 			
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				auto personRaw = parts->people.getmakePerson("user1@test.com");
+				auto personRaw = parts->people.getMakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
 
@@ -189,7 +189,7 @@ inline Tests test_count_methods()
 				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+				auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
 				ASSERT(personRaw != nullptr);
 				auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -290,7 +290,7 @@ inline Tests test_count_methods()
 				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+				auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
 				ASSERT(personRaw != nullptr);
 				auto mappedColumns = interpreter->getReferencedColumns();
 
