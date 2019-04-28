@@ -81,7 +81,7 @@ TablePartitioned::TablePartitioned(
 		attributeBlob(attributeBlob),
 		people(partition),
 		asyncLoop(openset::globals::async->getPartition(partition)),
-		triggers(new openset::revent::ReventManager(this)),
+		//triggers(new openset::revent::ReventManager(this)),
 		insertBacklog(0)
 {	
     // this will stop any translog purging until the insertCell (below) 
@@ -106,8 +106,8 @@ TablePartitioned::TablePartitioned(
 
 TablePartitioned::~TablePartitioned()
 {
-    if (triggers)
-        delete triggers;
+    //if (triggers)
+      //  delete triggers;
 
     csLock lock(insertCS);
 
@@ -239,4 +239,38 @@ openset::db::IndexBits* TablePartitioned::getBits(std::string& segmentName)
         return this->segments[segmentName].prepare(attributes);
 
     return nullptr;
+}
+
+void TablePartitioned::pushMessage(int64_t segmentHash, bool entered, std::string& uuid)
+{
+    //if (!messages.count(segmentHash))
+    messages[segmentHash].emplace_back(
+       revent::TriggerMessage_s {
+            segmentHash,
+            entered ? revent::TriggerMessage_s::State_e::entered : revent::TriggerMessage_s::State_e::exited,
+            uuid
+        }
+    );
+        /*
+        messages.emplace(
+            segmentHash,
+            revent::TriggerMessage_s {
+                segmentHash,
+                entered ? revent::TriggerMessage_s::State_e::entered : revent::TriggerMessage_s::State_e::exited,
+                uuid
+            });*/
+}
+
+void TablePartitioned::flushMessageMessages() 
+{
+    csLock lock(globals::running->cs);
+
+    for (auto &&t : messages)
+    {
+        // push our local message cache to the main cache so it can dispatched
+        table->getMessages()->push(t.first, t.second);
+
+        // empty our local cache now that it has been pusehd to the main caches
+        t.second.clear();
+    }
 }

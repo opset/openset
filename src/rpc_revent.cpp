@@ -30,6 +30,7 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
+/*
 void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
     // this request must be forwarded to all the other nodes
@@ -138,10 +139,11 @@ void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcM
     response.set("reevent", reventName);
     message->reply(http::StatusCode::success_ok, response);
 }
+*/
 
+/*
 void RpcRevent::revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-    /*
     csLock lock(globals::running->cs);
 
     auto tableName = request->xPathString("/params/table", "");
@@ -185,12 +187,12 @@ void RpcRevent::revent_describe(const openset::web::MessagePtr message, const Rp
     const auto logLine = "describe triggers on table '" + tableName + "'.";
     Logger::get().info(logLine);
     response->set("message", logLine);
-    */
 }
+*/
 
 void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-    /*
+/*    
     csLock lock(globals::running->cs);
 
     auto tableName = request->xPathString("/params/table", "");
@@ -239,9 +241,10 @@ void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMap
 
     const auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
     Logger::get().info(logLine);
-    response->set("message", logLine);
-    */
+    response->set("message", logLine);    
+*/
 }
+
 
 void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& matches)
 {
@@ -253,8 +256,8 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
 
     const auto request = message->getJSON();
     const auto tableName = matches.find("table"s)->second;
-    const auto reventName = matches.find("name"s)->second;
-    const auto subName = matches.find("sub"s)->second;
+    const auto segmentName = matches.find("segment"s)->second;
+    const auto subName = matches.find("subname"s)->second;
 
     if (!tableName.size())
     {
@@ -281,7 +284,7 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
         return;
     }
 
-    if (!reventName.size())
+    if (!segmentName.size())
     {
         RpcError(
             openset::errors::Error{
@@ -320,13 +323,13 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
         return;
     }
 
-    auto testAndCreate = [message, retention, host, port, path, table, tableName, reventName, subName]()
+    auto testAndCreate = [message, retention, host, port, path, table, tableName, segmentName, subName]()
     {
 
         const auto hostPort = host + ":" + to_string(port);
         auto rest = std::make_shared<openset::web::Rest>(0, hostPort);
 
-        auto done_cb = [message, retention, host, port, path, table, tableName, reventName, subName](
+        auto done_cb = [message, retention, host, port, path, table, tableName, segmentName, subName](
             const http::StatusCode status, const bool error, char* data, const size_t size)
         {
             if (status != http::StatusCode::success_ok || error)
@@ -340,32 +343,33 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
                 return;
             }
 
+            // lock the server up for a moment to avoid any bad behavior
             csLock lock(globals::running->cs);
 
             // lets do some checking, are we making a new trigger
             // or updating an old one
-            auto triggers = table->getTriggerConf();
+            auto segments = table->getSegmentRefresh();
 
-            // does this trigger exist? If so this is an update!
-            if (!triggers->count(reventName))
+            // does this trigger exist? If not report the error
+            if (!segments->count(segmentName))
             {
                 RpcError(
                     openset::errors::Error{
                         openset::errors::errorClass_e::config,
                         openset::errors::errorCode_e::general_config_error,
-                        "trigger '" + reventName + "' not found." },
+                        "trigger '" + segmentName + "' not found." },
                         message);
                 return;
             }
 
             // this will make or update our subscriber
-            table->getMessages()->registerSubscriber(reventName, subName, host, port, path, retention);
+            table->getMessages()->registerSubscriber(segmentName, subName, host, port, path, retention);
 
             cjson response;
             response.set("message", "created");
             response.set("table", tableName);
-            response.set("reevent", reventName);
-            response.set("sub", subName);
+            response.set("segment", segmentName);
+            response.set("subname", subName);
             message->reply(http::StatusCode::success_ok, response);
         };
 

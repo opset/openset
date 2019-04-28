@@ -125,7 +125,7 @@ bool OpenLoopInsert::run()
         {
             // ensure we have bits mounted for this segment
             segment->prepare(tablePartitioned->attributes);
-            // get a cached interpeter (or make one) and set the bits
+            // get a cached interpreter (or make one) and set the bits
             const auto interpreter = segment->getInterpreter(tablePartitioned->people.peopleCount());
 
             // mount the person

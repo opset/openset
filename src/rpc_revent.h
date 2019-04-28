@@ -14,9 +14,9 @@ namespace openset::comms
     {
     public:
         // POST /v1/revent/{table}/trigger/{revent_name}
-        static void revent_create(const openset::web::MessagePtr message, const RpcMapping& matches);
+        //static void revent_create(const openset::web::MessagePtr message, const RpcMapping& matches);
         // GET /v1/revent/{table}/trigger/{revent_name}
-        static void revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches);
+        //static void revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches);
         // DELETE /v1/revent/{table}/trigger/{revent_name}
         static void revent_drop(const openset::web::MessagePtr message, const RpcMapping& matches);
         // POST /v1/revent/{table}/trigger/{revent_name}/sub/{sub_name}

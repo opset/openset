@@ -120,7 +120,7 @@ inline Tests test_sessions()
 	for row in rows:
 		tally("all", row['some_str'])
 		if session == 2:
-			debug(true)
+			debug(True)
 
 	debug(session_count == 3)
 

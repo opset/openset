@@ -62,6 +62,8 @@ namespace openset
 			// store segments that have a TTL
 			void storeSegments();
 
+            void OpenLoopSegment::emitSegmentDifferences(int64_t segmentHash, openset::db::IndexBits* before, openset::db::IndexBits* after);
+
 			bool nextMacro();
 
 			void prepare() final;

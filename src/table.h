@@ -109,7 +109,7 @@ namespace openset
 
 			zMapStr zOrderStrings;
 			zMapHash zOrderInts;
-			std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
+			//std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
 			PartitionMap partitions;
@@ -243,10 +243,10 @@ namespace openset
 				++loadVersion;
 			}
 
-			std::unordered_map<string, openset::revent::reventSettings_s*>* getTriggerConf()
+			/*std::unordered_map<string, openset::revent::reventSettings_s*>* getTriggerConf()
 			{
 				return &triggerConf;
-			}
+			}*/
 
             void setSegmentRefresh(
                 const std::string& segmentName, 

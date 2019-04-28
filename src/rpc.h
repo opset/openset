@@ -64,7 +64,7 @@ namespace openset::comms
         // RpcInsert
         { "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },
         // RpcRevent
-        {
+        /*{
             "POST",
             std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcRevent::revent_create,
@@ -75,18 +75,18 @@ namespace openset::comms
             std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcRevent::revent_describe,
             { { 1, "table" }, { 2, "name" } }
-        },
+        },*/
         {
             "DELETE",
             std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcRevent::revent_drop,
-            { { 1, "table" }, { 2, "name" } }
+            { { 1, "table" }, { 2, "subname" } }
         },
         {
             "PUT",
             std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)/sub/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcRevent::revent_sub,
-            { { 1, "table" }, { 2, "name" }, { 3, "sub" } }
+            { { 1, "table" }, { 2, "segment" }, { 3, "subname" } }
         },
         // RpcInternode
         { "GET", std::regex(R"(^/v1/internode/is_member$)"), RpcInternode::is_member, {} },

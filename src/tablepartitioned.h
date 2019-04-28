@@ -6,7 +6,8 @@
 #include "table.h"
 #include "people.h"
 #include "attributes.h"
-#include "triggers.h"
+#include "message_broker.h"
+#include "config.h"
 
 namespace openset
 {
@@ -91,12 +92,16 @@ namespace openset
 			AttributeBlob* attributeBlob;
 			People people;
 			openset::async::AsyncLoop* asyncLoop;
-			openset::revent::ReventManager* triggers;
+			//openset::revent::ReventManager* triggers;
 
 			// map of segment names to expire times
 			std::unordered_map<std::string, int64_t> segmentRefresh;
 			std::unordered_map<std::string, int64_t> segmentTTL;
             std::unordered_map<std::string, SegmentPartitioned_s> segments;
+
+            using MailBox = std::vector<revent::TriggerMessage_s>;
+            using MessageQueues = std::unordered_map<int64_t, MailBox>;
+            MessageQueues messages;
 
             using InterpreterList = std::vector<SegmentPartitioned_s*>;
             InterpreterList onInsertSegments;
@@ -189,7 +194,9 @@ namespace openset
 
             openset::db::IndexBits* getBits(std::string& segmentName);
 
+            void pushMessage(int64_t segmentHash, bool entered, std::string& uuid);
 
-		};
+            void flushMessageMessages();
+        };
 	};
 };

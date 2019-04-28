@@ -1,6 +1,6 @@
 #include "config.h"
 #include "table.h"
-#include "trigger.h"
+//#include "trigger.h"
 #include "errors.h"
 #include "tablepartitioned.h"
 #include "file/file.h"
@@ -197,6 +197,7 @@ void Table::serializeSettings(cjson* doc) const
 void Table::serializeTriggers(cjson* doc)
 {
 	// push the trigger names
+    /*
 	doc->setType(cjson::Types_e::OBJECT);
 
 	for (auto &t : triggerConf)
@@ -206,7 +207,8 @@ void Table::serializeTriggers(cjson* doc)
 		trigNode->set("name", t.second->name);
 		trigNode->set("entry", t.second->entryFunction);
 		trigNode->set("script", t.second->script);
-	}	
+	}
+    */
 }
 
 void Table::deserializeTable(const cjson* doc)
@@ -388,6 +390,7 @@ void Table::clearZombies()
 
 void Table::deserializeTriggers(const cjson* doc)
 {
+    /*
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)
 	{
@@ -409,4 +412,5 @@ void Table::deserializeTriggers(const cjson* doc)
 
 		Logger::get().info("initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
 	}
+    */
 }

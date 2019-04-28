@@ -127,6 +127,22 @@ void OpenLoopSegment::storeSegments()
 	}
     */
 }
+void OpenLoopSegment::emitSegmentDifferences(int64_t segmentHash, openset::db::IndexBits* before, openset::db::IndexBits* after)
+{
+    bool beforeBit, afterBit;
+
+    /*
+     * This will have to be made faster, but essentially it allows to look for changes in/out changes on the segment 
+     * for segments calculated using segment math
+     */
+    for (auto i = 0; i < maxLinearId; ++i)
+    {
+        beforeBit = before->bitState(i);
+        afterBit = after->bitState(i);
+
+
+    }
+}
 
 bool OpenLoopSegment::nextMacro()
 {
@@ -349,7 +365,7 @@ bool OpenLoopSegment::run()
             auto returns = interpreter->getLastReturn();
 
             // any returns, are they true?
-            segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);              
+            const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);              
 		}
 	}
 }
