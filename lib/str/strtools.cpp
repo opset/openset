@@ -2,12 +2,12 @@
 
 bool EndsWith(std::string Source, std::string Find)
 {
-	int32_t Pos = Source.rfind(Find);
+	const auto pos = Source.rfind(Find);
 
-	if (Pos == std::string::npos)
+	if (pos == std::string::npos)
 		return false;
 
-	if (Pos == Source.length() - Find.length())
+	if (pos == Source.length() - Find.length())
 		return true;
 
 	return false;
@@ -20,20 +20,20 @@ bool StartsWith(const std::string& Source, const std::string& Find)
 
 void Replace(std::string& Source, std::string Find, std::string Replace)
 {
-	int32_t Pos = 0;
+	size_t pos = 0;
 
-	while (1)
+	while (true)
 	{
-		Pos = Source.find(Find, Pos);
+		pos = Source.find(Find, pos);
 
-		if (Pos == std::string::npos)
+		if (pos == std::string::npos)
 			return;
 
-		Source.erase(Pos, Find.length());
+		Source.erase(pos, Find.length());
 
-		Source.insert(Pos, Replace);
+		Source.insert(pos, Replace);
 
-		Pos += Replace.length();
+		pos += Replace.length();
 	}
 }
 
@@ -328,15 +328,15 @@ std::string N2S(int32_t Value, int32_t MinWidth)
 	char Buffer[256];
 	sprintf(Buffer, "%i", Value);
 
-	std::string Result(Buffer);
+	std::string result(Buffer);
 
 	if (MinWidth)
 	{
-		while (Result.length() < MinWidth)
-			Result = "0" + Result;
+		while (result.length() < static_cast<size_t>(MinWidth))
+			result = "0" + result;
 	}
 
-	return Result;
+	return result;
 };
 
 std::string N2S(int64_t Value, int32_t MinWidth)
@@ -344,15 +344,15 @@ std::string N2S(int64_t Value, int32_t MinWidth)
 	char Buffer[256];
 	sprintf(Buffer, INT64_FORMAT, Value);
 
-	std::string Result(Buffer);
+	std::string result(Buffer);
 
 	if (MinWidth)
 	{
-		while (Result.length() < MinWidth)
-			Result = "0" + Result;
+		while (result.length() < static_cast<size_t>(MinWidth))
+			result = "0" + result;
 	}
 
-	return Result;
+	return result;
 };
 
 void N2S(int64_t Value, std::string& Result)

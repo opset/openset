@@ -43,6 +43,30 @@ void OpenLoopSegmentRefresh::storeSegment() const
 	    Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName + ". (delta " + to_string(delta) + ")");
 }
 
+void OpenLoopSegmentRefresh::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
+{
+    openset::db::PersonData_s* personData;
+
+    /*
+     * This will have to be made faster, but essentially it allows to look for changes in/out changes on the segment 
+     * for segments calculated using segment math
+     */
+    for (int64_t i = 0; i < maxLinearId; ++i)
+    {
+        const auto beforeBit = before->bitState(i);
+        const auto afterBit = after->bitState(i);
+
+        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+            continue;
+
+        if (afterBit && !beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::enter, personData->getIdStr());
+        else if (!afterBit && beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::exit, personData->getIdStr());
+    }
+}
+
+
 bool OpenLoopSegmentRefresh::nextExpired()
 {
     // this loop is a bit expensive and may make sense to break down into
@@ -57,6 +81,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
         }
 
 		segmentName = segmentsIter->first;
+        segmentHash = MakeHash(segmentName);
 
         if (!parts->isRefreshDue(segmentName))
         {
@@ -66,6 +91,8 @@ bool OpenLoopSegmentRefresh::nextExpired()
         
 		macros = segmentsIter->second.macros;
         segmentInfo = &parts->segments[segmentName];
+
+        cout << "segment refresh: " << segmentName << endl;
         	    
 		// generate the index for this query	
 		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
@@ -82,6 +109,8 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// indexes? (query logic shows we can simply use binary operators to calculate the segment)
 		if (countable && !macros.isSegmentMath)
 		{
+            // look for changes
+            emitSegmentDifferences(bits, index);
             // index contains result
             bits->opCopy(*index);
 
@@ -112,11 +141,17 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
+            IndexBits beforeBits;
+            beforeBits.opCopy(*bits);
+
 			interpreter->interpretMode = InterpretMode_e::count;
 
             // mount empty person record (required but not used in segment math queries).
 			interpreter->mount(&person);
 			interpreter->exec();
+
+            emitSegmentDifferences(&beforeBits, bits);
+
 
 			storeSegment();
 
@@ -218,7 +253,9 @@ bool OpenLoopSegmentRefresh::run()
                 auto returns = interpreter->getLastReturn();
 
                 // any returns, are they true?
-                segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+                const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+                if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                    parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
             }
 		}
 	}

@@ -41,8 +41,6 @@ OpenLoopSegment::~OpenLoopSegment()
             --parts->segmentUsageCount;
         parts->storeAllChangedSegments();
     }
-
-    cout << "openloopsegment deleted" << endl;
 }
 
 void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
@@ -127,20 +125,26 @@ void OpenLoopSegment::storeSegments()
 	}
     */
 }
-void OpenLoopSegment::emitSegmentDifferences(int64_t segmentHash, openset::db::IndexBits* before, openset::db::IndexBits* after)
+void OpenLoopSegment::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
 {
-    bool beforeBit, afterBit;
+    openset::db::PersonData_s* personData;
 
     /*
      * This will have to be made faster, but essentially it allows to look for changes in/out changes on the segment 
      * for segments calculated using segment math
      */
-    for (auto i = 0; i < maxLinearId; ++i)
+    for (int64_t i = 0; i < maxLinearId; ++i)
     {
-        beforeBit = before->bitState(i);
-        afterBit = after->bitState(i);
+        const auto beforeBit = before->bitState(i);
+        const auto afterBit = after->bitState(i);
 
+        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+            continue;
 
+        if (afterBit && !beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::enter, personData->getIdStr());
+        else if (!afterBit && beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::exit, personData->getIdStr());
     }
 }
 
@@ -178,8 +182,9 @@ bool OpenLoopSegment::nextMacro()
 
 		// set the resultName variable, this will be the branch
 		// in the result set we use to store the value for this index count
-		resultName = macroIter->first;
-        segmentInfo = &parts->segments[resultName];
+		segmentName = macroIter->first;
+        segmentHash = MakeHash(segmentName);
+        segmentInfo = &parts->segments[segmentName];
 
         auto& macros = macroIter->second;
 
@@ -189,14 +194,14 @@ bool OpenLoopSegment::nextMacro()
 		index = indexing.getIndex("_", countable);
 
 		// get the bits for this segment
-        auto bits = parts->getBits(resultName);
+        auto bits = parts->getBits(segmentName);
         
 		// should we return these bits, as a cached copy?
-		if (macros.useCached && !parts->isSegmentExpiredTTL(resultName))
+		if (macros.useCached && !parts->isRefreshDue(segmentName))
 		{
 		    if (bits)
 			{
-				storeResult(resultName, bits->population(maxLinearId));
+				storeResult(segmentName, bits->population(maxLinearId));
 				++macroIter;
 				continue; // try another index
 			}
@@ -207,17 +212,19 @@ bool OpenLoopSegment::nextMacro()
 		// indexes? (nifty)
 		if (countable && !macros.isSegmentMath)
         {
+            // look for changes
+            emitSegmentDifferences(bits, index);
             // index contains result
             bits->opCopy(*index);
 
 		    // add to resultBits upon query completion
-			storeResult(resultName, index->population(maxLinearId));
+			storeResult(segmentName, index->population(maxLinearId));
 
 			++macroIter;
 			continue; // try another index
 		}
 
-		interpreter = parts->getInterpreter(resultName, maxLinearId);
+		interpreter = parts->getInterpreter(segmentName, maxLinearId);
         auto getSegmentCB = parts->getSegmentCallback();
 		interpreter->setGetSegmentCB(getSegmentCB);
 
@@ -238,13 +245,17 @@ bool OpenLoopSegment::nextMacro()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
+            IndexBits beforeBits;
+            beforeBits.opCopy(*bits);
 			interpreter->interpretMode = InterpretMode_e::count;
 
 			interpreter->mount(&person);
 			interpreter->exec();
 
+            emitSegmentDifferences(&beforeBits, bits);
+
 			// add to resultBits upon query completion
-			storeResult(resultName, bits->population(maxLinearId));
+			storeResult(segmentName, bits->population(maxLinearId));
 
 			++macroIter;
 			continue;
@@ -318,7 +329,7 @@ bool OpenLoopSegment::run()
 		if (!index->linearIter(currentLinId, maxLinearId))
 		{
 			// add to resultBits upon query completion
-			storeResult(resultName, interpreter->bits->population(maxLinearId));
+			storeResult(segmentName, interpreter->bits->population(maxLinearId));
 			
 			// is there another query to run? If not we are done
 			if (!nextMacro())
@@ -365,8 +376,10 @@ bool OpenLoopSegment::run()
             auto returns = interpreter->getLastReturn();
 
             // any returns, are they true?
-            const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);              
-		}
+            const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+            if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
+        }
 	}
 }
 

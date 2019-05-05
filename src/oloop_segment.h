@@ -46,7 +46,8 @@ namespace openset
 
 			//openset::query::BitMap resultBits;
 
-			std::string resultName;
+			std::string segmentName;
+            int64_t segmentHash { 0 };
 
 			explicit OpenLoopSegment(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
@@ -62,7 +63,7 @@ namespace openset
 			// store segments that have a TTL
 			void storeSegments();
 
-            void OpenLoopSegment::emitSegmentDifferences(int64_t segmentHash, openset::db::IndexBits* before, openset::db::IndexBits* after);
+            void emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const;
 
 			bool nextMacro();
 

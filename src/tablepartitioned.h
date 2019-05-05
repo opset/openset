@@ -37,6 +37,7 @@ namespace openset
             };
 
 			string segmentName;
+            int64_t segmentHash { 0 };
 			int64_t refreshTime{ 86400 };
 			query::Macro_s macros;
 
@@ -55,6 +56,7 @@ namespace openset
                     const int zIndex,
                     const bool onInsert) :
 				segmentName(segmentName),
+                segmentHash(MakeHash(segmentName)),
 				refreshTime(refreshTime),
 				macros(macros),
                 zIndex(zIndex),
@@ -154,7 +156,7 @@ namespace openset
 
 			void setSegmentRefresh(const std::string& segmentName, int64_t refresh)
 			{
-				if (refresh > 0)
+				//if (refresh > 0)
 					segmentRefresh[segmentName] = Now() + refresh;
 			}
 
@@ -162,14 +164,14 @@ namespace openset
 			{
 				if (!segmentRefresh.count(segmentName))
 					return true;
-				return segmentRefresh[segmentName] < Now();
+				return segmentRefresh[segmentName] <= Now();
 			}
 
 			bool isSegmentExpiredTTL(const std::string& segmentName)
 			{
 				if (!segmentTTL.count(segmentName))
 					return true;
-				return segmentTTL[segmentName] < Now();
+				return segmentTTL[segmentName] <= Now();
 			}
 
             openset::query::Interpreter* getInterpreter(const std::string& segmentName, int64_t maxLinearId);
@@ -188,13 +190,13 @@ namespace openset
             // set the "deleteAfterUsing" parameter appropriately. 
             //
             // The Interpreter needs this callback to operate when performing segment math
-            std::function<openset::db::IndexBits*(string, bool&)> getSegmentCallback();
+            std::function<openset::db::IndexBits*(const string&, bool&)> getSegmentCallback();
 
             void storeAllChangedSegments();
 
             openset::db::IndexBits* getBits(std::string& segmentName);
 
-            void pushMessage(int64_t segmentHash, bool entered, std::string& uuid);
+            void pushMessage(const int64_t segmentHash, const SegmentPartitioned_s::SegmentChange_e state, std::string uuid);
 
             void flushMessageMessages();
         };

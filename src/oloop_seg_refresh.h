@@ -42,6 +42,7 @@ namespace openset
             SegmentPartitioned_s* segmentInfo {nullptr};
                 
 			std::string segmentName;
+            int64_t segmentHash { 0 };
 			query::Macro_s macros;
 
 			explicit OpenLoopSegmentRefresh(openset::db::Database::TablePtr table);
@@ -50,6 +51,8 @@ namespace openset
 
 			// store segments that have a TTL
 			void storeSegment() const;
+
+            void emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const;
 
 			bool nextExpired();
 

@@ -203,10 +203,10 @@ void TablePartitioned::checkForSegmentChanges()
     onInsertSegments = std::move(onInsertList);
 }
 
-std::function<openset::db::IndexBits*(string, bool&)> TablePartitioned::getSegmentCallback()
+std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::getSegmentCallback()
 {
 
-    return [this](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
+    return [this](const std::string& segmentName, bool &deleteAfterUsing) -> IndexBits*
     {
         if (this->segments.count(segmentName))
         {
@@ -241,16 +241,21 @@ openset::db::IndexBits* TablePartitioned::getBits(std::string& segmentName)
     return nullptr;
 }
 
-void TablePartitioned::pushMessage(int64_t segmentHash, bool entered, std::string& uuid)
+void TablePartitioned::pushMessage(const int64_t segmentHash, const SegmentPartitioned_s::SegmentChange_e state, std::string uuid)
 {
     //if (!messages.count(segmentHash))
     messages[segmentHash].emplace_back(
        revent::TriggerMessage_s {
             segmentHash,
-            entered ? revent::TriggerMessage_s::State_e::entered : revent::TriggerMessage_s::State_e::exited,
+            state == SegmentPartitioned_s::SegmentChange_e::enter 
+                ? openset::revent::TriggerMessage_s::State_e::entered 
+                : openset::revent::TriggerMessage_s::State_e::exited,
             uuid
         }
     );
+
+    cout << "hash: " << segmentHash << "  state: " << (state == SegmentPartitioned_s::SegmentChange_e::enter ? "in" : "out") << "  uuid: " << uuid << endl; 
+
         /*
         messages.emplace(
             segmentHash,

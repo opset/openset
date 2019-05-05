@@ -189,7 +189,7 @@ void Table::serializeSettings(cjson* doc) const
     doc->set("session_time", sessionTime);
     doc->set("tz_offset", tzOffset);
     doc->set("maint_interval", maintInterval);
-    doc->set("revent_interval", reventInterval);
+    doc->set("segment_interval", segmentInterval);
     doc->set("index_compression", indexCompression);
     doc->set("person_compression", personCompression);    
 }
@@ -344,11 +344,11 @@ void Table::deserializeSettings(const cjson* doc)
             maintInterval = 60'000;
     }
 
-    if (const auto node = doc->find("revent_interval"); node)
+    if (const auto node = doc->find("segment_interval"); node)
     {
-        reventInterval = node->getInt();
-        if (maintInterval < 1'000)
-            maintInterval = 1'000;
+        segmentInterval = node->getInt();
+        if (segmentInterval < 60'000)
+            segmentInterval = 60'000;
     }
 
     if (const auto node = doc->find("index_compression"); node)

@@ -2740,7 +2740,7 @@ void openset::query::Interpreter::setEmitCB(const function<void(string emitMessa
     emit_cb = cb;
 }
 
-void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)>& cb)
+void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(const string&, bool&)>& cb)
 {
     getSegment_cb = cb;
 }

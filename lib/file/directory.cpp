@@ -16,7 +16,7 @@ namespace openset
 			_Index(0)
 		{}
 
-		Directory::~Directory() {}
+		Directory::~Directory() = default;
 
 		/*static*/
 		std::string Directory::GetCurrentExecutionDirectory()

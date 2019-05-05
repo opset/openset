@@ -819,7 +819,9 @@ namespace openset
             bool useCached { false };     // for segments allow use of cached values within TTL
             bool isSegmentMath { false }; // for segments, the index has the value, script execution not required
             bool useSessions { false };   // uses session functions, we can cache these
-            bool useStampedRowIds { false };
+            bool useStampedRowIds { false }; // count using row stamp rather than row uniqueness
+            bool onInsert { false };
+            int zIndex { 100 };
         };
 
         using QueryPairs = vector<pair<string, Macro_s>>;

@@ -33,6 +33,8 @@ void OpenLoopInsert::prepare()
         return;
     }
 
+    tablePartitioned->checkForSegmentChanges();
+
 //	queueIter = localQueue.end();
     Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
@@ -128,6 +130,13 @@ bool OpenLoopInsert::run()
             // get a cached interpreter (or make one) and set the bits
             const auto interpreter = segment->getInterpreter(tablePartitioned->people.peopleCount());
 
+            // we can't crunch segment math on refresh, but we can expire it, so it crunches the next time it's used
+            if (interpreter->macros.isSegmentMath)
+            {
+                tablePartitioned->setSegmentRefresh(segment->segmentName, 0);
+                continue;
+            }
+
             // mount the person
             interpreter->mount(&person);
 			interpreter->exec();
@@ -137,6 +146,8 @@ bool OpenLoopInsert::run()
 
             // set bit according to interpreter results
             const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
+            if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                tablePartitioned->pushMessage(segment->segmentHash, stateChange, personData->getIdStr());
 
         }
 

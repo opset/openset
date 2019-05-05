@@ -176,7 +176,7 @@ namespace openset
 			// callbacks to external code (i.e. triggers)
 			function<void(int64_t functionHash, int seconds)> schedule_cb{ nullptr };
 			function<void(string emitMessage)> emit_cb{ nullptr };
-			function<IndexBits*(string, bool&)> getSegment_cb{ nullptr };
+			function<IndexBits*(const string&, bool&)> getSegment_cb{ nullptr };
 
 			// distinct counting structures
             using ValuesSeenKey = EventDistinct_s;//tuple<int32_t, int64_t, int64_t, int64_t>;
@@ -274,7 +274,7 @@ namespace openset
 
 			void setScheduleCB(const function<void (int64_t functionHash, int seconds)> &cb);
 			void setEmitCB(const function<void (string emitMessage)> &cb);
-			void setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)> &cb);
+			void setGetSegmentCB(const function<IndexBits*(const string&, bool&)>& cb);
 			// where our result bits are going to end up
 			void setBits(IndexBits* indexBits, int maxPopulation);
 			void setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments);

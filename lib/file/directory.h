@@ -1,5 +1,4 @@
-#ifndef RARELOGIC_LIB_FILE_DIRECTORY_H_
-#define RARELOGIC_LIB_FILE_DIRECTORY_H_
+#pragma once
 
 #include "../include/libcommon.h"
 #include <vector>
@@ -7,13 +6,13 @@
 #ifdef _MSC_VER
 #include <direct.h>
 #define GetCurrentDir _getcwd
-#define DIR_SEPARATOR "/" // note in the SDK a forward slash is valid on win32.
+#define DIR_SEPARATOR '/' // note in the SDK a forward slash is valid on win32.
 #else
 #include <dirent.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #define GetCurrentDir getcwd
-#define DIR_SEPARATOR "/"
+#define DIR_SEPARATOR '/'
 #endif
 
 namespace openset
@@ -53,5 +52,3 @@ namespace openset
 		};
 	}; // IO
 }; // OpenSet
-
-#endif // RARELOGIC_LIB_FILE_DIRECTORY_H_

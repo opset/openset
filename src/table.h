@@ -128,8 +128,7 @@ namespace openset
 			int64_t eventTtl{ 86'400'000LL * 365LL * 5LL }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
             int64_t maintInterval{ 86'400'000LL }; // trim, index, clean, etc (daily)
-            int64_t reventInterval{ 60'000 }; // check for re-events every 60 seconds
-            int64_t segmentInterval{ 60'000 }; // update segments every 60 seconds
+            int64_t segmentInterval{ 1'000 }; // update segments every second
             int indexCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
             int personCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
 

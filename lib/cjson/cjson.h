@@ -235,7 +235,7 @@ public:
 	-------------------------------------------------------------------------
 	*/
 
-	Types_e type() const; // returns the node type cjsonNode:: is the enum
+    Types_e type() const; // returns the node type cjsonNode:: is the enum
 	std::string name() const; // returns the node name or ""
 	const char* nameCstr() const; // returns pointer to node name or NULL
 

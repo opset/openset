@@ -1,5 +1,4 @@
-#ifndef RARELOGIC_CPPLIB_STR_STRTOOLS_H_
-#define RARELOGIC_CPPLIB_STR_STRTOOLS_H_
+#pragma once
 
 #include "../include/libcommon.h"
 
@@ -88,4 +87,3 @@ void Replace(std::string& Source, std::string Find, std::string Replace);
 bool EndsWith(std::string Source, std::string Find);
 bool StartsWith(const std::string& Source, const std::string& Find);
 
-#endif // RARELOGIC_CPPLIB_STR_STRTOOLS_H_

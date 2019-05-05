@@ -37,7 +37,7 @@ namespace openset
 				return FileSetSize(filename.c_str(), size);
 			}
 
-			static std::string load(std::string namePath);
+			static std::string load(std::string& namePath);
 
 		private:
 			File();

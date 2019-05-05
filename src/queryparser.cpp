@@ -951,7 +951,7 @@ void QueryParser::tokenizeBlock(
                         };
                     x += 2;
                 } // auto refresh a segment
-                if (lines[i].parts[x] == "refresh" && static_cast<int>(lines[i].parts.size()) > x + 2 && lines[i].parts[
+                else if (lines[i].parts[x] == "refresh" && static_cast<int>(lines[i].parts.size()) > x + 2 && lines[i].parts[
                     x + 1] == "=")
                 {
                     if (isNumeric(lines[i].parts[x + 2]))
@@ -965,8 +965,23 @@ void QueryParser::tokenizeBlock(
                         };
                     x += 2;
                 } // use a cached version of the segment if within the TTL
-                if (lines[i].parts[x] == "use_cached")
-                    segmentUseCached = true;
+                else if (lines[i].parts[x] == "use_cached")
+                {
+                    if (lines[i].parts.size() > x + 2 && lines[i].parts[x + 2][0] == 'F')
+                        segmentUseCached = true;
+                    else
+                        segmentUseCached = false;
+                }
+                else if (lines[i].parts[x] == "z_index")
+                    segmentZIndex = stol(lines[i].parts[x+2]);
+                else if (lines[i].parts[x] == "on_insert")
+                {
+                    if (lines[i].parts.size() > x + 2 && lines[i].parts[x + 2][0] == 'F')
+                        segmentOnInsert = false;
+                    else
+                        segmentOnInsert = true;
+                }
+
             }
             lines[i].parts.clear();
         }
@@ -3848,6 +3863,8 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
         macros.useCached          = segmentUseCached;
         macros.isSegment          = isSegment;
         macros.isSegmentMath      = isSegmentMath;
+        macros.onInsert           = segmentOnInsert;
+        macros.zIndex             = segmentZIndex;
         macros.useGlobals         = useGlobals;
         macros.useProps           = useProps;
         macros.rawScript          = rawScript;
@@ -4014,13 +4031,23 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
                         for (auto idx = 2; idx < static_cast<int>(sectionParts.size()); ++idx)
                         {
                             auto keyVal = split(sectionParts[idx], '=');
+
                             if (keyVal.size() == 1)
                                 keyVal.emplace_back("True");
+
                             if (keyVal[0] == "ttl" || keyVal[0] == "refresh")
                                 // these are special and allow for time appends like 's' or 'm', or 'd'
                                 flags[keyVal[0]] = expandTime(keyVal[1]) * 1000;
+
                             else if (keyVal[0] == "use_cached")
                                 flags["use_cached"] = (keyVal[1] == "True" || keyVal[1] == "true");
+
+                            else if (keyVal[0] == "on_insert")
+                                flags["on_insert"] = (keyVal[1] == "True" || keyVal[1] == "true");
+
+                            else if (keyVal[0] == "z_index")
+                                flags["z_index"] = stoll(keyVal[1]);
+
                             else if (isFloat(keyVal[1]))
                                 params[keyVal[0]] = stod(keyVal[1]);
                             else if (isNumeric(keyVal[1]))

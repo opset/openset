@@ -110,7 +110,7 @@ namespace openset
 			return true;
 		}
 
-		std::string File::load(std::string namePath)
+		std::string File::load(std::string& namePath)
 		{
 			auto size = FileSize(namePath.c_str());
 			auto file = fopen(namePath.c_str(), "r");
