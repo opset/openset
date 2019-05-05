@@ -167,8 +167,8 @@ set(SOURCE_FILES
         src/rpc_internode.h
         src/rpc_cluster.cpp
         src/rpc_cluster.h
-        src/rpc_revent.cpp
-        src/rpc_revent.h
+        src/rpc_trigger.cpp
+        src/rpc_trigger.h
         src/rpc_table.cpp
         src/rpc_table.h
 		src/rpc_status.cpp

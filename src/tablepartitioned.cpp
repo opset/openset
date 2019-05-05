@@ -254,10 +254,9 @@ void TablePartitioned::pushMessage(const int64_t segmentHash, const SegmentParti
         }
     );
 
-    cout << "hash: " << segmentHash << "  state: " << (state == SegmentPartitioned_s::SegmentChange_e::enter ? "in" : "out") << "  uuid: " << uuid << endl; 
+    //cout << "hash: " << segmentHash << "  state: " << (state == SegmentPartitioned_s::SegmentChange_e::enter ? "in" : "out") << "  uuid: " << uuid << endl; 
 
-        /*
-        messages.emplace(
+/*        messages.emplace(
             segmentHash,
             revent::TriggerMessage_s {
                 segmentHash,
@@ -268,6 +267,9 @@ void TablePartitioned::pushMessage(const int64_t segmentHash, const SegmentParti
 
 void TablePartitioned::flushMessageMessages() 
 {
+    if (!messages.size())
+        return;
+
     csLock lock(globals::running->cs);
 
     for (auto &&t : messages)

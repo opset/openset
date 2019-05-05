@@ -8,12 +8,10 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 | Platform    | Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | 0.2.13  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 | 0.2.13  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   | 0.3.01  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 | 0.3.01  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:fire: **UPGRADE TO 0.2.13.** version 0.2.12 was a bad build.
-
-:coffee: OpenSet is currently in alpha. Please see v0.2.13 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.3.01 release notes below.
 
 ## Links
 
@@ -33,7 +31,7 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 ![Segments](docs/img/re-event-matrix.svg)
 
-Translate live event streams into behavioral event streams. OpenSet can ingest high speed data, and emit behavioral events for individual people from that stream.
+Translate live event streams into behavioral event streams. OpenSet will ingest streams of raw data and convert that into behavioral data for individuals in the dataset. You can have OpenSet notify you when a specific behavior is met (or not met).
 
 For example:
 
@@ -44,7 +42,8 @@ For example:
 -   people who spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
 -   people who were in Spain visited Spain but did not visit another European destination within 180 days.
 
-The event emitted will contain a time, an event name and the user ID that triggered the event. Events are emitted within milliseconds of their due time, where they are queued for consumption. Queues listeners can be configured to receive complete subscriptions, or share a subscription to allow for round robin message distribution.
+Triggers use are part of OpenSets powerful segmentation abilities. You simply subscribe to a segment and you will
+be notified when someone enters or exits that segment via web-hook.
 
 ### 2. Sequence Extraction
 
@@ -258,7 +257,7 @@ curl \
 --data-binary @- << PYQL | json_pp
 # our pyql script
 
-@segment products_home ttl=300s use_cached=True refresh=300s
+@segment products_home ttl=300s use_cached=True refresh=300s on_insert=True
 
 # match one of these
 for row in rows if
@@ -270,7 +269,7 @@ for row in rows if
     return True
 return False
 
-@segment products_yard ttl=300s use_cached=True refresh=300s
+@segment products_yard ttl=300s use_cached=True refresh=300s on_insert=True
 
 # match one of these
 for row in rows if
@@ -279,7 +278,7 @@ for row in rows if
     return True
 return False
 
-@segment products_outdoor ttl=300s use_cached=True refresh=300s
+@segment products_outdoor ttl=300s use_cached=True refresh=300s on_insert=True
 
 # match one of these
 for row in rows if
@@ -288,13 +287,18 @@ for row in rows if
     return True
 return False
 
-@segment products_commercial ttl=300s use_cached=True refresh=300s
+@segment products_commercial ttl=300s use_cached=True refresh=300s on_insert=True
 
 # match one of these
 for row in rows if
         'restaurant' in product_group:
     return True
 return False
+
+@segment products_yard_and_outdoor ttl=300s use_cached=True refresh=60s on_insert=True z_index=1000
+
+# create a new segment containing both products_yard and products_outdoor
+union('products_outdoor', 'products_yard')
 
 #end of pyql script
 
@@ -306,6 +310,10 @@ response (counts are people):
 ```json
 {
     "_": [
+        {
+            "g": "products_yard_and_outdoor",
+            "c": [3]
+        },
         {
             "g": "products_commercial",
             "c": [2]
@@ -723,31 +731,26 @@ In this case we want to find the products purchased immediately after another pu
 OpenSet is in Alpha. There may be semi-breaking changes going forward.
 
 -   External data. This feature will allow complex data structures to be passed to OpenSet for use in queries. These will data structures will be global to a table and can be used from any `pyql` script as standard `python` data types.
--   Properties. A way to set non-event attributes on a `person` record. For example, life-time-value, gender or birth-date. Properties will appear as regular named `python` variables in `pyql` scripts.
 
 # Inspiration
-
-My name Seth Hamilton, I've written commercial software my entire life.
-
-My first product was released in 1992 --- a graphical BBS product called RoboBOARD. After that came web analytics (DeepMetrix) and network monitoring (ipMonitor). My last startup (rare.io) did marketing automation. In all I've founded three startups, and I've been involved in two major acquisition --- by all measures I have had an exciting career.
-
-However, in 2015 I found myself writing my first resume and came to a realization. Despite writing millions of lines of code, I actually couldn't prove I had written anything. 100% of the code I had written was owned by someone else at that point in time.
-
-I love programming, I've been doing it since I was kid, and I especially love C++ (C++11 and beyond are game changing), and extra love messing with data (who doesn't). So, I thought this useful solution might be a good project to give back to the community.
-
-**So, why does this even exist?**
 
 Way back in 2005 I came across an interesting problem while at DeepMetrix. We produced an excellent little product called LiveStats. Everyday a million websites got their metrics using our software.
 
 LiveStats created roughly 40 reports. The reports were predefined and continuously updated using data from weblogs and page-scripts.
 
-This approach seemed perfect... until one day Anheuser-Busch called (they make a beer you've probably heard of). Bud wanted to drill into their data, and they wanted to see their data grouped and tabulated as saw fit, and they wanted this all in real-time. It was a compelling problem and they were willing to pay handsomely if we could solve it.
+This approach seemed perfect... until one day Anheuser-Busch called (they make a beer you've probably heard of). They wanted a solution that could drill into data, and look at that data in any way they saw fit. It was a compelling problem and they were willing to pay handsomely if we could solve it.
 
 Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone today... and... our stack was SQL.
 
 Failure got me thinking, and here we are today.
 
-## OpenSet 0.2.1 release notes
+## OpenSet 0.3.1 release notes
+
+-   Triggering is now unified with segmentation. Rather than having independent scripts, they now rely on segment scripts, and will notify with entered and exited events. Documentation for Triggers and Rest endpoints has been updated.
+
+-   Segments now have an `on_insert` flag. Segments can now be kept super-live by having segment code executed at the time of insert. There is overhead in performing this task, so if regular timed refreshes work, it is suggested you use those instead (they will trigger as well if you subscribe to them).
+
+## OpenSet 0.2.1x release notes
 
 -   support for properties by way of the `props` variable within your scripts. A property can be read or modified during any query, segment, or trigger. The script compiler will optimize if `props` are not used. Reading `props` will slow down execution of your scripts. Writing `props` will slow down execution a little bit more. Expect a 2x slowdown when getting and setting props. It should be noted only changed `props` are written back:
 

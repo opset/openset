@@ -63,7 +63,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
                     "POST", 
                     path, 
                     {
-                        { "revent", reventName }, 
+                        { "segment", reventName }, 
                         { "subscriber", subscriberName },
                         { "count", to_string(messageList.size())},
                         { "remaining", to_string(backlog) }
@@ -100,11 +100,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
     th.detach();
 }
 
-openset::revent::MessageBroker::~MessageBroker()
-{
-    
-
-}
+openset::revent::MessageBroker::~MessageBroker() = default;
 
 std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t segmentId)
 {
@@ -123,11 +119,11 @@ std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueue
 }
 
 void openset::revent::MessageBroker::registerSubscriber(
-	const std::string segmentName,
-	const std::string subscriberName,
-    const std::string host,
+	const std::string& segmentName,
+	const std::string& subscriberName,
+    const std::string& host,
     const int port,
-    const std::string path,
+    const std::string& path,
 	const int64_t hold)
 {
 	csLock lock(cs); // scoped lock
@@ -203,7 +199,7 @@ void openset::revent::MessageBroker::push(
 	auto subQueues = getAllQueues(segmentId);
 
     // each segment can have multiple subQueues (different subscribers)
-    // to accomodate this we basically insert the mesage multipe times, 
+    // to accomodate this we basically insert the message multiple times, 
     // once for each subQueue
 	for (auto &m : messages)
 	{
@@ -217,8 +213,8 @@ void openset::revent::MessageBroker::push(
 }
 
 std::vector<openset::revent::TriggerMessage_s> openset::revent::MessageBroker::pop(
-	const std::string segmentName, 
-	const std::string subscriberName, 
+	const std::string& segmentName, 
+	const std::string& subscriberName, 
 	const int64_t max)
 {
 	std::vector<openset::revent::TriggerMessage_s> result;
@@ -256,7 +252,7 @@ std::vector<openset::revent::TriggerMessage_s> openset::revent::MessageBroker::p
 
 }
 
-int64_t openset::revent::MessageBroker::size(std::string segmentName, std::string subscriberName)
+int64_t openset::revent::MessageBroker::size(const std::string& segmentName, const std::string& subscriberName)
 {
 	csLock lock(cs); // scoped lock
 

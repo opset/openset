@@ -23,6 +23,12 @@ OpenLoopInsert::OpenLoopInsert(openset::db::Database::TablePtr table) :
 	runCount(0)
 {}
 
+OpenLoopInsert::~OpenLoopInsert()
+{
+    if (tablePartitioned)
+        tablePartitioned->flushMessageMessages();
+}
+
 void OpenLoopInsert::prepare()
 {
     tablePartitioned = table->getPartitionObjects(loop->partition, false);

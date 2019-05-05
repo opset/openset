@@ -120,11 +120,11 @@ namespace openset
 			// indicates how many milliseconds a message may remain in the queue
 			// before it is discarded
 			void registerSubscriber(
-				const std::string segmentName,
-				const std::string subscriberName,
-                const std::string host,
+				const std::string& segmentName,
+				const std::string& subscriberName,
+                const std::string& host,
                 const int port,
-                const std::string path,
+                const std::string& path,
 				const int64_t hold);
 
             // pushes a local cache of messages from a tablePartitioned object
@@ -135,11 +135,11 @@ namespace openset
 
             // pop up to "max" items from a subscribers queue
 			std::vector<TriggerMessage_s> pop(
-				const std::string segmentName, 
-				const std::string subscriberName, 
+				const std::string& segmentName, 
+				const std::string& subscriberName, 
 				const int64_t max);
 
-			int64_t size(std::string segmentName, std::string subscriberName);
+			int64_t size(const std::string& segmentName, const std::string& subscriberName);
 
 			// perform queue maintenance, expire old messages, etc.
 			void run();

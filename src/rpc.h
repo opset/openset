@@ -7,7 +7,7 @@
 #include "rpc_internode.h"
 #include "rpc_cluster.h"
 #include "rpc_table.h"
-#include "rpc_revent.h"
+#include "rpc_trigger.h"
 #include "rpc_query.h"
 #include "rpc_insert.h"
 #include "rpc_status.h"
@@ -78,14 +78,14 @@ namespace openset::comms
         },*/
         {
             "DELETE",
-            std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::revent_drop,
+            std::regex(R"(^/v1/trigger/([a-z0-9_]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            RpcRevent::trigger_drop,
             { { 1, "table" }, { 2, "subname" } }
         },
         {
             "PUT",
-            std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)/sub/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::revent_sub,
+            std::regex(R"(^/v1/trigger/([a-z0-9_]+)/([a-z0-9_\.]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            RpcRevent::trigger_sub,
             { { 1, "table" }, { 2, "segment" }, { 3, "subname" } }
         },
         // RpcInternode

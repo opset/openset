@@ -1,4 +1,4 @@
-#include "rpc_revent.h"
+#include "rpc_trigger.h"
 
 #include <cinttypes>
 #include <regex>
@@ -190,7 +190,7 @@ void RpcRevent::revent_describe(const openset::web::MessagePtr message, const Rp
 }
 */
 
-void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcRevent::trigger_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
 /*    
     csLock lock(globals::running->cs);
@@ -246,7 +246,7 @@ void RpcRevent::revent_drop(const openset::web::MessagePtr message, const RpcMap
 }
 
 
-void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& matches)
 {
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
@@ -357,7 +357,7 @@ void RpcRevent::revent_sub(openset::web::MessagePtr message, const RpcMapping& m
                     openset::errors::Error{
                         openset::errors::errorClass_e::config,
                         openset::errors::errorCode_e::general_config_error,
-                        "trigger '" + segmentName + "' not found." },
+                        "segment: '" + segmentName + "' not found." },
                         message);
                 return;
             }

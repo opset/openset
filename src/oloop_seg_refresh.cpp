@@ -24,8 +24,14 @@ OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(openset::db::Database::TablePtr t
 
 OpenLoopSegmentRefresh::~OpenLoopSegmentRefresh()
 {
-    if (parts && prepared)
-       --parts->segmentUsageCount;        
+    if (parts) 
+    {       
+       if (prepared)
+        --parts->segmentUsageCount;  
+
+        parts->storeAllChangedSegments();
+        parts->flushMessageMessages();
+    }
 }
 
 void OpenLoopSegmentRefresh::storeSegment() const
@@ -151,7 +157,6 @@ bool OpenLoopSegmentRefresh::nextExpired()
 			interpreter->exec();
 
             emitSegmentDifferences(&beforeBits, bits);
-
 
 			storeSegment();
 

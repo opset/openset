@@ -18,8 +18,8 @@ namespace openset::comms
         // GET /v1/revent/{table}/trigger/{revent_name}
         //static void revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches);
         // DELETE /v1/revent/{table}/trigger/{revent_name}
-        static void revent_drop(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void trigger_drop(const openset::web::MessagePtr message, const RpcMapping& matches);
         // POST /v1/revent/{table}/trigger/{revent_name}/sub/{sub_name}
-        static void revent_sub(const openset::web::MessagePtr message, const RpcMapping& matches);
+        static void trigger_sub(const openset::web::MessagePtr message, const RpcMapping& matches);
     };
 }

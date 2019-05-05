@@ -40,6 +40,7 @@ OpenLoopSegment::~OpenLoopSegment()
         if (prepared)
             --parts->segmentUsageCount;
         parts->storeAllChangedSegments();
+        parts->flushMessageMessages();
     }
 }
 
