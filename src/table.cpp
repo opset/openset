@@ -1,6 +1,6 @@
 #include "config.h"
 #include "table.h"
-#include "trigger.h"
+//#include "trigger.h"
 #include "errors.h"
 #include "tablepartitioned.h"
 #include "file/file.h"
@@ -8,6 +8,7 @@
 #include "database.h"
 #include "asyncpool.h"
 #include "internoderouter.h"
+#include "queryinterpreter.h"
 
 using namespace openset::db;
 
@@ -100,6 +101,30 @@ void Table::releasePartitionObjects(const int32_t partition)
     }
 }
 
+void Table::setSegmentRefresh(
+    const std::string& segmentName, 
+    const openset::query::Macro_s& macros, 
+    const int64_t refreshTime,
+    const int zIndex,
+    const bool onInsert)
+{
+    csLock lock(segmentCS);
+
+    const auto scriptHash = MakeHash(macros.rawScript);
+
+    // lets see if it exists and if the script has a different hash we will replace it.
+    if (segmentRefresh.count(segmentName))
+    {
+        if (segmentRefresh[segmentName].lastHash == scriptHash &&
+            segmentRefresh[segmentName].zIndex == zIndex &&
+            segmentRefresh[segmentName].refreshTime == refreshTime &&
+            segmentRefresh[segmentName].onInsert == onInsert)
+            return;
+    }
+
+    segmentRefresh.emplace(segmentName, SegmentRefresh_s { segmentName, macros, refreshTime, zIndex, onInsert });
+}
+
 void Table::serializeTable(cjson* doc)
 {
 	auto pkNode = doc->setArray("z_order");
@@ -164,7 +189,7 @@ void Table::serializeSettings(cjson* doc) const
     doc->set("session_time", sessionTime);
     doc->set("tz_offset", tzOffset);
     doc->set("maint_interval", maintInterval);
-    doc->set("revent_interval", reventInterval);
+    doc->set("segment_interval", segmentInterval);
     doc->set("index_compression", indexCompression);
     doc->set("person_compression", personCompression);    
 }
@@ -172,6 +197,7 @@ void Table::serializeSettings(cjson* doc) const
 void Table::serializeTriggers(cjson* doc)
 {
 	// push the trigger names
+    /*
 	doc->setType(cjson::Types_e::OBJECT);
 
 	for (auto &t : triggerConf)
@@ -181,7 +207,8 @@ void Table::serializeTriggers(cjson* doc)
 		trigNode->set("name", t.second->name);
 		trigNode->set("entry", t.second->entryFunction);
 		trigNode->set("script", t.second->script);
-	}	
+	}
+    */
 }
 
 void Table::deserializeTable(const cjson* doc)
@@ -317,11 +344,11 @@ void Table::deserializeSettings(const cjson* doc)
             maintInterval = 60'000;
     }
 
-    if (const auto node = doc->find("revent_interval"); node)
+    if (const auto node = doc->find("segment_interval"); node)
     {
-        reventInterval = node->getInt();
-        if (maintInterval < 1'000)
-            maintInterval = 1'000;
+        segmentInterval = node->getInt();
+        if (segmentInterval < 60'000)
+            segmentInterval = 60'000;
     }
 
     if (const auto node = doc->find("index_compression"); node)
@@ -363,6 +390,7 @@ void Table::clearZombies()
 
 void Table::deserializeTriggers(const cjson* doc)
 {
+    /*
 	auto triggerList = doc->getNodes();
 	for (auto &t : triggerList)
 	{
@@ -384,5 +412,5 @@ void Table::deserializeTriggers(const cjson* doc)
 
 		Logger::get().info("initialized trigger '" + trigInfo->name + "' on table '" + this->name + ".");
 	}
+    */
 }
-

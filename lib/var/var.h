@@ -1008,6 +1008,10 @@ public:
 		if (type == valueType::BOOL)
 			return value.asBool;
 
+        // None is false
+        if (value.asInt64 == None)
+            return false;
+
 		switch (type)
 		{
 		case valueType::INT32:
@@ -1021,9 +1025,10 @@ public:
 		case valueType::BOOL:
 			return value.asBool ? true : false;
 		case valueType::STR:
-			// no length, "false" or "0" = false, anything else is true
+			// no length, starts with "f/F" or "0" = false, anything else is true
 			return (valueString.length() == 0 ||
-				valueString == "false" ||
+				valueString[0] == 'f' ||
+                valueString[0] == 'F' ||
 				valueString == "0") ? false : true;
 		default:
 			return false;

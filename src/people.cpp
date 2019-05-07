@@ -53,7 +53,7 @@ PersonData_s* People::getPersonByLIN(const int64_t linId)
 	return peopleLinear[linId];
 }
 
-PersonData_s* People::getmakePerson(string userIdString)
+PersonData_s* People::getMakePerson(string userIdString)
 {
     auto idLen = userIdString.length();
     if (idLen > 64)
@@ -105,6 +105,16 @@ PersonData_s* People::getmakePerson(string userIdString)
 		// keep incrementing until we miss.
 		hashId++;
 	}
+}
+
+void People::replacePersonRecord(PersonData_s* newRecord)
+{
+    // FIX - memory leak
+    if (peopleLinear[newRecord->linId])
+        PoolMem::getPool().freePtr(peopleLinear[newRecord->linId]);
+
+    if (newRecord)
+        peopleLinear[newRecord->linId] = newRecord;
 }
 
 int64_t People::peopleCount() const

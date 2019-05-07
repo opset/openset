@@ -29,7 +29,7 @@ void OpenLoopCleaner::prepare()
         return;
     }
 
-    parts->triggers->checkForConfigChange();
+    //parts->triggers->checkForConfigChange();
 }
 
 void OpenLoopCleaner::respawn()

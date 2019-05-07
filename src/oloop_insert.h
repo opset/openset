@@ -43,7 +43,7 @@ namespace openset
 		public:
 
 			explicit OpenLoopInsert(openset::db::Database::TablePtr table);
-			~OpenLoopInsert() final = default;
+			~OpenLoopInsert() final;
 
 			void prepare() final;
 			bool run() final;

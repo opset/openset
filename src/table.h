@@ -14,7 +14,6 @@ using namespace std;
 
 namespace openset
 {
-
 	namespace trigger
 	{
 		struct reventSettings_s;
@@ -30,30 +29,48 @@ namespace openset
 		struct SegmentTtl_s
 		{
 			string segmentName;
-			int64_t TTL;
+			int64_t TTL {0};
 
-			SegmentTtl_s(const std::string segmentName, const int64_t TTL) :
+			SegmentTtl_s(
+                    const std::string& segmentName, 
+                    const int64_t TTL) :
 				segmentName(segmentName),
 				TTL(TTL)
 			{}
+
+            SegmentTtl_s() {};
 		};
 
 		struct SegmentRefresh_s
 		{
 			string segmentName;
-			int64_t refreshTime;
+			int64_t refreshTime{ 86400 };
 			query::Macro_s macros;
 
+            int zIndex {100};
+            int64_t lastModified {0};
+            int64_t lastHash {0};
+            bool    onInsert {false};
+
 			SegmentRefresh_s(
-				const std::string segmentName,
-				const query::Macro_s macros,
-				const int64_t refreshTime) :
+				    const std::string& segmentName,
+				    const query::Macro_s& macros,
+				    const int64_t refreshTime,
+                    const int zIndex,
+                    const bool onInsert) :
 				segmentName(segmentName),
 				refreshTime(refreshTime),
-				macros(macros)
-			{}
+				macros(macros),
+                zIndex(zIndex),
+                onInsert(onInsert)
+			{
+			    lastModified = Now();
+                lastHash = MakeHash(macros.rawScript);
+			}
 
-			int64_t getRefresh() const
+            SegmentRefresh_s() = default;
+
+            int64_t getRefresh() const
 			{
 				return refreshTime;
 			}
@@ -92,7 +109,7 @@ namespace openset
 
 			zMapStr zOrderStrings;
 			zMapHash zOrderInts;
-			std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
+			//std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
 			AttributeBlob attributeBlob;
 			// partition specific objects
 			PartitionMap partitions;
@@ -111,8 +128,7 @@ namespace openset
 			int64_t eventTtl{ 86'400'000LL * 365LL * 5LL }; // auto cull older than stampCull
 			int64_t sessionTime{ 60'000LL * 30LL }; // 30 minutes
             int64_t maintInterval{ 86'400'000LL }; // trim, index, clean, etc (daily)
-            int64_t reventInterval{ 60'000 }; // check for re-events every 60 seconds
-            int64_t segmentInterval{ 60'000 }; // update segments every 60 seconds
+            int64_t segmentInterval{ 1'000 }; // update segments every second
             int indexCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
             int personCompression{ 5 }; // 1-20 - 1 is slower, but smaller, 20 is faster and bigger
 
@@ -226,24 +242,23 @@ namespace openset
 				++loadVersion;
 			}
 
-			std::unordered_map<string, openset::revent::reventSettings_s*>* getTriggerConf()
+			/*std::unordered_map<string, openset::revent::reventSettings_s*>* getTriggerConf()
 			{
 				return &triggerConf;
-			}
+			}*/
 
-			void setSegmentRefresh(std::string& segmentName, const query::Macro_s& macros, const int64_t refreshTime)
-			{
-				csLock lock(segmentCS);
-				segmentRefresh.emplace(segmentName, SegmentRefresh_s{ segmentName, macros, refreshTime });
-			}
+            void setSegmentRefresh(
+                const std::string& segmentName, 
+                const query::Macro_s& macros, 
+                const int64_t refreshTime, 
+                const int zIndex, 
+                const bool onInsert);
 
 			void setSegmentTtl(std::string segmentName, const int64_t TTL)
 			{
 				csLock lock(segmentCS);
 				segmentTTL.emplace(segmentName, SegmentTtl_s{ segmentName, TTL });
 			}
-
-            
 
 			void serializeTable(cjson* doc);
 			void serializeTriggers(cjson* doc);

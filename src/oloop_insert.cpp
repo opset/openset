@@ -10,6 +10,7 @@
 #include "tablepartitioned.h"
 #include "sidelog.h"
 #include "internoderouter.h"
+#include "queryinterpreter.h"
 
 using namespace std;
 using namespace openset::async;
@@ -22,6 +23,12 @@ OpenLoopInsert::OpenLoopInsert(openset::db::Database::TablePtr table) :
 	runCount(0)
 {}
 
+OpenLoopInsert::~OpenLoopInsert()
+{
+    if (tablePartitioned)
+        tablePartitioned->flushMessageMessages();
+}
+
 void OpenLoopInsert::prepare()
 {
     tablePartitioned = table->getPartitionObjects(loop->partition, false);
@@ -32,6 +39,8 @@ void OpenLoopInsert::prepare()
         return;
     }
 
+    tablePartitioned->checkForSegmentChanges();
+
 //	queueIter = localQueue.end();
     Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
@@ -40,6 +49,9 @@ bool OpenLoopInsert::run()
 {       
     const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
+    // check partition segment data against master and update if necessary
+    tablePartitioned->checkForSegmentChanges();
+    
 	if (mapInfo != openset::mapping::NodeState_e::active_owner &&
 		mapInfo != openset::mapping::NodeState_e::active_clone)
 	{
@@ -107,24 +119,47 @@ bool OpenLoopInsert::run()
 	// now insert without locks
 	for (auto& uuid : evtByPerson)
 	{
-	    const auto personData = tablePartitioned->people.getmakePerson(uuid.first);
+	    const auto personData = tablePartitioned->people.getMakePerson(uuid.first);
 		person.mount(personData);
 		person.prepare();
-
-		auto triggers = tablePartitioned->triggers->getTriggerMap();
-		for (auto trigger : triggers)
-		{
-			trigger.second->mount(&person);
-			trigger.second->preInsertTest();
-		}
 
 		// insert events for this uuid
 		for (auto &json : uuid.second)
 			person.insert(&json);
 
+        // run any segments flagged for "onInsert" in proper z-order
+        const auto insertSegments = tablePartitioned->getOnInsertSegments();
+        for (auto segment : insertSegments)
+        {
+            // ensure we have bits mounted for this segment
+            segment->prepare(tablePartitioned->attributes);
+            // get a cached interpreter (or make one) and set the bits
+            const auto interpreter = segment->getInterpreter(tablePartitioned->people.peopleCount());
+
+            // we can't crunch segment math on refresh, but we can expire it, so it crunches the next time it's used
+            if (interpreter->macros.isSegmentMath)
+            {
+                tablePartitioned->setSegmentRefresh(segment->segmentName, 0);
+                continue;
+            }
+
+            // mount the person
+            interpreter->mount(&person);
+			interpreter->exec();
+
+            // get return values from script
+            auto returns = interpreter->getLastReturn();
+
+            // set bit according to interpreter results
+            const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
+            if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                tablePartitioned->pushMessage(segment->segmentHash, stateChange, personData->getIdStr());
+
+        }
+
 		// check status after insert
-		for (auto trigger : triggers)
-			trigger.second->postInsertTest();
+		//for (auto trigger : triggers)
+			//trigger.second->postInsertTest();
 
 		person.commit();
 	}

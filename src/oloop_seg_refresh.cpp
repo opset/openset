@@ -19,151 +19,117 @@ OpenLoopSegmentRefresh::OpenLoopSegmentRefresh(openset::db::Database::TablePtr t
 	instance(0),
 	runCount(0),
 	index(nullptr)
-{}
+{
+}
 
 OpenLoopSegmentRefresh::~OpenLoopSegmentRefresh()
 {
-	if (interpreter)
-	{
-		if (interpreter->bits)
-			delete interpreter->bits;
-		delete interpreter;
-	}
+    if (parts) 
+    {       
+       if (prepared)
+        --parts->segmentUsageCount;  
+
+        parts->storeAllChangedSegments();
+        parts->flushMessageMessages();
+    }
 }
 
-void OpenLoopSegmentRefresh::storeSegment(IndexBits* bits) const
+void OpenLoopSegmentRefresh::storeSegment() const
 {
-	// make sure it exists in the index, we don't care about the return value
-	parts->attributes.getMake(COL_SEGMENT, segmentName);
+    // store any changes we've made to the segments
+    parts->storeAllChangedSegments();
 
-	// swap our new or existing index entry with some new IndexBits, compress, and store them
-	parts->attributes.swap(COL_SEGMENT, MakeHash(segmentName), bits);
-	//delete bits; // we are done with the bits
+    auto delta = bits->population(maxLinearId) - startPopulation;
 
+    // update the segment refresh
 	parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
 	parts->setSegmentTTL(segmentName, macros.segmentTTL);
 
-	Logger::get().info("did refresh on " + table->getName() + "/" + segmentName + ".");
+    if (delta != 0)
+	    Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName + ". (delta " + to_string(delta) + ")");
 }
+
+void OpenLoopSegmentRefresh::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
+{
+    openset::db::PersonData_s* personData;
+
+    /*
+     * This will have to be made faster, but essentially it allows to look for changes in/out changes on the segment 
+     * for segments calculated using segment math
+     */
+    for (int64_t i = 0; i < maxLinearId; ++i)
+    {
+        const auto beforeBit = before->bitState(i);
+        const auto afterBit = after->bitState(i);
+
+        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+            continue;
+
+        if (afterBit && !beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::enter, personData->getIdStr());
+        else if (!afterBit && beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::exit, personData->getIdStr());
+    }
+}
+
 
 bool OpenLoopSegmentRefresh::nextExpired()
 {
-	// retreive any indexes this script depends on
-	const auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
-	{
-		// if there are no bits with this name created in this query
-		// then look in the index
-		auto attr = parts->attributes.get(COL_SEGMENT, segmentName);
-		
-		if (!attr)
-			return nullptr;
-
-		deleteAfterUsing = true;
-		return attr->getBits();
-	};
-
-	const auto deleteInterpreter = [&]()
-	{
-		if (interpreter)
-		{
-			if (interpreter->bits)
-				delete interpreter->bits;
-			delete interpreter;
-			interpreter = nullptr;
-		}
-	};
-
+    // this loop is a bit expensive and may make sense to break down into
+    // a more async process at some future point.
 	while (true)
 	{
 
-		deleteInterpreter();
-
-		// clean up old objects
-
-		// reset the linear iterator current index
-		currentLinId = -1;
-
-		int64_t expiredBy = 0;
-		std::vector<std::string> cleanup;
-
-		{ // scoped lock
-			csLock lock(*parts->table->getSegmentLock());
-
-			// sync the refresh map in the table object with our local refresh timer
-			// first, lets grab the master list
-			const auto refreshList = parts->table->getSegmentRefresh();
-
-			// add new segments to our refreshList (a map)
-			for (auto seg : *refreshList)
-				if (!parts->segmentRefresh.count(seg.first))
-					parts->setSegmentRefresh(seg.first, seg.second.getRefresh());
-
-			const auto now = Now();
-
-			// find expired and clean up
-			for (auto &seg : parts->segmentRefresh)
-			{
-				// if we didn't see it in the master list
-				// lets destroy it in our list
-				if (!refreshList->count(seg.first))
-				{
-					cleanup.push_back(seg.first);
-					continue;
-				}
-
-				if (seg.second < now)
-				{
-					segmentName = seg.first;
-					expiredBy = now - seg.second;
-					break;
-				}
-			}
-
-			// no expired segment found, lets reschedule
-			if (expiredBy && segmentName.length())
-			{
-				// copy those macros
-				macros = parts->table->getSegmentRefresh()->at(segmentName).macros;
-			}
-		}
-
-		// do some cleanup
-		for (auto &seg : cleanup)
-			parts->segmentRefresh.erase(seg);
-
-		// if we didn't get an expired segment lets exit
-		if (!expiredBy)
-		{
-			this->scheduleFuture(5000); // try again in 15 seconds
+		if (segmentsIter == parts->segments.end())
+        {
+            respawn();
 			return false;
-		}
-		
+        }
+
+		segmentName = segmentsIter->first;
+        segmentHash = MakeHash(segmentName);
+
+        if (!parts->isRefreshDue(segmentName))
+        {
+            ++segmentsIter;
+            continue;
+        }
+        
+		macros = segmentsIter->second.macros;
+        segmentInfo = &parts->segments[segmentName];
+
+        cout << "segment refresh: " << segmentName << endl;
+        	    
 		// generate the index for this query	
 		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 		bool countable;
 		index = indexing.getIndex("_", countable);
 
-		// create our bits, and zero them out
-		maxLinearId = parts->people.peopleCount();
-		auto bits = new IndexBits();
-		bits->makeBits(maxLinearId, 0);
+	    // get bits for this segment
+		bits = parts->getBits(segmentName);        
+        startPopulation = bits->population(maxLinearId);
 
-		// reset max linear
-		maxLinearId = parts->people.peopleCount();
+        auto getSegmentCB = parts->getSegmentCallback();
 
 		// is this something we can calculate using purely
-		// indexes? (nifty)
+		// indexes? (query logic shows we can simply use binary operators to calculate the segment)
 		if (countable && !macros.isSegmentMath)
 		{
-			bits->opCopy(*index);
-			storeSegment(bits);
-			delete bits;
+            // look for changes
+            emitSegmentDifferences(bits, index);
+            // index contains result
+            bits->opCopy(*index);
+
+            // index is the result when binary index math can be used.
+            // copy the index
+			storeSegment();
+            ++segmentsIter;
 			continue;
 		}
 
-		interpreter = new Interpreter(macros, openset::query::InterpretMode_e::count);
+        // this script needs to be executed
+		interpreter = parts->getInterpreter(segmentName, maxLinearId);
 		interpreter->setGetSegmentCB(getSegmentCB);
-		interpreter->setBits(bits, maxLinearId);
 
 		auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -181,14 +147,27 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
+            IndexBits beforeBits;
+            beforeBits.opCopy(*bits);
+
 			interpreter->interpretMode = InterpretMode_e::count;
 
+            // mount empty person record (required but not used in segment math queries).
 			interpreter->mount(&person);
 			interpreter->exec();
 
-			storeSegment(bits);
+            emitSegmentDifferences(&beforeBits, bits);
+
+			storeSegment();
+
+            ++segmentsIter;
 			continue;
 		};
+
+		// reset the linear iterator current index
+		currentLinId = -1;
+
+		++segmentsIter;
 
 		// we have to execute actual code that iterates people
 		return true;
@@ -206,69 +185,84 @@ void OpenLoopSegmentRefresh::prepare()
         suicide();
         return;
     }
+
+    parts->checkForSegmentChanges();
+    ++parts->segmentUsageCount;        
+    
+    segmentsIter = parts->segments.begin();
+	maxLinearId = parts->people.peopleCount();
 	
-	nextExpired();	
+	nextExpired();
 }
 
 void OpenLoopSegmentRefresh::respawn()
 {
     OpenLoop* newCell = new OpenLoopSegmentRefresh(table);
     
-    newCell->scheduleFuture(table->segmentInterval); // check again in 15 seconds
-    
+    newCell->scheduleFuture(table->segmentInterval); // check again in (60 second default)   
     spawn(newCell); // add replacement to scheduler
+
     suicide(); // kill this cell.
 }
 
 bool OpenLoopSegmentRefresh::run()
 {
-	if (!interpreter && 
-		!nextExpired())
-	{
-		respawn();
-		return false;
-	}
 
 	if (!interpreter)
+    {
+        respawn();
 		return false;
+    }
 
 	openset::db::PersonData_s* personData;
-	//while (true)
+
+	while (true)
 	{
-		//if (sliceComplete())
-			//break; // let some other cells run
+		if (sliceComplete())
+			break; // let some other cells run
 		
 		// are we out of bits to analyze?
+        // lets move to the next expired segment
 		if (interpreter->error.inError() || 
 			!index->linearIter(currentLinId, maxLinearId))
 		{
 
 			// TODO - log error
+			storeSegment();
 
 			// add to resultBits upon query completion
-			if (!interpreter->error.inError())
-				storeSegment(interpreter->bits);
+			if (interpreter->error.inError())
+	            Logger::get().error("attempted refresh on " + table->getName() + "/" + segmentName + ". " + interpreter->error.getErrorJSON());		    
 			
 			// all done?
 			if (!nextExpired())
-				respawn();
+                return false;
 
-            // either we are done, or we will do more on the next
-            // loop
-            return false;
+            // keep working
+            return true;
 		}
 		
-		if ((personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+		if (currentLinId < maxLinearId &&
+            (personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
 		{
 			++runCount;
 			person.mount(personData);
 			person.prepare();
 			interpreter->mount(&person);
 			interpreter->exec();
+
+            // if we have bits (we should always have bits)
+            if (interpreter->bits)
+            {                
+                // get return values from script
+                auto returns = interpreter->getLastReturn();
+
+                // any returns, are they true?
+                const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+                if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                    parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
+            }
 		}
-
-		//++count;
 	}
-
     return true;
 }

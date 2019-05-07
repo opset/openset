@@ -119,16 +119,24 @@ bool AsyncLoop::run(int64_t &nextRun)
 	{
 		const auto now = Now();
 
-		if (!w->prepared)
-		{
-			w->prepare();
-			w->prepared = true;
-		}
-
 		if (w->checkCondition() &&
 			w->checkTimer(now) &&
 			w->state == oloopState_e::running) // check - some cells will complete in prepare
 		{
+		    if (!w->prepared)
+		    {
+			    w->prepare();
+			    w->prepared = true;
+
+                // if the worker completed or terminated during
+                // the prepare step, then do not run
+                if (w->state == oloopState_e::done)
+                {
+                    delete w;
+                    continue;
+                }
+		    }
+
 			w->runStart = now;
 
             // count runs that have asked for an immediate re-run (returned true)

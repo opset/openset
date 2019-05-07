@@ -2,12 +2,12 @@
 
 bool Path::IsRelative(const std::string& path)
 {
-	if (path.find("..\\") != -1)
+	if (path.find("..\\") != std::string::npos)
 	{
 		return true;
 	}
 
-	if (path.find("../") != -1)
+	if (path.find("../") != std::string::npos)
 	{
 		return true;
 	}
@@ -17,9 +17,9 @@ bool Path::IsRelative(const std::string& path)
 
 std::string Path::GetExtension(const std::string& path)
 {
-	int32_t pos = path.find_last_of('.');
+    const auto pos = path.find_last_of('.');
 
-	if (pos == -1)
+	if (pos == std::string::npos)
 	{
 		return "";
 	}

@@ -527,6 +527,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             bufferLength); // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
         PoolMem::getPool().freePtr(buffer); // clean up stray resultSets
+        Logger::get().info("event query on " + table->getName()); 
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
@@ -558,33 +559,44 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                     // clean up stray resultSets
                     for (auto resultSet : resultSets)
                         delete resultSet;
+
                     release_cb();
                     return;
                 }
-            }                                                            // 1. Merge the Macro Literals in
-            ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets); // 2. Merge the rows
+            }
+
+            // 1. Merge the Macro Literals
+            // 2. Merge the rows
+            ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 queryMacros.vars.columnVars.size(),
                 queryMacros.indexes.size(),
                 resultSets,
-                bufferLength); /*
-        cjson tDoc;
-        ResultMuxDemux::resultSetToJson(
-            queryMacros.vars.columnVars.size(),
-            queryMacros.indexes.size(),
-            resultSets,
-            &tDoc);
+                bufferLength); 
+            /*
+            cjson tDoc;
+            ResultMuxDemux::resultSetToJson(
+                queryMacros.vars.columnVars.size(),
+                queryMacros.indexes.size(),
+                resultSets,
+                &tDoc);
 
-        cout << cjson::stringify(&tDoc, true );
-        */
+            cout << cjson::stringify(&tDoc, true );
+            */
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-            Logger::get().info("Fork query on " + table->getName()); // clean up stray resultSets
+            PoolMem::getPool().freePtr(buffer);
+
+            Logger::get().info("event query on " + table->getName());
+
+            // clean up stray resultSets
             for (auto resultSet : resultSets)
                 delete resultSet;
-            PoolMem::getPool().freePtr(buffer);
+
             release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
         });
+
     auto instance = 0; // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
@@ -604,10 +616,10 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     const auto queryCode  = std::string { message->getPayload(), message->getPayloadLength() };
     const auto debug      = message->getParamBool("debug");
     const auto isFork     = message->getParamBool("fork");
-    const auto log        = "Inbound counts query (fork: "s + (isFork
-                                                                   ? "true"s
-                                                                   : "false"s) + ")"s;
+    const auto log        = "Inbound counts query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+
     Logger::get().info(log);
+
     if (!tableName.length())
     {
         RpcError(
@@ -619,6 +631,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             message);
         return;
     }
+
     if (!queryCode.length())
     {
         RpcError(
@@ -630,7 +643,9 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             message);
         return;
     }
+
     auto table = database->getTable(tableName);
+    
     if (!table)
     {
         RpcError(
@@ -642,10 +657,13 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             message);
         return;
     }
+
     query::ParamVars paramVars = getInlineVaraibles(message);
     // get the functions extracted and de-indented as named code blocks
     auto subQueries = query::QueryParser::extractSections(queryCode.c_str());
-    query::QueryPairs queries; // loop through the extracted functions (subQueries) and compile them
+    query::QueryPairs queries; 
+    
+    // loop through the extracted functions (subQueries) and compile them
     for (auto r : subQueries)
     {
         if (r.sectionType != "segment")
@@ -653,25 +671,36 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         query::Macro_s queryMacros; // this is our compiled code block
         query::QueryParser p;
         p.compileQuery(r.code.c_str(), table->getColumns(), queryMacros, &paramVars);
+
         if (p.error.inError())
         {
             cjson response;
             message->reply(http::StatusCode::client_error_bad_request, cjson::stringify(&response, true));
             return;
         }
+
         if (r.flags.contains("ttl"))
         {
             queryMacros.segmentTTL = r.flags["ttl"];
             table->setSegmentTtl(r.sectionName, r.flags["ttl"]);
         }
+
+        const auto zIndex = r.flags.contains("z_index") ? r.flags["z_index"].getInt32() : 100;
+        const auto onInsert = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
+        const auto useCached = r.flags.contains("use_cached") ? r.flags["use_cached"].getBool() : false;
+        
         if (r.flags.contains("refresh"))
         {
             queryMacros.segmentRefresh = r.flags["refresh"];
-            table->setSegmentRefresh(r.sectionName, queryMacros, r.flags["refresh"]);
+            table->setSegmentRefresh(r.sectionName, queryMacros, r.flags["refresh"], zIndex, onInsert);
         }
+
+        queryMacros.useCached = useCached;            
         queryMacros.isSegment = true;
         queries.emplace_back(std::pair<std::string, query::Macro_s> { r.sectionName, queryMacros });
-    } // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
+    } 
+    
+    // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
     //      thread as they are executed serially, rather than in parallel. 
     //
@@ -688,7 +717,9 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
                 MacroDbg(m.second); // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
         return;
-    } /*
+    } 
+    
+    /*
     * We are originating the query.
     *
     * At this point in the function we have validated that the
@@ -698,7 +729,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     * We will call our forkQuery function.
     *
     * forQuery will call all the nodes (including this one) with the
-    * `is_fork` varaible set to true.
+    * `is_fork` variable set to true.
     *
     *
     */
@@ -713,6 +744,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             message);
         return;
     }
+
     if (!isFork)
     {
         const auto json = forkQuery(
@@ -723,29 +755,39 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
-    } // We are a Fork!
+    } 
+    
+    // We are a Fork!
     auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
         {
             mapping::NodeState_e::active_owner
         });
+
     resultSets.reserve(partitions->getWorkerCount());
+
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-        resultSets.push_back(new ResultSet(1)); // nothing active - return an empty set - not an error
+        resultSets.push_back(new ResultSet(1)); 
+    
+    // nothing active - return an empty set - not an error
     if (!activeList.size())
     {
         // 1. Merge Macro Literals
         ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets); // 2. Merge the rows
         int64_t bufferLength = 0;
         const auto buffer    = ResultMuxDemux::multiSetToInternode(1, 1, resultSets, bufferLength);
-        // reply is responible for buffer
+
+        // reply is responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
         PoolMem::getPool().freePtr(buffer);
         Logger::get().info("No active workers for " + table->getName()); // clean up stray resultSets
+
         for (auto resultSet : resultSets)
             delete resultSet;
+
         return;
     }
+
     auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
@@ -764,25 +806,38 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
                     // clean up stray resultSets
                     for (auto resultSet : resultSets)
                         delete resultSet;
+
+                    release_cb(); 
                     return;
                 }
-            }                                                                       // 1. Merge Macro Literals
-            ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets); // 2. Merge the rows
+            }
+
+            // 1. Merge Macro Literals
+            // 2. Merge the rows
+            ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets); 
+
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 queries.front().second.vars.columnVars.size(),
                 queries.front().second.indexes.size(),
                 resultSets,
                 bufferLength);
+
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
             PoolMem::getPool().freePtr(buffer);
-            Logger::get().info("Fork count(s) on " + table->getName()); // clean up stray resultSets
+
+            Logger::get().info("segment query on " + table->getName()); 
+        
+            // clean up stray resultSets
             for (auto resultSet : resultSets)
                 delete resultSet;
+
             release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
         });
+
     auto instance = 0;
     auto workers  = 0; // pass factory function (as lambda) to create new cell objects
+
     partitions->cellFactory(
         activeList,
         [shuttle, table, queries, resultSets, &workers, &instance](AsyncLoop* loop) -> OpenLoop*
@@ -791,6 +846,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             ++workers;
             return new OpenLoopSegment(shuttle, table, queries, resultSets[loop->getWorkerId()], instance);
         });
+
     Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 

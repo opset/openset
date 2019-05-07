@@ -28,8 +28,6 @@ OpenLoopSegment::OpenLoopSegment(
 	instance(instance),
 	runCount(0), 
 	startTime(0),
-	population(0),
-	popEvaluated(0),
 	index(nullptr),
 	result(result),
 	macroIter(macrosList.begin())
@@ -37,15 +35,16 @@ OpenLoopSegment::OpenLoopSegment(
 
 OpenLoopSegment::~OpenLoopSegment()
 {
-	if (interpreter)
-		delete interpreter;
-
-	for (auto &rb : resultBits)
-		if (rb.second)
-			delete rb.second;
+    if (parts)
+    {
+        if (prepared)
+            --parts->segmentUsageCount;
+        parts->storeAllChangedSegments();
+        parts->flushMessageMessages();
+    }
 }
 
-void OpenLoopSegment::storeResult(std::string name, int64_t count) const
+void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
 {
 	const auto nameHash = MakeHash(name);
 
@@ -79,6 +78,21 @@ void OpenLoopSegment::storeSegments()
 	 *  are local to the partition	 
 	 */
 
+    // store any changes we've made to the segments
+    parts->storeAllChangedSegments();
+
+    for (auto& macro : macrosList)
+    {
+		const auto &segmentName = macro.first;
+
+		if (macro.second.segmentRefresh != -1)
+			parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
+
+        if (macro.second.segmentTTL != -1)
+            parts->setSegmentTTL(segmentName, macro.second.segmentTTL);       
+    }
+
+    /*
 	for (auto& macro : macrosList)
 	{
 		const auto &segmentName = macro.first;
@@ -87,7 +101,7 @@ void OpenLoopSegment::storeSegments()
 			parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
 
 		// are we storing this, and was this a cached copy (not fresh)
-		// if so, store it, otherwise let it age.
+		// if its a fresh query then store it, otherwise let it age.
 		if (macro.second.segmentTTL != -1 && 
 			segmentWasCached.count(segmentName) == 0)
 		{
@@ -110,33 +124,33 @@ void OpenLoopSegment::storeSegments()
 			parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
 		}
 	}
+    */
+}
+void OpenLoopSegment::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
+{
+    openset::db::PersonData_s* personData;
+
+    /*
+     * This will have to be made faster, but essentially it allows to look for changes in/out changes on the segment 
+     * for segments calculated using segment math
+     */
+    for (int64_t i = 0; i < maxLinearId; ++i)
+    {
+        const auto beforeBit = before->bitState(i);
+        const auto afterBit = after->bitState(i);
+
+        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+            continue;
+
+        if (afterBit && !beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::enter, personData->getIdStr());
+        else if (!afterBit && beforeBit)
+            parts->pushMessage(segmentHash, SegmentPartitioned_s::SegmentChange_e::exit, personData->getIdStr());
+    }
 }
 
 bool OpenLoopSegment::nextMacro()
 {
-
-	// lambda callback used by interpretor when executing segment
-	// queries to get segments not caculated in the current query 
-	// i.e. get save segments (those created with TTLs)
-	const auto getSegmentCB = [&](std::string segmentName, bool &deleteAfterUsing) -> IndexBits*
-	{
-		// try for local bits (made during this query) first as they 
-		// may be fresher
-		deleteAfterUsing = false;
-		if (resultBits.count(segmentName))
-			return resultBits[segmentName];
-
-		// if there are no bits with this name created in this query
-		// then look in the index
-		auto attr = parts->attributes.get(COL_SEGMENT, segmentName);
-		
-		if (!attr)
-			return nullptr;
-
-		deleteAfterUsing = true;
-		return attr->getBits();
-	};
-
 	// loop until we find an segment index that requires
 	// querying, otherwise, if an index is "countable"
 	// we will just use it's population and move to
@@ -145,41 +159,50 @@ bool OpenLoopSegment::nextMacro()
 	{
 
 		if (macroIter == macrosList.end())
+        {
+			storeSegments();
+
+            if (macrosList.size())
+                result->setAccTypesFromMacros(macrosList.begin()->second);
+
+		    openset::errors::Error error;
+
+			shuttle->reply(
+				0,
+				CellQueryResult_s{
+					instance,
+                    {},
+					error
+				}
+			);
+
+		    suicide();
+
 			return false;
+        }
 
 		// set the resultName variable, this will be the branch
 		// in the result set we use to store the value for this index count
-		resultName = macroIter->first;
-		macros = macroIter->second;
+		segmentName = macroIter->first;
+        segmentHash = MakeHash(segmentName);
+        segmentInfo = &parts->segments[segmentName];
+
+        auto& macros = macroIter->second;
 
 		// generate the index for this query	
 		indexing.mount(table.get(), macros, loop->partition, maxLinearId);
 		bool countable;
 		index = indexing.getIndex("_", countable);
-		population = index->population(maxLinearId);
-		popEvaluated += population;
 
-		// create our bits, and zero them out
-		auto bits = new IndexBits();
-		bits->makeBits(maxLinearId, 0);
-
-
-		// we may have a cached copy
-		if (macros.useCached && !parts->isSegmentExpiredTTL(resultName))
+		// get the bits for this segment
+        auto bits = parts->getBits(segmentName);
+        
+		// should we return these bits, as a cached copy?
+		if (macros.useCached && !parts->isRefreshDue(segmentName))
 		{
-			auto deleteAfterUsing = false;
-			const auto cachedBits = getSegmentCB(resultName, deleteAfterUsing);
-			if (cachedBits)
+		    if (bits)
 			{
-				bits->opCopy(*cachedBits);
-				resultBits[resultName] = bits;
-				storeResult(resultName, bits->population(maxLinearId));
-
-				segmentWasCached.insert(resultName);
-
-				if (deleteAfterUsing)
-					delete cachedBits;
-
+				storeResult(segmentName, bits->population(maxLinearId));
 				++macroIter;
 				continue; // try another index
 			}
@@ -189,24 +212,22 @@ bool OpenLoopSegment::nextMacro()
 		// is this something we can calculate using purely
 		// indexes? (nifty)
 		if (countable && !macros.isSegmentMath)
-		{
-			bits->opCopy(*index);
+        {
+            // look for changes
+            emitSegmentDifferences(bits, index);
+            // index contains result
+            bits->opCopy(*index);
 
-			// add to resultBits upon query completion
-			resultBits[resultName] = bits;
-			storeResult(resultName, population);
+		    // add to resultBits upon query completion
+			storeResult(segmentName, index->population(maxLinearId));
 
 			++macroIter;
 			continue; // try another index
 		}
 
-		// we need a new interpreter object
-		if (interpreter) 
-			delete interpreter;
-
-		interpreter = new Interpreter(macros, openset::query::InterpretMode_e::count);
+		interpreter = parts->getInterpreter(segmentName, maxLinearId);
+        auto getSegmentCB = parts->getSegmentCallback();
 		interpreter->setGetSegmentCB(getSegmentCB);
-		interpreter->setBits(bits, maxLinearId);
 
 		auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -225,14 +246,17 @@ bool OpenLoopSegment::nextMacro()
 		// meaning we do not have to iterate user records
 		if (macros.isSegmentMath)
 		{
+            IndexBits beforeBits;
+            beforeBits.opCopy(*bits);
 			interpreter->interpretMode = InterpretMode_e::count;
 
 			interpreter->mount(&person);
 			interpreter->exec();
 
+            emitSegmentDifferences(&beforeBits, bits);
+
 			// add to resultBits upon query completion
-			resultBits[resultName] = interpreter->bits;
-			storeResult(resultName, interpreter->bits->population(maxLinearId));
+			storeResult(segmentName, bits->population(maxLinearId));
 
 			++macroIter;
 			continue;
@@ -251,7 +275,7 @@ bool OpenLoopSegment::nextMacro()
 void OpenLoopSegment::prepare()
 {
 	auto prepStart = Now();
-
+    
 	parts = table->getPartitionObjects(loop->partition, false);
 
     if (!parts)
@@ -260,52 +284,28 @@ void OpenLoopSegment::prepare()
         return;
     }
 
+    parts->checkForSegmentChanges();   
+    ++parts->segmentUsageCount;
+
 	maxLinearId = parts->people.peopleCount();
 
 	startTime = Now();
 
 	// Note - OpenLoopSegment can return in the prepare if none of the queries
 	// require iterating user records (as in were cached, segmentMath, or indexed).
-	if (!nextMacro())
-	{
-		const auto time = Now() - startTime;
-
-		openset::errors::Error error;
-
-		if (interpreter)
-			error = interpreter->error;
-
-		storeSegments();
-
-        result->setAccTypesFromMacros(macros);
-
-		shuttle->reply(
-			0,
-			CellQueryResult_s{
-			instance,
-            {},
-			error
-		}
-		);
-
-		this->suicide();
-		return;
-	}
-		
+	nextMacro();		
 }
 
 bool OpenLoopSegment::run()
 {
+
 	openset::db::PersonData_s* personData;
 	while (true)
 	{
 		if (sliceComplete())
 			return true; // let some other cells run
 
-		if (!interpreter && !nextMacro())
-			return false;
-
-		if (!interpreter)
+		if (!interpreter) 
 			return false;
 
 		// if there was an error, exit
@@ -330,35 +330,11 @@ bool OpenLoopSegment::run()
 		if (!index->linearIter(currentLinId, maxLinearId))
 		{
 			// add to resultBits upon query completion
-			resultBits[resultName] = interpreter->bits;
-			storeResult(resultName, interpreter->bits->population(maxLinearId));
+			storeResult(segmentName, interpreter->bits->population(maxLinearId));
 			
 			// is there another query to run? If not we are done
 			if (!nextMacro())
-			{
-				const auto time = Now() - startTime;
-
-				openset::errors::Error error;
-
-				if (interpreter)
-					error = interpreter->error;
-
-				storeSegments();
-
-                result->setAccTypesFromMacros(macros);
-
-				shuttle->reply(
-					0,
-					CellQueryResult_s{
-						instance,
-                        {},
-						error
-					}
-				);
-
-				suicide();
 				return false;
-			}
 
 			// we have more macros, loop to the top and try again
 			//continue;
@@ -378,12 +354,12 @@ bool OpenLoopSegment::run()
             {
                 openset::errors::Error error;
 			    error = interpreter->error;
-    			delete interpreter;
                 interpreter = nullptr;
 
 		        storeSegments();
 
-                result->setAccTypesFromMacros(macros);
+                if (macrosList.size())
+                    result->setAccTypesFromMacros(macrosList.begin()->second);
 
 		        shuttle->reply(
 			        0,
@@ -393,7 +369,7 @@ bool OpenLoopSegment::run()
 			            error
 		            }
 		        );
-                this->suicide();
+                suicide();
                 return false;
             }
 
@@ -401,24 +377,10 @@ bool OpenLoopSegment::run()
             auto returns = interpreter->getLastReturn();
 
             // any returns, are they true?
-            const auto inSegment = (returns.size() && returns[0].getBool() == true);
-
-            // if we have bits (we should always have bits)
-            if (interpreter->bits)
-            {                
-                if (inSegment)
-                    interpreter->bits->bitSet(currentLinId); // add to segment
-                else
-                    interpreter->bits->bitClear(currentLinId); // remove from segment
-            }
-
-            //loopState = LoopState_e::in_exit;
-            //*stackPtr = 0;
-            //++stackPtr;
-            //return true;
-
-                
-		}
+            const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+            if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+                parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
+        }
 	}
 }
 

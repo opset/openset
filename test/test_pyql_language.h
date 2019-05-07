@@ -797,7 +797,7 @@ inline Tests test_pyql_language()
                 columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, false);
                 columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, false);
                 auto parts     = table->getPartitionObjects(0, true); // partition zero for test
-                auto personRaw = parts->people.getmakePerson("user1@test.com");
+                auto personRaw = parts->people.getMakePerson("user1@test.com");
                 Person person;                   // Person overlay for personRaw;
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
                 person.mount(personRaw);         // parse the user1_raw_inserts raw JSON text block
@@ -836,7 +836,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -876,7 +876,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -914,7 +914,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -955,7 +955,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -998,7 +998,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1040,7 +1040,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1082,7 +1082,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -1124,7 +1124,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -1162,7 +1162,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -1202,7 +1202,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 // MappedColumns? Why? Because the basic mapTable function (without a
@@ -1242,7 +1242,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 // MappedColumns? Why? Because the basic mapTable function (without a
@@ -1283,7 +1283,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1324,7 +1324,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1366,7 +1366,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -1407,7 +1407,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -1449,7 +1449,7 @@ inline Tests test_pyql_language()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
                 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1492,7 +1492,7 @@ inline Tests test_pyql_language()
 
 
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 
@@ -1533,7 +1533,7 @@ inline Tests test_pyql_language()
                 auto interpreter = new openset::query::Interpreter(queryMacros);
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 

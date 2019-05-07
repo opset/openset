@@ -217,7 +217,7 @@ inline Tests test_db()
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
                 ASSERT(parts != nullptr);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com");
+                auto personRaw = parts->people.getMakePerson("user1@test.com");
                 ASSERT(personRaw != nullptr);
                 ASSERT(personRaw->getIdStr() == "user1@test.com");
                 ASSERT(personRaw->id == MakeHash("user1@test.com"));
@@ -312,7 +312,7 @@ inline Tests test_db()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 ASSERT(mappedColumns.size() == 6);
@@ -415,7 +415,7 @@ inline Tests test_db()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 ASSERT(mappedColumns.size() == 5);
@@ -508,7 +508,7 @@ inline Tests test_db()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 ASSERT(mappedColumns.size() == 4);
@@ -622,7 +622,7 @@ inline Tests test_db()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
                 ASSERT(mappedColumns.size() == 4);

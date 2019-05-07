@@ -232,6 +232,8 @@ namespace openset
             int64_t segmentRefresh { -1 };
             mutable int autoCounter { 0 };
             bool segmentUseCached { false };
+            bool segmentOnInsert { false };
+            int segmentZIndex { 100 };
 
             std::string rawScript;
 

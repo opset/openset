@@ -802,13 +802,18 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
     --stackPtr;
     const auto b = *stackPtr;
     --stackPtr;
-    const auto a = *stackPtr; // if we acquired IndexBits from getSegment_cb we must
-    // delete them after we are done, or it'll leak
+    const auto a = *stackPtr; 
+    
+    // if we acquired IndexBits from getSegment_cb we may have to
+    // delete them after we are done
     auto aDelete     = false;
     auto bDelete     = false;
     IndexBits* aBits = nullptr;
+    IndexBits* bBits = nullptr;
+
     if (getSegment_cb)
         aBits = getSegment_cb(a, aDelete);
+
     if (!aBits)
     {
         error.set(
@@ -819,9 +824,10 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
         ++stackPtr;
         return;
     }
-    IndexBits* bBits = nullptr;
+
     if (getSegment_cb)
         bBits = getSegment_cb(b, bDelete);
+
     if (!bBits)
     {
         if (aDelete)
@@ -833,9 +839,12 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } // copy then OR to get the union of these two segments
+    } 
+
+    // copy then OR to get the union of these two segments
     bits->opCopy(*aBits);
     bits->opOr(*bBits);
+
     if (aDelete)
         delete aBits;
     if (bDelete)
@@ -2731,7 +2740,7 @@ void openset::query::Interpreter::setEmitCB(const function<void(string emitMessa
     emit_cb = cb;
 }
 
-void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(string, bool& deleteAfterUsing)>& cb)
+void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(const string&, bool&)>& cb)
 {
     getSegment_cb = cb;
 }

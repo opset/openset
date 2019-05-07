@@ -142,8 +142,6 @@ set(SOURCE_FILES
 		src/oloop_person.h
         src/oloop_query.cpp
         src/oloop_query.h
-        src/oloop_revent.cpp
-        src/oloop_revent.h
         src/oloop_segment.cpp
         src/oloop_segment.h
         src/oloop_seg_refresh.cpp
@@ -169,10 +167,10 @@ set(SOURCE_FILES
         src/rpc_internode.h
         src/rpc_cluster.cpp
         src/rpc_cluster.h
+        src/rpc_trigger.cpp
+        src/rpc_trigger.h
         src/rpc_table.cpp
         src/rpc_table.h
-		src/rpc_revent.cpp
-		src/rpc_revent.h
 		src/rpc_status.cpp
 		src/rpc_status.h
 		src/rpc_query.cpp
@@ -189,10 +187,6 @@ set(SOURCE_FILES
         src/table.h
         src/tablepartitioned.cpp
         src/tablepartitioned.h
-        src/trigger.cpp
-        src/trigger.h
-        src/triggers.cpp
-        src/triggers.h
         test/test_db.h
         test/test_lib_var.h
         test/test_pyql_language.h

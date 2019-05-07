@@ -120,7 +120,7 @@ inline Tests test_sessions()
 	for row in rows:
 		tally("all", row['some_str'])
 		if session == 2:
-			debug(true)
+			debug(True)
 
 	debug(session_count == 3)
 
@@ -176,7 +176,7 @@ inline Tests test_sessions()
 				columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
 			
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				auto personRaw = parts->people.getmakePerson("user1@test.com");
+				auto personRaw = parts->people.getMakePerson("user1@test.com");
 
 				Person person; // Person overlay for personRaw;
 
@@ -225,7 +225,7 @@ inline Tests test_sessions()
 				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
 				interpreter->setResultObject(&resultSet);
 
-				auto personRaw = parts->people.getmakePerson("user1@test.com"); // get a user			
+				auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
 				ASSERT(personRaw != nullptr);
 				auto mappedColumns = interpreter->getReferencedColumns();
 

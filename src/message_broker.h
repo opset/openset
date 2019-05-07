@@ -3,7 +3,6 @@
 #include <unordered_map>
 
 #include "common.h"
-#include "trigger.h"
 #include "threads/locks.h"
 #include <queue>
 
@@ -17,6 +16,45 @@ namespace openset
 
 	namespace revent
 	{
+    	struct TriggerMessage_s
+		{
+            enum class State_e : int
+    	    {
+                entered,
+                exited
+            };
+
+			int64_t stamp { 0 };
+			int64_t segmentId { 0 };
+			string uuid;
+            State_e state { State_e::entered };
+
+			TriggerMessage_s() = default;
+
+			TriggerMessage_s(const int64_t segmentId, const State_e state, std::string &uuidStr) :
+    	        stamp(Now()),
+                segmentId(segmentId),
+                uuid(uuidStr),
+                state(state)
+			{}
+
+			TriggerMessage_s(const TriggerMessage_s &other):
+				stamp(other.stamp),
+				segmentId(other.segmentId),
+                state(other.state)
+			{
+                uuid = other.uuid;
+			}
+
+			TriggerMessage_s(TriggerMessage_s&& other) noexcept :
+				stamp(other.stamp),
+				segmentId(other.segmentId),
+                state(other.state)
+			{
+                uuid = std::move(other.uuid);
+			}
+		};
+
         class MessageBroker;
 
 		struct Broker_s
@@ -31,11 +69,11 @@ namespace openset
 			int64_t hold;
 
 			Broker_s(
-				const std::string reventName, 
-				const std::string subscriberName, 
-                const std::string host,
+				const std::string& reventName, 
+				const std::string& subscriberName, 
+                const std::string& host,
                 const int port,
-                const std::string path,
+                const std::string& path,
 				const int64_t hold) :
 				reventName(reventName),
 				subscriberName(subscriberName),
@@ -51,7 +89,7 @@ namespace openset
 		};
 		
 		// independent queue for each subscriber
-		using Queue = queue<triggerMessage_s>;
+		using Queue = queue<TriggerMessage_s>;
 		// map of subscriber ID to message queue
 		using Subscriptions = unordered_map<int64_t, Queue>;
 		// map of trigger ids, to subscribers
@@ -72,7 +110,7 @@ namespace openset
 
 		private:
 			// returns a list of all queues regardless of Subscriber
-			std::vector<Queue*> getAllQueues(const int64_t triggerId);
+			std::vector<Queue*> getAllQueues(const int64_t segmentId);
 			void backClean();
 
 		public:
@@ -82,23 +120,26 @@ namespace openset
 			// indicates how many milliseconds a message may remain in the queue
 			// before it is discarded
 			void registerSubscriber(
-				const std::string reventName,
-				const std::string subscriberName,
-                const std::string host,
+				const std::string& segmentName,
+				const std::string& subscriberName,
+                const std::string& host,
                 const int port,
-                const std::string path,
+                const std::string& path,
 				const int64_t hold);
 
+            // pushes a local cache of messages from a tablePartitioned object
+            // into the various subscriber caches and clears the messages vector upon completion
 			void push(
-				const std::string trigger, 
-				std::vector<triggerMessage_s>& messages);
+				int64_t segmentId, 
+				std::vector<TriggerMessage_s>& messages);
 
-			std::vector<triggerMessage_s> pop(
-				const std::string triggerName, 
-				const std::string subscriberName, 
+            // pop up to "max" items from a subscribers queue
+			std::vector<TriggerMessage_s> pop(
+				const std::string& segmentName, 
+				const std::string& subscriberName, 
 				const int64_t max);
 
-			int64_t size(std::string triggerName, std::string subscriberName);
+			int64_t size(const std::string& segmentName, const std::string& subscriberName);
 
 			// perform queue maintenance, expire old messages, etc.
 			void run();

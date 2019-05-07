@@ -1,5 +1,4 @@
-#ifndef RARELOGIC_CPPLIP_FILE_PATH_H_
-#define RARELOGIC_CPPLIP_FILE_PATH_H_
+#pragma once
 
 #include "../include/libcommon.h"
 
@@ -10,4 +9,3 @@ public:
 	static std::string GetExtension(const std::string& path);
 };
 
-#endif // RARELOGIC_CPPLIP_FILE_PATH_H_

@@ -13,7 +13,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
         const auto MaxMessages = 500;
         const auto MaxBackoff = 20;
 
-        vector<triggerMessage_s> messageList;
+        vector<TriggerMessage_s> messageList;
 
         auto backOff = 0;
 
@@ -49,8 +49,7 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
                     msg->set("stamp", m.stamp);
                     msg->set("stamp_iso", Epoch::EpochToISO8601(m.stamp));
                     msg->set("uid", m.uuid);
-                    msg->set("message", m.message);
-                    msg->set("method", m.method);
+                    msg->set("state", m.state == TriggerMessage_s::State_e::entered ? "entered" : "exited");
                 }
 
                 auto buffer = cjson::stringify(&payload);
@@ -59,11 +58,12 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
 
                 done = false;
                 retry = false;
+
                 rest->request(
                     "POST", 
                     path, 
                     {
-                        { "revent", reventName }, 
+                        { "segment", reventName }, 
                         { "subscriber", subscriberName },
                         { "count", to_string(messageList.size())},
                         { "remaining", to_string(backlog) }
@@ -100,19 +100,15 @@ void openset::revent::Broker_s::webhookThread(MessageBroker* broker)
     th.detach();
 }
 
-openset::revent::MessageBroker::~MessageBroker()
-{
-    
+openset::revent::MessageBroker::~MessageBroker() = default;
 
-}
-
-std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t triggerId)
+std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueues(const int64_t segmentId)
 {
 	std::vector<openset::revent::Queue*> queues;
 
 	for (auto &q:queueMap)
 	{
-		if (q.first == triggerId)
+		if (q.first == segmentId)
 		{
 			for (auto &t:q.second)
 				queues.push_back(&t.second);
@@ -123,16 +119,16 @@ std::vector<openset::revent::Queue*> openset::revent::MessageBroker::getAllQueue
 }
 
 void openset::revent::MessageBroker::registerSubscriber(
-	const std::string reventName,
-	const std::string subscriberName,
-    const std::string host,
+	const std::string& segmentName,
+	const std::string& subscriberName,
+    const std::string& host,
     const int port,
-    const std::string path,
+    const std::string& path,
 	const int64_t hold)
 {
 	csLock lock(cs); // scoped lock
 	
-	const auto key = std::make_pair(reventName, subscriberName);
+	const auto key = std::make_pair(segmentName, subscriberName);
 	const auto sub = subscribers.find(key);
 
 	if (sub != subscribers.end()) // found
@@ -144,7 +140,7 @@ void openset::revent::MessageBroker::registerSubscriber(
 	} 
 	else // not found
 	{
-		auto newSub = subscribers.emplace(key, Broker_s{ reventName, subscriberName, host, port, path, hold });
+		auto newSub = subscribers.emplace(key, Broker_s{ segmentName, subscriberName, host, port, path, hold });
 
 		// emplace returns a goofy pair of pairs, our pair is in .first
 		auto &info = newSub.first->second;
@@ -189,25 +185,22 @@ void openset::revent::MessageBroker::backClean()
 
 		// pop anything expired from the queue
 		while (!q.empty() && q.front().stamp < expireLine)
-		{
-			cout << q.front().uuid << " - " << q.front().message << " hold:" << sub.second.hold << " stamp:" << q.front().stamp << " line:" << expireLine <<  endl;
 			q.pop();
-		}
 	}
 }
 
 void openset::revent::MessageBroker::push(
-    const std::string trigger, 
-	std::vector<triggerMessage_s>& messages)
+    int64_t segmentId,  
+	std::vector<TriggerMessage_s>& messages)
 {
 	csLock lock(cs); // scoped lock
 
-	// make a triggerId
-    const auto triggerId = MakeHash(trigger);
+	// get list of all subscribers waiting on messages for this trigger
+	auto subQueues = getAllQueues(segmentId);
 
-	// get list of all subscribers to messages for this trigger
-	auto subQueues = getAllQueues(triggerId);
-
+    // each segment can have multiple subQueues (different subscribers)
+    // to accomodate this we basically insert the message multiple times, 
+    // once for each subQueue
 	for (auto &m : messages)
 	{
 		// insert message m in each subscribed queue for this trigger
@@ -216,20 +209,19 @@ void openset::revent::MessageBroker::push(
 
 	}	
 
-	messages.clear();
 	backClean();
 }
 
-std::vector<openset::revent::triggerMessage_s> openset::revent::MessageBroker::pop(
-	const std::string triggerName, 
-	const std::string subscriberName, 
+std::vector<openset::revent::TriggerMessage_s> openset::revent::MessageBroker::pop(
+	const std::string& segmentName, 
+	const std::string& subscriberName, 
 	const int64_t max)
 {
-	std::vector<openset::revent::triggerMessage_s> result;
+	std::vector<openset::revent::TriggerMessage_s> result;
 
 	csLock lock(cs); // scoped lock
 
-    const auto key = std::make_pair(triggerName, subscriberName);
+    const auto key = std::make_pair(segmentName, subscriberName);
     const auto sub = subscribers.find(key);
 
 	if (sub != subscribers.end()) // found
@@ -260,11 +252,11 @@ std::vector<openset::revent::triggerMessage_s> openset::revent::MessageBroker::p
 
 }
 
-int64_t openset::revent::MessageBroker::size(std::string triggerName, std::string subscriberName)
+int64_t openset::revent::MessageBroker::size(const std::string& segmentName, const std::string& subscriberName)
 {
 	csLock lock(cs); // scoped lock
 
-    const auto key = std::make_pair(triggerName, subscriberName);
+    const auto key = std::make_pair(segmentName, subscriberName);
     const auto sub = subscribers.find(key);
 
 	if (sub != subscribers.end()) // found
