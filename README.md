@@ -94,7 +94,7 @@ git clone https://github.com/opset/openset_samples.git
 **2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.2.13
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.3.1
 ```
 
 > **Note** The newest docker build can be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
