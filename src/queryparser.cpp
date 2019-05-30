@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 #include <iterator>
+
 using namespace openset::query;
 
 QueryParser::QueryParser(const parseMode_e parseMode)
@@ -217,8 +218,8 @@ QueryParser::FirstPass QueryParser::extractLines(const char* query)
         case '\t':
             current.text += "    "; // convert tab to 4 spaces
             break;
-        case 0: 
-        case 0x1a: 
+        case 0:
+        case 0x1a:
         case '\n':
         {
             ++lineCount;
@@ -360,7 +361,7 @@ int64_t QueryParser::extractBlocks(const int indent, FirstPass& lines, BlockList
                     }
                     auto alias    = c.parts[1]; // name				
                     auto distinct = std::string { alias };
-                    for (auto s   = 1; s < static_cast<int>(c.parts.size()); ++s)
+                    for (auto s = 1; s < static_cast<int>(c.parts.size()); ++s)
                     {
                         if (s < static_cast<int>(c.parts.size()) - 1)
                         {
@@ -665,13 +666,13 @@ int64_t QueryParser::parseConditions(
                         if (isRowObject(value))
                         {
                             // is there enough data here to extract
-                            // square brackes
+                            // square brackets
                             /*if (conditions.size() < index + 3)
                             {
                                 throw ParseFail_s{
                                     errors::errorClass_e::parse,
                                     errors::errorCode_e::syntax_error,
-                                    "row iterator variable must be dereferenced",
+                                    "row iterator variable must be dereferrenced",
                                     debug
                                 };
 
@@ -951,8 +952,9 @@ void QueryParser::tokenizeBlock(
                         };
                     x += 2;
                 } // auto refresh a segment
-                else if (lines[i].parts[x] == "refresh" && static_cast<int>(lines[i].parts.size()) > x + 2 && lines[i].parts[
-                    x + 1] == "=")
+                else if (lines[i].parts[x] == "refresh" && static_cast<int>(lines[i].parts.size()) > x + 2 && lines[i].
+                    parts[
+                        x + 1] == "=")
                 {
                     if (isNumeric(lines[i].parts[x + 2]))
                         segmentRefresh = expandTime(lines[i].parts[x + 2]) * 1000; // milliseconds		
@@ -973,7 +975,7 @@ void QueryParser::tokenizeBlock(
                         segmentUseCached = false;
                 }
                 else if (lines[i].parts[x] == "z_index")
-                    segmentZIndex = stol(lines[i].parts[x+2]);
+                    segmentZIndex = stol(lines[i].parts[x + 2]);
                 else if (lines[i].parts[x] == "on_insert")
                 {
                     if (lines[i].parts.size() > x + 2 && lines[i].parts[x + 2][0] == 'F')
@@ -981,7 +983,6 @@ void QueryParser::tokenizeBlock(
                     else
                         segmentOnInsert = true;
                 }
-
             }
             lines[i].parts.clear();
         }
@@ -1038,7 +1039,7 @@ void QueryParser::tokenizeBlock(
     
                 for item in container
     
-            */ 
+            */
         else if (lines[i].parts[0] == "__row_for" || lines[i].parts[0] == "__row_for_count")
         {
             /* original format:
@@ -1049,11 +1050,11 @@ void QueryParser::tokenizeBlock(
             const auto isCount       = lines[i].parts[0] == "__row_for_count";
             const auto maxIterations = isCount ? stoll(lines[i].parts[1]) : 99'999'999;
             const auto rowVar        = lines[i].parts[isCount ? 2 : 1];
-            const auto reverseSearch = lines[i].parts[isCount? 3 : 2] == "__rev_rows";
+            const auto reverseSearch = lines[i].parts[isCount ? 3 : 2] == "__rev_rows";
 
             // look for `if` and generate index hints
             auto conditions = tokenizeBlockForLogic(lines[i].parts, 3, lines[i].isConditional, lines[i].isFunction);
-            
+
             // add the `row` variable and mark it as `isRowObject`, these
             // will be parsed differently than regular variables
             if (!isVar(vars.userVars, rowVar))
@@ -1063,7 +1064,7 @@ void QueryParser::tokenizeBlock(
                 vars.userVars.emplace(rowVar, tempVar);
             }
 
-            int64_t lambdaId = -1; 
+            int64_t lambdaId = -1;
             // if there was an "if" in this iterator
             // then lets turn it into an eval lambda
             if (!conditions.empty())
@@ -1073,8 +1074,8 @@ void QueryParser::tokenizeBlock(
                 MiddleOpList lambdaBlock;
                 parseConditions(conditions, lambdaBlock, 0, lines[i].debug, false);
                 pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
-            } 
-             
+            }
+
             // push a reference to the `for` iterator variable
             block.emplace_back(OpCode_e::PSHUSRVREF, rowVar, lines[i].debug);
             // push an iterator instruction (iterator instruction is essentially a marshal)
@@ -1096,7 +1097,7 @@ void QueryParser::tokenizeBlock(
              */
             const auto isCount       = lines[i].parts[0] == "__row_continue_for_count";
             const auto maxIterations = isCount ? stoll(lines[i].parts[1]) : 99'999'999;
-            const auto rowVar = lines[i].parts[isCount ? 2 : 1];
+            const auto rowVar        = lines[i].parts[isCount ? 2 : 1];
             const auto reverseSearch = lines[i].parts[isCount ? 3 : 2] == "__rev_rows";
 
             // look for `if` and generate index hints
@@ -1109,8 +1110,8 @@ void QueryParser::tokenizeBlock(
                 tempVar.isRowObject = true;
                 vars.userVars.emplace(rowVar, tempVar);
             }
-            int64_t lambdaId = -1; 
-            
+            int64_t lambdaId = -1;
+
             // if there was an "if" in this iterator
             // then lets turn it into an eval lambda
             if (!conditions.empty())
@@ -1120,8 +1121,8 @@ void QueryParser::tokenizeBlock(
                 MiddleOpList lambdaBlock;
                 parseConditions(conditions, lambdaBlock, 0, lines[i].debug, false);
                 pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
-            } 
-            
+            }
+
             // push a reference to the `for` iterator variable
             block.emplace_back(OpCode_e::PSHUSRVREF, rowVar, lines[i].debug);
             // push an iterator instruction (iterator instruction is essentially a marshal)
@@ -1134,8 +1135,8 @@ void QueryParser::tokenizeBlock(
                 lambdaId);
             block.back().params = maxIterations;
         }
-        else if (lines[i].parts[0] == "__row_continue_from_for" || 
-                 lines[i].parts[0] == "__row_continue_from_for_count")
+        else if (lines[i].parts[0] == "__row_continue_from_for" ||
+            lines[i].parts[0] == "__row_continue_from_for_count")
         {
             /* original format:
              *    for <rowVar> in rows:
@@ -1157,8 +1158,8 @@ void QueryParser::tokenizeBlock(
                 tempVar.isRowObject = true;
                 vars.userVars.emplace(rowVar, tempVar);
             }
-            int64_t lambdaId = -1; 
-            
+            int64_t lambdaId = -1;
+
             // if there was an "if" in this iterator
             // then lets turn it into an eval lambda
             if (!conditions.empty())
@@ -1168,8 +1169,8 @@ void QueryParser::tokenizeBlock(
                 MiddleOpList lambdaBlock;
                 parseConditions(conditions, lambdaBlock, 0, lines[i].debug, false);
                 pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
-            } 
-            
+            }
+
             // inject fromVar
             if (isNumeric(fromVar))
             {
@@ -1183,8 +1184,8 @@ void QueryParser::tokenizeBlock(
                     vars.userVars.emplace(fromVar, tempVar);
                 }
                 block.emplace_back(OpCode_e::PSHUSRVAR, fromVar, lines[i].debug);
-            } 
-            
+            }
+
             // push a reference to the `for` iterator variable
             block.emplace_back(OpCode_e::PSHUSRVREF, rowVar, lines[i].debug);
             // push an iterator instruction (iterator instruction is essentially a marshal)
@@ -1211,165 +1212,8 @@ void QueryParser::tokenizeBlock(
                 if (lines[i].parts[idx] == "in")
                     break;
                 left.push_back(lines[i].parts[idx]);
-            } 
-            
-            /*const auto isIn = idx != static_cast<int>(lines[i].parts.size()) && lines[i].parts[idx] == "in";
-            const auto isRows = isIn && static_cast<int>(lines[i].parts.size()) > idx + 1 && lines[i].parts[idx + 1]
-                == "rows";
-
-            // basic parse error check, or did we fail to capture anything?
-            if (!isRows &&
-                (idx == static_cast<int>(lines[i].parts.size()) ||
-                    !isIn ||
-                    left.size() == 0 || left.size() > 2))
-                throw ParseFail_s{
-                    errors::errorClass_e::parse,
-                    errors::errorCode_e::syntax_error,
-                    "in clause incorrect",
-                    lines[i].debug
-                };
-
-            ++idx;
-
-            // special version of `for` for row iteration
-            if (isIn && isRows)
-            {
-                const auto isContinue = lines[i].parts[0] == "continue";
-                const auto isFrom = lines[i].parts[1] == "from";
-
-                const auto fromVar = lines[i].parts[2];
-
-                auto parseIndex = 1;
-                if (isContinue)
-                    parseIndex += 1;
-                if (isFrom)
-                    parseIndex += 2;
-
-                const auto isLimit = isNumeric(lines[i].parts[parseIndex]);
-                const auto limit = isLimit ? stoll(lines[i].parts[parseIndex]) : 9999999;
-
-                if (isLimit)
-                    parseIndex += 1;
-
-                const auto rowVar = lines[i].parts[parseIndex];               
-                idx++;
-                LineParts condition;
-
-                if (idx != static_cast<int>(lines[i].parts.size()) &&
-                    lines[i].parts[idx] == "if")
-                {
-                    ++idx; // move past `if`
-
-                    for (; idx < static_cast<int>(lines[i].parts.size()); ++idx)
-                    {
-                        if (lines[i].parts[idx] == "__MARKER__")
-                            break;
-
-                        condition.push_back(lines[i].parts[idx]);
-                    }
-                }
-
-                // Index Hinting --------------
-                // default hintMap is "_", create it, if need be, and get a reference to it.
-                if (!hintMap.count("_"))
-                {
-                    hintNames.push_back("_");
-                    hintMap.emplace("_", LineParts{});
-                }
-
-                auto& hints = hintMap["_"];
-
-                // if there are process conditions get lambda
-                // we don't index row conditions if they occur within if/elif/else blocks
-                // or within function calls - we cannot guarantee that indexes built 
-                // using blocks in functions or conditionals will not exclude people
-                // that should be evaluated
-
-                if (condition.size() && !lines[i].isConditional && !lines[i].isFunction)
-                {
-                    if (hints.size())
-                        hints.emplace_back("nest_and");
-
-                    hints.emplace_back("(");
-                    for (const auto& value : condition)
-                        hints.push_back(value);
-                    hints.emplace_back(")");
-                }
-                //-----------------
-
-                // add the `row` variable and mark it as `isRowObject`, these
-                // will be parsed differently than regular variables
-                if (!isVar(vars.userVars, rowVar))
-                {
-                    auto tempVar = Variable_s{rowVar, rowVar, ""};
-                    tempVar.isRowObject = true;
-                    vars.userVars.emplace(rowVar, tempVar);
-                }
-
-                int64_t lambdaId = -1;
-
-                // if there was an "if" in this iterator
-                // then lets turn it into an eval lambda
-                // 
-                if (!condition.empty())
-                {
-                    ++blockCounter;
-                    lambdaId = blockCounter;
-                    MiddleOpList lambdaBlock;
-
-                    parseConditions(
-                        condition,
-                        lambdaBlock,
-                        0,
-                        lines[i].debug,
-                        false);
-
-                    pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
-                }
-
-                if (isFrom)
-                {
-                    if (isNumeric(fromVar))
-                    {
-                        block.emplace_back(
-                            OpCode_e::PSHLITINT,
-                            stoll(fromVar),
-                            lines[i].debug);                       
-                    }
-                    else
-                    {
-                        if (!isVar(vars.userVars, fromVar))
-                        {
-                            auto tempVar = Variable_s{fromVar, fromVar, ""};
-                            vars.userVars.emplace(fromVar, tempVar);
-                        }
-
-                        block.emplace_back(
-                            OpCode_e::PSHUSRVAR,
-                            fromVar,
-                            lines[i].debug);
-                    }
-                }
-
-                // push a reference to the `for` iterator value variable
-                block.emplace_back(
-                    OpCode_e::PSHUSRVREF,
-                    rowVar,
-                    lines[i].debug);
-
-                // push an iterator instruction (iterator instruction is essentially a marshal)
-                block.emplace_back(
-                    isFrom ? OpCode_e::ITFORRCF :
-                    (isContinue ? OpCode_e::ITFORRC : OpCode_e::ITFORR),
-                    lines[i].block,
-                    lines[i].debug,
-                    lambdaId);
-
-                block.back().params = limit;
             }
-            else // normal case for for iterators
-            
-            {*/
+
             LineParts right;
             for (++idx; idx < static_cast<int>(lines[i].parts.size()); ++idx)
             {
@@ -1419,96 +1263,8 @@ void QueryParser::tokenizeBlock(
                 });
             block.emplace_back(OpCode_e::ITFOR, lines[i].block, lines[i].debug);
             block.back().params = left.size();
-        }       //}
-            /*else if (
-                lines[i].parts[0] == "match" ||
-                lines[i].parts[0] == "reverse_match")
-            {
-                // default hintMap is "_", create it, if need be, and get a reference to it.
-                if (!hintMap.count("_"))
-                {
-                    hintNames.push_back("_");
-                    hintMap.emplace("_", LineParts{});
-                }
-    
-                auto& hints = hintMap["_"];
-    
-                if (lines[i].parts.size() == 1)
-                    lines[i].parts.push_back("where");
-    
-                // find where, process conditions get lambda
-                auto whereIdx = -1;
-                for (auto x = 1; x < lines[i].parts.size(); x++)
-                {
-                    if (lines[i].parts[x] == "where" && lines[i].parts.size() > x + 1)
-                    {
-                        whereIdx = x;
-    
-                        // we don't index `where` when it occurs in if/elif/else blocks
-                        // or within function calls - we cannot guarantee that indexes built 
-                        // using blocks in functions or conditionals will not exclude people
-                        // that should be evaluated
-                        if (lines[i].isConditional || lines[i].isFunction)
-                            break;
-    
-                        if (hints.size())
-                            hints.push_back("nest_and");
-    
-                        hints.push_back("(");
-                        for (auto idx = whereIdx + 1; idx < lines[i].parts.size(); ++idx)
-                            hints.push_back(lines[i].parts[idx]);
-                        hints.push_back(")");
-    
-                        break;
-                    }
-                }
-    
-                if (!((lines[i].parts.size() >= 2 && lines[i].parts[1] == "where") ||
-                    (lines[i].parts.size() >= 3 && lines[i].parts[2] == "where")))
-                {
-                    throw ParseFail_s{
-                        errors::errorClass_e::parse,
-                        errors::errorCode_e::syntax_error,
-                        "match missing where",
-                        lines[i].debug
-                    };
-                }
-    
-                int64_t lambdaId = -1;
-    
-                // if there was a "where" in this iterator
-                // then lets turn it into an eval lambda
-                if (whereIdx >= 1)
-                {
-                    ++blockCounter;
-                    lambdaId = blockCounter;
-                    MiddleOpList lambdaBlock;
-    
-                    parseConditions(
-                        lines[i].parts,
-                        lambdaBlock,
-                        whereIdx + 1,
-                        lines[i].debug,
-                        false);
-    
-                    pushBlock(lambdaBlock, lambdaId, BlockType_e::lambda);
-                }
-    
-                int64_t iterCount = 9999999;
-    
-                // is there an iterations count specified
-                if (lines[i].parts[1][0] >= '0' &&
-                    lines[i].parts[1][0] <= '9')
-                    iterCount = stoll(lines[i].parts[1]);
-    
-                block.emplace_back(
-                    (lines[i].parts[0] == "match") ? OpCode_e::ITNEXT : OpCode_e::ITPREV,
-                    lines[i].block,
-                    lines[i].debug,
-                    lambdaId);
-    
-                block.back().params = iterCount;
-            }*/ // left side variable with indexing
+        }
+        // left side variable with indexing
         else if (lines[i].parts.size() >= 2 && lines[i].parts[1] == "[")
         {
             vector<MiddleOpList> derefCaptures;
@@ -1673,7 +1429,7 @@ int QueryParser::getMatching(LineParts& conditions, const int index)
     auto round          = 0;
     const auto matching = conditions[index];
     auto endIndex       = index;
-    for (auto c         = conditions.begin() + index; c < conditions.end(); ++c, ++endIndex)
+    for (auto c = conditions.begin() + index; c < conditions.end(); ++c, ++endIndex)
     {
         if (*c == "{")
         {
@@ -1914,9 +1670,8 @@ void QueryParser::extractParam(LineParts& conditions, const int startIdx, int& e
 
 void QueryParser::lineTranslation(FirstPass& lines)
 {
-
     // FIRST PASS
-    auto lineIndex = 0; 
+    auto lineIndex = 0;
     while (true)
     {
         if (lineIndex == static_cast<int>(lines.size()))
@@ -1945,7 +1700,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                 if (conditions[0] == "for" || (static_cast<int>(conditions.size()) > 2 && ((conditions[0] == "continue"
                     && conditions[1] == "for") || (conditions[0] == "continue" && conditions[1] == "from"))))
                 {
-                    auto inPos  = -1;
+                    auto inPos = -1;
                     for (auto i = 0; i < static_cast<int>(conditions.size()); ++i)
                     {
                         if (conditions[i] == "in")
@@ -1967,36 +1722,14 @@ void QueryParser::lineTranslation(FirstPass& lines)
                         }
                         isRowIter = true;
                     }
-                } /* Convert list declarations into function calls
-                 *
-                 * i.e.
-                 *
-                 *   some_list = [1, 2, 3, 4, 5]
-                 *
-                 * becomes:
-                 * 
-                 *   some_list = __internal_make_list(1, 2, 3, 4, 5)
-                 *
-                 *  Note: next/whhere in clauses are translated into multiple OR 
-                 *        statements so they will be evaulated by the query optimizer
-                 *        
-                 *       
-                 *        
-                 */
-                /*
-                if (static_cast<int>(conditions.size()) > index + 1 && 
-                    conditions[index] == "[" && 
-                    (!isRowIter || (
-                    isRowIter && index > 4)) && index > 1 && (conditions[index - 1] == "," || conditions[index - 1] ==
-                    "=" || conditions[index - 1] == "+" || conditions[index - 1] == "in" || conditions[index - 1] ==
-                    "notin" || conditions[index - 1] == "-" || conditions[index - 1] == "(" || conditions[index - 1] ==
-                    "__MARKER__"))                
-                 */
-                if (static_cast<int>(conditions.size()) > index + 1 && 
+                }
+
+                if (static_cast<int>(conditions.size()) > index + 1 &&
                     conditions[index] == "[" && index > 1 && (conditions[index - 1] == "," || conditions[index - 1] ==
-                    "=" || conditions[index - 1] == "+" || conditions[index - 1] == "in" || conditions[index - 1] ==
-                    "notin" || conditions[index - 1] == "-" || conditions[index - 1] == "(" || conditions[index - 1] ==
-                    "__MARKER__"))
+                        "=" || conditions[index - 1] == "+" || conditions[index - 1] == "in" || conditions[index - 1] ==
+                        "notin" || conditions[index - 1] == "-" || conditions[index - 1] == "(" || conditions[index - 1]
+                        ==
+                        "__MARKER__"))
                 {
                     auto brackets            = 0;
                     auto allCounted          = false;
@@ -2029,57 +1762,57 @@ void QueryParser::lineTranslation(FirstPass& lines)
                 }
 
                 // TRANSLATE FIRST ROW into FIRST_ROW
-                if (conditions[index] == "FIRST" && 
+                if (conditions[index] == "FIRST" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "ROW")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "FIRST_ROW";
                     changes           = true; // loop again
                     break;
-                } 
+                }
 
                 // TRANSLATE LAST ROW into LAST_ROW
-                if (conditions[index] == "LAST" && 
+                if (conditions[index] == "LAST" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "ROW")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "LAST_ROW";
                     changes           = true; // loop again
                     break;
-                } 
+                }
 
                 // TRANSLATE FIRST VALUE into FIRST_VALUE
-                if (conditions[index] == "FIRST" && 
+                if (conditions[index] == "FIRST" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "VALUE")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "FIRST_VALUE";
                     changes           = true; // loop again
                     break;
-                } 
+                }
 
                 // TRANSLATE LAST VALUE into LAST_VALUE
-                if (conditions[index] == "LAST" && 
+                if (conditions[index] == "LAST" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "VALUE")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "LAST_VALUE";
                     changes           = true; // loop again
                     break;
-                } 
-                
+                }
+
                 // TRANSLATE COUNT DISTINCT into COUNT_DISTINCT
-                if (conditions[index] == "COUNT" && 
+                if (conditions[index] == "COUNT" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "DISTINCT")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "COUNT_DISTINCT";
                     changes           = true; // loop again
                     break;
-                } 
-                
+                }
+
                 // TRANSLATE NOTIN: convert 'not in' into 'notin'
-                if (conditions[index] == "not" && 
+                if (conditions[index] == "not" &&
                     index + 1 < static_cast<int>(conditions.size()) && conditions[index + 1] == "in")
                 {
                     conditions.erase(conditions.begin() + index + 1);
@@ -2093,12 +1826,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
                 if (conditions[index] == "where")
                 {
                     conditions[index] = "if";
-                    changes = true;
+                    changes           = true;
                     break;
                 }
 
-                
-                /* Convert aggregators into function calls
+                /* Convert aggregaters into function calls
                  * containing standard pyql "match" iterators.
                  *
                  *  i.e.
@@ -2122,11 +1854,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
                 if (conditions[index] == "FIRST_ROW" ||
                     conditions[index] == "LAST_ROW" ||
                     conditions[index] == "FIRST_VALUE" ||
-                    conditions[index] == "LAST_VALUE" || 
-                    conditions[index] == "SUM" || 
-                    conditions[index] == "AVG" || 
-                    conditions[index] == "MAX" || 
-                    conditions[index] == "MIN" || 
+                    conditions[index] == "LAST_VALUE" ||
+                    conditions[index] == "SUM" ||
+                    conditions[index] == "AVG" ||
+                    conditions[index] == "MAX" ||
+                    conditions[index] == "MIN" ||
                     conditions[index] == "COUNT" ||
                     conditions[index] == "COUNT_DISTINCT")
                 {
@@ -2138,25 +1870,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
                             errors::errorCode_e::syntax_error,
                             "error in aggregator",
                             line.debug
-                        }; 
-                    
-                    /*std::string with = "";
-                    if (const auto withIdx = search(conditions, "with", index); withIdx != -1)
-                    {                       
-                        if (withIdx + 1 >= static_cast<int>(conditions.size()))
-                        {
-                            throw ParseFail_s{
-                                errors::errorClass_e::parse,
-                                errors::errorCode_e::syntax_error,
-                                "aggregaator 'with' missing value",
-                                line.debug
-                            };
-                        }
-                        with = conditions[withIdx + 1];                        
-                        conditions.erase(conditions.begin() + withIdx, conditions.begin() + endIdx);
-                        endIdx -= 2;
-                    }*/
-
+                        };
+                                        
                     LineParts aggregate(conditions.begin() + index, conditions.begin() + endIdx);
                     conditions.erase(conditions.begin() + index, conditions.begin() + endIdx);
 
@@ -2168,17 +1883,17 @@ void QueryParser::lineTranslation(FirstPass& lines)
                             line.debug
                         };
 
-                    const auto agg      = aggregate[0];
+                    const auto agg = aggregate[0];
 
                     // shameful hack - FIRST_ROW and LAST_ROW don't take a variable
                     // but the code below is expecting keywords in certain spaces, so
                     // we will inject a placeholder
                     if (agg == "FIRST_ROW" || agg == "LAST_ROW")
-                           aggregate.insert(aggregate.begin() + 1, "stamp");
+                        aggregate.insert(aggregate.begin() + 1, "stamp");
 
                     const auto variable = aggregate[1];
 
-                    if (aggregate.size() <= 2 || 
+                    if (aggregate.size() <= 2 ||
                         (aggregate.size() > 2 && aggregate[2] != "if" && aggregate[2] != "where"))
                     {
                         // If no `where` we add one, this allows aggregation without the "where".
@@ -2201,9 +1916,10 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     if (aggregate.size() > 2) // this is the condition
                         where.insert(where.begin(), aggregate.begin() + 2, aggregate.end());
 
-                    const auto isSearch = (agg == "LAST_ROW" || agg == "LAST_VALUE" || agg == "FIRST_ROW" || agg == "FIRST_VALUE");
+                    const auto isSearch = (agg == "LAST_ROW" || agg == "LAST_VALUE" || agg == "FIRST_ROW" || agg ==
+                        "FIRST_VALUE");
                     const auto reverseSearch = (agg == "LAST_ROW" || agg == "LAST_VALUE");
-                    const auto maxIterations = isSearch ? "1" : "99999999"; 
+                    const auto maxIterations = isSearch ? "1" : "99999999";
 
                     FirstPass newFunction = {
                         {
@@ -2218,8 +1934,13 @@ void QueryParser::lineTranslation(FirstPass& lines)
                             1
                         }
                     };
-                     
-                    LineParts nextWhere = { "__row_for", maxIterations, "agg_row", reverseSearch ? "__rev_rows" : "__rows" };
+
+                    LineParts nextWhere = {
+                        "__row_for",
+                        maxIterations,
+                        "agg_row",
+                        reverseSearch ? "__rev_rows" : "__rows"
+                    };
                     nextWhere.insert(nextWhere.end(), where.begin(), where.end());
                     nextWhere.push_back("__MARKER__"); //if (!with.length())
 
@@ -2325,7 +2046,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     }
                     else if (agg == "MAX")
                     {
-                        // overwite value that __agg_result (set to zero by default above)
+                        // overwrite value that __agg_result (set to zero by default above)
                         newFunction.back().parts.back() = to_string(std::numeric_limits<int64_t>::min());
                         newFunction.insert(
                             newFunction.end(),
@@ -2352,7 +2073,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     }
                     else if (agg == "MIN")
                     {
-                        // overwite value that __agg_result (set to zero by default above)
+                        // overwrite value that __agg_result (set to zero by default above)
                         newFunction.back().parts.back() = to_string(std::numeric_limits<int64_t>::max());
                         newFunction.insert(
                             newFunction.end(),
@@ -2429,11 +2150,6 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     newFunction.insert(
                         newFunction.end(),
                         {
-                            /*{
-                                { "iter_set", "(", "__agg_saved_iter", ")" },
-                                lastDebug,
-                                1
-                            },*/
                             {
                                 { "return", "__agg_result" },
                                 lastDebug,
@@ -2443,7 +2159,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     lines.insert(lines.end(), newFunction.begin(), newFunction.end());
                     changes = true;
                     break;
-                } /*  Convert dictionary declarations into function calls
+                } 
+                /*  Convert dictionary declarations into function calls
                  *
                  *  i.e. 
                  *  
@@ -2465,7 +2182,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                      * 
                      * We need to do it this way because 
                      */
-                    auto idx       = conditions.size() - 1;
+                    auto idx = conditions.size() - 1;
                     for (auto iter = conditions.end() - 1; iter != conditions.begin(); --iter, --idx)
                         if (*iter == "[")
                             break;
@@ -2476,13 +2193,16 @@ void QueryParser::lineTranslation(FirstPass& lines)
                             "expecting opening brace",
                             line.debug
                         };
+                    
                     const auto key         = conditions[idx + 1];
+                    
                     LineParts newStatement = { "__del", "(" };
                     newStatement.insert(newStatement.end(), conditions.begin() + 1, conditions.begin() + idx);
                     newStatement.push_back(",");
                     newStatement.push_back(key);
                     newStatement.push_back(")"); // make first param a reference
                     newStatement[2] = "@" + newStatement[2];
+
                     line.parts.swap(newStatement);
                     changes = true;
                     break;
@@ -2526,7 +2246,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     conditions.erase(conditions.begin() + index);
                     changes = true; // loop again
                     break;
-                } /*
+                } 
+                /*
                  *  convert Python style array/string slicing into function calls. i.e.
                  *  
                  *      some_string[4:10]
@@ -2570,8 +2291,9 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     conditions.insert(conditions.begin() + startIdx, newSection.begin(), newSection.end());
                     changes = true; // loop again
                     break;
-                } /*
-                 *  Member-to-function translantion 
+                } 
+                /*
+                 *  Member-to-function translation 
                  *
                  *  We convert member functions into regular function calls, where the first
                  *  param is a reference type (using @) and the params in the member function
@@ -2640,19 +2362,18 @@ void QueryParser::lineTranslation(FirstPass& lines)
                         newSection.end()); // start over
                     changes = true;        // loop again
                     break;
-                } 
-               
+                }
 
-                if (conditions[index] == "is" && 
-                    index + 1 < static_cast<int>(conditions.size()) && 
+                if (conditions[index] == "is" &&
+                    index + 1 < static_cast<int>(conditions.size()) &&
                     conditions[index + 1] == "not")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "isnot";
                     changes           = true; // loop again
                     break;
-                } 
-                
+                }
+
                 /*
                  *  convert various forms of:
                  *
@@ -2662,8 +2383,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
                  *  
                  *      for row __rows
                  */
-                if (conditions[index] == "in" && 
-                    index + 1 < static_cast<int>(conditions.size()) && 
+                if (conditions[index] == "in" &&
+                    index + 1 < static_cast<int>(conditions.size()) &&
                     conditions[index + 1] == "rows")
                 {
                     conditions.erase(conditions.begin() + index + 1);
@@ -2672,17 +2393,16 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     break;
                 }
 
-                if (conditions[index] == "in" && 
-                    index + 2 < static_cast<int>(conditions.size()) && 
+                if (conditions[index] == "in" &&
+                    index + 2 < static_cast<int>(conditions.size()) &&
                     conditions[index + 1] == "reverse" && conditions[index + 2] == "rows")
                 {
                     conditions.erase(conditions.begin() + index + 1);
                     conditions[index] = "__rev_rows";
                     changes           = true; // loop again
                     break;
-                } 
-                
-                
+                }
+
                 /*
                  * convert:
                  *   
@@ -2692,12 +2412,12 @@ void QueryParser::lineTranslation(FirstPass& lines)
                  * 
                  *       __row_for <rowVar> __rows:
                  */
-                if ((conditions[index] == "for" && 
+                if ((conditions[index] == "for" &&
                     (
-                        (index + 2 < static_cast<int>(conditions.size()) && 
-                            (conditions[index+ 2] == "__rows" || conditions[index + 2] == "__rev_rows")) || 
-                        (index + 3 < static_cast<int>(conditions.size()) && 
-                            (conditions[index + 3] == "__rows" || conditions[index + 3] =="__rev_rows"))
+                        (index + 2 < static_cast<int>(conditions.size()) &&
+                            (conditions[index + 2] == "__rows" || conditions[index + 2] == "__rev_rows")) ||
+                        (index + 3 < static_cast<int>(conditions.size()) &&
+                            (conditions[index + 3] == "__rows" || conditions[index + 3] == "__rev_rows"))
                     )))
                 {
                     conditions[index] = "__row_for";
@@ -2705,7 +2425,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     break;
                 }
 
-                if (index == 0 && conditions[index] == "continue" && 
+                if (index == 0 && conditions[index] == "continue" &&
                     index + 1 < static_cast<int>(conditions.size()) &&
                     (conditions[index + 1] == "__row_for" || conditions[index + 1] == "for"))
                 {
@@ -2713,8 +2433,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     conditions[index] = "__row_continue_for";
                     changes           = true; // loop again
                     break;
-                } 
-                
+                }
+
                 /*
                  *  convert:
                  *
@@ -2725,12 +2445,12 @@ void QueryParser::lineTranslation(FirstPass& lines)
                  *      __row_continue_from_for <fromVar> <rowVar> __rows:
                  *      
                  */
-                if (index == 0 && index + 2 < static_cast<int>(conditions.size()) && 
+                if (index == 0 && index + 2 < static_cast<int>(conditions.size()) &&
                     conditions[index] == "continue" &&
-                    conditions[index + 1] == "from" && 
-                    ((index + 2 < static_cast<int>(conditions.size()) && conditions[index + 2] == "__row_for") || 
-                    (index + 3 < static_cast<int>(conditions.size()) && conditions[index + 3] == "__row_for") || 
-                        (index + 2 < static_cast<int>(conditions.size()) && conditions[index + 2] == "for") || 
+                    conditions[index + 1] == "from" &&
+                    ((index + 2 < static_cast<int>(conditions.size()) && conditions[index + 2] == "__row_for") ||
+                        (index + 3 < static_cast<int>(conditions.size()) && conditions[index + 3] == "__row_for") ||
+                        (index + 2 < static_cast<int>(conditions.size()) && conditions[index + 2] == "for") ||
                         (index + 3 < static_cast<int>(conditions.size()) && conditions[index + 3] == "for")))
                 {
                     const auto fromVar = conditions[index + 2];
@@ -2745,7 +2465,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     break;
                 }
 
-                if (index == 0 && conditions[index] == "__row_for" && 
+                if (index == 0 && conditions[index] == "__row_for" &&
                     index + 1 < static_cast<int>(conditions.size()) &&
                     isNumeric(conditions[index + 1]))
                 {
@@ -2754,17 +2474,17 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     break;
                 }
 
-                if (index == 0 && conditions[index] == "__row_continue_for" && 
+                if (index == 0 && conditions[index] == "__row_continue_for" &&
                     index + 1 < static_cast<int>(conditions.
-                    size()) && isNumeric(conditions[index + 1]))
+                        size()) && isNumeric(conditions[index + 1]))
                 {
                     conditions[index] = "__row_continue_for_count";
                     changes           = true; // loop again
                     break;
                 }
 
-                if (index == 0 && conditions[index] == "__row_continue_from_for" && 
-                    index + 2 < static_cast<int>(conditions.size()) && 
+                if (index == 0 && conditions[index] == "__row_continue_from_for" &&
+                    index + 2 < static_cast<int>(conditions.size()) &&
                     isNumeric(conditions[index + 2]))
                 {
                     conditions[index] = "__row_continue_from_for_count";
@@ -2781,20 +2501,20 @@ void QueryParser::lineTranslation(FirstPass& lines)
                         line.debug
                     }; // TRANSLATE ISNOT: convert 'break all' or 'break top' into 'break "all"' or 'break "top"'
 
-                if (conditions[index] == "break" && 
-                    index + 1 < static_cast<int>(conditions.size()) && 
-                    (conditions[index+ 1] == "all" || conditions[index + 1] == "top"))
+                if (conditions[index] == "break" &&
+                    index + 1 < static_cast<int>(conditions.size()) &&
+                    (conditions[index + 1] == "all" || conditions[index + 1] == "top"))
                 {
                     conditions[index + 1] = "'" + conditions[index + 1] + "'";
                     changes               = true; // loop again
                     break;
                 } // TRANSLATE TIME CONSTANTS: convert two word time constants to underscore names
 
-                if (index + 1 < static_cast<int>(conditions.size()) && 
-                    ((conditions[index] == "row" && conditions[index + 1] == "time") || 
-                    (conditions[index] == "last" && conditions[index + 1] == "event") || 
-                        (conditions[index] == "first" && conditions[index + 1] == "event") || 
-                        (conditions[index] == "prev" && conditions[index + 1] == "match") || 
+                if (index + 1 < static_cast<int>(conditions.size()) &&
+                    ((conditions[index] == "row" && conditions[index + 1] == "time") ||
+                        (conditions[index] == "last" && conditions[index + 1] == "event") ||
+                        (conditions[index] == "first" && conditions[index + 1] == "event") ||
+                        (conditions[index] == "prev" && conditions[index + 1] == "match") ||
                         (conditions[index] == "previous" && conditions[index + 1] == "match") ||
                         (conditions[index] == "first" && conditions[index + 1] == "match")))
                 {
@@ -2806,8 +2526,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
                     changes = true;
                     break;
-                } 
-                
+                }
+
                 // TRANSLATE TIME convert days, minutes, hours, seconds to math
                 // we convert: x seconds -> (x * 60)
                 if (index + 1 < static_cast<int>(conditions.size()) && TimeConstants.count(conditions[index + 1]))
@@ -2838,7 +2558,8 @@ void QueryParser::lineTranslation(FirstPass& lines)
 
                 ++index;
             }
-        } while (changes);
+        }
+        while (changes);
 
         if (changeCounter)
         {
@@ -2848,7 +2569,6 @@ void QueryParser::lineTranslation(FirstPass& lines)
             lines[lineIndex].debug.translation.assign(translation);
         }
         ++lineIndex;
-
     }
 
     // SECOND PASS
@@ -3006,10 +2726,11 @@ void QueryParser::lineTranslation(FirstPass& lines)
                     conditions.insert(conditions.begin() + startIdx, orParts.begin(), orParts.end());
                     changes = true; // loop again
                     break;
-                }               
+                }
                 ++index;
             }
-        } while (changes);
+        }
+        while (changes);
 
         if (changeCounter)
         {
@@ -3019,8 +2740,7 @@ void QueryParser::lineTranslation(FirstPass& lines)
             lines[lineIndex].debug.translation.assign(translation);
         }
         ++lineIndex;
-
-     }
+    }
 }
 
 QueryParser::FirstPass QueryParser::mergeLines(FirstPass& lines) const
@@ -3181,12 +2901,16 @@ int64_t QueryParser::parseHintConditions(
         return iter != OpToHintOp.end()
                    ? iter->second
                    : HintOp_e::UNSUPPORTED;
-    }; // store textual values as we come across them
+    }; 
+    
+    // store textual values as we come across them
     // we will call store when we hit a logical operator
     const auto accumulate = [&accumulation](const string& item)
     {
         accumulation.push_back(item);
-    }; // this will evaluate what conditions were
+    }; 
+    
+    // this will evaluate what conditions were
     // accumulated and store them in OpList if 
     // possible, will return FALSE if it could not
     // so the logical operator can be bypassed in the
@@ -3243,28 +2967,29 @@ int64_t QueryParser::parseHintConditions(
         {
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
-            return;            
+            return;
         }
-        else if (leftIsTableVar && rightIsTableVar)
+        if (leftIsTableVar && rightIsTableVar)
         {
             // skip column to column comparisons, emit a NOP placeholder
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
             return;
         }
-        else if (!leftIsTableVar && !rightIsTableVar)
+        if (!leftIsTableVar && !rightIsTableVar)
         {
             // skip non-table variable comparisons, emit a NOP placeholder
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
             return;
         }
-        else if (isUserVar(left) || isUserVar(right))
+        if (isUserVar(left) || isUserVar(right))
         {
             opList.emplace_back(HintOp_e::PUSH_NOP);
             accumulation.clear();
             return;
-        } /**
+        }
+        /**
          * so, we have a condition written with he variable
          * on the right and the value on the left. We will swap em
          */
@@ -3288,21 +3013,27 @@ int64_t QueryParser::parseHintConditions(
                 break;
             default: ;
             }
-        } /** 
+        } 
+        
+        /** 
          * OK, now at a point where we know we aren't dealing with
          * an unsupported operator, values on the left and right,
          * or table columns on the left and right, and that the table 
          * column is on the left! 
-         */ // lets get the "real" non-alias names for these columns
+         */ 
+        
+        // lets get the "real" non-alias names for these columns
         if (isColumnVar(left))
-            left = vars.columnVars.find(left)->second.actual; //else if (isGroupVar(left))
-        //left = vars.groupVars.find(left)->second.actual;
+            left = vars.columnVars.find(left)->second.actual; 
+
         if (isNumeric(right))
             opList.emplace_back(op, left, stoll(right));
         else
             opList.emplace_back(op, left, right);
+
         accumulation.clear();
     };
+
     while (index < conditions.size())
     {
         if (conditions[index] == ",")
@@ -3413,7 +3144,9 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
 
     TODO - there is a possibility for strings hashes to collide. We need
     to address that.
-    */ // index the select variables
+    */ 
+    
+    // index the select variables
     for (auto& v : vars.columnVars)
     {
         // add non var types (aka db columns) to the
@@ -3444,7 +3177,9 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
     for (auto& v : vars.tableVars)
     {
         v.second.index  = finVars.tableVars.size();
-        v.second.column = v.second.index; // map column same as index
+        v.second.column = v.second.index; 
+        
+        // map column same as index
         // find this column in the schema
         const auto schemaInfo = columns->getColumn(v.second.actual);
         if (!schemaInfo)
@@ -3452,7 +3187,9 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 errors::errorClass_e::parse,
                 errors::errorCode_e::column_not_in_table,
                 "column_check: " + v.second.actual
-            }; // set the sort to the actual schema index - so they will be in order
+            }; 
+        
+        // set the sort to the actual schema index - so they will be in order
         v.second.sortOrder    = schemaInfo->idx;
         v.second.schemaColumn = schemaInfo->idx;
         v.second.schemaType   = schemaInfo->type;
@@ -3475,12 +3212,16 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
         cv.column                        = idx;
         vars.tableVars[cv.actual].index  = cv.index;
         vars.tableVars[cv.actual].column = cv.column;
-    } // index the user variables
+    } 
+    
+    // index the user variables
     for (auto& v : vars.userVars)
     {
         v.second.index = finVars.userVars.size();
         finVars.userVars.push_back(v.second);
-    } // index the text literals
+    } 
+    
+    // index the text literals
     for (auto& t : vars.literals)
     {
         const auto trimmed = stripQuotes(t.first);
@@ -3491,6 +3232,7 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
         literal.index     = t.second; // index from above
         finVars.literals.emplace_back(move(literal));
     }
+
     for (auto& v : finVars.columnVars)
     {
         if (v.modifier == Modifiers_e::var)
@@ -3503,8 +3245,8 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 "select column: " + v.actual
             }; // map column variable to actual column
         v.column = tableVar->second.column;
-    } 
-    
+    }
+
     // map the distinct key column
     for (auto& v : finVars.columnVars)
     {
@@ -3518,8 +3260,8 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 "select column distinct: " + v.distinctColumnName
             }; // map column variable to actual column
         v.distinctColumn = tableVar->second.column;
-    } 
-    
+    }
+
     // see if this query uses global variables
     // note: we may want to move this further up in the parser
     for (auto& s : vars.userVars)
@@ -3536,30 +3278,30 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
     // the array, the blocks IDs in function calls and
     // lambdas are converted in the final pass to
     // the index here.
-    unordered_map<int64_t, int64_t> blockIndex; // this maps a function name to a specific index
+    unordered_map<int64_t, int64_t> blockIndex; 
+    
+    // this maps a function name to a specific index    
     // in the final code
-    unordered_map<string, int64_t> functionMap; // this records the function name and the position in the
+    unordered_map<string, int64_t> functionMap; 
+    
+    // this records the function name and the position in the
     // final code, this is used post compile to map a function
     // name to an index
-    unordered_map<int64_t, string> callMap; //for (auto blockFilter = 0; blockFilter < 2; ++blockFilter)
+    unordered_map<int64_t, string> callMap; 
     {
         for (auto& b : input) // iterate the blocks
         {
-            /*
-            if (!blockFilter && (
-                b.type == blockType_e::function ||
-                b.type == blockType_e::lambda))
-                continue;
-            else if (blockFilter && 
-                b.type != blockType_e::function &&
-                b.type != blockType_e::lambda)
-                continue;
-            */ // first line of this block will be tail of
+
+            // first line of this block will be tail of
             // of the final Code at this point.
-            blockIndex[b.blockId] = finCode.size(); // if this is a function map its name to the 
+            blockIndex[b.blockId] = finCode.size(); 
+            
+            // if this is a function map its name to the 
             // final Code line
             if (b.type == BlockType_e::function)
-                functionMap[b.blockName] = finCode.size(); // iterate instruction
+                functionMap[b.blockName] = finCode.size(); 
+            
+            // iterate instruction
             for (auto& c : b.code)
             {
                 switch (c.op)
@@ -3585,14 +3327,14 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 case OpCode_e::COLIDX:
                     finCode.emplace_back(c.op, vars.columnVars[c.valueString].index, 0, 0, c.debug);
                     break;
-                case OpCode_e::PSHLITTRUE: 
+                case OpCode_e::PSHLITTRUE:
                 case OpCode_e::PSHLITFALSE:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
                     break;
-                case OpCode_e::PSHUSROBJ: 
-                case OpCode_e::PSHUSRVAR: 
-                case OpCode_e::PSHUSRVREF: 
-                case OpCode_e::PSHUSROREF:                
+                case OpCode_e::PSHUSROBJ:
+                case OpCode_e::PSHUSRVAR:
+                case OpCode_e::PSHUSRVREF:
+                case OpCode_e::PSHUSROREF:
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
                 case OpCode_e::PSHLITSTR:
@@ -3616,11 +3358,11 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         0,
                         c.debug);
                     break;
-                case OpCode_e::PSHPAIR: 
+                case OpCode_e::PSHPAIR:
                 case OpCode_e::PSHLITNUL:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
-                    break; //case OpCode_e::SETROW:
-                case OpCode_e::POPUSRVAR: 
+                    break; 
+                case OpCode_e::POPUSRVAR:
                 case OpCode_e::POPUSROBJ:
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
@@ -3657,13 +3399,12 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         c.params,
                         0,
                         c.debug);
-                    break; /*case OpCode_e::ITNEXT:
-                        case OpCode_e::ITPREV:*/
-                case OpCode_e::ITFORR: 
-                case OpCode_e::ITFORRC: 
-                case OpCode_e::ITFORRCF: 
-                case OpCode_e::ITRFORR: 
-                case OpCode_e::ITRFORRC: 
+                    break; 
+                case OpCode_e::ITFORR:
+                case OpCode_e::ITFORRC:
+                case OpCode_e::ITFORRCF:
+                case OpCode_e::ITRFORR:
+                case OpCode_e::ITRFORRC:
                 case OpCode_e::ITRFORRCF:
                     finCode.emplace_back(
                         c.op,
@@ -3674,29 +3415,30 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                         // extra maps to lambda
                         c.debug);
                     break;
-                case OpCode_e::MATHADD: 
-                case OpCode_e::MATHSUB: 
-                case OpCode_e::MATHMUL: 
-                case OpCode_e::MATHDIV: 
-                case OpCode_e::OPGT: 
-                case OpCode_e::OPLT: 
-                case OpCode_e::OPGTE: 
-                case OpCode_e::OPLTE: 
+                case OpCode_e::MATHADD:
+                case OpCode_e::MATHSUB:
+                case OpCode_e::MATHMUL:
+                case OpCode_e::MATHDIV:
+                case OpCode_e::OPGT:
+                case OpCode_e::OPLT:
+                case OpCode_e::OPGTE:
+                case OpCode_e::OPLTE:
                 case OpCode_e::OPEQ:
-                case OpCode_e::OPNEQ: 
-                case OpCode_e::OPWTHN: 
-                case OpCode_e::OPNOT: 
-                case OpCode_e::LGCAND: 
+                case OpCode_e::OPNEQ:
+                case OpCode_e::OPWTHN:
+                case OpCode_e::OPNOT:
+                case OpCode_e::LGCAND:
                 case OpCode_e::LGCOR:
                     finCode.emplace_back(c.op, 0, 0, 0, c.debug);
                     break;
-                case OpCode_e::MATHADDEQ: 
-                case OpCode_e::MATHSUBEQ: 
-                case OpCode_e::MATHMULEQ: 
+                case OpCode_e::MATHADDEQ:
+                case OpCode_e::MATHSUBEQ:
+                case OpCode_e::MATHMULEQ:
                 case OpCode_e::MATHDIVEQ:
                     finCode.emplace_back(c.op, vars.userVars[c.valueString].index, 0, c.params, c.debug);
                     break;
-                case OpCode_e::MARSHAL: // these should not appear in generated code
+                case OpCode_e::MARSHAL: 
+                    // these should not appear in generated code
                     // something is rotten in Denmark
                     throw ParseFail_s {
                         errors::errorClass_e::parse,
@@ -3749,23 +3491,25 @@ void QueryParser::build(Columns* columns, MiddleBlockList& input, InstructionLis
                 }
             }
         }
-    } // add the term code to the end of the program
+    } 
+    
+    // add the term code to the end of the program
     finCode.emplace_back(OpCode_e::TERM, 0, 0, 0);
     int64_t lineNumber = 0;
     for (auto& f : finCode)
     {
         switch (f.op)
         {
-        case OpCode_e::CNDIF: 
-        case OpCode_e::CNDELIF: 
+        case OpCode_e::CNDIF:
+        case OpCode_e::CNDELIF:
         case OpCode_e::ITFOR:
-        case OpCode_e::ITFORR: 
-        case OpCode_e::ITFORRC: 
-        case OpCode_e::ITFORRCF: 
-        case OpCode_e::ITRFORR: 
-        case OpCode_e::ITRFORRC: 
-        case OpCode_e::ITRFORRCF: // map index to index of BlockID
-            f.index = blockIndex[f.index];  // map lambda (extra) to index of BlockId
+        case OpCode_e::ITFORR:
+        case OpCode_e::ITFORRC:
+        case OpCode_e::ITFORRCF:
+        case OpCode_e::ITRFORR:
+        case OpCode_e::ITRFORRC:
+        case OpCode_e::ITRFORRCF:          // map index to index of BlockID
+            f.index = blockIndex[f.index]; // map lambda (extra) to index of BlockId
             f.extra = blockIndex[f.extra];
             break;
         case OpCode_e::CNDELSE: // map index to index of BlockID
@@ -3811,25 +3555,40 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
     try
     {
         rawScript  = query;
-        templating = templateVars; // we will be suing the schema to validate the
+        templating = templateVars; 
+        
+        // we will be suing the schema to validate the
         // select and group and column. variables
         tableColumns = columnsPtr;
         vars.tableVars.emplace("stamp", Variable_s { "stamp", "grid" });
         vars.tableVars.emplace("event", Variable_s { "event", "grid" }); // breaks it out into lines
-        auto firstPass = extractLines(query);
-        BlockList blockList; // convert lines into blocks by indentation
+
+        // fix for missing trailing line and default `return False`
+
+        const auto modifiedQuery = std::string(query) + "\nreturn False\n";
+
+        auto firstPass = extractLines(modifiedQuery.c_str());
+        BlockList blockList; 
+        
+        // convert lines into blocks by indentation
         blockList.emplace_back(0, FirstPass {});
-        extractBlocks(0, firstPass, blockList); // iterate through our list of blocks, converting line parts
+        extractBlocks(0, firstPass, blockList); 
+        
+        // iterate through our list of blocks, converting line parts
         // into opcodes and breaking out into conditionals such as
         // if, elif, next, and prev into condition lambdas
         MiddleBlockList middleBlocks;
+
         for (auto& b : blockList)
             tokenizeBlock(b.code, b.blockId, blockList, middleBlocks);
+
         for (auto& m : middleBlocks)
         {
             Debug_s dbg;
             m.code.emplace_back(OpCode_e::RETURN, 0, dbg);
-        } // sort blocks into descending block order, blocks are likely to be accessed
+        }
+
+        // sort blocks into descending block order, blocks are likely to be accessed
         // in this order, with the main block being block 1.
         sort(
             middleBlocks.begin(),
@@ -3840,9 +3599,11 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
             });
         if (useSessions && vars.tableVars.count("session") == 0)
             vars.tableVars.emplace("session", Variable_s { "session", "grid" });
+
         // fill class variable 'macro' with the built code.
-        // the macro structure can be passed to the interpretor
+        // the macro structure can be passed to the interpreter
         build(tableColumns, middleBlocks, macros.code, macros.vars);
+
         // this will build the instruction list for generating index
         // stacks that will result in an index containing all and any
         // column type variables used in the query. 
@@ -3851,12 +3612,14 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
         // and fill them here.
         if (!hintNames.size())
             hintNames.push_back("_");
+
         for (const auto& n : hintNames)
         {
             auto hintPair = HintPair(n, {});
             evaluateHints(n, hintPair.second);
             macros.indexes.emplace_back(hintPair);
         }
+
         macros.marshalsReferenced = marshalsReferenced;
         macros.segmentTTL         = segmentTTL;
         macros.segmentRefresh     = segmentRefresh;
@@ -3869,6 +3632,7 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
         macros.useProps           = useProps;
         macros.rawScript          = rawScript;
         macros.useSessions        = useSessions;
+
         if (macros.useSessions)
         {
             for (auto& c : macros.vars.tableVars)
@@ -3886,20 +3650,23 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
             caught.debug = lastDebug;
         error.set(caught.eClass, caught.eCode, caught.getMessage(), caught.getDetail());
         return false;
-    } /*	catch (const std::exception& ex)
-            {
-                std::string additional = "";
-                if (lastDebug.text.length())
-                    additional = lastDebug.toStrShort();
-        
-                error.set(
-                    errors::errorClass_e::parse,
-                    errors::errorCode_e::run_time_exception_triggered,
-                    std::string{ ex.what() }+"(1)",
-                    additional
-                );
-                return false;
-            }*/ catch (const std::runtime_error& ex)
+    } 
+    
+    catch (const std::exception& ex)
+    {
+        std::string additional = "";
+        if (lastDebug.text.length())
+            additional = lastDebug.toStrShort();
+
+        error.set(
+            errors::errorClass_e::parse,
+            errors::errorCode_e::run_time_exception_triggered,
+            std::string{ ex.what() }+"(1)",
+            additional
+        );
+        return false;
+    }
+    catch (const std::runtime_error& ex)
     {
         std::string additional = "";
         if (lastDebug.text.length())
@@ -3910,7 +3677,8 @@ bool QueryParser::compileQuery(const char* query, Columns* columnsPtr, Macro_s& 
             std::string { ex.what() } + "(1)",
             additional);
         return false;
-    } catch (...) // giant WTF runtime exception
+    } 
+    catch (...) // giant WTF runtime exception
     {
         std::string additional = "";
         if (lastDebug.text.length())
@@ -3931,17 +3699,20 @@ std::string QueryParser::fixIndent(const std::string& source)
     auto indent = -1;
     for (auto p : parts)
     {
-        int t; // replace tabs
+        int t; 
+        // replace tabs
         while ((t = p.find('\t')) != -1)
         {
             p.erase(t, 1);
             p.insert(t, "    ");
-        } // skip empty lines or lines with just whitespace
+        } 
+        
+        // skip empty lines or lines with just whitespace
         if (trim(p, " ").size() == 0)
             continue;
         if (indent == -1)
         {
-            indent      = 0;
+            indent = 0;
             for (auto i = 0; i < static_cast<int>(p.length()); ++i)
             {
                 indent = i;
@@ -3975,7 +3746,9 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
         string code;
         for (auto& s : accumulatedLines)
             code += s + '\n';
-        code += '\n'; // this allows you to indent the code under the @section if preferred
+        code += '\n'; 
+        
+        // this allows you to indent the code under the @section if preferred
         code = fixIndent(code);
         accumulatedLines.clear();
         result.emplace_back(
@@ -4026,8 +3799,8 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
                     auto sectionParts = split(current.substr(1), ' ');
                     if (sectionParts.size() >= 2)
                     {
-                        sectionType   = sectionParts[0];
-                        sectionName   = sectionParts[1];
+                        sectionType = sectionParts[0];
+                        sectionName = sectionParts[1];
                         for (auto idx = 2; idx < static_cast<int>(sectionParts.size()); ++idx)
                         {
                             auto keyVal = split(sectionParts[idx], '=');
@@ -4040,10 +3813,12 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
                                 flags[keyVal[0]] = expandTime(keyVal[1]) * 1000;
 
                             else if (keyVal[0] == "use_cached")
-                                flags["use_cached"] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                flags["use_cached"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
+                                    't');
 
                             else if (keyVal[0] == "on_insert")
-                                flags["on_insert"] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                flags["on_insert"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
+                                    't');
 
                             else if (keyVal[0] == "z_index")
                                 flags["z_index"] = stoll(keyVal[1]);
@@ -4063,7 +3838,9 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
                 {
                     accumulatedLines.emplace_back(current);
                 }
-            } // reset the line accumulator
+            } 
+            
+            // reset the line accumulator
             current.clear();
         }
             break;
@@ -4080,9 +3857,7 @@ QueryParser::SectionDefinitionList QueryParser::extractSections(const char* quer
 string padding(string text, const int length, const bool left = true, const char filler = ' ')
 {
     while (static_cast<int>(text.length()) < length)
-        text = (left)
-                   ? filler + text
-                   : text + filler;
+        text = (left) ? filler + text : text + filler;
     return text;
 }
 

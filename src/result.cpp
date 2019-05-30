@@ -69,83 +69,89 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
     accModifiers.resize(resultWidth, query::Modifiers_e::sum);
 
     auto dataIndex = -1;
-    for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
+
+    for (auto r = 0; r < resultWidth; ++r)
     {
-        ++dataIndex;
-
-        if (g.modifier == query::Modifiers_e::var)
+        for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
         {
-            switch (g.value.typeOf())
+            ++dataIndex;
+
+            if (g.modifier == query::Modifiers_e::var)
             {
-                case cvar::valueType::INT32: 
-                case cvar::valueType::INT64: 
-                    accTypes[dataIndex] = ResultTypes_e::Int;
-                break;
-                case cvar::valueType::FLT: 
-                case cvar::valueType::DBL: 
-                    accTypes[dataIndex] = ResultTypes_e::Double;
-                break;
-                case cvar::valueType::STR: 
-                    accTypes[dataIndex] = ResultTypes_e::Text;
-                break;
-                case cvar::valueType::BOOL: 
-                    accTypes[dataIndex] = ResultTypes_e::Bool;
-                break;
-                case cvar::valueType::LIST: 
-                case cvar::valueType::DICT: 
-                case cvar::valueType::SET:
-                case cvar::valueType::REF:
-                default:
-                    accTypes[dataIndex] = ResultTypes_e::None;
+                switch (g.value.typeOf())
+                {
+                    case cvar::valueType::INT32: 
+                    case cvar::valueType::INT64: 
+                        accTypes[dataIndex] = ResultTypes_e::Int;
+                    break;
+                    case cvar::valueType::FLT: 
+                    case cvar::valueType::DBL: 
+                        accTypes[dataIndex] = ResultTypes_e::Double;
+                    break;
+                    case cvar::valueType::STR: 
+                        accTypes[dataIndex] = ResultTypes_e::Text;
+                    break;
+                    case cvar::valueType::BOOL: 
+                        accTypes[dataIndex] = ResultTypes_e::Bool;
+                    break;
+                    case cvar::valueType::LIST: 
+                    case cvar::valueType::DICT: 
+                    case cvar::valueType::SET:
+                    case cvar::valueType::REF:
+                    default:
+                        accTypes[dataIndex] = ResultTypes_e::None;
+                }
             }
-        }
-        else if (g.modifier == query::Modifiers_e::value)
-        {
-            switch (g.schemaType)
+            else if (g.modifier == query::Modifiers_e::value)
             {
+                switch (g.schemaType)
+                {
 
-                case db::columnTypes_e::intColumn: 
+                    case db::columnTypes_e::intColumn: 
+                        accTypes[dataIndex] = ResultTypes_e::Int;
+                    break;
+                    case db::columnTypes_e::doubleColumn: 
+                        accTypes[dataIndex] = ResultTypes_e::Double;
+                    break;
+                    case db::columnTypes_e::boolColumn: 
+                        accTypes[dataIndex] = ResultTypes_e::Bool;
+                    break;
+                    case db::columnTypes_e::textColumn: 
+                        accTypes[dataIndex] = ResultTypes_e::Text;
+                    break;
+                    case db::columnTypes_e::freeColumn:
+                    default: 
+                        accTypes[dataIndex] = ResultTypes_e::None;
+                }
+            }
+            else 
+            {
+                switch (g.schemaType)
+                {
+                case db::columnTypes_e::intColumn:
                     accTypes[dataIndex] = ResultTypes_e::Int;
-                break;
-                case db::columnTypes_e::doubleColumn: 
+                    break;
+                case db::columnTypes_e::doubleColumn:
                     accTypes[dataIndex] = ResultTypes_e::Double;
-                break;
-                case db::columnTypes_e::boolColumn: 
-                    accTypes[dataIndex] = ResultTypes_e::Bool;
-                break;
-                case db::columnTypes_e::textColumn: 
-                    accTypes[dataIndex] = ResultTypes_e::Text;
-                break;
+                    break;
+                case db::columnTypes_e::boolColumn:
+                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    break;
+                case db::columnTypes_e::textColumn:
+                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    break;
                 case db::columnTypes_e::freeColumn:
-                default: 
-                    accTypes[dataIndex] = ResultTypes_e::None;
+                default:
+                    accTypes[dataIndex] = ResultTypes_e::Int;
+                }
             }
-        }
-        else 
-        {
-            switch (g.schemaType)
-            {
-            case db::columnTypes_e::intColumn:
-                accTypes[dataIndex] = ResultTypes_e::Int;
-                break;
-            case db::columnTypes_e::doubleColumn:
-                accTypes[dataIndex] = ResultTypes_e::Double;
-                break;
-            case db::columnTypes_e::boolColumn:
-                accTypes[dataIndex] = ResultTypes_e::Int;
-                break;
-            case db::columnTypes_e::textColumn:
-                accTypes[dataIndex] = ResultTypes_e::Int;
-                break;
-            case db::columnTypes_e::freeColumn:
-            default:
-                accTypes[dataIndex] = ResultTypes_e::Int;
-            }
-        }
 
-        accModifiers[dataIndex] = g.modifier;
-
+            accModifiers[dataIndex] = g.modifier;
+        }
     }
+
+    if (resultWidth == 2)
+        cout << "blah" << endl;
 }
 
 Accumulator* ResultSet::getMakeAccumulator(RowKey& key)

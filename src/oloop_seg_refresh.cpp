@@ -98,7 +98,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 		macros = segmentsIter->second.macros;
         segmentInfo = &parts->segments[segmentName];
 
-        cout << "segment refresh: " << segmentName << endl;
+        //cout << "segment refresh: " << segmentName << endl;
         	    
 		// generate the index for this query	
 		indexing.mount(table.get(), macros, loop->partition, maxLinearId);

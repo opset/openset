@@ -158,7 +158,7 @@ namespace openset
 		struct Accumulator
 		{
 #pragma pack(push, 1)
-            // overlay width, these are made with exact nubmer of columns by 
+            // overlay width, these are made with exact number of columns by 
             // getMakeAccumulator
 			Accumulation_s columns[256]; 
 #pragma pack(pop)

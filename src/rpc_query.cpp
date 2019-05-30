@@ -522,7 +522,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
         int64_t bufferLength = 0;
         const auto buffer    = ResultMuxDemux::multiSetToInternode(
             queryMacros.vars.columnVars.size(),
-            queryMacros.indexes.size(),
+            queryMacros.segments.size(),
             resultSets,
             bufferLength); // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
@@ -572,7 +572,8 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 queryMacros.vars.columnVars.size(),
-                queryMacros.indexes.size(),
+                queryMacros.segments.size(),
+                //queryMacros.indexes.size(),
                 resultSets,
                 bufferLength); 
             /*
@@ -1140,10 +1141,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
     resultSets.reserve(partitions->getWorkerCount());
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
-            new ResultSet(
-                1 * (queryInfo.segments.size()
-                         ? queryInfo.segments.size()
-                         : 1))); // nothing active - return an empty set - not an error
+            new ResultSet(queryInfo.segments.size() ? queryInfo.segments.size() : 1)); // nothing active - return an empty set - not an error
     if (!activeList.size())
     {
         // 2. Merge the rows
