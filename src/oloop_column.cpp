@@ -27,8 +27,8 @@ OpenLoopColumn::OpenLoopColumn(
 
 OpenLoopColumn::~OpenLoopColumn()
 {
-    for (auto s: segments)
-        delete s;
+    //for (auto s: segments)
+      //  delete s;
 }
 
 void OpenLoopColumn::prepare()
@@ -56,12 +56,7 @@ void OpenLoopColumn::prepare()
             }
             else
             {
-                auto attr = parts->attributes.get(db::COL_SEGMENT, MakeHash(segmentName));
-                if (attr)
-                {
-                    segments.push_back(attr->getBits());
-                }
-                else
+                if (!parts->segments.count(segmentName))
                 {
                     shuttle->reply(
                         0,
@@ -78,6 +73,8 @@ void OpenLoopColumn::prepare()
                     suicide();
                     return;
                 }
+
+                segments.push_back(parts->segments[segmentName].bits);
             }
         }
     }

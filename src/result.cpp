@@ -70,7 +70,9 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 
     auto dataIndex = -1;
 
-    for (int64_t r = 0; r < resultWidth; ++r)
+    const auto segmentWidth = macros.segments.size() ? macros.segments.size() : 1;
+
+    for (int64_t r = 0; r < segmentWidth; ++r)
     {
         for (auto& g : macros.vars.columnVars) // WAS TABLE VARS
         {

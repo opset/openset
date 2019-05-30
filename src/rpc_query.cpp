@@ -260,7 +260,7 @@ shared_ptr<cjson> forkQuery(
             }
         }
     }; // add status nodes to JSON document
- 
+
     //auto metaJson = resultJson->setObject("info");
     //auto dataJson = metaJson->setObject("data");
     //fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
@@ -527,7 +527,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             bufferLength); // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
         PoolMem::getPool().freePtr(buffer); // clean up stray resultSets
-        Logger::get().info("event query on " + table->getName()); 
+        Logger::get().info("event query on " + table->getName());
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
@@ -575,7 +575,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 queryMacros.segments.size(),
                 //queryMacros.indexes.size(),
                 resultSets,
-                bufferLength); 
+                bufferLength);
             /*
             cjson tDoc;
             ResultMuxDemux::resultSetToJson(
@@ -646,7 +646,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     }
 
     auto table = database->getTable(tableName);
-    
+
     if (!table)
     {
         RpcError(
@@ -662,8 +662,8 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     query::ParamVars paramVars = getInlineVaraibles(message);
     // get the functions extracted and de-indented as named code blocks
     auto subQueries = query::QueryParser::extractSections(queryCode.c_str());
-    query::QueryPairs queries; 
-    
+    query::QueryPairs queries;
+
     // loop through the extracted functions (subQueries) and compile them
     for (auto r : subQueries)
     {
@@ -686,21 +686,21 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table->setSegmentTtl(r.sectionName, r.flags["ttl"]);
         }
 
-        const auto zIndex = r.flags.contains("z_index") ? r.flags["z_index"].getInt32() : 100;
-        const auto onInsert = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
+        const auto zIndex    = r.flags.contains("z_index") ? r.flags["z_index"].getInt32() : 100;
+        const auto onInsert  = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
         const auto useCached = r.flags.contains("use_cached") ? r.flags["use_cached"].getBool() : false;
-        
+
         if (r.flags.contains("refresh"))
         {
             queryMacros.segmentRefresh = r.flags["refresh"];
             table->setSegmentRefresh(r.sectionName, queryMacros, r.flags["refresh"], zIndex, onInsert);
         }
 
-        queryMacros.useCached = useCached;            
+        queryMacros.useCached = useCached;
         queryMacros.isSegment = true;
         queries.emplace_back(std::pair<std::string, query::Macro_s> { r.sectionName, queryMacros });
-    } 
-    
+    }
+
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
     //      thread as they are executed serially, rather than in parallel. 
@@ -718,8 +718,8 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
                 MacroDbg(m.second); // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
         return;
-    } 
-    
+    }
+
     /*
     * We are originating the query.
     *
@@ -756,8 +756,8 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
-    } 
-    
+    }
+
     // We are a Fork!
     auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
@@ -768,8 +768,8 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     resultSets.reserve(partitions->getWorkerCount());
 
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
-        resultSets.push_back(new ResultSet(1)); 
-    
+        resultSets.push_back(new ResultSet(1));
+
     // nothing active - return an empty set - not an error
     if (!activeList.size())
     {
@@ -808,14 +808,14 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
                     for (auto resultSet : resultSets)
                         delete resultSet;
 
-                    release_cb(); 
+                    release_cb();
                     return;
                 }
             }
 
             // 1. Merge Macro Literals
             // 2. Merge the rows
-            ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets); 
+            ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets);
 
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
@@ -827,8 +827,8 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
             PoolMem::getPool().freePtr(buffer);
 
-            Logger::get().info("segment query on " + table->getName()); 
-        
+            Logger::get().info("segment query on " + table->getName());
+
             // clean up stray resultSets
             for (auto resultSet : resultSets)
                 delete resultSet;
@@ -873,6 +873,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             message);
         return;
     }
+
     const auto table = database->getTable(tableName);
     if (!table)
     {
@@ -885,6 +886,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             message);
         return;
     }
+
     if (!columnName.size())
     {
         RpcError(
@@ -896,7 +898,9 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             message);
         return;
     }
+
     const auto column = table->getColumns()->getColumn(columnName);
+
     if (!column || column->type == columnTypes_e::freeColumn)
     {
         RpcError(
@@ -907,11 +911,14 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             },
             message);
         return;
-    } // We are a Fork!
+    } 
+    
+    // We are a Fork!
     OpenLoopColumn::ColumnQueryConfig_s queryInfo;
     queryInfo.columnName  = columnName;
     queryInfo.columnType  = column->type;
     queryInfo.columnIndex = column->idx;
+
     if (message->isParam("gt"))
     {
         queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::gt;
@@ -948,6 +955,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::rx;
         // bad regex blows this thing up... so lets catch any errors
         auto isError = false;
+
         try
         {
             queryInfo.rx = std::regex(message->getParamString("rx"));
@@ -955,10 +963,12 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         catch (const std::runtime_error&)
         {
             isError = true;
-        } catch (...)
+        } 
+        catch (...)
         {
             isError = true;
         }
+
         if (isError)
         {
             RpcError(
@@ -1010,6 +1020,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
     }
     if (message->isParam("bucket"))
         queryInfo.bucket = message->getParamString("bucket");
+
     if (message->isParam("segments"))
     {
         const auto segmentText = message->getParamString("segments");
@@ -1032,18 +1043,20 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                 message);
             return;
         }
-    } // here we are going to force typing depending on the column type
+    } 
+    
+    // here we are going to force typing depending on the column type
     // note: prior to conversion these will all be strings
     switch (queryInfo.columnType)
     {
     case columnTypes_e::intColumn:
-        queryInfo.bucket     = queryInfo.bucket.getInt64();
+        queryInfo.bucket = queryInfo.bucket.getInt64();
         queryInfo.filterLow  = queryInfo.filterLow.getInt64();
         queryInfo.filterHigh = queryInfo.filterHigh.getInt64();
         break;
     case columnTypes_e::doubleColumn:
         // floating point data in the db is in scaled integers, scale our ranges and buckets
-        queryInfo.bucket     = static_cast<int64_t>(queryInfo.bucket.getDouble() * 10000.0);
+        queryInfo.bucket = static_cast<int64_t>(queryInfo.bucket.getDouble() * 10000.0);
         queryInfo.filterLow  = static_cast<int64_t>(queryInfo.filterLow.getDouble() * 10000.0);
         queryInfo.filterHigh = static_cast<int64_t>(queryInfo.filterHigh.getDouble() * 10000.0);
         break;
@@ -1054,10 +1067,12 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         queryInfo.filterLow = queryInfo.filterLow.getString();
         break;
     default: ;
-    } // now lets make sure the `columnType` and the `mode` make sense together and
+    } 
+    
+    // now lets make sure the `columnType` and the `mode` make sense together and
     // return an error if they do not.
-    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all && queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e
-        ::eq)
+    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all && 
+        queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::eq)
     {
         switch (queryInfo.columnType)
         {
@@ -1092,7 +1107,9 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             break;
         case columnTypes_e::boolColumn: default: ;
         }
-    } /*
+    } 
+    
+    /*
     * We are originating the query.
     *
     * At this point in the function we have validated that the
@@ -1120,8 +1137,10 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
-    } // create list of active_owner parititions for factory function
-    auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
+    } 
+    
+    // create list of active_owner parititions for factory function
+    const auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
         {
             mapping::NodeState_e::active_owner
@@ -1139,9 +1158,12 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
     //
     std::vector<ResultSet*> resultSets;
     resultSets.reserve(partitions->getWorkerCount());
+
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
-            new ResultSet(queryInfo.segments.size() ? queryInfo.segments.size() : 1)); // nothing active - return an empty set - not an error
+            new ResultSet(queryInfo.segments.size() ? queryInfo.segments.size() : 1));
+
+    // nothing active - return an empty set - not an error
     if (!activeList.size())
     {
         // 2. Merge the rows
@@ -1157,7 +1179,9 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
-    } /*
+    } 
+    
+    /*
     *  this Shuttle will gather our result sets roll them up and spit them back
     *
     *  note that queryMacros are captured with a copy, this is because a reference
@@ -1188,17 +1212,23 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                     release_cb();
                     return;
                 }
-            } // 1. Merge the rows
+            } 
+        
+            // 1. Merge the rows
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 1,
                 queryInfo.segments.size(),
                 resultSets,
                 bufferLength);
+
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+
             Logger::get().info("Fork query on " + table->getName()); // clean up all those resultSet*
+
             for (auto r : resultSets)
                 delete r;
+
             release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
         });
     auto instance = 0; // pass factory function (as lambda) to create new cell objects
@@ -1430,10 +1460,10 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
     }
     int64_t bucket = 0;
     if (message->isParam("bucket"))
-        bucket    = static_cast<int64_t>(stod(message->getParamString("bucket", "0")) * 10000.0);
+        bucket = static_cast<int64_t>(stod(message->getParamString("bucket", "0")) * 10000.0);
     auto forceMin = std::numeric_limits<int64_t>::min();
     if (message->isParam("min"))
-        forceMin  = static_cast<int64_t>(stod(message->getParamString("min", "0")) * 10000.0);
+        forceMin = static_cast<int64_t>(stod(message->getParamString("min", "0")) * 10000.0);
     auto forceMax = std::numeric_limits<int64_t>::min();
     if (message->isParam("max"))
         forceMax = static_cast<int64_t>(stod(message->getParamString("max", "0")) * 10000.0); /*
