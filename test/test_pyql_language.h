@@ -388,6 +388,14 @@ inline Tests test_pyql_language()
 
 	debug(len(some_set) == 2)
 
+    test = {}
+    test['yellow'] = {}
+    test['yellow']['green'] = 'this is green'
+    del test['yellow']['green']
+    del test['yellow']['orange']
+    del test['yellow']['orange']
+
+
 	)pyql");
     // test container iterators
     auto test14_pyql = openset::query::QueryParser::fixIndent(

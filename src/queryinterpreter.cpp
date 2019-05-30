@@ -1481,6 +1481,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     case Marshals_e::marshal_return: // return will have its params on the stack,
         // we will just leave these on the stack and
         // break out of this block... magic!
+        if (stackPtr == stack) // push None if no return
+        {
+            *stackPtr = NONE;
+            ++stackPtr;
+        }
         inReturn = true;
         --recursion;
         return true;
@@ -1749,7 +1754,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
     while (loopState == LoopState_e::run && !error.inError() && !inReturn)
     {
         // tracks the last known script line number
-        if (inst->debug.number)
+        if (inst->debug.number && inst->debug.number != -1)
             lastDebug = &inst->debug; /* TODO LONG RUN CHECK --- we will do this differently
         if (++loopCount > MAX_EXEC_COUNT)
         {
@@ -1767,6 +1772,24 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             return;
         }
         */
+
+        // underrun test
+        if (stackPtr < stack)
+        {
+            error.set(
+                errors::errorClass_e::run_time,
+                errors::errorCode_e::exec_count_exceeded,
+                "stack under-run",
+                lastDebug->toStrShort());
+            loopState = LoopState_e::in_exit;
+            // reset stack
+            stackPtr = stack;
+            *stackPtr = NONE;
+            ++stackPtr;
+            --recursion;
+            return;            
+        }
+
         switch (inst->op)
         {
         case OpCode_e::NOP: // do nothing... nothing to see here... move on
@@ -1786,14 +1809,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 auto colValue = NONE; // extract property value from grid->propRow
                 
-                if (macros.vars.tableVars[inst->index].isProp)
-                {
-                    colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
-                }
-                else
-                {
-                    colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
-                }
+                //if (macros.vars.tableVars[inst->index].isProp)
+                //{
+                //    colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
+                // }
+                //else
+                //{
+                colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
+                //}
 
                 switch (macros.vars.tableVars[inst->index].schemaType)
                 {
@@ -2709,6 +2732,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             break;
         case OpCode_e::RETURN: // this is a soft return like END-OF-BLOCK, not like explicit return call
             //inReturn = true;
+            
             if (stack == stackPtr)
             {
                 *stackPtr = NONE;
@@ -2801,7 +2825,7 @@ void openset::query::Interpreter::exec()
                     execReset();
                     opRunner(inst, 0);
                 }
-                if (stackPtr == stack)
+                if (stackPtr <= stack)
                     returns.push_back(NONE); // return NONE if stack is unwound
                 else
                     returns.push_back(*(stackPtr - 1)); // capture last value on stack
@@ -2814,7 +2838,7 @@ void openset::query::Interpreter::exec()
             segmentColumnShift = 0;
             execReset();
             opRunner(inst, 0);
-            if (stackPtr == stack)
+            if (stackPtr <= stack)
                 returns.push_back(NONE); // return NONE if stack is unwound
             else
                 returns.push_back(*(stackPtr - 1)); // capture last value on stack
@@ -2876,7 +2900,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                             execReset();
                             opRunner(inst, 0);
                         }
-                        if (stackPtr == stack)
+                        if (stackPtr <= stack)
                             returns.push_back(NONE); // return NONE if stack is unwound
                         else
                             returns.push_back(*(stackPtr - 1)); // capture last value on stack
@@ -2889,7 +2913,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                     segmentColumnShift = 0;
                     execReset();
                     opRunner(inst, 0);
-                    if (stackPtr == stack)
+                    if (stackPtr <= stack)
                         returns.push_back(NONE); // return NONE if stack is unwound
                     else
                         returns.push_back(*(stackPtr - 1)); // capture last value on stack
