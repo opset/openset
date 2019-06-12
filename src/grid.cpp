@@ -444,45 +444,59 @@ PersonData_s* Grid::clearFlag(const flagType_e flagType, const int64_t reference
 
 PersonData_s* Grid::commit()
 {
-    if (!rows.size()) { cout << "no rows" << endl; } // this is the worst case scenario temp buffer size for this data.
+    if (!rows.size()) { cout << "no rows" << endl; } 
+    
+    // this is the worst case scenario temp buffer size for this data.
     // (columns * rows) + (columns * row headers) + number_of_set_values
     const auto rowCount = rows.size();
-    const auto tempBufferSize = (rowCount * (colMap->columnCount * sizeOfCast)) + (rowCount * sizeOfCastHeader) + (
-            setData.size() * sizeof(int64_t)) +                                    // the set data
+    const auto tempBufferSize =
+        (rowCount * (colMap->columnCount * sizeOfCast)) + 
+        (rowCount * sizeOfCastHeader) + (setData.size() * sizeof(int64_t)) + // the set data
         ((rowCount * colMap->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
-    // make an intermediate buffer that is fully uncompresed
+    
+    // make an intermediate buffer that is fully uncompressed
     const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
     auto write = intermediateBuffer;
+    
     Cast_s* cursor;
     auto bytesNeeded = 0;
     auto columns = table->getColumns();
+    
     const auto pushRow = [&](Row* r)
     {
         for (auto c = 0; c < colMap->columnCount; ++c)
         {
             const auto actualColumn = colMap->columnMap[c];
+
             // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
             if (r->cols[c] == NONE || (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
                 continue;
+
             if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
             {
                 if (colInfo->isSet)
                 {
                     /* Output stream looks like this:
-                                        *
-                                        *  int16_t column
-                                        *  int16_t length
-                                        *  int64_t values[]
-                                        */ // write out column id
+                    *
+                    *  int16_t column
+                    *  int16_t length
+                    *  int64_t values[]
+                    */ 
+                    
+                    // write out column id
                     *reinterpret_cast<int16_t*>(write) = actualColumn;
                     write += sizeof(int16_t);
-                    bytesNeeded += sizeof(int16_t); // cast SetInfo_s over the value and get offset and length
+                    bytesNeeded += sizeof(int16_t); 
+                    
+                    // cast SetInfo_s over the value and get offset and length
                     // write out count
                     const auto start = static_cast<int32_t>(reinterpret_cast<SetInfo_s*>(&r->cols[c])->offset);
                     auto& count = *reinterpret_cast<int16_t*>(write);
+
                     count = static_cast<int16_t>(reinterpret_cast<SetInfo_s*>(&r->cols[c])->length);
                     write += sizeof(int16_t);
                     bytesNeeded += sizeof(int16_t); // write out values
+
                     for (auto idx = start; idx < start + count; ++idx)
                     {
                         *recast<int64_t*>(write) = setData[idx];
@@ -495,20 +509,28 @@ PersonData_s* Grid::commit()
                     cursor = recast<Cast_s*>(write);
                     cursor->columnNum = actualColumn;
                     cursor->val64 = r->cols[c];
+
                     write += sizeOfCast;
                     bytesNeeded += sizeOfCast;
                 }
             }
         }
+
         cursor = recast<Cast_s*>(write); // END OF ROW - write a "row" marker at the end of the row
         cursor->columnNum = -1;
+
         write += sizeOfCastHeader;
+
         bytesNeeded += sizeOfCastHeader;
-    }; // push the rows through the encode
+    }; 
+    
+    // push the rows through the encode
     for (auto r : rows)
         pushRow(r);
+
     const auto maxBytes = LZ4_compressBound(bytesNeeded);
     const auto compBuffer = cast<char*>(PoolMem::getPool().getPtr(maxBytes));
+
     const auto oldCompBytes = rawData->comp;
     const auto newCompBytes = LZ4_compress_fast(
         intermediateBuffer,
@@ -516,22 +538,30 @@ PersonData_s* Grid::commit()
         bytesNeeded,
         maxBytes,
         table->personCompression);
+
     const auto newPersonSize = (rawData->size() - oldCompBytes) + newCompBytes;
+    
     // size() includes data, we adjust
     const auto newPerson = recast<PersonData_s*>(PoolMem::getPool().getPtr(newPersonSize)); // copy old header
     memcpy(newPerson, rawData, PERSON_DATA_SIZE);
+
     newPerson->comp = newCompBytes; // adjust offsets
-    newPerson->bytes = bytesNeeded; // copy old id bytes											 
+    newPerson->bytes = bytesNeeded; // copy old id bytes	
+
     if (rawData->idBytes)
         memcpy(newPerson->getIdPtr(), rawData->getIdPtr(), static_cast<size_t>(rawData->idBytes)); // copy NEW flags
+
     if (rawData->flagRecords)
         memcpy(newPerson->getFlags(), rawData->getFlags(), static_cast<size_t>(rawData->flagBytes()));
+
     // copy NEW compressed events
     if (newCompBytes)
         memcpy(newPerson->getComp(), compBuffer, static_cast<size_t>(newCompBytes)); // get rid of the intermediate copy
+
     PoolMem::getPool().freePtr(intermediateBuffer);
     PoolMem::getPool().freePtr(compBuffer); // release the original
     PoolMem::getPool().freePtr(rawData);    // it probably got longer!
+
     rawData = newPerson;
     return rawData;
 }

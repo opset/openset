@@ -81,6 +81,7 @@ set(SOURCE_FILES
         lib/mem/prequeues.cpp
         lib/mem/prequeues.h
         lib/mem/ssdict.h
+		lib/mem/blhash.h
         lib/str/strtools.cpp
         lib/str/strtools.h
         lib/threads/spinlock.h

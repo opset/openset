@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "person.h"
 #include "mem/bigring.h"
+#include "mem/blhash.h"
 #include "grid.h"
 
 #include <vector>
@@ -19,7 +20,8 @@ namespace openset
 		class People
 		{
 		public:
-			bigRing<int64_t, int32_t> peopleMap; // probably delete this!
+			//bigRing<int64_t, int32_t> peopleMap; // probably delete this!
+            BinaryListHash<int64_t, int32_t> peopleMap;
 			vector<PersonData_s*> peopleLinear;
             vector<int32_t> reuse;
 			int partition;

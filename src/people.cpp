@@ -5,7 +5,7 @@
 using namespace openset::db;
 
 People::People(const int partition) :	
-	peopleMap(ringHint_e::lt_5_million),
+	//peopleMap(ringHint_e::lt_5_million),
     partition(partition)
 {}
 
@@ -70,7 +70,7 @@ PersonData_s* People::getMakePerson(string userIdString)
         auto isReuse = false;
         auto linId = static_cast<int32_t>(peopleLinear.size());
 
-        if (!reuse.empty())
+        if (!person && !reuse.empty())
         {
             linId = reuse.back();
             reuse.pop_back();
@@ -109,11 +109,7 @@ PersonData_s* People::getMakePerson(string userIdString)
 
 void People::replacePersonRecord(PersonData_s* newRecord)
 {
-    // FIX - memory leak
-    if (peopleLinear[newRecord->linId])
-        PoolMem::getPool().freePtr(peopleLinear[newRecord->linId]);
-
-    if (newRecord)
+    if (newRecord && peopleLinear[newRecord->linId] != newRecord)
         peopleLinear[newRecord->linId] = newRecord;
 }
 
@@ -129,7 +125,7 @@ void People::drop(const int64_t userId)
     if (!info)
         return;
 
-    peopleMap.erase(userId);
+    //peopleMap.erase(userId);
 
     peopleLinear[info->linId] = nullptr;
 

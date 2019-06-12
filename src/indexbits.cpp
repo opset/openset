@@ -210,10 +210,12 @@ char* IndexBits::store(int64_t& compressedBytes, int64_t& linId, int32_t& offset
     return compressionBuffer;
 }
 
-void IndexBits::grow(const int64_t required)
+void IndexBits::grow(int64_t required)
 {
     if (ints >= required)
         return;
+
+    required += 32;
 
     const auto bytes = required * sizeof(uint64_t);
     const auto write = cast<char*>(PoolMem::getPool().getPtr(bytes));

@@ -81,6 +81,7 @@ namespace openset
             CVList getAdded();
             void iterRemoved(std::function<void(int32_t, int64_t)> cb);
         };
+
 #pragma pack(push,1)
         struct PersonData_s
         {
@@ -103,8 +104,10 @@ namespace openset
             int16_t idBytes;     // number of bytes in id string
             int16_t flagRecords; // number of flag records
             char*   props;       // pointer to props - mutable and may change during a query, slow to repack into structure
-            char events[1];      // char* (1st byte) of packed event struct            
+            char events[1];      // char* (1st byte) of packed event struct       
+            
             std::string getIdStr() const { return std::string(events, idBytes); }
+
             // personData_s must already be sized, null not required
             void setIdStr(std::string& idString)
             {
