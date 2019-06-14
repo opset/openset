@@ -210,12 +210,13 @@ char* IndexBits::store(int64_t& compressedBytes, int64_t& linId, int32_t& offset
     return compressionBuffer;
 }
 
-void IndexBits::grow(int64_t required)
+void IndexBits::grow(int64_t required, bool exact)
 {
     if (ints >= required)
         return;
 
-    required += 32;
+    if (!exact)
+        required += 32;
 
     const auto bytes = required * sizeof(uint64_t);
     const auto write = cast<char*>(PoolMem::getPool().getPtr(bytes));
@@ -243,7 +244,7 @@ void IndexBits::bitSet(const int64_t index)
     const int64_t pos = index >> 6ULL; // divide by 8
 
     if (pos >= ints) // is our buffer big enough?
-        grow(pos + 1);
+        grow(pos + 1, false);
 
     bits[pos] |= BITMASK[index & 63ULL]; // mod 64
 }
@@ -253,7 +254,7 @@ void IndexBits::lastBit(const int64_t index)
     const int64_t pos = index >> 6ULL; // divide by 8
 
     if (pos >= ints) // is our buffer big enough?
-        grow(pos + 1);
+        grow(pos + 1, false);
 }
 
 void IndexBits::bitClear(const int64_t index)
@@ -261,7 +262,7 @@ void IndexBits::bitClear(const int64_t index)
     const int64_t pos = index >> 6ULL; // divide by 8
 
     if (pos >= ints) // is our buffer big enough?
-        grow(pos + 1);
+        grow(pos + 1, false);
 
     bits[pos] &= ~(BITMASK[index & 63ULL]); // mod 64
 }

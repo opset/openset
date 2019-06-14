@@ -37,7 +37,7 @@ namespace openset
             // returns a POOL buffer ptr, and the number of bytes
             char* store(int64_t& compressedBytes, int64_t& linId, int32_t& offset, int32_t& length, int compRatio = 1);
 
-            void grow(int64_t required);
+            void grow(int64_t required, bool exact = true);
 
             void lastBit(int64_t index);
             void bitSet(int64_t index);
