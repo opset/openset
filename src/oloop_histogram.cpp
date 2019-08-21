@@ -10,49 +10,49 @@ using namespace openset::result;
 
 // yes, we are passing queryMacros by value to get a copy
 OpenLoopHistogram::OpenLoopHistogram(
-	ShuttleLambda<CellQueryResult_s>* shuttle,
-	openset::db::Database::TablePtr table, 
-	Macro_s macros, 
+    ShuttleLambda<CellQueryResult_s>* shuttle,
+    openset::db::Database::TablePtr table,
+    Macro_s macros,
     std::string groupName,
     std::string eachColumn,
     const int64_t bucket,
-	openset::result::ResultSet* result,
-    const int instance) :
-
-	OpenLoop(table->getName(), oloopPriority_e::realtime), // queries are high priority and will preempt other running cells
-	macros(std::move(macros)),
-	shuttle(shuttle),
-    groupName(std::move(groupName)),
-    eachColumn(std::move(eachColumn)),
-    table(table),
-	bucket(bucket),
-	parts(nullptr),
-	maxLinearId(0),
-	currentLinId(-1),
-	interpreter(nullptr),
-	instance(instance),
-	runCount(0), 
-	startTime(0),
-	population(0),
-	index(nullptr),
-	result(result)
+    openset::result::ResultSet* result,
+    const int instance)
+    : OpenLoop(table->getName(), oloopPriority_e::realtime),
+      // queries are high priority and will preempt other running cells
+      macros(std::move(macros)),
+      shuttle(shuttle),
+      groupName(std::move(groupName)),
+      eachColumn(std::move(eachColumn)),
+      table(table),
+      bucket(bucket),
+      parts(nullptr),
+      maxLinearId(0),
+      currentLinId(-1),
+      interpreter(nullptr),
+      instance(instance),
+      runCount(0),
+      startTime(0),
+      population(0),
+      index(nullptr),
+      result(result)
 {}
 
 OpenLoopHistogram::~OpenLoopHistogram()
 {
-	if (interpreter)
-	{
-		// free up any segment bits we may have made
-		for (auto bits : interpreter->segmentIndexes)
-			delete bits;
+    if (interpreter)
+    {
+        // free up any segment bits we may have made
+        //for (auto bits : interpreter->segmentIndexes)
+          //  delete bits;
 
-		delete interpreter;
-	}
+        delete interpreter;
+    }
 }
 
 void OpenLoopHistogram::prepare()
 {
-	parts = table->getPartitionObjects(loop->partition, false);
+    parts = table->getPartitionObjects(loop->partition, false);
 
     if (!parts)
     {
@@ -60,16 +60,16 @@ void OpenLoopHistogram::prepare()
         return;
     }
 
-	maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.peopleCount();
 
-	// generate the index for this query	
-	indexing.mount(table.get(), macros, loop->partition, maxLinearId);
-	bool countable;
-	index = indexing.getIndex("_", countable);
-	population = index->population(maxLinearId);
+    // generate the index for this query	
+    indexing.mount(table.get(), macros, loop->partition, maxLinearId);
+    bool countable;
+    index      = indexing.getIndex("_", countable);
+    population = index->population(maxLinearId);
 
-	interpreter = new Interpreter(macros);
-	interpreter->setResultObject(result);
+    interpreter = new Interpreter(macros);
+    interpreter->setResultObject(result);
 
     if (eachColumn.length())
     {
@@ -79,14 +79,14 @@ void OpenLoopHistogram::prepare()
         {
             shuttle->reply(
                 0,
-                result::CellQueryResult_s{
+                result::CellQueryResult_s {
                     instance,
-                {},
-                openset::errors::Error{
-                    openset::errors::errorClass_e::run_time,
-                    openset::errors::errorCode_e::item_not_found,
-                    "missing foreach column '" + eachColumn + "'"
-                }
+                    {},
+                    openset::errors::Error {
+                        openset::errors::errorClass_e::run_time,
+                        openset::errors::errorCode_e::item_not_found,
+                        "missing foreach column '" + eachColumn + "'"
+                    }
                 }
             );
             suicide();
@@ -103,29 +103,28 @@ void OpenLoopHistogram::prepare()
         {
             shuttle->reply(
                 0,
-                result::CellQueryResult_s{
+                result::CellQueryResult_s {
                     instance,
-                {},
-                openset::errors::Error{
-                    openset::errors::errorClass_e::run_time,
-                    openset::errors::errorCode_e::item_not_found,
-                    "the 'each_value' variable was not found."
-                }
+                    {},
+                    openset::errors::Error {
+                        openset::errors::errorClass_e::run_time,
+                        openset::errors::errorCode_e::item_not_found,
+                        "the 'each_value' variable was not found."
+                    }
                 }
             );
             suicide();
             return;
-
         }
     }
 
-	// if we are in segment compare mode:
-	if (macros.segments.size())
-	{
-		std::vector<IndexBits*> segments;
+    // if we are in segment compare mode:
+    if (macros.segments.size())
+    {
+        std::vector<IndexBits*> segments;
 
-		for (const auto& segmentName : macros.segments)
-		{
+        for (const auto& segmentName : macros.segments)
+        {
             if (segmentName == "*")
             {
                 auto tBits = new IndexBits();
@@ -134,12 +133,29 @@ void OpenLoopHistogram::prepare()
             }
             else
             {
-                auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
+                /*auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
                 if (attr)
                 {
                     segments.push_back(attr->getBits());
                 }
                 else
+                {
+                    shuttle->reply(
+                        0,
+                        result::CellQueryResult_s {
+                            instance,
+                            {},
+                            openset::errors::Error {
+                                openset::errors::errorClass_e::run_time,
+                                openset::errors::errorCode_e::item_not_found,
+                                "missing segment '" + segmentName + "'"
+                            }
+                        }
+                    );
+                    suicide();
+                    return;
+                }*/
+                if (!parts->segments.count(segmentName))
                 {
                     shuttle->reply(
                         0,
@@ -156,24 +172,26 @@ void OpenLoopHistogram::prepare()
                     suicide();
                     return;
                 }
+
+                segments.push_back(parts->segments[segmentName].bits);
+
             }
-		}
+        }
 
-		interpreter->setCompareSegments(index, segments);
-	}
+        interpreter->setCompareSegments(index, segments);
+    }
 
+    auto mappedColumns = interpreter->getReferencedColumns();
 
-	auto mappedColumns = interpreter->getReferencedColumns();
-
-	// map table, partition and select schema columns to the Person object
-	if (!person.mapTable(table.get(), loop->partition, mappedColumns))
-	{
+    // map table, partition and select schema columns to the Person object
+    if (!person.mapTable(table.get(), loop->partition, mappedColumns))
+    {
         partitionRemoved();
-	    suicide();
+        suicide();
         return;
-	}
+    }
 
-	person.setSessionTime(macros.sessionTime);
+    person.setSessionTime(macros.sessionTime);
 
     rowKey.clear();
     rowKey.key[0] = MakeHash(groupName);
@@ -185,20 +203,20 @@ void OpenLoopHistogram::prepare()
     {
         switch (colInfo->type)
         {
-            case columnTypes_e::intColumn: 
-                rowKey.types[1] = ResultTypes_e::Int;
+        case columnTypes_e::intColumn:
+            rowKey.types[1] = ResultTypes_e::Int;
             break;
-            case columnTypes_e::doubleColumn: 
-                rowKey.types[1] = ResultTypes_e::Double;
+        case columnTypes_e::doubleColumn:
+            rowKey.types[1] = ResultTypes_e::Double;
             break;
-            case columnTypes_e::boolColumn: 
-                rowKey.types[1] = ResultTypes_e::Bool;
+        case columnTypes_e::boolColumn:
+            rowKey.types[1] = ResultTypes_e::Bool;
             break;
-            case columnTypes_e::textColumn: 
-                rowKey.types[1] = ResultTypes_e::Text;
+        case columnTypes_e::textColumn:
+            rowKey.types[1] = ResultTypes_e::Text;
             break;
-            case columnTypes_e::freeColumn: 
-            default: ;
+        case columnTypes_e::freeColumn:
+        default: ;
         }
 
         rowKey.types[2] = ResultTypes_e::Double;
@@ -207,40 +225,40 @@ void OpenLoopHistogram::prepare()
     {
         rowKey.types[1] = ResultTypes_e::Double;
     }
-    	
-	startTime = Now();
+
+    startTime = Now();
 }
 
 bool OpenLoopHistogram::run()
 {
-	while (true)
-	{
-		if (sliceComplete())
-			return true;
+    while (true)
+    {
+        if (sliceComplete())
+            return true;
 
-    	// are we done? This will return the index of the 
-		// next set bit until there are no more, or maxLinId is met
-		if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
-		{
-			shuttle->reply(
-				0, 
-				CellQueryResult_s{				
-					instance,
+        // are we done? This will return the index of the 
+        // next set bit until there are no more, or maxLinId is met
+        if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
+        {
+            shuttle->reply(
+                0,
+                CellQueryResult_s {
+                    instance,
                     {},
-					interpreter->error,
-				});
-		
-			suicide();
-			return false;
-		}
+                    interpreter->error,
+                });
+
+            suicide();
+            return false;
+        }
 
         if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
-		{
-			++runCount;
+        {
+            ++runCount;
 
-			person.mount(personData);
-			person.prepare();
-			interpreter->mount(&person);
+            person.mount(personData);
+            person.prepare();
+            interpreter->mount(&person);
 
             if (valueList.size())
             {
@@ -267,7 +285,7 @@ bool OpenLoopHistogram::run()
                         if (itemValue.second->text)
                         {
                             result->addLocalText(itemValue.first, itemValue.second->text);
-                            key1Value = itemValue.first;
+                            key1Value                                           = itemValue.first;
                             interpreter->macros.vars.userVars[eachVarIdx].value = itemValue.second->text;
                         }
                         else
@@ -282,7 +300,7 @@ bool OpenLoopHistogram::run()
                     auto returns = interpreter->getLastReturn();
 
                     auto idx = -1;
-                    for (auto &r : returns)
+                    for (auto& r : returns)
                     {
                         ++idx;
 
@@ -294,7 +312,6 @@ bool OpenLoopHistogram::run()
                         // bucket the key if it's non-zero
                         if (bucket)
                             value = (value / bucket) * bucket;
-
 
                         rowKey.key[1] = NONE;
                         rowKey.key[2] = NONE;
@@ -326,16 +343,15 @@ bool OpenLoopHistogram::run()
                         else
                             ++aggs->columns[idx].value;
                     }
-
                 }
             }
             else
             {
-			    interpreter->exec(); // run the script on this person - do some magic
+                interpreter->exec(); // run the script on this person - do some magic
                 auto returns = interpreter->getLastReturn();
 
                 auto idx = -1;
-                for (auto &r : returns)
+                for (auto& r : returns)
                 {
                     ++idx;
 
@@ -347,7 +363,7 @@ bool OpenLoopHistogram::run()
                     // bucket the key if it's non-zero
                     if (bucket)
                         value = (value / bucket) * bucket;
-                    
+
                     rowKey.key[1] = NONE;
 
                     auto aggs = result->getMakeAccumulator(rowKey);
@@ -365,23 +381,22 @@ bool OpenLoopHistogram::run()
                     else
                         ++aggs->columns[idx].value;
                 }
-
             }
-		}
-	}
+        }
+    }
 }
 
 void OpenLoopHistogram::partitionRemoved()
 {
-	shuttle->reply(
-		0,
-		CellQueryResult_s{
-		instance,
-        {},
-		openset::errors::Error{
-			openset::errors::errorClass_e::run_time,
-			openset::errors::errorCode_e::partition_migrated,
-			"please retry query"
-		}
-	});
+    shuttle->reply(
+        0,
+        CellQueryResult_s {
+            instance,
+            {},
+            openset::errors::Error {
+                openset::errors::errorClass_e::run_time,
+                openset::errors::errorCode_e::partition_migrated,
+                "please retry query"
+            }
+        });
 }

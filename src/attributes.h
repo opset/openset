@@ -2,6 +2,7 @@
 
 #include <vector>
 #include "mem/bigring.h"
+#include "mem/blhash.h"
 #include "heapstack/heapstack.h"
 
 #include "dbtypes.h"
@@ -130,15 +131,15 @@ namespace openset::db
 		using ChangeIndex = bigRing<attr_key_s, Attr_changes_s*>;
 		using AttrPair = pair<attr_key_s, Attr_s*>;
 
-		ColumnIndex columnIndex{ ringHint_e::lt_1_million };
-		ChangeIndex changeIndex{ ringHint_e::lt_compact };
+		ColumnIndex columnIndex{ ringHint_e::lt_5_million };
+		ChangeIndex changeIndex{ ringHint_e::lt_5_million };
 		
         Table* table;
 		AttributeBlob* blob;
 		Columns* columns;
 		int partition;
 
-		explicit Attributes(const int parition, Table* table, AttributeBlob* attributeBlob, Columns* columns);
+		explicit Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Columns* columns);
 		~Attributes();
 
 		void addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state);

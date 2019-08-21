@@ -761,6 +761,7 @@ public:
 	cvar& operator=(const double& source)
 	{
 		type = valueType::DBL;
+        reference = nullptr;
 		value.asDouble = source;
 		return *this;
 	}
@@ -768,6 +769,7 @@ public:
 	cvar& operator=(const float& source)
 	{
 		type = valueType::FLT;
+        reference = nullptr;
 		value.asInt64 = 0;
 		value.asFloat = source;
 		return *this;
@@ -781,6 +783,7 @@ public:
 	cvar& operator=(const char* source)
 	{
 		type = valueType::STR;
+        reference = nullptr;
 		value.asInt64 = 0;
 		valueString = source;
 		return *this;
@@ -789,6 +792,7 @@ public:
 	cvar& operator=(const std::string& source)
 	{
 		type = valueType::STR;
+        reference = nullptr;
 		value.asInt64 = 0;
 		valueString = source;
 		return *this;
@@ -797,6 +801,7 @@ public:
 	cvar& operator=(const bool& source)
 	{
 		type = valueType::BOOL;
+        reference = nullptr;
 		value.asInt64 = 0;
 		value.asBool = (source) ? true : false;
 		return *this;
@@ -816,6 +821,7 @@ public:
 			setValue = nullptr;
 		}
 
+        reference = nullptr;
 		list();
 		*listValue = source;
 
@@ -845,6 +851,7 @@ public:
 			listValue = nullptr;
 		}
 
+        reference = nullptr;
 		set();
 		for (auto &item : source)
 			setValue->insert(item);
@@ -863,6 +870,7 @@ public:
 	template<typename T>
 	cvar& operator=(const std::vector<T>& source)
 	{
+        reference = nullptr;
 		list();
 		for (auto &item : source)
 			listValue->push_back(item);

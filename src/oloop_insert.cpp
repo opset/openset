@@ -140,6 +140,7 @@ bool OpenLoopInsert::run()
             if (interpreter->macros.isSegmentMath)
             {
                 tablePartitioned->setSegmentRefresh(segment->segmentName, 0);
+                //cout << "on insert - skip" << endl;
                 continue;
             }
 
@@ -153,7 +154,10 @@ bool OpenLoopInsert::run()
             // set bit according to interpreter results
             const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
             if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
+            {
+                //cout << "on insert" << endl;
                 tablePartitioned->pushMessage(segment->segmentHash, stateChange, personData->getIdStr());
+            }
 
         }
 

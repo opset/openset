@@ -22,6 +22,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 	endif()
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
+	set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 	if (MSVC)
 		add_compile_options(/std:c++17 /Ox)
 		add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
@@ -81,6 +82,7 @@ set(SOURCE_FILES
         lib/mem/prequeues.cpp
         lib/mem/prequeues.h
         lib/mem/ssdict.h
+		lib/mem/blhash.h
         lib/str/strtools.cpp
         lib/str/strtools.h
         lib/threads/spinlock.h
@@ -197,7 +199,6 @@ set(SOURCE_FILES
 )
 
 add_executable(openset ${SOURCE_FILES})
-set_target_properties(openset PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 enable_testing()
 add_test(NAME openset-unit-test COMMAND $<TARGET_FILE:openset> --test)

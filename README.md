@@ -8,10 +8,10 @@ OpenSet is a streaming solution and can ingest data at up to 35,000 lines per se
 
 | Platform    | Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   | 0.3.01  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 | 0.3.01  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   |  0.3.2  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.3.2  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.3.01 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.3.2 release notes below.
 
 ## Links
 
@@ -94,7 +94,7 @@ git clone https://github.com/opset/openset_samples.git
 **2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.3.1
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.3.2
 ```
 
 > **Note** The newest docker build can be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -743,6 +743,12 @@ This approach seemed perfect... until one day Anheuser-Busch called (they make a
 Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone today... and... our stack was SQL.
 
 Failure got me thinking, and here we are today.
+
+## OpenSet 0.3.2 release notes
+
+-   fixed a stack under-run issue
+
+-   fixed segment compare issue
 
 ## OpenSet 0.3.1 release notes
 
