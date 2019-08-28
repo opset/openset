@@ -189,7 +189,8 @@ namespace openset
             marshal_str_slice,
             marshal_str_strip,
             marshal_url_decode,
-            marshal_get_row
+            marshal_get_row,
+            marshal_eval_column_filter
         }; // enum used for query index optimizer
         enum class HintOp_e : int64_t
         {
@@ -485,7 +486,8 @@ namespace openset
             { "__strip", Marshals_e::marshal_str_strip },
             { "range", Marshals_e::marshal_range },
             { "url_decode", Marshals_e::marshal_url_decode },
-            { "get_row", Marshals_e::marshal_get_row }
+            { "get_row", Marshals_e::marshal_get_row },
+            { "__eval_column_filter", Marshals_e::marshal_eval_column_filter}
         };
         static const unordered_set<Marshals_e> SegmentMathMarshals = {
             { Marshals_e::marshal_population },
@@ -784,12 +786,54 @@ namespace openset
             int64_t functionHash;
         };
 
+        enum class ColumnFilterOperator_e
+        {
+            eq,
+            neq,
+            gt,
+            gte,
+            lt,
+            lte
+        };
+
+        struct Filter_s
+        {
+            bool isRow {true};
+            bool isEver {false};
+            bool isFirst {false};
+            bool isLast {false};
+            bool isWithin {false};
+            bool isRange {false};
+            bool isFullSet {false};
+            bool isLookBack {false};
+            bool isLookForward {false};
+            bool isReverse {false};
+            bool isContinue {false};
+
+            int everBlock {-1};
+            int continueBlock {-1};
+            int withinStartBlock {-1};
+            int rangeStartBlock {-1};
+            int rangeEndBlock {-1};
+            int lookAheadBlock {-1};
+            int lookBackBlock {-1};
+
+            int64_t rangeStart {LLONG_MIN};
+            int64_t withinStart {LLONG_MIN};
+            int64_t withinEnd {LLONG_MAX};
+            int64_t continueFrom { 0 };
+        };
+        using FilterList = vector<Filter_s>;
         using CountList = vector<Count_S>; // structure for variables
+        using BlockMap = vector<int>;
+
         struct Variables_S
         {
             VarList userVars;
             VarList tableVars;
             VarList columnVars;
+            FilterList filers;
+            BlockMap blockList;
             ColumnLambdas columnLambdas;
             FunctionList functions;
             LiteralsList literals;
@@ -811,6 +855,7 @@ namespace openset
             int64_t segmentTTL { -1 };
             int64_t segmentRefresh { -1 };
             int sessionColumn { -1 };
+
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
             bool isSegment { false };

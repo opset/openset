@@ -9,6 +9,7 @@
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
 #include "../src/queryparser.h"
+#include "../src/queryparser2.h"
 #include "../src/internoderouter.h"
 #include "../src/result.h"
 #include <unordered_set>
@@ -69,14 +70,60 @@ inline Tests test_pyql_language()
     // test loop
     auto test1_pyql = openset::query::QueryParser::fixIndent(
         R"pyql(
-	agg:
-		count id
 
+    x = (id + 1) == (test - 2)
+
+    count(id)
+    sum(total, "money")
+  
 	counter = 0
 
-	for row in rows:
-		tally(id)
+    some_value = 23 + (((45 * 72) / 3) - 2) * 3) - 1
+
+    test = "some (string with <stuff>> in, it"
+
+    test_list = [123, "test", now(), (2+2), 4+4, now(345)]
+
+    test_dict = {
+       blah: [123,456,789],
+       foo: {
+          bar: now(),
+          eat: "food"
+       }
+    }
+
+    t = 5_ms
+    t = 5_seconds
+    t = 5_minutes
+    t = 5_hours
+    t = 5_days
+    t = 5_weeks
+    t = 5_months
+    t = 5_years
+    
+    if.reverse().range( (1234 + (22 / 3)) , 4567) (id + 1) == (test - 2)
+        << "blah"
+    end
+
+    if.within(now(1234)) id == "test" || (id == "true" && frog == "green") || frog == "red" && (4 * (34 + 23 / (10 / 2))) == 55
+       bogus = 10 
+       << "total"
+    end
+
+    if id.within(3_months).first() == "test"
+        monkey = true != false
+        << "total"
+    end
+
+    each.within(3months, fromStart) where ((country.ever(all) == "Germany" && teeth == "yellow") ||
+        product.ever == "watch")
+        << true
+    end
+
+	for row in rows
+		<< id
 		counter = counter + 1
+    end
 
 	debug(counter)
 
@@ -835,10 +882,18 @@ inline Tests test_pyql_language()
                 auto parts    = table->getPartitionObjects(0, true); // partition zero for test
                 openset::query::Macro_s queryMacros;                 // this is our compiled code block
                 openset::query::QueryParser p;                       
+
+                openset::query::QueryParser2 p2;
+
+                const auto input = std::string(test1_pyql);
+                p2.compileQuery(test1_pyql, table->getColumns(), queryMacros, nullptr);
                 
                 // compile this
                 p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(p.error.inError() == false); 
+                cout << openset::query::MacroDbg(queryMacros) << endl;
+
+                ASSERT(p.error.inError() == false);
+
                 
                 // mount the compiled query to an interpreter
                 auto interpreter = new openset::query::Interpreter(queryMacros);

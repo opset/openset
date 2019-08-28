@@ -159,6 +159,8 @@ set(SOURCE_FILES
         src/queryinterpreter.h
         src/queryparser.cpp
         src/queryparser.h
+        src/queryparser2.cpp
+        src/queryparser2.h
         src/result.cpp
         src/result.h
         src/rpc_global.cpp
