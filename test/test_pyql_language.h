@@ -71,10 +71,39 @@ inline Tests test_pyql_language()
     auto test1_pyql = openset::query::QueryParser::fixIndent(
         R"pyql(
 
+    if fruit.ever(contains test_set)
+        << "blah"
+    end
+
+    if fruit.ever(any test_set)
+        << "blah"
+    end
+
+    if fruit.never(in test_set) == false
+        << "blah"
+    end
+
+    some_bool = true
+    some_bool = false
+    some_bool = nil
+
+    each.range(fromStart, from_end) where ( ( fruit.ever(== "Germany") && teeth == "yellow" ) || fruit.ever(== "tomato") )
+        << true
+    end
+
+    test_set = set("pig", "goat", "donkey", "mule", "horse")
+
+    if.range( (1234 + (22 / 3)) , 4567) (id.ever(== "klara") + 1) == (test - 2)
+        << "blah"
+    end
+
+    test_list = [123, "test", now(), (2+2), 4+4, now(345), [4,5,6]]
+
+    test = 4
     x = (id + 1) == (test - 2)
 
-    count(id)
-    sum(total, "money")
+    now(id)
+    now(total, "money")
   
 	counter = 0
 
@@ -82,7 +111,12 @@ inline Tests test_pyql_language()
 
     test = "some (string with <stuff>> in, it"
 
-    test_list = [123, "test", now(), (2+2), 4+4, now(345)]
+    some_value = test_list[0]
+    some_value = test_list[6][1]
+
+    empty_list = []
+
+    empty_list[4] = "blah"
 
     test_dict = {
        blah: [123,456,789],
@@ -92,6 +126,10 @@ inline Tests test_pyql_language()
        }
     }
 
+    test_dict[blah][0] = 234
+
+    empty_dict = {}
+
     t = 5_ms
     t = 5_seconds
     t = 5_minutes
@@ -100,24 +138,23 @@ inline Tests test_pyql_language()
     t = 5_weeks
     t = 5_months
     t = 5_years
-    
-    if.reverse().range( (1234 + (22 / 3)) , 4567) (id + 1) == (test - 2)
-        << "blah"
-    end
-
-    if.within(now(1234)) id == "test" || (id == "true" && frog == "green") || frog == "red" && (4 * (34 + 23 / (10 / 2))) == 55
+   
+    if.within(3_months, now(1234)) id.ever(== "test") || (id.ever(== true) && frog == "green") || frog == "red" && (4 * (34 + 23 / (10 / 2))) == 55
        bogus = 10 
        << "total"
     end
 
-    if id.within(3_months).first() == "test"
-        monkey = true != false
-        << "total"
+    if id.ever(== "seth") 
+      test = this
     end
 
-    each.within(3months, fromStart) where ((country.ever(all) == "Germany" && teeth == "yellow") ||
-        product.ever == "watch")
-        << true
+    if id == "tommy"
+      x = now()
+    end
+
+    if id.within(3_months, from_start).ever(== "test")
+        monkey = true != false
+        << "total", id
     end
 
 	for row in rows

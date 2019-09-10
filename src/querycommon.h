@@ -52,6 +52,7 @@ namespace openset
         enum class OpCode_e : int32_t
         {
             NOP = 0,     // No operation
+            LAMBDA,      // lambda
             PSHTBLCOL,   // push column
             PSHRESCOL,   // push result Column (may be grid, may be variable)
             //PSHRESGRP, // push group_by (may be grid, may be variable)
@@ -101,10 +102,16 @@ namespace openset
             OPNEQ,       // != <>
             OPWTHN,      // fuzzy range +/-
             OPNOT,       // !
+            OPCONT,      // left contains all of right
+            OPANY,       // left contains any contains any right
+            OPIN,        // left in right
             LGCAND,      // logical and
             LGCOR,       // logical or
             MARSHAL,     // Marshal an internal C++ function
             CALL,        // Call a script defined function
+            CALL_FOR,    // Call in `for` loop
+            CALL_EACH,   // Call in `each` loop
+            CALL_IF,     // Call `if`
             RETURN,      // Pops the call stack leaves last item on stack
             TERM,        // this script is done
             LGCNSTAND,
@@ -163,6 +170,8 @@ namespace openset
             marshal_init_list,
             marshal_make_dict,
             marshal_make_list,
+            marshal_pop_subscript,
+            marshal_push_subscript,
             marshal_set,
             marshal_list,
             marshal_dict,
@@ -331,6 +340,7 @@ namespace openset
         }; // opCode to String (for debug output)
         static const unordered_map<OpCode_e, string> OpDebugStrings = {
             { OpCode_e::NOP, "NOP" },
+            { OpCode_e::LAMBDA, "LAMBDA" },
             { OpCode_e::PSHTBLCOL, "PSHTBLCOL" },
             { OpCode_e::PSHRESCOL, "PSHRESCOL" },
             { OpCode_e::VARIDX, "VARIDX" },
@@ -380,8 +390,14 @@ namespace openset
             { OpCode_e::OPNOT, "OPNOT" },
             { OpCode_e::LGCAND, "LGCAND" },
             { OpCode_e::LGCOR, "LGCOR" },
+            { OpCode_e::OPCONT, "CONT" },
+            { OpCode_e::OPANY, "ANY" },
+            { OpCode_e::OPIN, "IN" },
             { OpCode_e::MARSHAL, "MARSHAL" },
             { OpCode_e::CALL, "CALL" },
+            { OpCode_e::CALL_FOR, "CALLFOR" },
+            { OpCode_e::CALL_EACH, "CALLEACH" },
+            { OpCode_e::CALL_IF, "CALLIF" },
             { OpCode_e::RETURN, "RETURN" },
             { OpCode_e::TERM, "TERM" }
 
@@ -468,6 +484,8 @@ namespace openset
             { "str", Marshals_e::marshal_str },
             { "__internal_make_dict", Marshals_e::marshal_make_dict },
             { "__internal_make_list", Marshals_e::marshal_make_list },
+            { "__internal_pop_subscript", Marshals_e::marshal_pop_subscript },
+            { "__internal_push_subscript", Marshals_e::marshal_push_subscript },
             { "len", Marshals_e::marshal_len },
             { "__append", Marshals_e::marshal_append },
             { "__update", Marshals_e::marshal_update },
@@ -509,6 +527,7 @@ namespace openset
             { "__internal_init_dict" },
             { "__internal_init_list" },
         }; // Comparatives
+
         static const unordered_map<string, OpCode_e> Operators = {
             { ">=", OpCode_e::OPGTE },
             { "<=", OpCode_e::OPLTE },
@@ -519,6 +538,10 @@ namespace openset
             { "=", OpCode_e::OPEQ },
             { "!=", OpCode_e::OPNEQ },
             { "<>", OpCode_e::OPNEQ },
+            { "not", OpCode_e::OPNOT },
+            { "contains", OpCode_e::OPCONT },
+            { "any", OpCode_e::OPANY },
+            { "in", OpCode_e::OPIN },
             { "not", OpCode_e::OPNOT },
             { "isnot", OpCode_e::OPNEQ },
         };
@@ -798,29 +821,35 @@ namespace openset
 
         struct Filter_s
         {
-            bool isRow {true};
+            int64_t personID {LLONG_MIN};
+            bool cacheable {false};
+
+            bool isRow {false};
             bool isEver {false};
-            bool isFirst {false};
-            bool isLast {false};
+            bool isLimit {false};
             bool isWithin {false};
             bool isRange {false};
             bool isFullSet {false};
-            bool isLookBack {false};
-            bool isLookForward {false};
             bool isReverse {false};
             bool isContinue {false};
+            bool isNegated {false};
 
-            int everBlock {-1};
+            int evalBlock {-1};
             int continueBlock {-1};
             int withinStartBlock {-1};
+            int withinWindowBlock {-1};
             int rangeStartBlock {-1};
             int rangeEndBlock {-1};
-            int lookAheadBlock {-1};
-            int lookBackBlock {-1};
 
-            int64_t rangeStart {LLONG_MIN};
-            int64_t withinStart {LLONG_MIN};
-            int64_t withinEnd {LLONG_MAX};
+            int limitBlock {-1};
+            int count {1};
+
+            int comparator {-1};
+
+            int64_t rangeStart {0};
+            int64_t rangeEnd {LLONG_MAX};
+            int64_t withinStart {0};
+            int64_t withinWindow {LLONG_MAX};
             int64_t continueFrom { 0 };
         };
         using FilterList = vector<Filter_s>;

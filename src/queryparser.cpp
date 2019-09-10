@@ -3919,7 +3919,7 @@ string openset::query::MacroDbg(Macro_s& macro)
         for (auto& v : macro.vars.userVars)
         {
             ss << padding(v.index, 3, true) << " | ";
-            ss << padding(v.actual, 20, false, ' ') << " | " << (v.startingValue == NONE
+            ss << padding("'" + v.actual + "'", 20, false, ' ') << " | " << (v.startingValue == NONE
                                                                      ? "null"
                                                                      : v.startingValue);
             ss << endl;

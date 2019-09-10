@@ -1,8 +1,8 @@
 #pragma once
+#pragma once
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <sstream>
 #include "../lib/str/strtools.h"
 
 #include "queryparser.h"
@@ -59,6 +59,86 @@ namespace openset::query
         }
     };
 
+    struct Debugger_s
+    {
+        Blocks::Line line;
+        std::string debugLine;
+        std::string cursor;
+
+        Debugger_s() = default;
+
+        void set(Blocks::Line words, const int index = -1)            
+        {
+            line = std::move(words);
+            consolidate(line, index);
+        }
+
+    private:
+
+        static std::string pad(const int width)
+        {
+            std::string result = "";
+            while (static_cast<int>(result.size()) < width)
+                result += " ";
+            return result;
+        }
+
+        void consolidate(const Blocks::Line& line, const int index = -1)
+        {            
+            debugLine = "";
+            int count = 0;
+            for (const auto &word: line)
+            {
+                if (count == index)
+                {
+                    cursor = pad(debugLine.length()) + "^";
+                }
+                debugLine += word + " ";
+                ++count;
+            }
+        }
+    };
+
+    // structure for parse exception handling
+    class QueryParse2Error_s : public std::exception
+    {
+    public:
+        errors::errorClass_e eClass;
+        errors::errorCode_e eCode;
+        std::string message;
+        Debugger_s debug;
+
+        QueryParse2Error_s(
+            const errors::errorClass_e eClass,
+            const errors::errorCode_e eCode,
+            const string& message)
+            : eClass(eClass),
+              eCode(eCode),
+              message(message)
+        {}
+
+        QueryParse2Error_s(
+            const errors::errorClass_e eClass,
+            const errors::errorCode_e eCode,
+            const string& message,
+            const Debugger_s debug)
+            : eClass(eClass),
+              eCode(eCode),
+              message(message),
+              debug(debug)
+        {}
+
+        std::string getMessage() const
+        {
+            return message;
+        }
+
+        std::string getDetail() const
+        {
+            return debug.debugLine;
+        }
+    };
+
     enum class MiddleOp_e
     {
         push_user,
@@ -67,6 +147,10 @@ namespace openset::query
         push_double,
         push_bool,
         push_column,
+        push_user_ref,
+        push_true,
+        push_false,
+        push_nil,
         pop_user,
         eq,
         neq,
@@ -74,6 +158,9 @@ namespace openset::query
         gte,
         lt,
         lte,
+        in,
+        contains,
+        any,
         and,
         or,
         add,
@@ -86,31 +173,11 @@ namespace openset::query
         logic_filter,
         column_filter,
         if_call,
+        each_call,
+        for_call,
+        term,
     };
-
-    struct Debugger_s
-    {
-        Blocks::Line line;
-        std::string debug;
-
-        Debugger_s() = default;
-
-        void set(Blocks::Line debugLine)            
-        {
-            line = std::move(debugLine);
-            debug = consolidate(line);
-        }
-
-    private:
-        static std::string consolidate(const Blocks::Line& line)
-        {
-            std::string result;
-            for (const auto &word: line)
-                result += word + " ";
-            return result;
-        }
-    };
-    
+   
     struct MiddleOp_s
     {
         MiddleOp_e op;
@@ -118,8 +185,9 @@ namespace openset::query
         cvar value2 {LLONG_MIN};
         int filterIndex {-1};
         Debugger_s debug;
-               
-        MiddleOp_s(const MiddleOp_e op) :
+        int index {-1};
+
+        explicit MiddleOp_s(const MiddleOp_e op) :
             op(op)
         {}
 
@@ -134,25 +202,28 @@ namespace openset::query
             value2(std::move(value2))
         {}
 
-        MiddleOp_s(const MiddleOp_e op, const Blocks::Line& line) :
-            op(op)
-        {
-            debug.set(line);
-        }
-
-        MiddleOp_s(const MiddleOp_e op, cvar value, const Blocks::Line& line) :
+        MiddleOp_s(const MiddleOp_e op, const Blocks::Line& line, const int index) :
             op(op),
-            value1(std::move(value))
+            index(index)            
         {
-            debug.set(line);
+            debug.set(line, index);
         }
 
-        MiddleOp_s(const MiddleOp_e op, cvar value, cvar value2, const Blocks::Line& line) :
+        MiddleOp_s(const MiddleOp_e op, cvar value, const Blocks::Line& line, const int index) :
             op(op),
             value1(std::move(value)),
-            value2(std::move(value2))
+            index(index)            
         {
-            debug.set(line);
+            debug.set(line, index);
+        }
+
+        MiddleOp_s(const MiddleOp_e op, cvar value, cvar value2, const Blocks::Line& line, const int index) :
+            op(op),
+            value1(std::move(value)),
+            value2(std::move(value2)),
+            index(index)            
+        {
+            debug.set(line, index);
         }
 
     };
@@ -165,6 +236,9 @@ namespace openset::query
         { "<", MiddleOp_e::lt },
         { "<=", MiddleOp_e::lte },
         { "<=", MiddleOp_e::lte },
+        { "in", MiddleOp_e::in },
+        { "contains", MiddleOp_e::contains },
+        { "any", MiddleOp_e::any },
         { "&&", MiddleOp_e::and },
         { "||", MiddleOp_e::or },
         { "+", MiddleOp_e::add },
@@ -179,6 +253,7 @@ namespace openset::query
     public:
 
         using MidOps = std::vector<MiddleOp_s>;
+        using Tracking = std::vector<std::string>;
 
         MidOps middle;
         FilterList filters;
@@ -188,15 +263,15 @@ namespace openset::query
 
         Blocks blocks;
 
-
-        using Tracking = std::vector<std::string>;
-
         Tracking userVars;
-        std::unordered_map<std::string, int> userVarAssignments;
-
         Tracking stringLiterals;
         Tracking columns;
         Tracking aggregates;
+
+        std::unordered_map<std::string, int> userVarAssignments;
+        std::vector<std::string> currentBlockType;
+
+        Debugger_s lastDebug;
 
         QueryParser2() = default;
         ~QueryParser2() = default;
@@ -230,8 +305,9 @@ namespace openset::query
 
         static bool isFloat(const string& value)
         {
-            return (((value[0] >= '0' && value[0] <= '9') || (value[0] == '-' && value[1] >= '0' && value[1] <= '9')) && value.
-                find('.') != string::npos);
+            return (((value[0] >= '0' && value[0] <= '9') || 
+                (value[0] == '-' && value[1] >= '0' && value[1] <= '9')) && 
+                value.find('.') != string::npos);
         }
 
         static bool isString(const string& value)
@@ -302,7 +378,12 @@ namespace openset::query
                 }
                 else
                 {
-                    // THROW
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "invalid time shorthand",
+                        lastDebug
+                    };
                 }
 
                 return result;
@@ -368,7 +449,7 @@ namespace openset::query
 
         void incUserVarAssignmentCount(const std::string& name)
         {
-            if (const auto iter = userVarAssignments.find(name); iter != userVarAssignments.end())
+            if (const auto& iter = userVarAssignments.find(name); iter != userVarAssignments.end())
                 ++iter->second;
             userVarAssignments.emplace(name, 1);
         }
@@ -387,13 +468,13 @@ namespace openset::query
         }
         
         // step 1 - parse raw query string, generate array of tokens
-        static std::vector<std::string> parseRawQuery(const std::string& query)
+        std::vector<std::string> parseRawQuery(const std::string& query) const
         {
             std::vector<std::string> accumulated;
             std::string current;
 
             auto c         = query.c_str(); // cursor
-            const auto end = query.c_str() + query.length() + 1;
+            const auto end = query.c_str() + query.length();
 
             while (c < end)
             {
@@ -433,6 +514,7 @@ namespace openset::query
                     ++c;
                     while (c < end)
                     {
+
                         if (*c == '\\')
                         {
                             ++c;
@@ -457,7 +539,13 @@ namespace openset::query
                             case '/':
                                 current += '/';
                                 break;
-                            default: // TODO - throw
+                            default:
+                                throw QueryParse2Error_s {
+                                    errors::errorClass_e::parse,
+                                    errors::errorCode_e::syntax_error,
+                                    "invalid character escape sequence",
+                                    lastDebug
+                                };
                                 break;
                             }
                             ++c;
@@ -476,17 +564,18 @@ namespace openset::query
                 }
 
                 // double symbols == != >= <=, etc.
-                if ((c[0] == '!' && c[1] == '=') ||
+                if (c + 1 < end &&
+                    ((c[0] == '!' && c[1] == '=') ||
                     (c[0] == '>' && c[1] == '=') ||
                     (c[0] == '<' && c[1] == '=') || 
                     (c[0] == '+' && c[1] == '=') || 
                     (c[0] == '-' && c[1] == '=') || 
                     (c[0] == '*' && c[1] == '=') || 
                     (c[0] == '/' && c[1] == '=') || 
-                    (c[0] == '<' && c[1] == '<') || 
+                    (c[0] == '<' && c[1] == '<') ||
                     (c[0] == '<' && c[1] == '>') || 
                     (c[0] == ':' && c[1] == ':') || 
-                    (c[0] == '=' && c[1] == '='))
+                    (c[0] == '=' && c[1] == '=')))
                 {
                     current = trim(current);
                     if (current.length())
@@ -600,7 +689,7 @@ namespace openset::query
             return -1;
         }
 
-        static bool validNext(std::vector<std::string>&tokens, int offset)
+        bool validNext(std::vector<std::string>&tokens, int offset) const
         {
             const std::unordered_set<std::string> forceNewLine = {
                 "if",
@@ -612,11 +701,16 @@ namespace openset::query
 
             const std::unordered_set<std::string> validAfterVarOrNum = {
                 "&&",
-                "||", 
+                "||",
                 "==",
                 "!=",
                 ">=",
                 "<=",
+                ">",
+                "<",
+                "in",
+                "any",
+                "contains",
                 ")",
                 "(",
                 "}",
@@ -642,6 +736,14 @@ namespace openset::query
                 "||",
                 "&&",
                 "==",
+                "=",
+                ">=",
+                "<=",
+                ">",
+                "<",
+                "in",
+                "any",
+                "contains",
                 "where",
                 ",",
                 ")",
@@ -657,16 +759,18 @@ namespace openset::query
             };
 
             const auto token = tokens[offset];
-            const auto nextToken = offset + 1 >= tokens.size() ? std::string() : tokens[offset + 1];
+            const auto nextToken = offset + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[offset + 1];
             const auto prevToken = offset - 1 < 0 ? std::string() : tokens[offset - 1];
             const auto isAfterBracketValid = validAfterClosingBracket.count(nextToken) != 0;
 
             const auto isItem = isNameOrNumber(token);
             const auto isNextAnItem = isNameOrNumber(nextToken);
-            const auto isChain = nextToken.find("__chain_") == 0;
+            const auto isNextChain = nextToken.find("__chain_") == 0;
 
             const int lookBackIndex = lookBack(tokens, offset);
-            const auto inChain = token == ")" && lookBackIndex > 0 ? tokens[lookBackIndex-1].find("__chain_") == 0 : false;
+            const auto inChain = token == ")" && lookBackIndex > 0 ? 
+                tokens[lookBackIndex-1].find("__chain_") == 0 : 
+            false;
 
             // end means stop
             if (token == "end")
@@ -681,14 +785,19 @@ namespace openset::query
             }
 
             // closing brackets... 
-            if (token == ")" && !isChain && !inChain && !isAfterBracketValid)
+            if (token == ")" && !isNextChain && !inChain && !isAfterBracketValid)
                 return false;
 
             // closing brackets... 
             if ((token == "]" || token == "}") && (isNextAnItem || !isAfterBracketValid))
                 return false;
+
+            // we should never have two numbers, words or funtions side by side, if we do
+            // it's the end of a line, unless it's a `for x in y` scenario
+            if (isItem && isNextAnItem && !isNextChain && nextToken != "in" && token != "in")
+                return false;
             
-            if (isChain)
+            if (isNextChain)
                 return true;
 
             // is the next thing valid following a name or number
@@ -701,77 +810,184 @@ namespace openset::query
 
             return false;
         }
+
+        bool checkForForcedLine(Blocks::Line& words, const int start) const
+        {
+            auto idx = start;
+
+            const auto variable = words[idx];
+            ++idx;
+            
+            // no subscript, just a variable (checked for function/table var by parseItem)
+            if (idx >= static_cast<int>(words.size()) || words[idx] != "[")
+            {
+                const auto nextToken = idx >= static_cast<int>(words.size()) ? std::string() : words[idx];
+                return nextToken == "=";
+            }
+                        
+            auto end = seekMatchingSquare(words, idx);
+            ++idx;
+
+            while (idx < end)
+            {
+                auto value = extract(words, idx, end);
+                idx = end;
+
+                const auto nextToken = idx + 1 >= static_cast<int>(words.size()) ? std::string() : words[idx + 1];
+
+                // Test for multi-depth-subscripts foo[index][nestedIndex]
+                if (nextToken == "[")
+                {
+                    end = seekMatchingSquare(words, idx + 1);
+                    idx += 2;
+                }
+                else
+                {
+                    return nextToken == "=";
+                }
+            }
+
+            return false;
+        }
+
+        int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction) const
+        {
+            extraction.clear();
+            auto idx = start;
+
+            const auto end = static_cast<int>(tokens.size());
+            while (idx < end)
+            {
+                const auto token = tokens[idx];               
+
+                if (token == "(")
+                {
+                    const auto matchingIndex = seekMatchingBrace(tokens, idx);
+
+                    if (matchingIndex == -1)
+                    {
+                        //THROW
+                    }
+
+                    extraction.insert(extraction.end(), tokens.begin() + idx, tokens.begin() + matchingIndex + 1);
+                    idx = matchingIndex + 1;
+
+                    if (!validNext(tokens, matchingIndex) || checkForForcedLine(tokens, idx))
+                        return idx;
+
+                    continue;
+                }
+
+                if (token == "[")
+                {
+                    const auto matchingIndex = seekMatchingSquare(tokens, idx);
+
+                    if (matchingIndex == -1)
+                    {
+                        //THROW
+                    }
+
+                    extraction.insert(extraction.end(), tokens.begin() + idx, tokens.begin() + matchingIndex + 1);
+                    idx = matchingIndex + 1;
+
+                    if (!validNext(tokens, matchingIndex) || checkForForcedLine(tokens, idx))
+                        return idx;
+
+                    continue;
+                }
+
+                if (token == "{")
+                {
+                    const auto matchingIndex = seekMatchingCurly(tokens, idx);
+
+                    if (matchingIndex == -1)
+                    {
+                        //THROW
+                    }
+
+                    extraction.insert(extraction.end(), tokens.begin() + idx, tokens.begin() + matchingIndex + 1);
+                    idx = matchingIndex + 1;
+
+                    if (!validNext(tokens, matchingIndex) || checkForForcedLine(tokens, idx))
+                        return idx;
+
+                    continue;
+                }
+
+                // force new line immediately
+                if (token == "<<" && idx != start)
+                {
+                    return idx;
+                }
+
+                // force new line if the next thing is word or number and an assignment is immediately next
+                if ((isNameOrNumber(token) && checkForForcedLine(tokens, idx) && idx != start))
+                {
+                    extraction.push_back(token);
+                    return idx + 1;
+                }
+
+                extraction.push_back(token);
+                                                               
+                if (!validNext(tokens, idx))
+                    return idx + 1;
+
+                ++idx;
+            }
+
+            return idx;            
+        }
       
-        void __extractBlock(std::vector<std::string>& tokens, Blocks::Block_s* block, int start, int end)
+        void __extractBlock(Blocks::Line& tokens, Blocks::Block_s* block, const int start, const int end)
         {
 
             auto idx = start;
 
             Blocks::Line line;
 
-            const auto emitLine = [&]()
-            {
-                if (!line.size())
-                    return;
-                std::cout << block->blockId << ": ";
-                for (const auto &l: line)
-                    std::cout << l << " ";
-                std::cout << std::endl;                
-            };
-
             while (idx < end)
             {
 
-                if (validNext(tokens,idx))
-                {
-                    if (tokens[idx].length())
-                        line.push_back(tokens[idx]);
-                }
-                else
-                {
-                    if (tokens[idx].length())
-                        line.push_back(tokens[idx]);
+                const auto isNewBlock = blockStartWords.count(tokens[idx]) != 0;
+                idx = extractLine(tokens, idx, line);
 
-                    emitLine();
+                for (auto i : line)
+                    cout << i << " ";
+                cout << endl;
 
-                    if (line.size())
+                auto blockId = -1;
+
+                // go recursive for sub block
+                if (isNewBlock)
+                {
+                    const auto blockEnd = __blockExtractionSeekEnd(tokens, idx, end);
+
+                    Debugger_s debug;
+                    debug.set(line);
+
+                    if (blockEnd == -1)
                     {
-
-                        auto blockId = -1;
-
-                        // go recursive for sub block
-                        if (blockStartWords.count(line[0]))
-                        {
-                            const auto blockEnd = __blockExtractionSeekEnd(tokens, idx + 1, end);
-
-                            if (blockEnd == -1)
-                            {
-                                // THROW
-                                exit(1);
-                            }
-
-                            const auto subBlock = blocks.newBlock();
-                            __extractBlock(tokens, subBlock, idx + 1, blockEnd);
-
-                            idx = blockEnd;
-                            blockId = subBlock->blockId;
-                        }
-
-                        block->lines.emplace_back(line);
-                        block->lines.back().codeBlock = blockId;
-
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "unable to find end of code block",
+                            lastDebug
+                        };
                     }
 
-                    line.clear();
+                    const auto subBlock = blocks.newBlock();
+                    __extractBlock(tokens, subBlock, idx, blockEnd);
+
+                    idx = blockEnd;
+                    blockId = subBlock->blockId;
+
+                    if (subBlock->blockId == 2)
+                        cout << "Debug";
+
                 }
 
-                ++idx;
-            }
-
-            if (line.size())
-            {
-                emitLine();
                 block->lines.emplace_back(line);
+                block->lines.back().codeBlock = blockId;
             }
         }
 
@@ -793,9 +1009,9 @@ namespace openset::query
             {
                 const auto token = words[start];
 
-                if (token == "(")
+                if (token == "(" || token == "[" || token == "{")
                     ++count;
-                else if (token == ")")
+                else if (token == ")" || token == "]" || token == "}")
                     --count;
 
                 if (!count && token == seek)
@@ -805,8 +1021,24 @@ namespace openset::query
             return -1;
         }
 
+        // seek, not caring about parenthesis
+        static int seekRaw(const std::string& seek, const Blocks::Line& words, int start, int end = -1)
+        {
+            if (end == -1)
+                end = words.size();
 
-        static int seekMatchingBrace(const Blocks::Line& words, int start, int end = -1)
+            while (start < end)
+            {
+                const auto token = words[start];
+
+                if (token == seek)
+                    return start;              
+                ++start;
+            }
+            return -1;
+        }
+
+        int seekMatchingBrace(const Blocks::Line& words, int start, int end = -1) const
         {
             if (end == -1)
                 end = words.size();
@@ -828,11 +1060,15 @@ namespace openset::query
                 ++start;
             }
 
-            // THROW
-            return -1;
+            throw QueryParse2Error_s {
+                errors::errorClass_e::parse,
+                errors::errorCode_e::syntax_error,
+                "missing closing ')' bracket",
+                lastDebug
+            };
         }
 
-        static int seekMatchingSquare(const Blocks::Line& words, int start, int end = -1)
+        int seekMatchingSquare(const Blocks::Line& words, int start, int end = -1) const
         {
             if (end == -1)
                 end = words.size();
@@ -854,11 +1090,45 @@ namespace openset::query
                 ++start;
             }
 
-            // THROW
-            return end;
+            throw QueryParse2Error_s {
+                errors::errorClass_e::parse,
+                errors::errorCode_e::syntax_error,
+                "missing closing ']' bracket",
+                lastDebug
+            };
         }
 
-        int __parseLine(const Blocks::Line& words, int start, int end = -1)
+        int seekMatchingCurly(const Blocks::Line& words, int start, int end = -1) const
+        {
+            if (end == -1)
+                end = words.size();
+
+            auto count = 0;
+
+            while (start < end)
+            {
+                if (words[start] == "{")
+                {
+                    ++count;
+                }
+                else if (words[start] == "}")
+                {
+                    --count;
+                    if (!count)
+                        return start;
+                }
+                ++start;
+            }
+
+            throw QueryParse2Error_s {
+                errors::errorClass_e::parse,
+                errors::errorCode_e::syntax_error,
+                "missing closing '}' bracket",
+                lastDebug
+            };
+        }
+
+        int parseStatement(int relative, const Blocks::Line& words, int start, int end = -1)
         {
             const std::unordered_set<std::string> operatorWords = {
                 "&&",
@@ -872,47 +1142,78 @@ namespace openset::query
             const std::unordered_set<std::string> logicWords = {
                 "==",
                 "!=",
+                ">",
+                "<",
+                "<=",
+                ">=",
+                "==>",
+                "==>>"
             };
 
-            const std::unordered_set<std::string> isAnArray = {
+            const std::unordered_set<std::string> isAnListOrDict = {
                 ",",
                 "(",
                 "=",
                 "==",
                 "[",
+                ":",
+                "{"
             };
 
             if (end == -1)
                 end = static_cast<int>(words.size());
             auto idx = start;
 
-            std::vector<std::string> ops;
+            std::vector<std::pair<std::string,int>> ops;
 
             while (idx < end)
             {
                 const auto token = words[idx];
-                const auto nextToken = idx + 1 >= words.size() ? std::string() : words[idx + 1];
+
+                const auto nextToken = idx + 1 >= static_cast<int>(words.size()) ? std::string() : words[idx + 1];
                 const auto prevToken = idx == 0 ? std::string() : words[idx - 1];
+
+                if (token == "end")
+                    return end;
 
                 if (isMarshal(token))
                 {
-                    std::vector<Blocks::Line> params;
+                    const int beforeIdx = idx;
+                    std::vector<std::pair<Blocks::Line, int>> params;
                     idx = parseParams(words, idx + 1, params);
 
                     for (const auto& param: params)
-                    {
-                        __parseLine(param, 0, param.size());
-                    }
+                        parseStatement(relative + param.second, param.first, 0, param.first.size());
 
                     const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
-                    middle.emplace_back(MiddleOp_e::marshal, marshalIndex, static_cast<int>(params.size()), words);
+                    middle.emplace_back(
+                        MiddleOp_e::marshal, 
+                        marshalIndex, 
+                        static_cast<int>(params.size()), 
+                        lastDebug.line,
+                        relative + beforeIdx);
 
                     ++idx;
                     continue;
                 }
 
-                // check for function call that is not a marshal and THROW
+                if (!isTableColumn(token) && nextToken.find("__chain_") == 0)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "filter applied to: '" + token + "' (filters can only be applied to columns)",
+                        lastDebug
+                    };
 
+                if (isTextual(token) && nextToken == "(")
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "item '" + token + "' is not a function (called with parameters)",
+                        lastDebug
+                    };
+
+                // check for function call that is not a marshal and THROW
                 if (token == ")")
                 {
                     ++idx;
@@ -922,25 +1223,52 @@ namespace openset::query
                 if (token == "(")
                 {
                     const auto subEnd = seekMatchingBrace(words, idx, end);
-                    if (subEnd == -1)
-                    {
-                        // THROW
-                    }
-                    idx = __parseLine(words, idx + 1, subEnd);
+                    idx = parseStatement(relative + idx, words, idx + 1, subEnd);
                     continue;
                 }
+
+                // if this is a text and the next token is a [ then this has to be as subscript                    
+                /*if (isTextual(token) && nextToken == "[")
+                {                    
+                    idx = parseSubscript(words, idx, false) + 1;
+                    continue;                    
+                }*/
 
                 // nested array or accessor?
                 // array: `[` is first char, or proceeded by `[`, `==`, `=`, `(` or `,`
                 if (token == "[")
                 {
-                    if (isAnArray.count(prevToken))
+                    if (isAnListOrDict.count(prevToken) || prevToken == "")
                     {
-                        idx = parseArray(words, idx);
+                        idx = parseDict(words, idx);
                     }
                     else
                     {
-                        // TODO accessor
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "unexpected subscript or malformed array",
+                            lastDebug
+                        };
+                    }
+                    ++idx;
+                    continue;
+                }
+
+                if (token == "{")
+                {
+                    if (isAnListOrDict.count(prevToken) || prevToken == "")
+                    {
+                        idx = parseDictionary(words, idx);
+                    }
+                    else
+                    {
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "unexpected subscript or malformed dictionary",
+                            lastDebug
+                        };
                     }
                     ++idx;
                     continue;
@@ -948,14 +1276,13 @@ namespace openset::query
 
                 if (!operatorWords.count(token) && !logicWords.count(token))
                 {
-                    pushItem(token, words);
-                    ++idx;
+                    idx = parseItem(words, idx, words);
                     continue;
                 }
 
                 if (operatorWords.count(token))
                 {
-                    ops.push_back(token);
+                    ops.emplace_back(token, relative + idx);
                     ++idx;
                     continue;
                 }
@@ -968,24 +1295,28 @@ namespace openset::query
                     {
                         if (nextToken == "(")
                         {
-                            const auto subEnd = seekMatchingBrace(words, idx, end) + 1;
-                            if (subEnd == -1)
-                            {
-                                // THROW
-                            }
-                            idx = __parseLine(words, idx + 1, subEnd) + 1;
-                            middle.emplace_back(ConditionToMiddleOp.find(token)->second, words);
+                            const auto beforeIdx = idx;
+                            const auto subEnd = seekMatchingBrace(words, idx + 1, end) + 1;
+                            idx = parseStatement(idx, words, idx + 1, subEnd) + 1;
+                            middle.emplace_back(
+                                ConditionToMiddleOp.find(token)->second, 
+                                lastDebug.line,
+                                beforeIdx);
                         }
                         else
                         {
-                            pushItem(nextToken, words);
-                            middle.emplace_back(ConditionToMiddleOp.find(token)->second, words);
-                            idx += 2;
+                            const auto beforeIdx = idx;
+                            idx = parseItem(words, idx + 1, words);
+                            middle.emplace_back(
+                                ConditionToMiddleOp.find(token)->second, 
+                                lastDebug.line,
+                                beforeIdx);
+                            //++idx;
                         }
                     }
                     else
                     {
-                        // THROW
+                        // THROW??
                     }
                     continue;
                 }
@@ -994,7 +1325,10 @@ namespace openset::query
 
             // push any accumulated logical or math operators onto the stack in reverse
             std::for_each(ops.rbegin(), ops.rend(), [&](auto op) {
-               middle.emplace_back(ConditionToMiddleOp.find(op)->second, words);
+               middle.emplace_back(
+                   ConditionToMiddleOp.find(op.first)->second, 
+                   lastDebug.line, 
+                   op.second);
             });
 
             return idx + 1;
@@ -1014,25 +1348,23 @@ namespace openset::query
             return result;
         }
 
-        static int parseParams(const Blocks::Line& words, int start, std::vector<Blocks::Line>& params)
+        int parseParams(const Blocks::Line& words, int start, std::vector<std::pair<Blocks::Line,int>>& params) const
         {
             params.clear();
-            std::deque<Blocks::Line> result;
-            auto end = static_cast<int>(words.size());
+            std::deque<std::pair<Blocks::Line,int>> result;
             auto idx = start;
 
             if (words[idx] != "(")
             {
-                // THROW
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting '()' brackets for function call",
+                    lastDebug
+                };
             }
 
-            end = seekMatchingBrace(words, start);
-
-            if (end == -1)
-            {
-                // THROW
-            }
-
+            const auto end = seekMatchingBrace(words, start);
             ++idx;
 
             while (idx < end)
@@ -1041,13 +1373,13 @@ namespace openset::query
                 if (commaPosition == -1)
                 {
                     auto param = extract(words, idx, end);
-                    result.push_front(param);
+                    result.push_front(make_pair(param, idx));
                     idx = end;
                 }
                 else
                 {
                     auto param = extract(words, idx, commaPosition);
-                    result.push_front(param);
+                    result.push_front(make_pair(param, idx));
                     idx = commaPosition;
                 }
 
@@ -1061,24 +1393,22 @@ namespace openset::query
             return idx;
         }
 
-        int parseArray(const Blocks::Line& words, int start)
+        int parseDict(const Blocks::Line& words, int start)
         {
-            std::deque<Blocks::Line> result;
-            auto end = static_cast<int>(words.size());
+            std::deque<std::pair<Blocks::Line,int>> params;
             auto idx = start;
 
             if (words[idx] != "[")
             {
-                // THROW
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting '[]' brackets for list",
+                    lastDebug
+                };
             }
                         
-            end = seekMatchingSquare(words, start);
-
-            if (end == -1)
-            {
-                // THROW
-            }
-
+            const auto end = seekMatchingSquare(words, start);
             ++idx;
 
             while (idx < end)
@@ -1086,14 +1416,14 @@ namespace openset::query
                 const auto commaPosition = seek(",", words, idx);
                 if (commaPosition == -1)
                 {
-                    auto param = extract(words, idx, end);
-                    result.push_front(param);
+                    auto value = extract(words, idx, end);
+                    params.push_front(std::make_pair(value, idx));
                     idx = end;
                 }
                 else
                 {
-                    auto param = extract(words, idx, commaPosition);
-                    result.push_front(param);
+                    auto value = extract(words, idx, commaPosition);
+                    params.push_front(std::make_pair(value, idx));
                     idx = commaPosition;
                 }
 
@@ -1101,14 +1431,191 @@ namespace openset::query
             }
 
             // push the items into the result in reverse
-            for (auto& item : result)
-                __parseLine(item, 0);
+            for (auto& item : params)
+                parseStatement(item.second, item.first, 0);
 
             middle.emplace_back(
                 MiddleOp_e::marshal, 
                 static_cast<int>(Marshals_e::marshal_make_list), 
-                static_cast<int>(result.size()), 
-                words);
+                static_cast<int>(params.size()), 
+                lastDebug.line,
+                start);
+
+            return idx;
+        }
+
+        int parseSubscript(const Blocks::Line& words, const int start, const bool assignment)
+        {
+            std::deque<std::pair<Blocks::Line,int>> subScripts;
+            auto idx = start;
+
+            const auto variable = words[idx];
+            ++idx;
+
+            // no subscript, just a variable (checked for function/table var by parseItem)
+            if (idx >= static_cast<int>(words.size()) || words[idx] != "[")
+            {
+                auto variableIndex = userVarIndex(variable);
+
+                if (assignment)
+                    incUserVarAssignmentCount(variable);
+
+                middle.emplace_back(
+                    assignment ? MiddleOp_e::pop_user : MiddleOp_e::push_user,
+                    variableIndex,
+                    lastDebug.line,
+                    start);
+
+                return idx;
+            }
+                        
+            auto end = seekMatchingSquare(words, idx);
+            ++idx;
+
+            while (idx < end)
+            {
+ 
+                auto value = extract(words, idx, end);
+                subScripts.push_front(make_pair(value,idx));
+                idx = end;
+
+                const auto nextToken = idx + 1 >= static_cast<int>(words.size()) ? std::string() : words[idx + 1];
+
+                // Test for multi-depth-subscripts foo[index][nestedIndex]
+                if (nextToken == "[")
+                {
+                    end = seekMatchingSquare(words, idx + 1);
+                    idx += 2;
+                }
+
+            }
+
+            // push the items into the result in reverse
+            for (auto& item : subScripts)
+                parseStatement(item.second, item.first, 0);
+
+            if (isTableColumn(variable))
+            {
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "subscript is not possible on table columns",
+                    lastDebug
+                };
+            }
+
+            if (assignment)
+                incUserVarAssignmentCount(variable);
+
+            auto variableIndex = userVarIndex(variable);
+            middle.emplace_back(
+                MiddleOp_e::push_user_ref,
+                variableIndex,
+                lastDebug.line,
+                start);
+
+            // convert subscript into function
+            middle.emplace_back(
+                MiddleOp_e::marshal,
+                assignment ? static_cast<int>(Marshals_e::marshal_pop_subscript) : static_cast<int>(Marshals_e::marshal_push_subscript),
+                static_cast<int>(subScripts.size() + 1), 
+                lastDebug.line,
+                start);
+
+            return end + 1;
+        }
+
+        int parseDictionary(const Blocks::Line& words, int start)
+        {
+            std::deque<std::pair<Blocks::Line,int>> values;
+            std::deque<std::string> keys;
+            auto idx = start;
+
+            if (words[idx] != "{")
+            {
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting '{}' brackets for dictionary",
+                    lastDebug
+                };
+            }
+                        
+            const auto end = seekMatchingCurly(words, start);
+            ++idx;
+
+            while (idx < end)
+            {
+                const auto commaPosition = seek(",", words, idx);
+                const auto colonPosition = seek(":", words, idx, commaPosition);
+
+                if (colonPosition == -1)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "expecting ':' after key in dictionary",
+                        lastDebug
+                    };
+                               
+                if (commaPosition == -1)
+                {
+                    auto key = words[idx];
+                    auto value = extract(words, colonPosition + 1, end);
+
+                    keys.push_front(key);
+                    values.push_front(make_pair(value, idx));
+                    idx = end;
+                }
+                else
+                {
+                    auto key = words[idx];
+                    auto value = extract(words, colonPosition + 1, commaPosition);
+
+                    keys.push_front(key);
+                    values.push_front(make_pair(value, idx));
+                    idx = commaPosition;
+                }
+
+                ++idx;
+            }
+
+            // push the items into the result in reverse
+            for (auto& item : values)
+            {
+                auto key = keys.front();
+                keys.pop_front();
+
+                if (!isTextual(key) && !isString(key))
+                {
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "dictionaries may not have numeric keys (convert keys to strings)",
+                        lastDebug
+                    };
+                }
+
+                auto cleanString = stripQuotes(key);
+                auto litIndex = stringLiteralIndex(key);
+                // push the key
+
+                middle.emplace_back(
+                    MiddleOp_e::push_literal, 
+                    litIndex, 
+                    lastDebug.line,
+                    item.second);
+
+                // parse the value (which will leave a single entry on the stack)
+                parseStatement(item.second, item.first, 0);
+
+            }
+
+            middle.emplace_back(
+                MiddleOp_e::marshal, 
+                static_cast<int>(Marshals_e::marshal_make_dict), 
+                static_cast<int>(values.size() * 2), 
+                lastDebug.line,
+                start);
 
             return idx;
         }
@@ -1131,66 +1638,121 @@ namespace openset::query
             return addLinesAsBlock(std::vector<Blocks::Line>{line});
         }
 
-        void pushItem(const std::string& item, const Blocks::Line& debugLine)
+        int parseItem(const Blocks::Line& words, int start, const Blocks::Line& debugLine, const bool assignment = false)
         {
+            const auto item = words[start];
+
+            if (assignment && isMarshal(item))
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "left side argument is a reserved word: '" + item + "'",
+                    lastDebug
+                };
+
+            if (assignment &&
+                (
+                item == "true" ||
+                item == "false" ||
+                item == "nil" ||
+                isString(item) || 
+                isFloat(item) ||
+                isNumeric(item) ||
+                isTableColumn(item)))
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "left side argument must be a user variable: " + item + "'",
+                    lastDebug
+                };
+
+            if (item == "true")
+            {
+                middle.emplace_back(MiddleOp_e::push_true, lastDebug.line, start);
+                return start + 1;
+            }
+
+            if (item == "false")
+            {
+                middle.emplace_back(MiddleOp_e::push_false, lastDebug.line, start);
+                return start + 1;
+            }
+
+            if (item == "nil")
+            {
+                middle.emplace_back(MiddleOp_e::push_nil, lastDebug.line, start);
+                return start + 1;
+            }
+
             if (isString(item))
             {
                 auto cleanString = stripQuotes(item);
-                auto idx = stringLiteralIndex(item);
-                middle.emplace_back(MiddleOp_e::push_literal, idx, debugLine);    
-            }
-            else if (isFloat(item))
-            {
-                middle.emplace_back(MiddleOp_e::push_double, expandTime(item).getDouble(), debugLine);    
-            }
-            else if (isNumeric(item))
-            {
-                middle.emplace_back(MiddleOp_e::push_int, expandTime(item).getInt64(), debugLine);    
-            }
-            else if (isTableColumn(item))
-            {
-                auto idx = columnIndex(item);
-                middle.emplace_back(MiddleOp_e::push_column, idx, debugLine);    
-            }
-            else if (isMarshal(item))
-            {
-                // THROW
-            }
-            else
-            {
-                auto idx = userVarIndex(item);
-                middle.emplace_back(MiddleOp_e::push_user, idx, debugLine);    
-            }
-        }
+                auto stringIdx = stringLiteralIndex(item);
+                middle.emplace_back(MiddleOp_e::push_literal, stringIdx, lastDebug.line, start);
 
-        void popItem(const std::string& item, const Blocks::Line& debugLine)
-        {
+                return start + 1;
+            }
 
-            if (isString(item) || 
-                isFloat(item) ||
-                isNumeric(item))
+            if (isFloat(item))
             {
-                // THROW
+                middle.emplace_back(MiddleOp_e::push_double, expandTime(item).getDouble(), lastDebug.line, start);
+                return start + 1;
+            }
+
+            if (isNumeric(item))
+            {
+                middle.emplace_back(MiddleOp_e::push_int, expandTime(item).getInt64(), lastDebug.line, start);
+                return start + 1;
             }
 
             if (isTableColumn(item))
             {
-                // THROW
+                const auto filterEndIndex = parseFilterChain(currentBlockType.back(), true, words, start + 1);
+                auto columnIdx = columnIndex(item);
+                middle.emplace_back(MiddleOp_e::push_column, columnIdx, lastDebug.line, start);
+                return filterEndIndex;
             }
 
             if (isMarshal(item))
-            {
-                // THROW
-            }
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "unexpected reserved word: '" + item + "'",
+                    lastDebug
+                };
 
-            userVarIndex(item);
-            incUserVarAssignmentCount(item);
-            middle.emplace_back(MiddleOp_e::pop_user, item, debugLine);    
+            return parseSubscript(words, start, assignment);
         }
 
-        int processLogicChain(const Blocks::Line& words, int start)
+        int parseReference(const Blocks::Line& words, const int start, const Blocks::Line& debugLine)
         {
-            const auto end = words.size();
+            const auto item = words[start];
+
+            if (isMarshal(item))
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "not expecting reserved word: '" + item + "'",
+                    lastDebug
+                };
+
+            if (isString(item) || 
+                isFloat(item) ||
+                isNumeric(item) ||
+                isTableColumn(item))
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting user variable: " + item + "'",
+                    lastDebug
+                };
+
+            return parseSubscript(words, start, false);
+        }
+
+        int parseFilterChain(const std::string& condition, const bool isColumn, const Blocks::Line& words, const int start)
+        {
+            const auto end = static_cast<int>(words.size());
             auto idx = start;
 
             Filter_s filter;
@@ -1199,17 +1761,122 @@ namespace openset::query
             while (idx < end)
             {
                 const auto token = words[idx];
-                const auto nextToken = idx + 1 >= words.size() ? std::string() : words[idx + 1];
+                const auto nextToken = idx + 1 >= static_cast<int>(words.size()) ? std::string() : words[idx + 1];
 
-                if (token == "__chain_reverse")
+                // test for missing brackets
+                if (token.find("__chain_") == 0 && nextToken != "(")
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "filter '" + token.substr(token.find("__chain_")) + "' is missing brackets",
+                        lastDebug
+                    };
+
+                if (token == "__chain_limit" && condition == "each" && !isColumn)
                 {
-                    std::vector<Blocks::Line> params;
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size() > 1)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".first() takes one optional parameter",
+                            lastDebug
+                        };
+
+                    if (params.size())
+                        filter.limitBlock = addLinesAsBlock(params[0].first);
+
+                    filter.isLimit = true;
+                    ++count;
+                    ++idx;
+                }
+                else if ((token == "__chain_ever" || token == "__chain_never") && isColumn)
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size() != 1 || (params.size() && params[0].first.size() < 2))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".ever( <logic> ) requires a comparator",
+                            lastDebug
+                        };
+
+                    const auto comparator = params[0].first[0];
+                    params[0].first.erase(params[0].first.begin()); // sinful
+
+                    if (!Operators.count(comparator))
+                    {
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".ever( <logic> ) requires a comparator",
+                            lastDebug
+                        };                        
+                    }
+                                        
+                    if (params.size())
+                        filter.evalBlock = addLinesAsBlock(params[0].first);                    
+
+                    filter.comparator = static_cast<int>(Operators.find(comparator)->second);
+                    filter.isEver = true;
+
+                    if (token == "__chain_never")
+                        filter.isNegated = true;
+
+                    ++count;
+                }
+                else if (token == "__chain_is" && condition == "each" && isColumn)
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+
+                    if (params.size() != 1 || (params.size() && params[0].first.size() < 2))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".is( <logic> ) requires a comparator",
+                            lastDebug
+                        };
+
+                    const auto comparator = params[0].first[0];
+                    params[0].first.erase(params[0].first.begin()); // sinful
+
+                    if (!Operators.count(comparator))
+                    {
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".is( <logic> ) requires a comparator",
+                            lastDebug
+                        };                        
+                    }                   
+                                       
+                    if (params.size())
+                        filter.evalBlock = addLinesAsBlock(params[0].first);                    
+
+                    filter.comparator = static_cast<int>(Operators.find(comparator)->second);
+
+                    filter.isRow = true;
+
+                    ++count;
+                }
+                else if (token == "__chain_reverse" && !isColumn && condition == "each")
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
                     if (params.size())
-                    {
-                        // THROW
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".reverse() takes no parameters",
+                            lastDebug
+                        };
 
                     filter.isReverse = true;
                     ++count;
@@ -1217,71 +1884,90 @@ namespace openset::query
                 }
                 else if (token == "__chain_within")
                 {
-                    std::vector<Blocks::Line> params;
+                    std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() != 1)
-                    {
-                        // THROW
-                    }
+                    if (params.size() != 2)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".within( <start>, <window> ) takes two parameter",
+                            lastDebug
+                        };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.withinStartBlock = addLinesAsBlock(params[0]);
+                    filter.withinStartBlock = addLinesAsBlock(params[0].first);
+                    filter.withinWindowBlock = addLinesAsBlock(params[1].first);
                     filter.isWithin = true;
 
                     ++count;
                 }
                 else if (token == "__chain_range")
                 {
-                    std::vector<Blocks::Line> params;
+                    std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
                     if (params.size() != 2)
-                    {
-                        // THROW
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".range( <start>, <end> ) takes two parameters",
+                            lastDebug
+                        };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.rangeStartBlock = addLinesAsBlock(params[0]);
-                    filter.rangeEndBlock = addLinesAsBlock(params[1]);
+                    filter.rangeStartBlock = addLinesAsBlock(params[0].first);
+                    filter.rangeEndBlock = addLinesAsBlock(params[1].first);
                     filter.isRange = true;
 
                     ++count;
                 }
-                else if (token == "__chain_continue")
+                else if (token == "__chain_continue" && !isColumn && (condition == "if" || condition == "each"))
                 {
-                    std::vector<Blocks::Line> params;
+                    std::vector<std::pair<Blocks::Line,int>> params;
                     cout << token << " - ";
                     idx = parseParams(words, idx + 1, params);
 
                     if (params.size() > 1)
-                    {
-                        // THROW
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".continue(<from>) takes one optional parameter",
+                            lastDebug
+                        };
 
                     if (params.size())
-                        filter.continueBlock = addLinesAsBlock(params[0]);
+                        filter.continueBlock = addLinesAsBlock(params[0].first);
                     filter.isContinue = true;
 
                     ++count;
                 }
-                /*else if (token.find("__chain_) == 0)
+                else if (token.find("__chain_") == 0)
                 {
-                    // THROW
-                }*/
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        isColumn ?
+                            "invalid column filter for `" + condition + "`: '" + token.substr(token.find("__chain_")) + "'" :
+                            "invalid logical filter for `" + condition + "`: '" + token.substr(token.find("__chain_")) + "'",
+                        lastDebug
+                    };
+                }
                 else
                 {
+                    const auto filterOp = isColumn ? MiddleOp_e::column_filter : MiddleOp_e::logic_filter;
                     if (count)
                     {
                         // sets active filter in opcode
-                        middle.emplace_back(MiddleOp_e::logic_filter, static_cast<int>(filters.size()), words);
+                        middle.emplace_back(filterOp, static_cast<int>(filters.size()), lastDebug.line, idx);
                         filters.push_back(filter);
                     }
-                    else
+                    else 
                     {
                         // set default filter
-                        middle.emplace_back(MiddleOp_e::logic_filter, 0, words);
+                        middle.emplace_back(filterOp, 0, lastDebug.line, idx);
                     }
+
                     return idx;
                 }
             }
@@ -1289,27 +1975,120 @@ namespace openset::query
             return idx;
         }
 
+
         void parseCondition(int codeBlockId, const Blocks::Line& words)
         {
             const auto condition = words[0];
 
-            Filter_s filter;
+            currentBlockType.push_back(condition);
 
             if (condition == "if")
             {
-                const auto idx = processLogicChain(words,1);
+                const auto idx = parseFilterChain("if", false, words, 1);
                 const Blocks::Line logic(words.begin() + idx, words.end());
                 const auto logicBlockId = addLinesAsBlock(logic);
-                middle.emplace_back(MiddleOp_e::if_call, codeBlockId, logicBlockId, words);
+                middle.emplace_back(
+                    MiddleOp_e::if_call, 
+                    codeBlockId, 
+                    logicBlockId, 
+                    lastDebug.line,
+                    0);
             }
             else if (condition == "for")
             {
+                if (words.size() < 4 || words[2] != "in")
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "for loop is malformed",
+                        lastDebug
+                    };                    
 
+                // push the variable containing source data for our iterator
+                parseStatement(0, words, 3);
+
+                // push a reference to the variable we will be filling
+                const auto variable = words[1];
+
+                incUserVarAssignmentCount(variable);
+                auto variableIndex = userVarIndex(variable);
+
+                if (variable == " ")
+                    cout << "debug";
+
+                middle.emplace_back(
+                    MiddleOp_e::push_user_ref,
+                    variableIndex,
+                    lastDebug.line,
+                    1);
+     
+                middle.emplace_back(
+                    MiddleOp_e::for_call, 
+                    codeBlockId, 
+                    0, 
+                    lastDebug.line,
+                    0);
             }
             else // each
             {
-                
+                auto idx = parseFilterChain("each", false, words, 1);
+
+                if (idx >= static_cast<int>(words.size()) || words[idx] != "where")
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "expecting `where` in each statement",
+                        lastDebug
+                    };
+
+                ++idx; // skip past where look for logic
+                const Blocks::Line logic(words.begin() + idx, words.end());
+
+                // if there is no logic, just straight iteration we push the logic block as -1
+                // the interpreter will run in a true state for the logic if it sees -1
+                const auto logicBlockId = logic.size() == 0 ? -1 : addLinesAsBlock(logic);
+                middle.emplace_back(
+                    MiddleOp_e::each_call, 
+                    codeBlockId, 
+                    logicBlockId, 
+                    lastDebug.line,
+                    0);                
             }
+
+            currentBlockType.pop_back();
+        }
+
+        void parseTally(const Blocks::Line& words)
+        {
+
+            if (words.size() == 1)
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting at least one group after `<<`",
+                    lastDebug
+                };
+
+            // the `<<` statement doesn't take brackets, so we are adding them before 
+            // we call parseParams
+            Blocks::Line modifiedSequence;
+            modifiedSequence.push_back("(");
+            modifiedSequence.insert(modifiedSequence.end(), words.begin() + 1, words.end());
+            modifiedSequence.push_back(")");
+
+            std::vector<std::pair<Blocks::Line,int>> params;
+            parseParams(modifiedSequence, 0, params);
+
+            for (const auto& param: params)
+                parseStatement(param.second, param.first, 0, param.first.size());
+
+            const auto marshalIndex = static_cast<int>(Marshals.find("tally")->second);
+            middle.emplace_back(
+                MiddleOp_e::marshal, 
+                marshalIndex, 
+                static_cast<int>(params.size()), 
+                lastDebug.line,
+                0);            
         }
 
         void processBlocks()
@@ -1318,20 +2097,32 @@ namespace openset::query
 
             const std::unordered_set<std::string> conditionBlock = {
                 "if",
-                //"for",
-                //"each",
+                "for",
+                "each"
             };
 
             while (currentIdx < blocks.blockCount)
             {
                 const auto& block = blocks.blocks.find(currentIdx)->second;
 
-                middle.emplace_back(MiddleOp_e::block, static_cast<int>(block.blockId), block.lines.size() ? block.lines[0].words : Blocks::Line{} );
+                if (block.blockId)
+                    middle.emplace_back(
+                        MiddleOp_e::block, 
+                        static_cast<int>(block.blockId), 
+                        Blocks::Line{},
+                        -1);
 
                 for (const auto& line : block.lines)
                 {
                     const auto& words = line.words;
-                    const auto codeBlock = line.codeBlock;
+                    lastDebug.set(words);
+
+                    // push row data to the accumulator 
+                    if (words[0] == "<<")
+                    {
+                        parseTally(words);
+                        continue;
+                    }
 
                     // is this a condition/loop/search?
                     if (conditionBlock.count(words[0]))
@@ -1343,28 +2134,29 @@ namespace openset::query
                     }
 
                     // is this an assignment?                    
-                    if (const int eqPos = seek("=", words, 0); eqPos != -1)
+                    if (const auto eqPos = seek("=", words, 0); eqPos != -1)
                     {
-                        if (eqPos != 1)
+                        if (eqPos == static_cast<int>(words.size()))
                         {
-                            // THROW
+                            throw QueryParse2Error_s {
+                                errors::errorClass_e::parse,
+                                errors::errorCode_e::syntax_error,
+                                "expecting right side value after '=' during assignment",
+                                lastDebug
+                            };
                         }
 
-                        if (eqPos == words.size())
-                        {
-                            // THROW
-                        }
-
-                        __parseLine(words, eqPos + 1, words.size());
-                        popItem(words[0], line.words);
+                        parseStatement(0, words, eqPos + 1);
+                        parseItem(words, 0, line.words, true);
                         continue;
                     }
 
-                    __parseLine(words, 0, words.size());
+                    if (words.size())
+                        parseStatement(0, words, 0);
 
                 }
 
-                middle.emplace_back(MiddleOp_e::ret);
+                middle.emplace_back(block.blockId == 0? MiddleOp_e::term : MiddleOp_e::ret, Blocks::Line{}, -1);
 
                 ++currentIdx;
             }
@@ -1380,6 +2172,9 @@ namespace openset::query
 
         void addDefaults()
         {
+            // default block type - we want `if` rules
+            currentBlockType.push_back("if");
+
             // these columns are always selected, so we add them by default
             columnIndex("stamp");
             columnIndex("event");
@@ -1399,15 +2194,19 @@ namespace openset::query
             for (auto& midOp : middle)
             {
                 Debug_s debug;
-                debug.text = midOp.debug.debug;
+                debug.text = midOp.debug.debugLine;
+                debug.translation = midOp.debug.cursor;
 
                 switch (midOp.op)
                 {
                 case MiddleOp_e::push_user:
-                    if (isAssignedUserVar(userVars[midOp.value1.getInt64()]))
-                    {
-                        // THROW
-                    }
+                    /*if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "variable: '" + userVars[midOp.value1.getInt64()] + "' is used but never assigned a value",
+                            lastDebug
+                        };*/
 
                     finCode.emplace_back(
                         OpCode_e::PSHUSRVAR,
@@ -1416,6 +2215,24 @@ namespace openset::query
                         0,
                         debug);
                     break;
+
+                case MiddleOp_e::push_user_ref:
+                    /*if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "variable: '" + userVars[midOp.value1.getInt64()] + "' is used but never assigned a value",
+                            lastDebug
+                        };*/
+
+                    finCode.emplace_back(
+                        OpCode_e::PSHUSRVREF,
+                        midOp.value1, // index of user var
+                        0,
+                        0,
+                        debug);
+                    break;
+
                 case MiddleOp_e::push_literal:
                     finCode.emplace_back(
                         OpCode_e::PSHLITSTR,
@@ -1424,6 +2241,7 @@ namespace openset::query
                         0,
                         debug);
                     break;
+
                 case MiddleOp_e::push_int:
                     finCode.emplace_back(
                         OpCode_e::PSHLITINT,
@@ -1432,6 +2250,7 @@ namespace openset::query
                         0,
                         debug);
                     break;
+
                 case MiddleOp_e::push_double:
                     finCode.emplace_back(
                         OpCode_e::PSHLITFLT,
@@ -1440,6 +2259,7 @@ namespace openset::query
                         0,
                         debug);
                     break;
+
                 case MiddleOp_e::push_bool:
                     finCode.emplace_back(
                         midOp.value1.getBool() ? OpCode_e::PSHLITTRUE : OpCode_e::PSHLITFALSE,
@@ -1448,14 +2268,43 @@ namespace openset::query
                         0,
                         debug);
                     break;
-                case MiddleOp_e::push_column:
+
+                case MiddleOp_e::push_true:
                     finCode.emplace_back(
-                        OpCode_e::PSHTBLCOL,
-                        midOp.value1, // index of user var
+                        OpCode_e::PSHLITTRUE,
+                        0,
                         0,
                         0,
                         debug);
                     break;
+
+                case MiddleOp_e::push_false:
+                    finCode.emplace_back(
+                        OpCode_e::PSHLITFALSE,
+                        0,
+                        0,
+                        0,
+                        debug);
+                    break;
+
+                case MiddleOp_e::push_nil:
+                    finCode.emplace_back(
+                        OpCode_e::PSHLITNUL,
+                        0,
+                        0,
+                        0,
+                        debug);
+                    break;
+
+                case MiddleOp_e::push_column:
+                    finCode.emplace_back(
+                        OpCode_e::PSHTBLCOL,
+                        midOp.value1, // index of user var
+                        filter,
+                        0,
+                        debug);
+                    break;
+
                 case MiddleOp_e::pop_user:
                     finCode.emplace_back(
                         OpCode_e::POPUSROBJ,
@@ -1464,48 +2313,79 @@ namespace openset::query
                         0,
                         debug);
                     break;
+
                 case MiddleOp_e::eq:
                     finCode.emplace_back(OpCode_e::OPEQ, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::neq:
                     finCode.emplace_back(OpCode_e::OPNEQ, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::gt:
                     finCode.emplace_back(OpCode_e::OPGT, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::gte:
                     finCode.emplace_back(OpCode_e::OPGTE, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::lt:
                     finCode.emplace_back(OpCode_e::OPLT, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::lte:
                     finCode.emplace_back(OpCode_e::OPLTE, 0, 0, 0, debug);
                     break;
+
+                case MiddleOp_e::in:
+                    finCode.emplace_back(OpCode_e::OPIN, 0, 0, 0, debug);
+                    break;
+
+                case MiddleOp_e::contains:
+                    finCode.emplace_back(OpCode_e::OPCONT, 0, 0, 0, debug);
+                    break;
+
+                case MiddleOp_e::any:
+                    finCode.emplace_back(OpCode_e::OPANY, 0, 0, 0, debug);
+                    break;
+
                 case MiddleOp_e::and:
                     finCode.emplace_back(OpCode_e::LGCAND, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::or:
                     finCode.emplace_back(OpCode_e::LGCOR, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::add:
                     finCode.emplace_back(OpCode_e::MATHADD, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::sub:
                     finCode.emplace_back(OpCode_e::MATHSUB, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::mul:
                     finCode.emplace_back(OpCode_e::MATHMUL, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::div:
                     finCode.emplace_back(OpCode_e::MATHDIV, 0, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::block:
-                    finCode.emplace_back(OpCode_e::NOP, midOp.value1, 0, 0, debug);
+                    finCode.emplace_back(OpCode_e::LAMBDA, midOp.value1, 0, 0, debug);
                     break;
+
                 case MiddleOp_e::ret:
                     finCode.emplace_back(OpCode_e::RETURN, 0, 0, 0, debug);
                     break;
+
+                case MiddleOp_e::term:
+                    finCode.emplace_back(OpCode_e::TERM, 0, 0, 0, debug);
+                    break;
+
                 case MiddleOp_e::marshal:
                     finCode.emplace_back(
                         OpCode_e::MARSHAL,
@@ -1514,25 +2394,77 @@ namespace openset::query
                         midOp.value2, // number of params to function 
                         debug);
                     break;
+
                 case MiddleOp_e::logic_filter:
                     filter = midOp.value1;
                     break;
+
                 case MiddleOp_e::column_filter:
                     filter = midOp.value1;
                     break;
+
                 case MiddleOp_e::if_call:
                     finCode.emplace_back(
-                        OpCode_e::CNDIF,
+                        OpCode_e::CALL_IF,
                         midOp.value1, // code block if lambda is true
                         filter,       // filter ID
                         midOp.value2, // lambda for logic
                         debug);
                     break;
+
+                case MiddleOp_e::for_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_FOR,
+                        midOp.value1, // code block if lambda is true
+                        0,       // filter ID
+                        0, // lambda for logic
+                        debug);
+                    break;
+
+                case MiddleOp_e::each_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_EACH,
+                        midOp.value1, // code block if lambda is true
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+
                 default: 
-                    // THROW
-                    ;
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "unknown middle language op code",
+                        lastDebug
+                    };
                 }
             }
+
+            // add user vars
+            //Tracking stringLiterals;
+            //Tracking columns;
+            //Tracking aggregates;
+
+            auto index = 0;
+            for (auto& v : userVars)
+            {
+                inMacros.vars.userVars.push_back(Variable_s{v, ""});
+                inMacros.vars.userVars.back().index = index;
+                ++index;
+            }
+
+            index = 0;
+            for (auto& v : stringLiterals)
+            {
+                TextLiteral_s literal;
+                literal.hashValue = MakeHash(v);
+                literal.index = index;
+                literal.value = v;
+                inMacros.vars.literals.emplace_back(literal);
+                ++index;
+            } 
+
+
         }
 
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
