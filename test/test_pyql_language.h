@@ -71,6 +71,29 @@ inline Tests test_pyql_language()
     auto test1_pyql = openset::query::QueryParser::fixIndent(
         R"pyql(
 
+    select
+      count id as customer_id
+      count session
+      count fruit
+      count event
+      max price as max_price
+      min price as min_price
+      sum price as total
+      avg price as avg_price
+    end
+
+    total_spend_red_outdoor = sum(total * quantity).within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")
+
+    some_row = row.reverse().within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")  
+
+    is_red_outdoor = test.reverse().within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")
+
+    count_red_outdoor = count(product).within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")
+
+    max_quantity_red_outdoor = max(quantity).within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")
+
+    avg_quantity_red_outdoor = avg(quantity).within(1_year) where catalog.row(== "outdoor") && tag.row(contains "red")
+
     if fruit.ever(contains test_set)
         << "blah"
     end

@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -175,6 +174,14 @@ namespace openset::query
         if_call,
         each_call,
         for_call,
+        sum_call,
+        avg_call,
+        max_call,
+        min_call,
+        count_call,
+        dcount_call,
+        test_call,
+        row_call,
         term,
     };
    
@@ -246,8 +253,18 @@ namespace openset::query
         { "*", MiddleOp_e::mul },
         { "/", MiddleOp_e::div },
     };
-
-
+    
+    static const unordered_map<string, MiddleOp_e> inlineIterators = {
+        {"sum", MiddleOp_e::sum_call },
+        {"avg", MiddleOp_e::avg_call },
+        {"max", MiddleOp_e::max_call },
+        {"min", MiddleOp_e::min_call },
+        {"count", MiddleOp_e::count_call },
+        {"dcount", MiddleOp_e::dcount_call },
+        {"test", MiddleOp_e::test_call },
+        {"row", MiddleOp_e::row_call }
+    };
+    
     class QueryParser2
     {     
     public:
@@ -259,6 +276,7 @@ namespace openset::query
         FilterList filters;
 
         db::Columns* tableColumns { nullptr };
+        bool usesSessions { false };
         std::string rawScript;
 
         Blocks blocks;
@@ -266,7 +284,8 @@ namespace openset::query
         Tracking userVars;
         Tracking stringLiterals;
         Tracking columns;
-        Tracking aggregates;
+        Tracking selects;
+        std::vector<Variable_s> selectColumnInfo;
 
         std::unordered_map<std::string, int> userVarAssignments;
         std::vector<std::string> currentBlockType;
@@ -439,12 +458,12 @@ namespace openset::query
             return static_cast<int>(columns.size()-1);
         }
 
-        int aggregatesIndex(const std::string& name)
+        int selectsIndex(const std::string& name)
         {
-            if (const auto idx = getTrackingIndex(aggregates, name); idx != -1)
+            if (const auto idx = getTrackingIndex(selects, name); idx != -1)
                 return idx;
-            aggregates.emplace_back(name);
-            return static_cast<int>(aggregates.size()-1);
+            selects.emplace_back(name);
+            return static_cast<int>(selects.size()-1);
         }
 
         void incUserVarAssignmentCount(const std::string& name)
@@ -643,6 +662,9 @@ namespace openset::query
 
         const std::unordered_set<std::string> blockStartWords = {
             "if",
+            "else",
+            "elsif",
+            "select",
             "for",
             "each",
         };           
@@ -693,6 +715,8 @@ namespace openset::query
         {
             const std::unordered_set<std::string> forceNewLine = {
                 "if",
+                "else",
+                "elsif",
                 "for",
                 "end",
                 "each",
@@ -776,7 +800,11 @@ namespace openset::query
             if (token == "end")
                 return false;
 
-            // is it a conditional?
+            // we are ok with almost anything after a where
+            if (token == "where")
+                return true;
+
+            // is it an a condition or iterator?
             if (forceNewLine.count(token))
             {
                 if (isNameOrNumber(nextToken) || validAfterCondition.count(nextToken))
@@ -850,15 +878,158 @@ namespace openset::query
             return false;
         }
 
-        int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction) const
+        // select 
+        int parseSelect(Blocks::Line& tokens, const int start) 
         {
-            extraction.clear();
-            auto idx = start;
+            const std::unordered_set<std::string> newStatementWords = {
+                "count",
+                "min",
+                "max",
+                "avg",
+                "sum",
+                "value",
+                "var",
+                "code"
+            };
 
+            auto idx = start + 1;
             const auto end = static_cast<int>(tokens.size());
+
             while (idx < end)
             {
-                const auto token = tokens[idx];               
+                auto token = tokens[idx];
+                auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                // end of select definition
+                if (token == "end")
+                    return idx + 1;
+
+                // should be a modifier?
+                if (!ColumnModifiers.count(token))
+                {
+                    // THROW 
+                }
+
+                // should be a textual word
+                if (!isTextual(nextToken))
+                {
+                    // THROW
+                }
+
+
+                auto modifier = ColumnModifiers.find(token)->second;
+                const auto columnName = nextToken; // actual column name in table
+                auto keyColumn = "event"s; // distinct to itself
+                auto asName = columnName; // aliased as itself
+
+                if (!isTableColumn(columnName))
+                {
+                    // THROW
+                }
+
+                idx += 2;
+
+                token = tokens[idx];
+                nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                if (token == "as")
+                {
+                    
+                    if (!nextToken.length() || !isTextual(nextToken))
+                    {
+                        // THROW
+                    }
+
+                    asName = nextToken;
+                    idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                }
+
+                if (token == "key")
+                {
+                    
+                    if (!nextToken.length() || !isTextual(nextToken))
+                    {
+                        // THROW
+                    }
+
+                    if (!isTableColumn(nextToken))
+                    {
+                        // THROW - gotta be a column
+                    }
+
+                    keyColumn = nextToken;
+                    idx += 2;
+                }
+                
+
+                // already used, then throw and suggest using `as`
+                if (getTrackingIndex(selects, asName) != -1)
+                {
+                    // THROW - suggest using AS
+                }
+
+                // register this column as having been referenced
+                const auto columnIdx = columnIndex(columnName);
+
+                const auto selectIdx = selectsIndex(asName);
+
+                if (columnName == "session")
+                {
+                    usesSessions = true;
+                    // session counting uses a specialized count method
+                    modifier = ColumnModifiers.find("dist_count_person")->second;
+
+                    // reference session so it becomes part of dataset
+                    columnIndex("session");
+                }
+
+                
+                Variable_s var(columnName, asName, "column", modifier);
+                var.distinctColumnName = keyColumn;
+
+                var.index = selectIdx; // index in variable array
+                var.column = columnIdx; // index in grid
+                var.schemaColumn = tableColumns->getColumn(columnName)->idx;
+
+                // if this is selection is keyed to another column lets reference it as well
+                if (keyColumn != "event")
+                {
+                    const auto keyIdx = columnIndex(keyColumn);
+                    var.distinctColumn = keyIdx; // index of key column in grid
+                }
+                
+                selectColumnInfo.push_back(var);                     
+            }
+
+            // THROW - should have found `end`
+
+        }
+
+        int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction) 
+        {
+            const std::unordered_set<std::string> forceNewLine = {
+                "if",
+                "else",
+                "elsif",
+                "for",
+                "end",
+                "each",
+                "<<"
+            };
+
+            extraction.clear();
+            auto idx = start;
+            const auto end = static_cast<int>(tokens.size());
+
+            while (idx < end)
+            {
+                const auto token = tokens[idx];
+
+                if (token == "select")
+                    return parseSelect(tokens, idx);
 
                 if (token == "(")
                 {
@@ -915,7 +1086,7 @@ namespace openset::query
                 }
 
                 // force new line immediately
-                if (token == "<<" && idx != start)
+                if (forceNewLine.count(token) && idx != start)
                 {
                     return idx;
                 }
@@ -948,8 +1119,12 @@ namespace openset::query
             while (idx < end)
             {
 
+                const auto startWord = tokens[idx];
                 const auto isNewBlock = blockStartWords.count(tokens[idx]) != 0;
                 idx = extractLine(tokens, idx, line);
+
+                if (startWord == "select")
+                    continue;
 
                 for (auto i : line)
                     cout << i << " ";
@@ -1128,6 +1303,76 @@ namespace openset::query
             };
         }
 
+        int parseInlineIterator(const Blocks::Line& words, int start)
+        {
+
+            const auto end = static_cast<int>(words.size());
+            auto idx = start;
+
+
+            const auto iteratorName = words[idx];
+            const auto iteratorOp = inlineIterators.find(iteratorName)->second;
+
+            ++idx;
+
+            // -1 means no agg block
+            auto aggBlockId = -1;
+
+            // row and test don't need an aggregator statement
+            if (iteratorName != "row" && iteratorName != "test")
+            {
+
+                // throw if we require an aggregator statement
+                if (idx >= end || words[idx] != "(")
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "aggregation '" + iteratorName + "' takes one parameter",
+                        lastDebug
+                    };
+
+                // extract the `summing statement` passed to the inline aggregator i.e. count(product_name)
+                std::vector<std::pair<Blocks::Line,int>> params;
+                idx = parseParams(words, idx, params);
+
+                if (params.size() != 1)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "aggregation '" + iteratorName + "' takes one parameter",
+                        lastDebug
+                    };
+
+                aggBlockId = addLinesAsBlock(params[0].first);
+            }
+
+            // inline aggregations use `each` style filters, lets parse them
+            idx = parseFilterChain("each", false, words, idx);
+
+            if (idx >= end || words[idx] != "where")
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "expecting `where` in '" + iteratorName + "' statement",
+                    lastDebug
+                };
+
+            ++idx; // skip past where look for logic
+            const Blocks::Line logic(words.begin() + idx, words.end());
+
+            // if there is no logic, just straight iteration we push the logic block as -1
+            // the interpreter will run in a true state for the logic if it sees -1
+            const auto logicBlockId = logic.size() == 0 ? -1 : addLinesAsBlock(logic);
+
+            middle.emplace_back(
+                iteratorOp, 
+                aggBlockId, 
+                logicBlockId, 
+                lastDebug.line,
+                0);                           
+        }
+
+
         int parseStatement(int relative, const Blocks::Line& words, int start, int end = -1)
         {
             const std::unordered_set<std::string> operatorWords = {
@@ -1175,6 +1420,13 @@ namespace openset::query
 
                 if (token == "end")
                     return end;
+
+                if (inlineIterators.count(token))
+                {
+                    idx = parseInlineIterator(words, idx);
+                    ++idx;
+                    continue;
+                }
 
                 if (isMarshal(token))
                 {
@@ -1758,6 +2010,8 @@ namespace openset::query
             Filter_s filter;
             auto count = 0;
 
+            auto usedForward = false;
+
             while (idx < end)
             {
                 const auto token = words[idx];
@@ -1829,7 +2083,7 @@ namespace openset::query
 
                     ++count;
                 }
-                else if (token == "__chain_is" && condition == "each" && isColumn)
+                else if (token == "__chain_is_row" && condition == "each" && isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -1839,7 +2093,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".is( <logic> ) requires a comparator",
+                            ".is_row( <logic> ) requires a comparator",
                             lastDebug
                         };
 
@@ -1882,24 +2136,100 @@ namespace openset::query
                     ++count;
                     ++idx;
                 }
+                else if (token == "__chain_forward" && !isColumn && condition == "each")
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size())
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".forward() takes no parameters",
+                            lastDebug
+                        };
+
+                    usedForward = true;
+                    filter.isReverse = false;
+                    ++count;
+                    ++idx;
+                }
+                else if (token == "__chain_advance" && !isColumn && condition == "each")
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size())
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".advance() takes no parameters",
+                            lastDebug
+                        };
+
+                    filter.isAdvance = true;
+                    ++count;
+                    ++idx;
+                }
                 else if (token == "__chain_within")
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() != 2)
+                    if (params.size() == 0 || params.size() > 2)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".within( <start>, <window> ) takes two parameter",
+                            ".within( <window>, <start> ) takes up to parameter",
                             lastDebug
                         };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.withinStartBlock = addLinesAsBlock(params[0].first);
-                    filter.withinWindowBlock = addLinesAsBlock(params[1].first);
+                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    if (params.size() == 2)
+                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
                     filter.isWithin = true;
 
+                    ++count;
+                }
+                else if (token == "__chain_look_ahead")
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size() == 0 || params.size() > 2)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".look_ahead( <window>, <start> ) takes up to parameter",
+                            lastDebug
+                        };
+
+                    // convert our params into code blocks to be called as lambdas
+                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    if (params.size() == 2)
+                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
+                    filter.isLookAhead = true;
+                    ++count;
+                }
+                else if (token == "__chain_look_back")
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size() == 0 || params.size() > 2)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".look_back( <window>, <start> ) takes up to parameter",
+                            lastDebug
+                        };
+
+                    // convert our params into code blocks to be called as lambdas
+                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    if (params.size() == 2)
+                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
+                    filter.isLookBack = true;
                     ++count;
                 }
                 else if (token == "__chain_range")
@@ -1955,6 +2285,40 @@ namespace openset::query
                 }
                 else
                 {
+                    // tests for filter combos that just don't work...
+
+                    if (filter.isRow && filter.isEver)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "filter must be either '.is_row' or '.ever'",
+                            lastDebug
+                        };
+
+                    if (usedForward && filter.isReverse)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "filter must be either '.forward' or '.reverse'",
+                            lastDebug
+                        };
+
+                    if (filter.isLookAhead && filter.isLookBack)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "use '.within' instead of both '.look_ahead' and '.look_back'",
+                            lastDebug
+                        };
+
+                    if (filter.isWithin && (filter.isLookAhead || filter.isLookBack))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "'.look_ahead' and '.look_back' cannot be used in conjunction with '.within', they perform similar tasks.",
+                            lastDebug
+                        };
+
                     const auto filterOp = isColumn ? MiddleOp_e::column_filter : MiddleOp_e::logic_filter;
                     if (count)
                     {

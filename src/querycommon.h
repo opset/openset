@@ -285,6 +285,19 @@ namespace openset
             { "last_event", MakeHash("last_event") },
         };
 
+        enum class CompileTimeConstants_e
+        {
+            BOTH,
+            FORWARD,
+            REVERSE,
+        };
+
+        static const unordered_map<string, CompileTimeConstants_e> CompileTimeConstantsMap = {
+            { "BOTH", CompileTimeConstants_e::BOTH },
+            { "FORWARD", CompileTimeConstants_e::FORWARD },
+            { "REVERSE", CompileTimeConstants_e::REVERSE },
+        }; 
+        
         enum class TimeSwitch_e : int
         {
             seconds,
@@ -310,6 +323,7 @@ namespace openset
             { "val", Modifiers_e::value },
             { "variable", Modifiers_e::var },
             { "var", Modifiers_e::var },
+            { "lambda", Modifiers_e::var },
         }; // Modifier to String (for debug output)
         static const unordered_map<Modifiers_e, string> ModifierDebugStrings = {
             { Modifiers_e::sum, "SUM" },
@@ -833,6 +847,9 @@ namespace openset
             bool isReverse {false};
             bool isContinue {false};
             bool isNegated {false};
+            bool isAdvance {false};
+            bool isLookAhead {false}; // for within
+            bool isLookBack {false}; // for within
 
             int evalBlock {-1};
             int continueBlock {-1};
