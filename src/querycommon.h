@@ -890,9 +890,12 @@ namespace openset
         using HintPairs = vector<HintPair>;
         using ParamVars = unordered_map<string, cvar>;
         using SegmentList = vector<std::string>; // struct containing compiled macro
+        using LambdaLookAside = vector<int>;
+
         struct Macro_s
         {
             Variables_S vars;
+            LambdaLookAside lambdas;
             InstructionList code;
             HintPairs indexes;
             string segmentName;

@@ -401,6 +401,8 @@ public:
     // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
     void dict()
     {
+        reference = nullptr;
+
         if (listValue) // do any needed cleanup
         {
             delete listValue;
@@ -422,6 +424,8 @@ public:
     // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
     void set()
     {
+        reference = nullptr;
+
         if (listValue) // do any needed cleanup
         {
             delete listValue;
@@ -443,6 +447,8 @@ public:
     // turns cvar into empty List like python/js: some_list = [] or some_list = list()
     void list()
     {
+        reference = nullptr;
+
         if (dictValue) // do any needed cleanup
         {
             delete dictValue;
@@ -496,7 +502,7 @@ public:
 
     bool contains(const cvar& key) const
     {
-        if (key.type == valueType::LIST || key.type == valueType::DICT || key.type == valueType::SET)
+        if (key.isContainer())
             throw std::runtime_error("cannot test for list/dict/set in list/dict/set");
 
         if (type == valueType::LIST)
@@ -515,6 +521,75 @@ public:
         throw std::runtime_error("not a dictionary/list/set");
     }
 
+    // see if this object contains ANY of the values from another object
+    bool containsAnyOf(const cvar& values) const
+    {
+        if (!isContainer())
+            throw std::runtime_error("contains any test on non list/dict/set");
+
+        // if right side `values` is not a container
+        // a simple `contains` call will suffice
+        if (!values.isContainer())
+            return contains(values);
+
+        // iterate container values and see if any of them are in this object
+		if (values.type == valueType::LIST)
+		{
+			for (auto &i : *values.getList())
+                if (contains(i))
+                    return true;
+		}
+		else if (values.type == valueType::SET)
+		{
+			for (auto &i : *values.getSet())
+                if (contains(i))
+                    return true;
+		}
+		else
+		{
+			for (auto &i : *values.getDict())
+                if (contains(i.first))
+                    return true;
+		}
+
+        return false;
+    }
+
+    // see if this object contains ALL of the values from another object
+    bool containsAllOf(const cvar& values) const
+    {
+        if (!isContainer())
+            throw std::runtime_error("contains any test on non list/dict/set");
+
+        // if right side `values` is not a container
+        // a simple `contains` call will suffice
+        if (!values.isContainer())
+            return contains(values);
+
+        // iterate container values and see if any of them are NOT in this object
+		if (values.type == valueType::LIST)
+		{
+			for (auto &i : *values.getList())
+                if (!contains(i))
+                    return false;
+		}
+		else if (values.type == valueType::SET)
+		{
+			for (auto &i : *values.getSet())
+                if (!contains(i))
+                    return false;
+		}
+		else
+		{
+			for (auto &i : *values.getDict())
+                if (!contains(i.first))
+                    return false;
+		}
+
+        return true;
+    }
+
+    
     cvar* getMemberPtr(cvar& key, const bool throwIfMissing = false) const
     {
         if (key == None) 
@@ -555,6 +630,16 @@ public:
     dataUnion valueOf() const
     {
         return value;
+    }
+
+    bool isRef() const
+    {
+        return reference != nullptr;
+    }
+
+    bool isContainer() const
+    {
+        return (type == valueType::DICT || type == valueType::LIST || type == valueType::SET);
     }
 
 private:

@@ -147,10 +147,15 @@ namespace openset::query
         push_bool,
         push_column,
         push_user_ref,
+        push_user_obj,
+        push_user_obj_ref,
         push_true,
         push_false,
         push_nil,
-        pop_user,
+        pop_user_var,
+        pop_user_obj,
+        pop_user_ref,
+        pop_user_obj_ref,
         eq,
         neq,
         gt,
@@ -291,6 +296,7 @@ namespace openset::query
         std::vector<std::string> currentBlockType;
 
         Debugger_s lastDebug;
+        errors::Error error;
 
         QueryParser2() = default;
         ~QueryParser2() = default;
@@ -666,7 +672,7 @@ namespace openset::query
             "elsif",
             "select",
             "for",
-            "each",
+            "each_row",
         };           
 
         int __blockExtractionSeekEnd(std::vector<std::string>& tokens, int start, int end) const
@@ -719,7 +725,7 @@ namespace openset::query
                 "elsif",
                 "for",
                 "end",
-                "each",
+                "each_row",
                 "<<"
             };
 
@@ -813,6 +819,9 @@ namespace openset::query
             }
 
             // closing brackets... 
+            if (token == ")" && !isNextChain && isNextAnItem)
+                return false;
+
             if (token == ")" && !isNextChain && !inChain && !isAfterBracketValid)
                 return false;
 
@@ -842,6 +851,9 @@ namespace openset::query
         bool checkForForcedLine(Blocks::Line& words, const int start) const
         {
             auto idx = start;
+
+            if (start >= static_cast<int>(words.size()))
+                return true;
 
             const auto variable = words[idx];
             ++idx;
@@ -1016,7 +1028,7 @@ namespace openset::query
                 "elsif",
                 "for",
                 "end",
-                "each",
+                "each_row",
                 "<<"
             };
 
@@ -1346,8 +1358,8 @@ namespace openset::query
                 aggBlockId = addLinesAsBlock(params[0].first);
             }
 
-            // inline aggregations use `each` style filters, lets parse them
-            idx = parseFilterChain("each", false, words, idx);
+            // inline aggregations use `each_row` style filters, lets parse them
+            idx = parseFilterChain(false, words, idx);
 
             if (idx >= end || words[idx] != "where")
                 throw QueryParse2Error_s {
@@ -1391,8 +1403,9 @@ namespace openset::query
                 "<",
                 "<=",
                 ">=",
-                "==>",
-                "==>>"
+                "in",
+                "contains",
+                "any",
             };
 
             const std::unordered_set<std::string> isAnListOrDict = {
@@ -1400,6 +1413,9 @@ namespace openset::query
                 "(",
                 "=",
                 "==",
+                "in",
+                "any",
+                "contains",
                 "[",
                 ":",
                 "{"
@@ -1445,7 +1461,7 @@ namespace openset::query
                         lastDebug.line,
                         relative + beforeIdx);
 
-                    ++idx;
+                    //++idx;
                     continue;
                 }
 
@@ -1492,7 +1508,7 @@ namespace openset::query
                 {
                     if (isAnListOrDict.count(prevToken) || prevToken == "")
                     {
-                        idx = parseDict(words, idx);
+                        idx = parseList(words, idx);
                     }
                     else
                     {
@@ -1545,26 +1561,39 @@ namespace openset::query
                 {                  
                     if (nextToken.length())
                     {
-                        if (nextToken == "(")
+                        const auto beforeIdx = idx;
+
+                        if (nextToken == "[")
                         {
-                            const auto beforeIdx = idx;
+                            if (isAnListOrDict.count(token))
+                            {
+                                idx = parseList(words, idx + 1);
+                            }
+                            else
+                            {
+                                throw QueryParse2Error_s {
+                                    errors::errorClass_e::parse,
+                                    errors::errorCode_e::syntax_error,
+                                    "unexpected subscript or malformed array",
+                                    lastDebug
+                                };
+                            }
+                        }
+                        else if (nextToken == "(")
+                        {
                             const auto subEnd = seekMatchingBrace(words, idx + 1, end) + 1;
                             idx = parseStatement(idx, words, idx + 1, subEnd) + 1;
-                            middle.emplace_back(
-                                ConditionToMiddleOp.find(token)->second, 
-                                lastDebug.line,
-                                beforeIdx);
                         }
                         else
                         {
-                            const auto beforeIdx = idx;
                             idx = parseItem(words, idx + 1, words);
-                            middle.emplace_back(
-                                ConditionToMiddleOp.find(token)->second, 
-                                lastDebug.line,
-                                beforeIdx);
-                            //++idx;
                         }
+
+                        middle.emplace_back(
+                            ConditionToMiddleOp.find(token)->second, 
+                            lastDebug.line,
+                            beforeIdx);
+
                     }
                     else
                     {
@@ -1645,7 +1674,7 @@ namespace openset::query
             return idx;
         }
 
-        int parseDict(const Blocks::Line& words, int start)
+        int parseList(const Blocks::Line& words, int start)
         {
             std::deque<std::pair<Blocks::Line,int>> params;
             auto idx = start;
@@ -1696,7 +1725,7 @@ namespace openset::query
             return idx;
         }
 
-        int parseSubscript(const Blocks::Line& words, const int start, const bool assignment)
+        int parseSubscript(const Blocks::Line& words, const int start, const bool assignment, const bool asRef = false)
         {
             std::deque<std::pair<Blocks::Line,int>> subScripts;
             auto idx = start;
@@ -1712,8 +1741,15 @@ namespace openset::query
                 if (assignment)
                     incUserVarAssignmentCount(variable);
 
+                MiddleOp_e op;
+
+                if (asRef)
+                    op = assignment ? MiddleOp_e::pop_user_ref : MiddleOp_e::push_user_ref;
+                else
+                    op = assignment ? MiddleOp_e::pop_user_var : MiddleOp_e::push_user;
+
                 middle.emplace_back(
-                    assignment ? MiddleOp_e::pop_user : MiddleOp_e::push_user,
+                    op,
                     variableIndex,
                     lastDebug.line,
                     start);
@@ -1759,13 +1795,22 @@ namespace openset::query
             if (assignment)
                 incUserVarAssignmentCount(variable);
 
+            MiddleOp_e op;
+
+            if (asRef)
+                op = assignment ? MiddleOp_e::pop_user_obj_ref : MiddleOp_e::push_user_obj_ref;
+            else
+                op = assignment ? MiddleOp_e::pop_user_obj : MiddleOp_e::push_user_obj;
+
             auto variableIndex = userVarIndex(variable);
             middle.emplace_back(
-                MiddleOp_e::push_user_ref,
+                op,
                 variableIndex,
-                lastDebug.line,
+                static_cast<int>(subScripts.size()),
+                lastDebug.line,  
                 start);
 
+            /*
             // convert subscript into function
             middle.emplace_back(
                 MiddleOp_e::marshal,
@@ -1773,6 +1818,7 @@ namespace openset::query
                 static_cast<int>(subScripts.size() + 1), 
                 lastDebug.line,
                 start);
+            */
 
             return end + 1;
         }
@@ -1848,7 +1894,7 @@ namespace openset::query
                 }
 
                 auto cleanString = stripQuotes(key);
-                auto litIndex = stringLiteralIndex(key);
+                auto litIndex = stringLiteralIndex(cleanString);
                 // push the key
 
                 middle.emplace_back(
@@ -1939,7 +1985,7 @@ namespace openset::query
             if (isString(item))
             {
                 auto cleanString = stripQuotes(item);
-                auto stringIdx = stringLiteralIndex(item);
+                auto stringIdx = stringLiteralIndex(cleanString);
                 middle.emplace_back(MiddleOp_e::push_literal, stringIdx, lastDebug.line, start);
 
                 return start + 1;
@@ -1959,7 +2005,7 @@ namespace openset::query
 
             if (isTableColumn(item))
             {
-                const auto filterEndIndex = parseFilterChain(currentBlockType.back(), true, words, start + 1);
+                const auto filterEndIndex = parseFilterChain(true, words, start + 1);
                 auto columnIdx = columnIndex(item);
                 middle.emplace_back(MiddleOp_e::push_column, columnIdx, lastDebug.line, start);
                 return filterEndIndex;
@@ -2002,7 +2048,7 @@ namespace openset::query
             return parseSubscript(words, start, false);
         }
 
-        int parseFilterChain(const std::string& condition, const bool isColumn, const Blocks::Line& words, const int start)
+        int parseFilterChain(const bool isColumn, const Blocks::Line& words, const int start)
         {
             const auto end = static_cast<int>(words.size());
             auto idx = start;
@@ -2026,7 +2072,7 @@ namespace openset::query
                         lastDebug
                     };
 
-                if (token == "__chain_limit" && condition == "each" && !isColumn)
+                if (token == "__chain_limit" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2083,7 +2129,7 @@ namespace openset::query
 
                     ++count;
                 }
-                else if (token == "__chain_is_row" && condition == "each" && isColumn)
+                else if (token == "__chain_row" && isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2093,7 +2139,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".is_row( <logic> ) requires a comparator",
+                            ".row( <logic> ) requires a comparator",
                             lastDebug
                         };
 
@@ -2119,7 +2165,7 @@ namespace openset::query
 
                     ++count;
                 }
-                else if (token == "__chain_reverse" && !isColumn && condition == "each")
+                else if (token == "__chain_reverse" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2136,7 +2182,7 @@ namespace openset::query
                     ++count;
                     ++idx;
                 }
-                else if (token == "__chain_forward" && !isColumn && condition == "each")
+                else if (token == "__chain_forward" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2154,7 +2200,7 @@ namespace openset::query
                     ++count;
                     ++idx;
                 }
-                else if (token == "__chain_advance" && !isColumn && condition == "each")
+                else if (token == "__chain_advance" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2252,7 +2298,7 @@ namespace openset::query
 
                     ++count;
                 }
-                else if (token == "__chain_continue" && !isColumn && (condition == "if" || condition == "each"))
+                else if (token == "__chain_continue" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     cout << token << " - ";
@@ -2278,8 +2324,8 @@ namespace openset::query
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
                         isColumn ?
-                            "invalid column filter for `" + condition + "`: '" + token.substr(token.find("__chain_")) + "'" :
-                            "invalid logical filter for `" + condition + "`: '" + token.substr(token.find("__chain_")) + "'",
+                            "invalid column filter: '" + token.substr(token.find("__chain_")) + "'" :
+                            "invalid logical filter: '" + token.substr(token.find("__chain_")) + "'",
                         lastDebug
                     };
                 }
@@ -2291,7 +2337,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "filter must be either '.is_row' or '.ever'",
+                            "filter must be either '.row' or '.ever'",
                             lastDebug
                         };
 
@@ -2348,7 +2394,7 @@ namespace openset::query
 
             if (condition == "if")
             {
-                const auto idx = parseFilterChain("if", false, words, 1);
+                const auto idx = parseFilterChain(false, words, 1);
                 const Blocks::Line logic(words.begin() + idx, words.end());
                 const auto logicBlockId = addLinesAsBlock(logic);
                 middle.emplace_back(
@@ -2395,7 +2441,7 @@ namespace openset::query
             }
             else // each
             {
-                auto idx = parseFilterChain("each", false, words, 1);
+                auto idx = parseFilterChain(false, words, 1);
 
                 if (idx >= static_cast<int>(words.size()) || words[idx] != "where")
                     throw QueryParse2Error_s {
@@ -2462,7 +2508,7 @@ namespace openset::query
             const std::unordered_set<std::string> conditionBlock = {
                 "if",
                 "for",
-                "each"
+                "each_row"
             };
 
             while (currentIdx < blocks.blockCount)
@@ -2552,6 +2598,9 @@ namespace openset::query
         {
 
             auto& finCode = inMacros.code;
+            auto& lambdas = inMacros.lambdas;
+
+            lambdas.push_back(0); // index zero, instruction index is zero
 
             int filter = 0;
 
@@ -2595,6 +2644,17 @@ namespace openset::query
                         0,
                         0,
                         debug);
+                    break;
+
+                case MiddleOp_e::pop_user_ref:
+                case MiddleOp_e::pop_user_obj_ref:
+                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "variable: '" + userVars[midOp.value1.getInt64()] + "' popref should never be called.",
+                            lastDebug
+                        };
                     break;
 
                 case MiddleOp_e::push_literal:
@@ -2669,12 +2729,39 @@ namespace openset::query
                         debug);
                     break;
 
-                case MiddleOp_e::pop_user:
+                case MiddleOp_e::pop_user_var:
+                    finCode.emplace_back(
+                        OpCode_e::POPUSRVAR,
+                        midOp.value1, // index of user var
+                        0,
+                        0,
+                        debug);
+                    break;
+
+                case MiddleOp_e::push_user_obj_ref:
+                    finCode.emplace_back(
+                        OpCode_e::PSHUSROREF,
+                        midOp.value1, // index of user var
+                        0,
+                        midOp.value2,
+                        debug);
+                    break;
+
+                case MiddleOp_e::push_user_obj:
+                    finCode.emplace_back(
+                        OpCode_e::PSHUSROBJ,
+                        midOp.value1, // index of user var
+                        0,
+                        midOp.value2,
+                        debug);
+                    break;
+
+                case MiddleOp_e::pop_user_obj:
                     finCode.emplace_back(
                         OpCode_e::POPUSROBJ,
                         midOp.value1, // index of user var
                         0,
-                        0,
+                        midOp.value2,
                         debug);
                     break;
 
@@ -2739,6 +2826,7 @@ namespace openset::query
                     break;
 
                 case MiddleOp_e::block:
+                    lambdas.push_back(static_cast<int>(finCode.size()));
                     finCode.emplace_back(OpCode_e::LAMBDA, midOp.value1, 0, 0, debug);
                     break;
 
@@ -2810,6 +2898,18 @@ namespace openset::query
             //Tracking aggregates;
 
             auto index = 0;
+            for (auto& v : columns)
+            {
+                inMacros.vars.tableVars.push_back(Variable_s{v, ""});
+                inMacros.vars.tableVars.back().index = index;
+                inMacros.vars.tableVars.back().actual = v;
+                inMacros.vars.tableVars.back().schemaColumn = tableColumns->getColumn(v)->idx;
+                inMacros.vars.tableVars.back().schemaType = tableColumns->getColumn(v)->type; 
+                ++index;
+            }
+
+
+            index = 0;
             for (auto& v : userVars)
             {
                 inMacros.vars.userVars.push_back(Variable_s{v, ""});
@@ -2833,18 +2933,67 @@ namespace openset::query
 
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
         {
-            tableColumns = columnsPtr;
+                tableColumns = columnsPtr;
 
-            addDefaults();
+                addDefaults();
+                
+                initialParse(query);
+                compile(inMacros);
 
-            initialParse(query);
-            compile(inMacros);
+                return true;
 
-            const auto debug = MacroDbg(inMacros);
+            try
+            {
+                tableColumns = columnsPtr;
 
-            std::cout << debug << std::endl;
+                addDefaults();
+                
+                initialParse(query);
+                compile(inMacros);
 
-            return true;
+                return true;
+            }
+            catch (const std::exception& ex)
+            {
+                std::string additional = "";
+                if (lastDebug.debugLine.length())
+                    additional = lastDebug.debugLine;
+
+                error.set(
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::run_time_exception_triggered,
+                    std::string{ ex.what() }+"(1)",
+                    additional
+                );
+                return false;
+            }
+            catch (const std::runtime_error& ex)
+            {
+                std::string additional = "";
+                if (lastDebug.debugLine.length())
+                    additional = lastDebug.debugLine;
+
+                error.set(
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::run_time_exception_triggered,
+                    std::string { ex.what() } + "(1)",
+                    additional);
+                return false;
+            } 
+            catch (...) // giant WTF runtime exception
+            {
+                std::string additional = "";
+                if (lastDebug.debugLine.length())
+                    additional = lastDebug.debugLine;
+
+                error.set(
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::run_time_exception_triggered,
+                    "unknown exception in parser",
+                    additional);
+                return false;
+            }
+
         }
 
     };

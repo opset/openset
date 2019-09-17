@@ -430,21 +430,20 @@ void openset::query::Interpreter::marshal_log(const int paramCount)
         --stackPtr;
         params.push_back(*stackPtr);
     } // print these in reverse order with reverse iterators
-    for_each(
-        params.rbegin(),
-        params.rend(),
-        [](auto& item)
+
+    for (auto& item : params)
+    {
+        if (item.typeOf() == cvar::valueType::DICT || item.typeOf() == cvar::valueType::SET || item.typeOf() == cvar
+            ::valueType::LIST)
         {
-            if (item.typeOf() == cvar::valueType::DICT || item.typeOf() == cvar::valueType::SET || item.typeOf() == cvar
-                ::valueType::LIST)
-            {
-                string result;
-                __nestItercvar(&item, result);
-                cout << result << " ";
-            }
-            else
-                cout << item << " ";
-        });
+            string result;
+            __nestItercvar(&item, result);
+            cout << result << " ";
+        }
+        else
+            cout << item << " ";
+     };
+
     cout << endl;
     *stackPtr = NONE;
     ++stackPtr;
@@ -684,10 +683,11 @@ void openset::query::Interpreter::marshal_makeList(const int paramCount)
     cvar output;
     output.list();
     auto outList = output.getList();
-    auto iter    = stackPtr - paramCount;
-    for (auto i  = 0; i < paramCount; ++i, ++iter)
-        outList->emplace_back(*iter);
-    stackPtr -= paramCount;
+    for (auto i  = 0; i < paramCount; ++i)
+    {
+        --stackPtr;
+        outList->emplace_back(std::move(*stackPtr));
+    }
     *stackPtr = move(output);
     ++stackPtr;
 }
@@ -1529,6 +1529,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_make_list:
         marshal_makeList(inst->extra);
+        break;
+    case Marshals_e::marshal_push_subscript:
+        {
+        marshal_makeList(inst->extra);
+        }
         break;
     case Marshals_e::marshal_set:
         if (!inst->extra) // no params is just init
@@ -2747,6 +2752,118 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             ++stackPtr;
             --recursion;
             return;
+        case OpCode_e::OPIN:
+            {
+                stackPtr -= 2;
+                const auto& rightSide = *(stackPtr + 1);
+                const auto& leftSide = *stackPtr;
+
+                if (leftSide.isContainer())
+                    *stackPtr = false; // THROW
+                else
+                    *stackPtr = rightSide.contains(leftSide); // `in` is `contains` in reverse
+                ++stackPtr;
+            }
+            break;
+        case OpCode_e::OPCONT:
+            {
+                stackPtr -= 2;
+                const auto& rightSide = *(stackPtr + 1);
+                const auto& leftSide = *stackPtr;
+
+                if (!leftSide.isContainer())
+                    *stackPtr = false;
+                else
+                    *stackPtr = leftSide.containsAllOf(rightSide);
+                ++stackPtr;
+            }
+            break;
+        case OpCode_e::OPANY:
+            {
+                stackPtr -= 2;
+                const auto& rightSide = *(stackPtr + 1);
+                const auto& leftSide = *stackPtr;
+
+                if (!leftSide.isContainer())
+                    *stackPtr = false;
+                else
+                    *stackPtr = leftSide.containsAnyOf(rightSide);
+                ++stackPtr;
+            }
+            break;
+        case OpCode_e::CALL_FOR:
+        {
+            --stackPtr;
+            const auto reference = stackPtr->getReference();
+            --stackPtr;
+            const auto source = *stackPtr;
+
+            if (source != NONE)
+            {
+                if (!source.isContainer())
+                {
+                    error.set(
+                        errors::errorClass_e::run_time,
+                        errors::errorCode_e::iteration_error,
+                        inst->debug.toStr());
+                    loopState = LoopState_e::in_exit;
+                    return;
+                }
+
+                const auto lambdaIndex = macros.lambdas[inst->index];
+
+                switch (source.typeOf())
+                {
+                case cvar::valueType::LIST:
+                    for (const auto& i : *source.getList())
+                    {
+                        *reference = i;
+                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                    }
+                    break;
+                case cvar::valueType::DICT:
+                    for (const auto& i : *source.getDict())
+                    {
+                        *reference = i.first;
+                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                    }
+                    break;
+                case cvar::valueType::SET:
+                    for (const auto& i : *source.getSet())
+                    {
+                        *reference = i;
+                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                    }
+                    break;
+                }
+
+            }           
+        }
+            break;
+        case OpCode_e::CALL_IF: // execute lambda, and if not 0 on stack
+        {
+            opRunner(
+                // call condition lambda
+                &macros.code.front() + macros.lambdas[inst->extra],
+                currentRow); 
+            --stackPtr;
+            // anything not 0 is true
+            if (stackPtr->isEvalTrue())
+            {
+                opRunner(&macros.code.front() + macros.lambdas[inst->index], currentRow);
+                if (inReturn) // error state?
+                    return; 
+                
+                // fast forward passed subsequent elif/else ops
+                ++inst;
+                //while (inst->op == OpCode_e::CNDELIF || inst->op == OpCode_e::CNDELSE)
+                //    ++inst; // we've advanced the instruction pointer
+                // loop to top
+                continue;
+            }
+        }
+            break;
+
         default:
             break;
         } // move to the next instruction
@@ -2812,7 +2929,7 @@ void openset::query::Interpreter::exec()
 {
     returns.clear(); // cannot be cleared in segment loop
     const auto inst = &macros.code.front();
-    try
+    //try
     {
         // if we have segment constraints
         if (segmentIndexes.size())
@@ -2849,7 +2966,7 @@ void openset::query::Interpreter::exec()
             grid->setProps(macros.vars.userVars[propsIndex].value);
 
     }
-    catch (const std::runtime_error& ex)
+   /*catch (const std::runtime_error& ex)
     {
         std::string additional = "";
         if (lastDebug)
@@ -2870,6 +2987,7 @@ void openset::query::Interpreter::exec()
             "unknown run-time error (3)",
             additional);
     }
+    */
 
 }
 

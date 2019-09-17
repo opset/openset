@@ -63,86 +63,6 @@ inline Tests test_db()
 	]
 	)raw_inserts";
 
-    auto test1_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count page
-		count referral_source
-
-    if 'test' not in props:
-        props['test'] = dict()
-
-    # set some props
-    props['test']['this'] = 'hello'
-    some_var = props['test']['this']
-
-    props['fav_beers'] = set('cold', 'free')
-    props['opposites'] = {
-        'bows': 'arrows',
-        'up': 'down',
-        'inside': 'outside'
-    }
-
-
-	for row in rows if page is not None:
-        for ref in referral_search:
-		    tally(row['id'], row['page'], row['referral_source'])
-	)pyql");
-
-    auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count {{attr_page}}
-		{{attr_ref}}
-
-	for row in rows:
-		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
-	)pyql");
-
-    auto test_within_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count page
-
-    # test props are still set
-    debug(len(props['fav_beers']) == 2)
-    debug('cold' in props['fav_beers'] and 'free' in props['fav_beers'])
-    debug(props['this'] == 'hello')
-  
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
-			tally('test1', 'home_page', sub_row['page'])
-		break
-	
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(100 seconds, row['stamp']):
-			tally('test2', 'home_page', sub_row['page'])
-		break
-
-	)pyql");
-
-    auto test_continue_from = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-        count page
-
-	for 1 row in rows if page is 'home page':		
-        tally('should_be_one')
-
-    debug(row == 1)
-    
-    start_from = row + 1
-
-    debug(start_from == 2)
-	
-	continue from start_from for 1 row in rows if page is 'home page':		
-        tally('should_also_be_one')
-
-	)pyql");
 
     /* In order to make the engine start there are a few required objects as 
      * they will get called in the background during testing:
@@ -291,7 +211,95 @@ inline Tests test_db()
                 person.commit();
             }
         },
-        {
+
+    };
+}
+
+inline Tests bogus()
+{
+        
+    auto test1_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
+	agg:
+		count id
+		count page
+		count referral_source
+
+    if 'test' not in props:
+        props['test'] = dict()
+
+    # set some props
+    props['test']['this'] = 'hello'
+    some_var = props['test']['this']
+
+    props['fav_beers'] = set('cold', 'free')
+    props['opposites'] = {
+        'bows': 'arrows',
+        'up': 'down',
+        'inside': 'outside'
+    }
+
+
+	for row in rows if page is not None:
+        for ref in referral_search:
+		    tally(row['id'], row['page'], row['referral_source'])
+	)pyql");
+
+    auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
+	agg:
+		count id
+		count {{attr_page}}
+		{{attr_ref}}
+
+	for row in rows:
+		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
+	)pyql");
+
+    auto test_within_pyql = openset::query::QueryParser::fixIndent(
+        R"pyql(
+	agg:
+		count id
+		count page
+
+    # test props are still set
+    debug(len(props['fav_beers']) == 2)
+    debug('cold' in props['fav_beers'] and 'free' in props['fav_beers'])
+    debug(props['this'] == 'hello')
+  
+	for row in reverse rows if page == 'home page':		
+		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
+			tally('test1', 'home_page', sub_row['page'])
+		break
+	
+	for row in reverse rows if page == 'home page':		
+		continue for sub_row in reverse rows if row_within(100 seconds, row['stamp']):
+			tally('test2', 'home_page', sub_row['page'])
+		break
+
+	)pyql");
+
+    auto test_continue_from = openset::query::QueryParser::fixIndent(
+        R"pyql(
+	agg:
+		count id
+        count page
+
+	for 1 row in rows if page is 'home page':		
+        tally('should_be_one')
+
+    debug(row == 1)
+    
+    start_from = row + 1
+
+    debug(start_from == 2)
+	
+	continue from start_from for 1 row in rows if page is 'home page':		
+        tally('should_also_be_one')
+
+	)pyql");
+
+    return {{
             "db: query a user",
             [=]()
             {
@@ -701,6 +709,5 @@ inline Tests test_db()
 
             }
         }
-
-    };
+ };
 }

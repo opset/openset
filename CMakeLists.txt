@@ -197,6 +197,8 @@ set(SOURCE_FILES
 		test/test_sessions.h
 		test/test_count_methods.h
         test/testing.h
+		test/test_helper.h
+		test/test_helper.cpp
         test/unittests.h
 )
 

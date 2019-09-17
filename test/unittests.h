@@ -24,9 +24,9 @@ bool unitTest()
 	add(test_lib_cvar());
 	add(test_db());
 	add(test_pyql_language());
-	add(test_zorder());
-	add(test_sessions());
-    add(test_count_methods());
+	//add(test_zorder());
+	//add(test_sessions());
+    //add(test_count_methods());
 
 	return runTests(allTests).size() == 0; // true if zero
 }

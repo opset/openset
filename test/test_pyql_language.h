@@ -7,12 +7,11 @@
 #include "../src/columns.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
-#include "../src/queryinterpreter.h"
-#include "../src/queryparser.h"
-#include "../src/queryparser2.h"
 #include "../src/internoderouter.h"
 #include "../src/result.h"
+#include "test_helper.h"
 #include <unordered_set>
+
 // Our tests
 inline Tests test_pyql_language()
 {
@@ -67,6 +66,10 @@ inline Tests test_pyql_language()
 		}
 	]
 	)raw_inserts";
+
+
+    auto filler = ""s;
+
     // test loop
     auto test1_pyql = openset::query::QueryParser::fixIndent(
         R"pyql(
@@ -857,6 +860,8 @@ inline Tests test_pyql_language()
     # log(test)
 
 	)pyql");
+
+
     /* In order to make the engine start there are a few required objects as
         * they will get called in the background during testing:
         *
@@ -933,6 +938,154 @@ inline Tests test_pyql_language()
                 person.commit();
             }
         },
+        {
+            "test OSL basic assign and multiply",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+                    test_value = 123
+                    new_value = test_value * 2
+                    debug(test_value == 123)
+                    debug(new_value == 246)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 2);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+        {
+            "test OSL basic containers",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+                    test_value = ["apple", "pear", "orange"]                    
+                    debug(test_value[0] == "apple")
+                    debug(test_value[1] != "apple")
+                    debug(test_value[2] == "orange")
+                    debug(len(test_value) == 3)
+                    debug("apple" in test_value)
+                    debug((test_value contains "donkey") == false)
+                    debug(test_value contains ["apple", "pear"])
+                    debug((test_value contains ["apple", "duck"]) == false)
+                    debug(test_value any ["donkey", "apple", "bear"])
+                    debug((test_value any ["donkey", "duck", "bear"]) == false)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 10);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+        {
+            "test OSL basic dictionary",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+                    test_value = {
+                        fruits: ["apple", "orange", "pear", "banana"],
+                        animals: ["zebra", "unicorn", "donkey"],
+                        a_boolean: true
+                    }
+
+                    debug(len(test_value) == 3)
+                    debug(len(test_value["fruits"]) == 4)
+                    debug(test_value["animals"][1] == "unicorn")
+
+                    test_value["animals"][1] == "dog"
+                    debug(test_value["animals"][1] == "unicorn")
+
+                    for key in test_value
+                       debug(key in ["fruits", "animals", "a_boolean"])
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 7);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+        {
+            "test OSL basic logic",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    test_value = 123
+                    some_list = ["apple", "orange", "pear", "banana"]
+
+                    if test_value == 123
+                       debug(true)
+                    end
+
+                    if test_value != 321
+                       debug(true)
+                    end
+
+                    if test_value == 123 && ("peach" in some_list || "apple" in some_list)
+                       debug(true)
+                    end
+
+                    if "peach" in some_list || "plum" in some_list
+                       debug(true)
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 3);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+        {
+            "test OSL each",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    each_row where fruit.row(== "banana")
+                        log(fruit)
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 7);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+
         {
             "test_pyql_language: loop",
             [test1_pyql]
