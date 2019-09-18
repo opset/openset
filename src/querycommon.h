@@ -54,6 +54,7 @@ namespace openset
             NOP = 0,     // No operation
             LAMBDA,      // lambda
             PSHTBLCOL,   // push column
+            PSHTBLFLT,   // push column
             PSHRESCOL,   // push result Column (may be grid, may be variable)
             //PSHRESGRP, // push group_by (may be grid, may be variable)
             VARIDX,      // placeholder for an index to a variable
@@ -356,6 +357,7 @@ namespace openset
             { OpCode_e::NOP, "NOP" },
             { OpCode_e::LAMBDA, "LAMBDA" },
             { OpCode_e::PSHTBLCOL, "PSHTBLCOL" },
+            { OpCode_e::PSHTBLFLT, "PSHTBLFLT"},
             { OpCode_e::PSHRESCOL, "PSHRESCOL" },
             { OpCode_e::VARIDX, "VARIDX" },
             { OpCode_e::COLIDX, "COLIDX" },
@@ -847,7 +849,7 @@ namespace openset
             bool isReverse {false};
             bool isContinue {false};
             bool isNegated {false};
-            bool isAdvance {false};
+            bool isNext {false};
             bool isLookAhead {false}; // for within
             bool isLookBack {false}; // for within
 
@@ -867,7 +869,7 @@ namespace openset
             int64_t rangeEnd {LLONG_MAX};
             int64_t withinStart {0};
             int64_t withinWindow {LLONG_MAX};
-            int64_t continueFrom { 0 };
+            int64_t continueFrom {0};
         };
         using FilterList = vector<Filter_s>;
         using CountList = vector<Count_S>; // structure for variables
@@ -878,7 +880,6 @@ namespace openset
             VarList userVars;
             VarList tableVars;
             VarList columnVars;
-            FilterList filers;
             BlockMap blockList;
             ColumnLambdas columnLambdas;
             FunctionList functions;
@@ -896,6 +897,7 @@ namespace openset
         {
             Variables_S vars;
             LambdaLookAside lambdas;
+            FilterList filters;
             InstructionList code;
             HintPairs indexes;
             string segmentName;

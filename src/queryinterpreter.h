@@ -117,6 +117,10 @@ namespace openset
 		{
 		public:
 
+            using Range = std::vector<std::pair<int64_t, int64_t>>;
+
+            Range filterRangeStack;
+
 			// we compare hashes of strings, rather than strings
 			const int64_t breakAllHash = MakeHash("all");
 			const int64_t breakTopHash = MakeHash("top");
@@ -270,6 +274,7 @@ namespace openset
 			string getLiteral(const int64_t id) const;
 
 			bool marshal(Instruction_s* inst, int64_t& currentRow);
+            cvar* lambda(int lambdaId, int currentRow);
 			void opRunner(Instruction_s* inst, int64_t currentRow = 0);
 
 			void setScheduleCB(const function<void (int64_t functionHash, int seconds)> &cb);

@@ -286,6 +286,8 @@ namespace openset::query
 
         Blocks blocks;
 
+        Blocks::Line indexLogic;
+
         Tracking userVars;
         Tracking stringLiterals;
         Tracking columns;
@@ -715,6 +717,29 @@ namespace openset::query
                 --start;
             }
             return -1;
+        }
+
+        void pushLogic(const Blocks::Line& words, const int start = 0, int end = -1)
+        {
+            if (end == -1)
+                end = static_cast<int>(words.size());
+
+            auto logicFound = false;
+
+            std::for_each(words.begin() + start, words.begin() + end, [&](auto token) {
+                if (isTableColumn(token))
+                    logicFound = true;
+            });
+
+            if (!logicFound)
+                return;
+
+            if (indexLogic.size())
+                indexLogic.push_back("||");
+
+            indexLogic.push_back("(");
+            indexLogic.insert(indexLogic.end(), words.begin() + start, words.begin() + end);
+            indexLogic.push_back(")");
         }
 
         bool validNext(std::vector<std::string>&tokens, int offset) const
@@ -1372,6 +1397,8 @@ namespace openset::query
             ++idx; // skip past where look for logic
             const Blocks::Line logic(words.begin() + idx, words.end());
 
+            pushLogic(logic); 
+
             // if there is no logic, just straight iteration we push the logic block as -1
             // the interpreter will run in a true state for the logic if it sees -1
             const auto logicBlockId = logic.size() == 0 ? -1 : addLinesAsBlock(logic);
@@ -2005,7 +2032,7 @@ namespace openset::query
 
             if (isTableColumn(item))
             {
-                const auto filterEndIndex = parseFilterChain(true, words, start + 1);
+                const auto filterEndIndex = parseFilterChain(true, words, start + 1, item);
                 auto columnIdx = columnIndex(item);
                 middle.emplace_back(MiddleOp_e::push_column, columnIdx, lastDebug.line, start);
                 return filterEndIndex;
@@ -2048,7 +2075,7 @@ namespace openset::query
             return parseSubscript(words, start, false);
         }
 
-        int parseFilterChain(const bool isColumn, const Blocks::Line& words, const int start)
+        int parseFilterChain(const bool isColumn, const Blocks::Line& words, const int start, const std::string& columnName = "")
         {
             const auto end = static_cast<int>(words.size());
             auto idx = start;
@@ -2106,7 +2133,7 @@ namespace openset::query
                         };
 
                     const auto comparator = params[0].first[0];
-                    params[0].first.erase(params[0].first.begin()); // sinful
+                    params[0].first.insert(params[0].first.begin(), columnName);
 
                     if (!Operators.count(comparator))
                     {
@@ -2144,7 +2171,7 @@ namespace openset::query
                         };
 
                     const auto comparator = params[0].first[0];
-                    params[0].first.erase(params[0].first.begin()); // sinful
+                    params[0].first.insert(params[0].first.begin(), columnName);
 
                     if (!Operators.count(comparator))
                     {
@@ -2200,7 +2227,7 @@ namespace openset::query
                     ++count;
                     ++idx;
                 }
-                else if (token == "__chain_advance" && !isColumn)
+                else if (token == "__chain_next" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2209,11 +2236,11 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".advance() takes no parameters",
+                            ".next() takes no parameters",
                             lastDebug
                         };
 
-                    filter.isAdvance = true;
+                    filter.isNext = true;
                     ++count;
                     ++idx;
                 }
@@ -2330,61 +2357,63 @@ namespace openset::query
                     };
                 }
                 else
-                {
-                    // tests for filter combos that just don't work...
+                    break;
+            }
 
-                    if (filter.isRow && filter.isEver)
-                        throw QueryParse2Error_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_error,
-                            "filter must be either '.row' or '.ever'",
-                            lastDebug
-                        };
+            if (count)
+            {
+                // tests for filter combos that just don't work...
 
-                    if (usedForward && filter.isReverse)
-                        throw QueryParse2Error_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_error,
-                            "filter must be either '.forward' or '.reverse'",
-                            lastDebug
-                        };
+                if (filter.isRow && filter.isEver)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "filter must be either '.row' or '.ever'",
+                        lastDebug
+                    };
 
-                    if (filter.isLookAhead && filter.isLookBack)
-                        throw QueryParse2Error_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_error,
-                            "use '.within' instead of both '.look_ahead' and '.look_back'",
-                            lastDebug
-                        };
+                if (usedForward && filter.isReverse)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "filter must be either '.forward' or '.reverse'",
+                        lastDebug
+                    };
 
-                    if (filter.isWithin && (filter.isLookAhead || filter.isLookBack))
-                        throw QueryParse2Error_s {
-                            errors::errorClass_e::parse,
-                            errors::errorCode_e::syntax_error,
-                            "'.look_ahead' and '.look_back' cannot be used in conjunction with '.within', they perform similar tasks.",
-                            lastDebug
-                        };
+                if (filter.isLookAhead && filter.isLookBack)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "use '.within' instead of both '.look_ahead' and '.look_back'",
+                        lastDebug
+                    };
 
-                    const auto filterOp = isColumn ? MiddleOp_e::column_filter : MiddleOp_e::logic_filter;
-                    if (count)
-                    {
-                        // sets active filter in opcode
-                        middle.emplace_back(filterOp, static_cast<int>(filters.size()), lastDebug.line, idx);
-                        filters.push_back(filter);
-                    }
-                    else 
-                    {
-                        // set default filter
-                        middle.emplace_back(filterOp, 0, lastDebug.line, idx);
-                    }
+                if (filter.isWithin && (filter.isLookAhead || filter.isLookBack))
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "'.look_ahead' and '.look_back' cannot be used in conjunction with '.within', they perform similar tasks.",
+                        lastDebug
+                    };
 
-                    return idx;
-                }
+
+            }
+
+            const auto filterOp = isColumn ? MiddleOp_e::column_filter : MiddleOp_e::logic_filter;
+            if (count)
+            {
+                // sets active filter in opcode
+                middle.emplace_back(filterOp, static_cast<int>(filters.size()), lastDebug.line, idx);
+                filters.push_back(filter);
+            }
+            else 
+            {
+                // set default filter
+                middle.emplace_back(filterOp, 0, lastDebug.line, idx);
             }
 
             return idx;
         }
-
 
         void parseCondition(int codeBlockId, const Blocks::Line& words)
         {
@@ -2396,6 +2425,8 @@ namespace openset::query
             {
                 const auto idx = parseFilterChain(false, words, 1);
                 const Blocks::Line logic(words.begin() + idx, words.end());
+                pushLogic(logic); 
+
                 const auto logicBlockId = addLinesAsBlock(logic);
                 middle.emplace_back(
                     MiddleOp_e::if_call, 
@@ -2453,6 +2484,7 @@ namespace openset::query
 
                 ++idx; // skip past where look for logic
                 const Blocks::Line logic(words.begin() + idx, words.end());
+                pushLogic(logic); 
 
                 // if there is no logic, just straight iteration we push the logic block as -1
                 // the interpreter will run in a true state for the logic if it sees -1
@@ -2722,10 +2754,10 @@ namespace openset::query
 
                 case MiddleOp_e::push_column:
                     finCode.emplace_back(
-                        OpCode_e::PSHTBLCOL,
+                        filter == 0 ? OpCode_e::PSHTBLCOL : OpCode_e::PSHTBLFLT,
                         midOp.value1, // index of user var
                         filter,
-                        0,
+                        NONE,
                         debug);
                     break;
 
@@ -2902,6 +2934,7 @@ namespace openset::query
             {
                 inMacros.vars.tableVars.push_back(Variable_s{v, ""});
                 inMacros.vars.tableVars.back().index = index;
+                inMacros.vars.tableVars.back().column = index;
                 inMacros.vars.tableVars.back().actual = v;
                 inMacros.vars.tableVars.back().schemaColumn = tableColumns->getColumn(v)->idx;
                 inMacros.vars.tableVars.back().schemaType = tableColumns->getColumn(v)->type; 
@@ -2928,7 +2961,77 @@ namespace openset::query
                 ++index;
             } 
 
+            inMacros.filters = filters;
+        }
 
+        void processLogic()
+        {
+            Blocks::Line newLogic;
+            auto idx = 0;
+            const auto end = static_cast<int>(indexLogic.size());
+
+            auto& tokens = indexLogic;
+
+            while (idx < end)
+            {
+                auto& token = indexLogic[idx];
+                if (isTextual(token))
+                {
+                    if (isTableColumn(token))
+                    {
+                        newLogic.emplace_back(token);
+
+                        ++idx;
+
+                        while (indexLogic[idx].find("__chain_") != string::npos)
+                        {
+                            if (indexLogic[idx] == "__chain_row" ||
+                                indexLogic[idx] == "__chain_ever" ||
+                                indexLogic[idx] == "__chain_never")
+                            {
+                                const auto isNever = indexLogic[idx] == "__chain_never";
+                                const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
+
+                                newLogic.insert(newLogic.end(), indexLogic.begin() + idx + 2, indexLogic.begin() + endOfLogic);
+                                idx = endOfLogic;
+                            }
+                            else
+                            {
+                                idx = seekMatchingBrace(tokens, idx + 1);                       
+                            }
+                            ++idx;   
+                        }                        
+
+                        continue;
+
+                    }
+                    else if (isMarshal(token))
+                    {
+                        newLogic.emplace_back("VOID");
+                        idx = seekMatchingBrace(tokens, idx);                       
+                    }
+                    else if (isUserVar(token))
+                    {
+                        newLogic.emplace_back("VOID");
+                    }
+                    else
+                    {
+                        // THROW ?? 
+                    }
+                }
+                else
+                {
+                    newLogic.emplace_back(std::move(token));
+                }
+
+                ++idx;
+            }
+
+            // expand in, contains and any - turn them into ORs
+
+            // DO SWAPS (move 
+
+            cout << "logic" << indexLogic.size();
         }
 
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
@@ -2938,6 +3041,9 @@ namespace openset::query
                 addDefaults();
                 
                 initialParse(query);
+
+                processLogic();
+
                 compile(inMacros);
 
                 return true;

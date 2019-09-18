@@ -1733,6 +1733,16 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     return false;
 }
 
+cvar* openset::query::Interpreter::lambda(int lambdaId, int currentRow)
+{
+    opRunner(
+        // call condition lambda
+        &macros.code.front() + macros.lambdas[lambdaId],
+        currentRow); 
+    --stackPtr;
+    return stackPtr;
+}
+
 void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentRow)
 {
     // count allows for now row pointer, and no mounted person
@@ -2810,29 +2820,27 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     return;
                 }
 
-                const auto lambdaIndex = macros.lambdas[inst->index];
-
                 switch (source.typeOf())
                 {
                 case cvar::valueType::LIST:
                     for (const auto& i : *source.getList())
                     {
                         *reference = i;
-                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                        lambda(inst->index, currentRow);
                     }
                     break;
                 case cvar::valueType::DICT:
                     for (const auto& i : *source.getDict())
                     {
                         *reference = i.first;
-                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                        lambda(inst->index, currentRow);
                     }
                     break;
                 case cvar::valueType::SET:
                     for (const auto& i : *source.getSet())
                     {
                         *reference = i;
-                        opRunner(&macros.code.front() + lambdaIndex, currentRow);
+                        lambda(inst->index, currentRow);
                     }
                     break;
                 }
@@ -2842,15 +2850,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             break;
         case OpCode_e::CALL_IF: // execute lambda, and if not 0 on stack
         {
-            opRunner(
-                // call condition lambda
-                &macros.code.front() + macros.lambdas[inst->extra],
-                currentRow); 
-            --stackPtr;
             // anything not 0 is true
-            if (stackPtr->isEvalTrue())
+            if (lambda(inst->extra, currentRow)->isEvalTrue())
             {
-                opRunner(&macros.code.front() + macros.lambdas[inst->index], currentRow);
+                lambda(inst->index, currentRow);
                 if (inReturn) // error state?
                     return; 
                 
@@ -2861,6 +2864,215 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 // loop to top
                 continue;
             }
+        }
+            break;
+        case OpCode_e::CALL_EACH:
+        {
+            auto startRow = currentRow;
+            const auto codeBlock = inst->index;
+            const auto logicLambda = inst->extra;
+            const auto filter = macros.filters[inst->value];
+
+            const auto rowCount  = static_cast<int>(rows->size());
+            const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
+
+            // .continue - are we continuing from a specific row 
+            if (filter.isContinue)
+                currentRow = lambda(filter.continueBlock, currentRow)->getInt64();
+            else
+                filter.isReverse ? currentRow = rowCount - 1 : currentRow = 0;
+            
+            // .next - are we advancing the cursor
+            if (filter.isNext)
+               filter.isReverse ? --currentRow : ++currentRow;
+
+            // .limit - set match limit
+            int64_t matches = 0;
+            auto matchLimit = LLONG_MAX;
+            if (filter.isLimit)
+                matchLimit = lambda(filter.limitBlock, currentRow)->getInt64();
+
+            // .range - set date limiters
+            auto startStamp = LLONG_MIN;
+            auto endStamp = LLONG_MAX;
+
+            if (filter.isRange)
+            {
+                startStamp = lambda(filter.rangeStartBlock, currentRow)->getInt64();
+                endStamp = lambda(filter.rangeEndBlock, currentRow)->getInt64();
+            }
+
+            // .within - within is constrained to limits defined in .range
+            if (filter.isWithin || filter.isLookAhead || filter.isLookBack)
+            {
+                const auto withinStart = lambda(filter.withinStartBlock, currentRow)->getInt64();
+                const auto withinWindow = lambda(filter.withinWindowBlock, currentRow)->getInt64();
+
+                int64_t rangeStart, rangeEnd;
+
+                if (filter.isLookAhead)
+                {
+                    rangeStart = withinStart;
+                    rangeEnd = withinStart + withinWindow;
+                }
+                else if (filter.isLookBack)
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart;
+                }
+                else
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart + withinWindow;                    
+                }
+
+                if (rangeStart > startStamp)
+                    startStamp = rangeStart;
+
+                if (rangeEnd < endStamp)
+                    endStamp = rangeEnd;
+            }
+
+            filterRangeStack.emplace_back(startStamp, endStamp);
+
+            // Iterate
+            while (matches < matchLimit && currentRow < rowCount && currentRow >= 0)
+            {
+                if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                {
+                    if (filter.isReverse)
+                        break;
+                    filter.isReverse ? --currentRow : ++currentRow;
+                    continue;
+                }
+
+                if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                {
+                    if (filter.isReverse)
+                    {
+                        filter.isReverse ? --currentRow : ++currentRow;
+                        continue;
+                    }
+                    break;
+                }
+                
+                if (logicLambda == -1 || lambda(logicLambda, currentRow)->isEvalTrue())
+                {
+                    lambda(codeBlock, currentRow);
+                    ++matches;
+                }
+
+                filter.isReverse ? --currentRow : ++currentRow;
+            }
+
+            filterRangeStack.pop_back();
+            currentRow = savedRow;
+        }
+            break;
+
+        case OpCode_e::PSHTBLFLT:
+        {
+            auto startRow = currentRow;
+            const auto filter = macros.filters[inst->value];
+            const auto rowCount  = static_cast<int>(rows->size());
+            const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
+
+            // THROW (in compiler?) isNext but not isLookAhead or isLookBack
+            
+            // .next - are we advancing the cursor
+            if (!filter.isRow && filter.isNext)
+               filter.isReverse ? --currentRow : ++currentRow;
+
+            // .range - set date limiters
+            auto startStamp = LLONG_MIN;
+            auto endStamp = LLONG_MAX;
+
+            // column filters inherit date ranges carry from `each` or `if` filters
+            if (filterRangeStack.size() && filterRangeStack.back().first != LLONG_MIN)
+            {
+                startStamp = filterRangeStack.back().first;
+                endStamp = filterRangeStack.back().second;
+            }
+
+            if (filter.isRange)
+            {
+                startStamp = lambda(filter.rangeStartBlock, currentRow)->getInt64();
+                endStamp = lambda(filter.rangeEndBlock, currentRow)->getInt64();
+            }
+
+            // .within - within is constrained to limits defined in .range
+            if (filter.isWithin || filter.isLookAhead || filter.isLookBack)
+            {
+                const auto withinStart = lambda(filter.withinStartBlock, currentRow)->getInt64();
+                const auto withinWindow = lambda(filter.withinWindowBlock, currentRow)->getInt64();
+
+                int64_t rangeStart, rangeEnd;
+
+                if (filter.isLookAhead)
+                {
+                    rangeStart = withinStart;
+                    rangeEnd = withinStart + withinWindow;
+                }
+                else if (filter.isLookBack)
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart;
+                }
+                else
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart + withinWindow;                    
+                }
+
+                if (rangeStart > startStamp)
+                    startStamp = rangeStart;
+
+                if (rangeEnd < endStamp)
+                    endStamp = rangeEnd;
+            }
+
+            auto pass = false;
+            
+            if (filter.isRow)
+            {
+                pass = lambda(filter.evalBlock, currentRow)->isEvalTrue();
+            }
+            else if (filter.isEver)
+            {
+                currentRow = 0;
+                while (currentRow < rowCount && currentRow >= 0)
+                {
+                    if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                    {
+                        if (filter.isReverse)
+                            break;
+                        filter.isReverse ? --currentRow : ++currentRow;
+                        continue;
+                    }
+
+                    if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                    {
+                        if (filter.isReverse)
+                        {
+                            filter.isReverse ? --currentRow : ++currentRow;
+                            continue;
+                        }
+                        break;
+                    }
+                    
+                    if (lambda(filter.evalBlock, currentRow)->isEvalTrue())
+                    {
+                        pass = true;
+                        break;
+                    }
+
+                    filter.isReverse ? --currentRow : ++currentRow;
+                }                          
+            }
+
+            *stackPtr = filter.isNegated ? !pass : pass;
+            ++stackPtr;
+            currentRow = savedRow;
         }
             break;
 

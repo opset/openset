@@ -1069,8 +1069,20 @@ inline Tests test_pyql_language()
                 const auto testScript = 
                 R"osl(
 
+                    each_row where fruit.row(== "banana") && fruit.ever(== "donkey")
+                        debug(true)
+                    end
+
+                    each_row where fruit.row(== "banana") && fruit.ever(== "pear")
+                        debug(true)
+                    end
+
+                    each_row where fruit.row(== "banana") && fruit.never(== "pear")
+                        debug(true)
+                    end
+
                     each_row where fruit.row(== "banana")
-                        log(fruit)
+                        debug(true)
                     end
 
                 )osl"s;
@@ -1079,7 +1091,7 @@ inline Tests test_pyql_language()
                 const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
 
                 auto& debug = interpreter->debugLog;
-                ASSERT(debug.size() == 7);
+                ASSERT(debug.size() == 2);
                 ASSERTDEBUGLOG(debug);
 
                 delete interpreter;                               
