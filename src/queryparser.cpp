@@ -2889,234 +2889,6 @@ int64_t QueryParser::parseHintConditions(
     int64_t index,
     const bool stopOnConditions)
 {
-    LineParts accumulation; // helper to convert our regular macro Ops to Hint style Ops
-    auto convertOp = [](string op) -> HintOp_e
-    {
-        const auto opIter = Operators.find(op);
-        if (op == "in")
-            return HintOp_e::PUSH_EQ;
-        if (opIter == Operators.end())
-        {
-            const auto logIter = LogicalOperators.find(op);
-            if (logIter == LogicalOperators.end())
-                return HintOp_e::UNSUPPORTED;
-            const auto iter = OpToHintOp.find(logIter->second);
-            return iter != OpToHintOp.end()
-                       ? iter->second
-                       : HintOp_e::UNSUPPORTED;
-        }
-        const auto iter = OpToHintOp.find(opIter->second);
-        return iter != OpToHintOp.end()
-                   ? iter->second
-                   : HintOp_e::UNSUPPORTED;
-    }; 
-    
-    // store textual values as we come across them
-    // we will call store when we hit a logical operator
-    const auto accumulate = [&accumulation](const string& item)
-    {
-        accumulation.push_back(item);
-    }; 
-    
-    // this will evaluate what conditions were
-    // accumulated and store them in OpList if 
-    // possible, will return FALSE if it could not
-    // so the logical operator can be bypassed in the
-    // output (we cull functions calls and user variables)
-    const auto store = [&]()
-    {
-        if (!accumulation.size())
-        {
-            // nothing accumulated - this is OK
-            return; // this is not an error
-        }
-        if (accumulation.size() == 1)
-        {
-            // TODO handle this - simply checking whether value present
-            auto left = accumulation[0];
-            if (isColumnVar(left))
-                left = vars.columnVars.find(left)->second.actual;
-            if (isNonuserVar(left))
-            {
-                // use PUSH_PRESENT (value 0 is ignored)
-                opList.emplace_back(HintOp_e::PUSH_PRESENT, left, 0);
-                accumulation.clear();
-                return;
-            } // we don't know what this is, so we will push an
-            // ignorable value into here
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        if (accumulation.size() == 2 || accumulation.size() > 3)
-        {
-            // this accumulation likely contains math or
-            // function calls, either way, we can't optimize
-            // with math (especially when variables are involved)
-            // so we will emit a NOP as a placeholder for the logic
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        auto left   = accumulation[0];
-        HintOp_e op = convertOp(accumulation[1]);
-        auto right  = accumulation[2];
-        if (op == HintOp_e::UNSUPPORTED)
-        {
-            // we can't index on this operator so emit a NOP placeholder
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        const auto leftIsTableVar  = isNonuserVar(left);
-        const auto rightIsTableVar = isNonuserVar(right);
-
-        if (left == "id" || right == "id")
-        {
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        if (leftIsTableVar && rightIsTableVar)
-        {
-            // skip column to column comparisons, emit a NOP placeholder
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        if (!leftIsTableVar && !rightIsTableVar)
-        {
-            // skip non-table variable comparisons, emit a NOP placeholder
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        if (isUserVar(left) || isUserVar(right))
-        {
-            opList.emplace_back(HintOp_e::PUSH_NOP);
-            accumulation.clear();
-            return;
-        }
-        /**
-         * so, we have a condition written with he variable
-         * on the right and the value on the left. We will swap em
-         */
-        if (rightIsTableVar)
-        {
-            swap(left, right); // nice
-            // swap certain operators if right is a var
-            switch (op)
-            {
-            case HintOp_e::PUSH_GT:
-                op = HintOp_e::PUSH_LTE;
-                break;
-            case HintOp_e::PUSH_LT:
-                op = HintOp_e::PUSH_GTE;
-                break;
-            case HintOp_e::PUSH_GTE:
-                op = HintOp_e::PUSH_LT;
-                break;
-            case HintOp_e::PUSH_LTE:
-                op = HintOp_e::PUSH_GT;
-                break;
-            default: ;
-            }
-        } 
-        
-        /** 
-         * OK, now at a point where we know we aren't dealing with
-         * an unsupported operator, values on the left and right,
-         * or table columns on the left and right, and that the table 
-         * column is on the left! 
-         */ 
-        
-        // lets get the "real" non-alias names for these columns
-        if (isColumnVar(left))
-            left = vars.columnVars.find(left)->second.actual; 
-
-        if (isNumeric(right))
-            opList.emplace_back(op, left, stoll(right));
-        else
-            opList.emplace_back(op, left, right);
-
-        accumulation.clear();
-    };
-
-    while (index < conditions.size())
-    {
-        if (conditions[index] == ",")
-        {
-            break;
-        }
-        if (conditions[index] == ")")
-        {
-            //++index;
-            break;
-        }
-        if (conditions[index] == "(")
-        {
-            index = parseHintConditions(conditions, opList, index + 1, false);
-        }
-        else if (conditions[index] != "in" && LogicalOperators.find(conditions[index]) != LogicalOperators.end())
-        {
-            store();
-            if (stopOnConditions)
-            {
-                index--;
-                break;
-            }
-            const int newIndex = parseHintConditions(conditions, opList, index + 1, false);
-            opList.emplace_back(convertOp(conditions[index]));
-            index = newIndex;
-            break;
-        }
-        else
-        {
-            // this is a function call
-            if (index < conditions.size() - 1 && conditions[index + 1] == "(")
-            {
-                // We skip function calls in where. Will
-                // strip the function, and rip any nested operations
-                // basically replacing anything between the brackets
-                // with an OP BIT_NOP 
-                auto brackets = 1;
-                if (conditions[index] == "__contains")
-                {
-                    accumulate(conditions[index + 2]);
-                    accumulate("in");
-                    accumulate(conditions[index + 4]);
-                    index += 5;
-                }
-                else if (conditions[index] == "__notcontains")
-                {
-                    accumulate(conditions[index + 4]);
-                    index += 5;
-                }
-                else
-                {
-                    auto idx = index + 2; // move past function name and (
-                    for (; idx < conditions.size(); idx++)
-                    {
-                        if (conditions[idx] == "(")
-                            ++brackets;
-                        else if (conditions[idx] == ")")
-                            --brackets;
-                        if (!brackets)
-                            break;
-                    }
-                    index = idx;
-                    opList.emplace_back(HintOp_e::PUSH_NOP);
-                    accumulation.clear();
-                } //break;
-            }
-            else
-            {
-                accumulate(conditions[index]);
-            }
-        }
-        ++index;
-    }
-    store();
     return index;
 }
 
@@ -4051,44 +3823,34 @@ string openset::query::MacroDbg(Macro_s& macro)
     }
     else
         ss << "NONE" << endl;
+
     outSpacer();
-    for (auto& pair : macro.indexes)
+    ss << endl << endl;
+    ss << "Raw Derived Index (all index conditions are 'ever'):" << endl;
+    outSpacer();
+    ss << macro.rawIndex << endl;
+    outSpacer();
+    ss << endl;
+    ss << "Index Macros:" << endl;
+    outSpacer();
+    ss << "OP             | VALUE" << endl;
+    outSpacer();
+    for (auto& i : macro.index)
     {
-        auto& index = pair.second;
-        ss << endl << endl;
-        ss << "Index Macros:" << endl;
-        outSpacer();
-        ss << "OP             | COLUMN               | VALUE" << endl;
-        outSpacer();
-        if (index.size())
+        const auto op = HintOperatorsDebug.find(i.op)->second;
+        ss << padding(op, 14, false) << " | ";
+        switch (i.op)
         {
-            for (auto& i : index)
-            {
-                const auto op = HintOperatorsDebug.find(i.op)->second;
-                ss << padding(op, 14, false) << " | ";
-                switch (i.op)
-                {
-                case HintOp_e::PUSH_EQ: case HintOp_e::PUSH_NEQ: case HintOp_e::PUSH_GT: case HintOp_e::PUSH_GTE: case
-                HintOp_e::PUSH_LT: case HintOp_e::PUSH_LTE:
-                    ss << padding(i.column, 20, false) << " | ";
-                    if (i.numeric)
-                        ss << to_string(i.intValue);
-                    else
-                        ss << i.textValue;
-                    break;
-                case HintOp_e::PUSH_PRESENT:
-                    ss << padding(i.column, 20, false) << " | ";
-                    break;
-                default:
-                    ss << "                     |";
-                }
-                ss << endl;
-            }
+        case HintOp_e::PUSH_TBL:
+            ss << "@" << padding(i.value.getString(), 20, false);
+            break;
+        case HintOp_e::PUSH_VAL: 
+            ss << padding(i.value.getString(), 20, false);
+            break;
         }
-        else
-            ss << "NONE - EVAL*" << endl;
-        outSpacer();
+        ss << endl;
     }
+    
     ss << endl << endl;
     ss << "Assembly:" << endl;
     outSpacer();

@@ -205,19 +205,17 @@ namespace openset
         enum class HintOp_e : int64_t
         {
             UNSUPPORTED,
-            PUSH_EQ,
-            PUSH_NEQ,
-            PUSH_GT,
-            PUSH_GTE,
-            PUSH_LT,
-            PUSH_LTE,
-            PUSH_PRESENT,
-            PUSH_NOT,
-            PUSH_NOP,
+            EQ,
+            NEQ,
+            GT,
+            GTE,
+            LT,
+            LTE,
+            PUSH_VAL,
+            PUSH_TBL,
             BIT_OR,
             BIT_AND,
-            NST_BIT_OR,
-            NST_BIT_AND
+
         };
     }
 }
@@ -584,10 +582,8 @@ namespace openset
             { "/", OpCode_e::MATHDIV }
         }; // Conditionals
         static const unordered_map<string, OpCode_e> LogicalOperators = {
-            { "and", OpCode_e::LGCAND },
-            { "or", OpCode_e::LGCOR },
-            { "nest_and", OpCode_e::LGCNSTAND },
-            { "nest_or", OpCode_e::LGCNSTOR },
+            { "&&", OpCode_e::LGCAND },
+            { "||", OpCode_e::LGCOR },
         };
         static const unordered_map<OpCode_e, string> LogicalOperatorsDebug = {
             { OpCode_e::LGCAND, "and" },
@@ -595,71 +591,59 @@ namespace openset
         };
         static const unordered_map<HintOp_e, string> HintOperatorsDebug = {
             { HintOp_e::UNSUPPORTED, "UNSUP" },
-            { HintOp_e::PUSH_EQ, "PUSH_EQ" },
-            { HintOp_e::PUSH_NEQ, "PUSH_NEQ" },
-            { HintOp_e::PUSH_GT, "PUSH_GT" },
-            { HintOp_e::PUSH_GTE, "PUSH_GTE" },
-            { HintOp_e::PUSH_LT, "PUSH_LT" },
-            { HintOp_e::PUSH_LTE, "PUSH_LTE" },
-            { HintOp_e::PUSH_PRESENT, "PUSH_PRES" },
-            { HintOp_e::PUSH_NOP, "PUSH_NOP" },
-            { HintOp_e::BIT_OR, "BIT_OR" },
-            { HintOp_e::BIT_AND, "BIT_AND" },
-            { HintOp_e::NST_BIT_OR, "NST_BIT_OR" },
-            { HintOp_e::NST_BIT_AND, "NST_BIT_AND" },
-
+            { HintOp_e::EQ, "EQ" },
+            { HintOp_e::NEQ, "NEQ" },
+            { HintOp_e::GT, "GT" },
+            { HintOp_e::GTE, "GTE" },
+            { HintOp_e::LT, "LT" },
+            { HintOp_e::LTE, "LTE" },
+            { HintOp_e::BIT_OR, "OR" },
+            { HintOp_e::BIT_AND, "AND" },
+            { HintOp_e::PUSH_VAL, "PSH_VAL" },
+            { HintOp_e::PUSH_TBL, "PSH_TBL" },
         };
-        static const unordered_map<OpCode_e, HintOp_e> OpToHintOp = {
-            { OpCode_e::OPGTE, HintOp_e::PUSH_GTE },
-            { OpCode_e::OPLTE, HintOp_e::PUSH_LTE },
-            { OpCode_e::OPGT, HintOp_e::PUSH_GT },
-            { OpCode_e::OPLT, HintOp_e::PUSH_LT },
-            { OpCode_e::OPEQ, HintOp_e::PUSH_EQ },
-            { OpCode_e::OPNEQ, HintOp_e::PUSH_NEQ },
-            { OpCode_e::OPNOT, HintOp_e::PUSH_NOT },
-            { OpCode_e::LGCAND, HintOp_e::BIT_AND },
-            { OpCode_e::LGCOR, HintOp_e::BIT_OR },
-            { OpCode_e::LGCNSTOR, HintOp_e::NST_BIT_OR },
-            { OpCode_e::LGCNSTAND, HintOp_e::NST_BIT_AND },
+        static const unordered_map<std::string, HintOp_e> OpToHintOp = {
+            { ">=", HintOp_e::GTE },
+            { "<=", HintOp_e::LTE },
+            { ">", HintOp_e::GT },
+            { "<", HintOp_e::LT },
+            { "==", HintOp_e::EQ },
+            { "!=", HintOp_e::NEQ },
+            { "&&", HintOp_e::BIT_AND },
+            { "||", HintOp_e::BIT_OR }
         };
 
         struct HintOp_s
         {
             HintOp_e op;
-            string column;
-            int64_t intValue;
-            string textValue;
-            bool numeric;
+            cvar value;
+            int64_t hash {NONE};
 
-            HintOp_s(const HintOp_e op, const string& column, const int64_t intValue)
+            HintOp_s(const HintOp_e op, const int64_t value)
                 : op(op),
-                  column(column),
-                  intValue(intValue),
-                  numeric(true)
+                  value(value)
             {}
 
-            HintOp_s(const HintOp_e op, const string& column, const string& text)
+            HintOp_s(const HintOp_e op, const double value)
                 : op(op),
-                  column(column),
-                  intValue(0),
-                  numeric(false)
+                  value(value)
+            {}
+
+            HintOp_s(const HintOp_e op, const bool value)
+                : op(op),
+                  value(value)
+            {}
+
+            HintOp_s(const HintOp_e op, const string& text)
+                : op(op),
+                  value(text)
             {
-                if (text == "None") // special case
-                {
-                    intValue = NONE;
-                    numeric  = true;
-                }
-                else
-                {
-                    textValue = text.substr(1, text.length() - 2);
-                    intValue  = MakeHash(textValue);
-                }
+                hash  = MakeHash(*value.getStringPtr());
             }
 
             explicit HintOp_s(const HintOp_e op)
                 : op(op),
-                  intValue(0),
-                  numeric(false)
+                  value(0)
             {}
         };
 
@@ -753,7 +737,9 @@ namespace openset
             {
                 return "@" + to_string(number) + " " + trim(text, " \t");
             }
-        }; // structure fo final build
+        }; 
+        
+        // structure fo final build
         struct Instruction_s
         {
             OpCode_e op;
@@ -900,6 +886,8 @@ namespace openset
             FilterList filters;
             InstructionList code;
             HintPairs indexes;
+            std::string rawIndex;
+            HintOpList index;
             string segmentName;
             SegmentList segments;
             MarshalSet marshalsReferenced;

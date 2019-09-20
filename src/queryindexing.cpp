@@ -74,6 +74,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 		- OR all those attributes together and return the 
 		  cumulative result
 	*/
+    /*
 	auto getBits = [&](HintOp_s& instruction, Attributes::listMode_e mode) -> IndexBits
 		{
 			auto colInfo = table->getColumns()->getColumn(instruction.column);
@@ -241,8 +242,10 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 		}
 	}
+        */
 
 	// *.* query likely (like rows: or all NOPs)
+/*
 	if (!s.size() || !count)
 	{
 		IndexBits bits;
@@ -258,16 +261,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
 
 	s.pop();
 
-	/*
-	 *
-	stringstream ss;
-	ss << "partition: " << partition << "  stop: " << stopBit << "  max lid: " << maxLinId << "  pop: " << res.population(stopBit);
-	ss << " " << IndexBits::debugBits(res, maxLinId) << endl;
-
-	if (partition == 3) // 9 
-		cout << ss.str() << endl;
-
-	*/
 	res.grow((stopBit / 64) + 1);
 	return res;
+*/
 }

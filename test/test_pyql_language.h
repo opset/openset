@@ -1050,13 +1050,25 @@ inline Tests test_pyql_language()
                        debug(true)
                     end
 
+                    some_list = ["dog", ["cat", "tiger"], "hamster"]
+
+                    if some_list[1][0] == "cat" && (id == 1 + 2 && "apple" == fruit) && fruit.never(== "pear") && 
+                           fruit == (4 + ((7*2) / 3)) && test_value == 123
+                        debug(true)
+                    end
+
+                    if fruit in ["apple", "orange"] || ["banana", "peach", "pumpkin"] contains id
+                        debug(true)
+                    end
+
+
                 )osl"s;
 
                 openset::query::Macro_s queryMacros;
                 const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
 
                 auto& debug = interpreter->debugLog;
-                ASSERT(debug.size() == 3);
+                ASSERT(debug.size() == 5);
                 ASSERTDEBUGLOG(debug);
 
                 delete interpreter;                               

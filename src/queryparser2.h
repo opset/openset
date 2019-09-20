@@ -342,6 +342,11 @@ namespace openset::query
             return (value[0] == '"' || value[0] == '\'');
         }
 
+        static bool isNil(const string& value)
+        {
+            return (value == "nil" || value == "Nil" || value == "null");
+        }
+
         static bool isBool(const string& value)
         {
             return (value == "True" || value == "true" || value == "False" || value == "false");
@@ -818,8 +823,8 @@ namespace openset::query
             const auto prevToken = offset - 1 < 0 ? std::string() : tokens[offset - 1];
             const auto isAfterBracketValid = validAfterClosingBracket.count(nextToken) != 0;
 
-            const auto isItem = isNameOrNumber(token);
-            const auto isNextAnItem = isNameOrNumber(nextToken);
+            const auto isItem = isNameOrNumber(token) && Operators.count(token) == 0;
+            const auto isNextAnItem = isNameOrNumber(nextToken) && Operators.count(nextToken) == 0;
             const auto isNextChain = nextToken.find("__chain_") == 0;
 
             const int lookBackIndex = lookBack(tokens, offset);
@@ -1443,9 +1448,12 @@ namespace openset::query
                 "in",
                 "any",
                 "contains",
+                "&&",
+                "||",
                 "[",
                 ":",
-                "{"
+                "{",
+                ""
             };
 
             if (end == -1)
@@ -1722,7 +1730,7 @@ namespace openset::query
             while (idx < end)
             {
                 const auto commaPosition = seek(",", words, idx);
-                if (commaPosition == -1)
+                if (commaPosition == -1 || commaPosition >= end)
                 {
                     auto value = extract(words, idx, end);
                     params.push_front(std::make_pair(value, idx));
@@ -2966,72 +2974,482 @@ namespace openset::query
 
         void processLogic()
         {
-            Blocks::Line newLogic;
-            auto idx = 0;
-            const auto end = static_cast<int>(indexLogic.size());
 
-            auto& tokens = indexLogic;
-
-            while (idx < end)
+            // convert .row, .ever, .never and remove function calls and user vars from logic
+            Blocks::Line tokensUnchained;
             {
-                auto& token = indexLogic[idx];
-                if (isTextual(token))
+                auto& tokens = indexLogic;
+                auto idx = 0;
+                auto end = static_cast<int>(tokens.size());
+
+                while (idx < end)
                 {
-                    if (isTableColumn(token))
+                    auto& token = tokens[idx];
+                    auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                    if (isTextual(token))
                     {
-                        newLogic.emplace_back(token);
-
-                        ++idx;
-
-                        while (indexLogic[idx].find("__chain_") != string::npos)
+                        if (Operators.count(token))
                         {
-                            if (indexLogic[idx] == "__chain_row" ||
-                                indexLogic[idx] == "__chain_ever" ||
-                                indexLogic[idx] == "__chain_never")
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (isTableColumn(token))
+                        {
+                            tokensUnchained.emplace_back(token);
+
+                            ++idx;
+
+                            while (tokens[idx].find("__chain_") != string::npos)
                             {
-                                const auto isNever = indexLogic[idx] == "__chain_never";
-                                const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
+                                if (tokens[idx] == "__chain_row" ||
+                                    tokens[idx] == "__chain_ever" ||
+                                    tokens[idx] == "__chain_never")
+                                {
+                                    const auto isNever = tokens[idx] == "__chain_never";
+                                    const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
 
-                                newLogic.insert(newLogic.end(), indexLogic.begin() + idx + 2, indexLogic.begin() + endOfLogic);
-                                idx = endOfLogic;
-                            }
-                            else
+                                    if (isNever)
+                                        tokens[idx + 2] = "!=";
+
+                                    tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
+                                    idx = endOfLogic;
+                                }
+                                else
+                                {
+                                    idx = seekMatchingBrace(tokens, idx + 1);                       
+                                }
+                                ++idx;   
+                            }                        
+
+                            continue;
+
+                        }                    
+                        else if (isMarshal(token))
+                        {
+                            tokensUnchained.emplace_back("VOID");
+                            idx = seekMatchingBrace(tokens, idx);
+                        }
+                        else if (isUserVar(token))
+                        {
+                            tokensUnchained.emplace_back("VOID");
+
+                            ++idx;
+                            token = idx >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx];
+
+                            // skip subscripts
+                            while (token == "[")
                             {
-                                idx = seekMatchingBrace(tokens, idx + 1);                       
+                                idx = seekMatchingSquare(tokens, idx) + 1;
+                                token = idx >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx];
                             }
-                            ++idx;   
-                        }                        
 
-                        continue;
-
-                    }
-                    else if (isMarshal(token))
-                    {
-                        newLogic.emplace_back("VOID");
-                        idx = seekMatchingBrace(tokens, idx);                       
-                    }
-                    else if (isUserVar(token))
-                    {
-                        newLogic.emplace_back("VOID");
+                            continue;
+                        }
+                        else
+                        {
+                            // THROW ?? 
+                        }
                     }
                     else
                     {
-                        // THROW ?? 
+                        tokensUnchained.emplace_back(std::move(token));
                     }
+
+                    ++idx;
                 }
-                else
+            }
+
+            // expand lists involved with `in`, `contains` and `any` - turn them into ORs
+            Blocks::Line tokensExpanded;
+            {                
+                auto& tokens = tokensUnchained;
+                auto idx = 0;
+                auto end = static_cast<int>(tokens.size());
+               
+                while (idx < end)
                 {
-                    newLogic.emplace_back(std::move(token));
+                    auto& token = tokens[idx];
+                    auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                    // convert lists into ORs if left or right side is not a void
+                    if (token == "[")
+                    {
+                        auto endIdx = seekMatchingSquare(tokens, idx);
+                        Blocks::Line extraction(tokens.begin() + idx, tokens.begin() + endIdx + 1);
+
+                        // we are going to use the function param parser to capture the array elements
+                        // so we must make this array look like a param list
+                        extraction.front() = "(";
+                        extraction.back() = ")";
+                        std::vector<std::pair<Blocks::Line,int>> params;
+                        parseParams(extraction, 0, params);
+                        
+                        const auto before = idx - 1 < 0 ? std::string() : tokens[idx - 1];
+                        const auto after = endIdx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[endIdx + 1];
+
+                        if (Operators.count(before) || Operators.count(after))
+                        {
+                            const auto isBefore = Operators.count(before) != 0;
+
+                            auto op = isBefore ? before : after;
+                            auto tableColumn = isBefore ? tokens[idx - 2] : tokens[endIdx + 2];
+
+                            // convert these to == tests - which in the index are inclusion tests
+                            if (op == "in" || op == "contains" || op == "any")
+                                op = "==";
+                                                  
+                            Blocks::Line ors;
+
+                            ors.push_back("(");
+
+                            auto pushCount = 0;
+
+                            for (auto& param: params)
+                            {
+                                // should be one value - can't see a scenario where it isn't
+                                if (param.first.size() != 1)
+                                    continue;
+
+                                auto value = param.first[0];
+
+                                // we are only interested in strings and numbers here, stuff that's in the index
+                                if (!isNumeric(value) && !isString(value))
+                                    continue;
+
+                                if (ors.size() > 1)
+                                    ors.push_back("||");
+                                ors.insert(ors.end(), {tableColumn, op, value});
+                                ++pushCount;
+                            }
+
+                            if (!pushCount)
+                                ors.push_back("VOID");
+
+                            ors.push_back(")");
+
+                            if (isBefore)
+                                tokensExpanded.erase(tokensExpanded.end() - 2, tokensExpanded.end());
+
+                            tokensExpanded.insert(tokensExpanded.end(), ors.begin(), ors.end());
+
+                            idx = endIdx + (isBefore ? 1 : 3);
+
+                            cout << endl;
+                        }
+                        else
+                        {
+                            tokensExpanded.push_back("VOID");
+                        }
+
+                        continue;
+                    }
+
+                    tokensExpanded.push_back(token);
+
+                    ++idx;
+                }
+            }
+
+            // remove math from logic
+            Blocks::Line tokensWithoutMath;
+            {                
+                auto& tokens = tokensExpanded;
+                auto idx = 0;
+                auto end = static_cast<int>(tokens.size());
+               
+                while (idx < end)
+                {
+                    auto& token = tokens[idx];
+                    auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                    auto prevToken = idx < 1 ? std::string() : tokens[idx - 1];
+
+                    if (Math.count(token))
+                    {
+                        if (isNumeric(prevToken))
+                            tokensWithoutMath.back() = "VOID";
+
+                        tokensWithoutMath.emplace_back("VOID");
+
+                        if (isNumeric(nextToken))
+                        {
+                            tokensWithoutMath.emplace_back("VOID");
+                            ++idx;
+                        }
+                    }
+                    else
+                    {
+                        tokensWithoutMath.emplace_back(token);
+                    }
+
+                    ++idx;
+                }
+            }
+
+            // swap logic so table columns are on the left and values are on the right
+            // and strip out VOID == VOID type occurences.
+            {
+                auto& tokens = tokensWithoutMath;
+                auto idx = 0;
+                auto end = static_cast<int>(tokens.size());
+
+                while (idx < end)
+                {
+                    auto& token = tokens[idx];
+                    auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                    auto prevToken = idx < 1 ? std::string() : tokens[idx - 1];
+
+                    if (Operators.count(token))
+                    {
+                        if (nextToken == "VOID" || prevToken == "VOID")
+                        {
+                            tokens[idx-1] = "";
+                            tokens[idx]   = "";
+                            tokens[idx+1] = "";                                            
+                        }                    
+                        else if (isTableColumn(nextToken) && (isNumeric(prevToken) || isString(prevToken)))
+                        {
+                            tokens[idx-1] = nextToken;
+                            tokens[idx+1] = prevToken;
+                        }
+                    }
+
+                    ++idx;
+                }
+            }
+
+            // remove all "VOIDS" and blanks and collapse
+            Blocks::Line tokensVoidCleaned;
+            {
+                // REMOVE VOIDS
+                auto& tokens = tokensWithoutMath;
+                auto idx = 0;
+                auto end = static_cast<int>(tokens.size());
+
+                std::string last = "";
+
+                while (idx < end)
+                {
+                    auto& token = tokens[idx];
+                    auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                    auto prevToken = idx < 1 ? std::string() : tokens[idx - 1];
+
+                    if (token != "" && token != "VOID")
+                    {
+                        tokensVoidCleaned.emplace_back(token);
+                        last = token;
+                    }
+
+                    ++idx;
+                }
+            }
+
+            // remove redundant logic and brackets
+            Blocks::Line tokensFinalClean = tokensVoidCleaned;
+            {
+                while (true)
+                {
+                    auto stripped = false;
+                    // REMOVE VOIDS
+                    auto& tokens = tokensFinalClean;
+                    auto idx = 0;
+                    auto end = static_cast<int>(tokens.size());
+
+                    Blocks::Line output;
+
+                    std::string last = "";
+
+                    while (idx < end)
+                    {
+                        auto& token = tokens[idx];
+                        auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                        auto prevToken = idx < 1 ? std::string() : tokens[idx - 1];
+
+                        if (token == "(" && nextToken == ")")
+                        {
+                            stripped = true;
+                            ++idx;
+                        }
+                        else if (LogicalOperators.count(token) && prevToken == token)
+                        {
+                            stripped = true;
+                        }
+                        else if (
+                            (Operators.count(token) || LogicalOperators.count(token)) && 
+                            (nextToken == ")" || prevToken == "(")
+                            )
+                        {
+                            stripped = true;                            
+                        }
+/*
+                        else if (LogicalOperators.count(token) && nextToken == ")")
+                        {
+                            // do nothing
+                            stripped = true;
+                        }
+                        else if (LogicalOperators.count(token) && prevToken == "(")
+                        {
+                            // do nothing
+                            stripped = true;
+                        }
+                        else if (Operators.count(token) && nextToken == ")")
+                        {
+                            // do nothing
+                            stripped = true;
+                        }
+                        else if (Operators.count(token) && prevToken == "(")
+                        {
+                            // do nothing
+                            stripped = true;
+                        }*/
+                        // look for columns with no condition
+                        else if (
+                                isTableColumn(token) &&
+                                (
+                                  (LogicalOperators.count(prevToken) || prevToken == "(") &&
+                                  (LogicalOperators.count(nextToken) || nextToken == ")")
+                                )
+                            )
+                        {
+                            stripped = true;                           
+                        }
+                        else
+                        {
+                            output.emplace_back(token);                            
+                        }
+
+                        ++idx;
+                    }
+
+                    tokensFinalClean = std::move(output);
+
+                    if (!stripped)
+                        break;
+                }                
+            }
+
+            indexLogic = tokensFinalClean;
+        }
+
+
+        int parseIndex(HintOpList& index, const Blocks::Line& words, int start, int end = -1)
+        {
+            const std::unordered_set<std::string> operatorWords = {
+                "&&",
+                "||",
+            };
+
+            const std::unordered_set<std::string> logicWords = {
+                "==",
+                "!=",
+                ">",
+                "<",
+                "<=",
+                ">=",
+            };
+
+            const auto pushValue = [&](const std::string& value)
+            {
+                if (isTableColumn(value))
+                    index.emplace_back(HintOp_e::PUSH_TBL, value);   
+                else if (isNil(value))
+                    index.emplace_back(HintOp_e::PUSH_VAL, NONE);
+                else if (isBool(value))
+                    index.emplace_back(HintOp_e::PUSH_VAL, value == "false" || value == "False");
+                else if (isString(value))
+                    index.emplace_back(HintOp_e::PUSH_VAL, stripQuotes(value));
+                else if (isFloat(value))
+                    index.emplace_back(HintOp_e::PUSH_VAL, std::stof(value));
+                else
+                    index.emplace_back(HintOp_e::PUSH_VAL, std::stoll(value));
+            };
+
+            if (end == -1)
+                end = static_cast<int>(words.size());
+            auto idx = start;
+
+            std::vector<std::string> ops;
+                       
+            while (idx < end)
+            {
+                const auto token = words[idx];
+
+                const auto nextToken = idx + 1 >= static_cast<int>(words.size()) ? std::string() : words[idx + 1];
+                const auto prevToken = idx == 0 ? std::string() : words[idx - 1];
+
+                // check for function call that is not a marshal and THROW
+                if (token == ")")
+                {
+                    ++idx;
+                    continue;
                 }
 
+                if (token == "(")
+                {
+                    const auto subEnd = seekMatchingBrace(words, idx, end);
+                    idx = parseIndex(index, words, idx + 1, subEnd);
+                    continue;
+                }
+
+                if (!operatorWords.count(token) && !logicWords.count(token))
+                {
+                    pushValue(token);
+                    ++idx;
+                    continue;
+                }
+
+                if (operatorWords.count(token))
+                {
+                    ops.emplace_back(token);
+                    ++idx;
+                    continue;
+                }
+
+                // if this is an equality/inequality test we push the test immediately to leave
+                // a true/false on the stack
+                if (logicWords.count(token))
+                {                  
+                    if (nextToken.length())
+                    {
+                        const auto beforeIdx = idx;
+
+                        if (nextToken == "(")
+                        {
+                            const auto subEnd = seekMatchingBrace(words, idx + 1, end) + 1;
+                            idx = parseIndex(index, words, idx + 1, subEnd) + 1;
+                        }
+                        else
+                        {
+                            pushValue(nextToken);
+                        idx += 2;
+
+                        }
+
+                        index.emplace_back(OpToHintOp.find(token)->second);
+                    }
+                    else
+                    {
+                        // THROW??
+                    }
+                    continue;
+                }
                 ++idx;
             }
 
-            // expand in, contains and any - turn them into ORs
+            // push any accumulated logical or math operators onto the stack in reverse
+            std::for_each(ops.rbegin(), ops.rend(), [&](auto op) {
+               index.emplace_back(OpToHintOp.find(op)->second);
+            });
 
-            // DO SWAPS (move 
+            return idx + 1;
+        }
 
-            cout << "logic" << indexLogic.size();
+        void compileIndex(Macro_s& inMacros)
+        {
+            processLogic();
+            parseIndex(inMacros.index, indexLogic, 0);
+
+            for (const auto &word: indexLogic)
+                inMacros.rawIndex += word + " ";
         }
 
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
@@ -3042,9 +3460,8 @@ namespace openset::query
                 
                 initialParse(query);
 
-                processLogic();
-
                 compile(inMacros);
+                compileIndex(inMacros);
 
                 return true;
 
