@@ -829,15 +829,14 @@ namespace openset::query
 
             const int lookBackIndex = lookBack(tokens, offset);
             const auto inChain = token == ")" && lookBackIndex > 0 ? 
-                tokens[lookBackIndex-1].find("__chain_") == 0 : 
-            false;
+                tokens[lookBackIndex-1].find("__chain_") == 0 : false;
 
             // end means stop
             if (token == "end")
                 return false;
 
             // we are ok with almost anything after a where
-            if (token == "where")
+            if (token == "where" || nextToken == "where")
                 return true;
 
             // is it an a condition or iterator?
@@ -1451,6 +1450,8 @@ namespace openset::query
                 "&&",
                 "||",
                 "[",
+                "+",
+                "-",
                 ":",
                 "{",
                 ""
@@ -1481,20 +1482,43 @@ namespace openset::query
 
                 if (isMarshal(token))
                 {
-                    const int beforeIdx = idx;
-                    std::vector<std::pair<Blocks::Line, int>> params;
-                    idx = parseParams(words, idx + 1, params);
+                    if (nextToken == "(")
+                    {
+                        const int beforeIdx = idx;
+                        std::vector<std::pair<Blocks::Line, int>> params;
+                        idx = parseParams(words, idx + 1, params);
 
-                    for (const auto& param: params)
-                        parseStatement(relative + param.second, param.first, 0, param.first.size());
+                        for (const auto& param: params)
+                            parseStatement(relative + param.second, param.first, 0, param.first.size());
 
-                    const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
-                    middle.emplace_back(
-                        MiddleOp_e::marshal, 
-                        marshalIndex, 
-                        static_cast<int>(params.size()), 
-                        lastDebug.line,
-                        relative + beforeIdx);
+                        const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
+                        middle.emplace_back(
+                            MiddleOp_e::marshal, 
+                            marshalIndex, 
+                            static_cast<int>(params.size()), 
+                            lastDebug.line,
+                            relative + beforeIdx);
+                    }
+                    else
+                    {
+                        if (!MacroMarshals.count(token))
+                            throw QueryParse2Error_s {
+                                errors::errorClass_e::parse,
+                                errors::errorCode_e::syntax_error,
+                                "function call for '" + token + "' requires parameters",
+                                lastDebug
+                            };
+
+                        const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
+                        middle.emplace_back(
+                            MiddleOp_e::marshal, 
+                            marshalIndex, 
+                            0, 
+                            lastDebug.line,
+                            relative + idx);
+
+                        ++idx;
+                    }
 
                     //++idx;
                     continue;
@@ -1516,8 +1540,7 @@ namespace openset::query
                         lastDebug
                     };
 
-                // check for function call that is not a marshal and THROW
-                if (token == ")")
+                if (token == ")" || token == "}" || token == "]")
                 {
                     ++idx;
                     continue;
@@ -1554,7 +1577,7 @@ namespace openset::query
                             lastDebug
                         };
                     }
-                    ++idx;
+                    //++idx;
                     continue;
                 }
 
@@ -1573,7 +1596,7 @@ namespace openset::query
                             lastDebug
                         };
                     }
-                    ++idx;
+                    //++idx;
                     continue;
                 }
 
@@ -1882,7 +1905,7 @@ namespace openset::query
                 const auto commaPosition = seek(",", words, idx);
                 const auto colonPosition = seek(":", words, idx, commaPosition);
 
-                if (colonPosition == -1)
+                if (colonPosition == -1 || colonPosition >= end)
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
@@ -1890,7 +1913,7 @@ namespace openset::query
                         lastDebug
                     };
                                
-                if (commaPosition == -1)
+                if (commaPosition == -1 || colonPosition >= end)
                 {
                     auto key = words[idx];
                     auto value = extract(words, colonPosition + 1, end);
@@ -2125,7 +2148,6 @@ namespace openset::query
 
                     filter.isLimit = true;
                     ++count;
-                    ++idx;
                 }
                 else if ((token == "__chain_ever" || token == "__chain_never") && isColumn)
                 {
@@ -2257,18 +2279,18 @@ namespace openset::query
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() == 0 || params.size() > 2)
+                    if (params.size() != 2)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".within( <window>, <start> ) takes up to parameter",
+                            ".within( <window>, <start> ) takes two parameter",
                             lastDebug
                         };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    filter.withinWindowBlock = addLinesAsBlock(params[1].first);
                     if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
+                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isWithin = true;
 
                     ++count;
@@ -2278,18 +2300,18 @@ namespace openset::query
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() == 0 || params.size() > 2)
+                    if (params.size() != 2)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".look_ahead( <window>, <start> ) takes up to parameter",
+                            ".look_ahead( <window>, <start> ) takes two parameter",
                             lastDebug
                         };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    filter.withinWindowBlock = addLinesAsBlock(params[1].first);
                     if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
+                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isLookAhead = true;
                     ++count;
                 }
@@ -2298,18 +2320,18 @@ namespace openset::query
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() == 0 || params.size() > 2)
+                    if (params.size() != 2)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".look_back( <window>, <start> ) takes up to parameter",
+                            ".look_back( <window>, <start> ) takes two parameter",
                             lastDebug
                         };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.withinWindowBlock = addLinesAsBlock(params[0].first);
+                    filter.withinWindowBlock = addLinesAsBlock(params[1].first);
                     if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[1].first);
+                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isLookBack = true;
                     ++count;
                 }
@@ -2327,8 +2349,8 @@ namespace openset::query
                         };
 
                     // convert our params into code blocks to be called as lambdas
-                    filter.rangeStartBlock = addLinesAsBlock(params[0].first);
-                    filter.rangeEndBlock = addLinesAsBlock(params[1].first);
+                    filter.rangeStartBlock = addLinesAsBlock(params[1].first);
+                    filter.rangeEndBlock = addLinesAsBlock(params[0].first);
                     filter.isRange = true;
 
                     ++count;
@@ -2719,7 +2741,7 @@ namespace openset::query
                     finCode.emplace_back(
                         OpCode_e::PSHLITFLT,
                         0,
-                        midOp.value1, // float value
+                        static_cast<int64_t>(midOp.value1 * 1'000'000.0), // float value
                         0,
                         debug);
                     break;
@@ -2972,8 +2994,10 @@ namespace openset::query
             inMacros.filters = filters;
         }
 
-        void processLogic()
+        bool processLogic()
         {
+
+            bool countable = true;
 
             // convert .row, .ever, .never and remove function calls and user vars from logic
             Blocks::Line tokensUnchained;
@@ -3005,6 +3029,9 @@ namespace openset::query
                                     tokens[idx] == "__chain_ever" ||
                                     tokens[idx] == "__chain_never")
                                 {
+                                    if (tokens[idx] == "__chain_row")
+                                        countable = false;
+
                                     const auto isNever = tokens[idx] == "__chain_never";
                                     const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
 
@@ -3027,7 +3054,8 @@ namespace openset::query
                         else if (isMarshal(token))
                         {
                             tokensUnchained.emplace_back("VOID");
-                            idx = seekMatchingBrace(tokens, idx);
+                            if (nextToken == "(")
+                                idx = seekMatchingBrace(tokens, idx);
                         }
                         else if (isUserVar(token))
                         {
@@ -3202,6 +3230,7 @@ namespace openset::query
                     {
                         if (nextToken == "VOID" || prevToken == "VOID")
                         {
+                            countable = false;
                             tokens[idx-1] = "";
                             tokens[idx]   = "";
                             tokens[idx+1] = "";                                            
@@ -3235,6 +3264,7 @@ namespace openset::query
 
                     if (token != "" && token != "VOID")
                     {
+                        countable = false;
                         tokensVoidCleaned.emplace_back(token);
                         last = token;
                     }
@@ -3280,27 +3310,6 @@ namespace openset::query
                         {
                             stripped = true;                            
                         }
-/*
-                        else if (LogicalOperators.count(token) && nextToken == ")")
-                        {
-                            // do nothing
-                            stripped = true;
-                        }
-                        else if (LogicalOperators.count(token) && prevToken == "(")
-                        {
-                            // do nothing
-                            stripped = true;
-                        }
-                        else if (Operators.count(token) && nextToken == ")")
-                        {
-                            // do nothing
-                            stripped = true;
-                        }
-                        else if (Operators.count(token) && prevToken == "(")
-                        {
-                            // do nothing
-                            stripped = true;
-                        }*/
                         // look for columns with no condition
                         else if (
                                 isTableColumn(token) &&
@@ -3328,6 +3337,8 @@ namespace openset::query
             }
 
             indexLogic = tokensFinalClean;
+
+            return countable;
         }
 
 
@@ -3445,7 +3456,12 @@ namespace openset::query
 
         void compileIndex(Macro_s& inMacros)
         {
-            processLogic();
+            for (const auto &word: indexLogic)
+                inMacros.capturedIndex += word + " ";
+
+            // would the count from the segment rules result in the same person count if you actually
+            // ran the query (used in segmentation)
+            inMacros.indexIsCountable = processLogic();
             parseIndex(inMacros.index, indexLogic, 0);
 
             for (const auto &word: indexLogic)

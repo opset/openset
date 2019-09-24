@@ -938,6 +938,7 @@ inline Tests test_pyql_language()
                 person.commit();
             }
         },
+
         {
             "test OSL basic assign and multiply",
             []
@@ -1068,7 +1069,7 @@ inline Tests test_pyql_language()
                 const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
 
                 auto& debug = interpreter->debugLog;
-                ASSERT(debug.size() == 5);
+                ASSERT(debug.size() == 4);
                 ASSERTDEBUGLOG(debug);
 
                 delete interpreter;                               
@@ -1108,6 +1109,305 @@ inline Tests test_pyql_language()
 
                 delete interpreter;                               
             }
+        },
+
+        {
+            "test OSL break and continue",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    source_list = ["one", "two", "three", "four", "five", "six", "seven"]
+
+                    debug(len(source_list) == 7)
+
+                    counter = 0
+                    for item in source_list
+                       counter = counter + 1
+                       if counter == 3
+                          break
+                       end
+                    end
+
+                    debug(counter == 3)
+
+                    counter = 0
+                    after_count = 0
+                    for item in source_list
+                       counter = counter + 1
+                       if counter >= 3
+                          continue
+                       end
+                       after_count = after_count + 1
+                    end
+
+                    debug(counter == 7)
+                    debug(after_count == 2)
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 4);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "test OSL break with depth",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    number_list = ["one", "two", "three", "four", "five", "six", "seven"]
+                    letter_list = ["a", "b", "c", "d"]
+
+                    debug(len(number_list) == 7)
+                    debug(len(letter_list) == 4)
+
+                    counter = 0
+                    for number in number_list                      
+
+                      for letter in letter_list
+                        if number == "three" && letter == "c"
+                          break(2)
+                        end
+                        counter = counter + 1
+                      end
+
+                    end
+
+                    debug(counter == 10)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 3);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+
+
+        {
+            "test OSL each_row with limit",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    counter = 0
+
+                    each_row.limit(2) where event == "purchase"
+                      counter = counter + 1
+                    end
+
+                    debug(counter == 2)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 1);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "test OSL .range",
+            []
+            {
+
+                // date ranges are inclusive
+                const auto testScript = 
+                R"osl(
+
+                    counter = 0
+
+                    each_row.range("2016-03-24T12:00:30+00:00", "2016-03-24T12:00:32+00:00") where event == "purchase"
+                      counter = counter + 1
+                      debug(stamp)
+                    end
+
+                    debug(counter == 3)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 4);
+                ASSERT(debug[0] < debug[2]);
+                ASSERT(debug[3] == true);
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "test OSL .range .reverse",
+            []
+            {
+
+                // date ranges are inclusive
+                const auto testScript = 
+                R"osl(
+
+                    counter = 0
+
+                    each_row.reverse().range("2016-03-24T12:00:30+00:00", "2016-03-24T12:00:32+00:00") where event == "purchase"
+                      counter = counter + 1
+                      debug(stamp)
+                    end
+
+                    debug(counter == 3)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 4);
+                ASSERT(debug[0] > debug[2]);
+                ASSERT(debug[3] == true);
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "test OSL containers",
+            []
+            {
+
+                // date ranges are inclusive
+                const auto testScript = 
+                R"osl(
+	                someVar = "3.14"
+	                debug(someVar == 3.14)
+
+	                someDict = {
+		                "hello": "goodbye",
+		                "many": [1,2,3,4]
+	                }
+
+	                someDict = someDict + {"another": "thing"}
+
+                    debug(someDict["hello"] == "goodbye")
+	                debug(someDict["many"][1] == 2)
+	                debug(someDict["another"] == "thing")
+
+	                debug(len(someDict) == 3)
+
+	                someDict = someDict - ["hello", "many"]
+	                debug(len(someDict) == 1)
+
+	                someSet = set()
+	                someSet = someSet + "hello"
+	                someSet = someSet + "goodbye"
+                    someSet = someSet + "what"
+	                someSet = someSet + "hello"
+
+	                debug(len(someSet) == 3)
+
+	                someSet = someSet - "hello"
+	                debug(len(someSet) == 2)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 8);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;            }
+        },
+
+        {
+            "test OSL containers and operators",
+            []
+            {
+
+                // date ranges are inclusive
+                const auto testScript = 
+                R"osl(
+	                someDict = {
+		                "hello": "goodbye",
+		                "many": [1,2,3,4]
+	                }
+
+	                someDict = someDict + {"fresh": "prince"}
+
+	                debug(len(someDict) == 3)
+
+	                otherDict = {"objective": "apples"} + {"hunt": "red october"}
+
+	                debug(len(otherDict) == 2)
+
+	                otherDict = otherDict + {"angels": "sang"}
+                    log(otherDict)
+
+	                debug(len(otherDict) == 3)
+
+	                someDict = someDict - "hello"
+
+	                debug(len(someDict) == 2)
+
+	                someDict["cheese"] = {
+		                "orange" : ["chedder"],
+		                "soft": ["mozza", "cream"]
+	                }
+
+	                someDict["cheese"] = someDict["cheese"] - "orange"
+
+	                debug(len(someDict["cheese"]) == 1)
+
+	                some_string = "merry"
+	                some_string = some_string + " new year"
+
+	                debug(some_string == "merry new year")
+
+	                otherDict["angels"] = otherDict["angels"] + " in awe"
+
+                    debug(otherDict["angels"] == "sang in awe")
+
+	                some_set = set("one", "two", "three")
+
+	                debug(len(some_set) == 3)
+
+	                some_set = some_set - "two"
+
+	                debug(len(some_set) == 2)
+
+                    nested = {}
+                    nested['yellow'] = {}
+                    nested['yellow']['green'] = 'this is green'
+
+                    debug(nested['yellow']['green'] == 'this is green')
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test003__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog;
+                ASSERT(debug.size() == 10);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;            }
         },
 
         {

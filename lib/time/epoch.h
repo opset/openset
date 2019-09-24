@@ -182,7 +182,9 @@ public:
 		return stamp;
 	}
 
-	/*  ISO8601 date parser
+
+
+	/*  ISO8601 date detect/parser
 	 * 
 	 *  Supported formats:
 	 *		 
@@ -194,9 +196,19 @@ public:
 	 *  a date is the specified milliseconds into the future.
 	 *	
 	 *	returns -1 on error
-	 */ 
+	 */
 
-	static int64_t ISO8601ToEpoch(std::string time, int64_t future = 0)
+    static bool isISO8601(const std::string& time)
+	{
+	    return (
+            time.length() >= 19 &&
+            time[4] == '-' && 
+            time[7] == '-' && 
+            time[13] == ':' &&
+			time[16] == ':');
+	}
+
+	static int64_t ISO8601ToEpoch(const std::string& time)
 	{
 		// parse the date...
 		std::string temp;
@@ -204,31 +216,32 @@ public:
 		if (time.length() < 19)
 			return -1;
 		
-		// if there is no Z or null terminate
-		auto zonePos = time.find("+",19);
-		if (zonePos == time.npos)
-			zonePos = time.find("-", 19);
-
-
 		// look for punctuation
-		if (time[4] != '-' || time[7] != '-' || time[13] != ':' ||
+		if (time[4] != '-' || 
+            time[7] != '-' || 
+            time[13] != ':' ||
 			time[16] != ':')
 			return -1;
 
-		int milli = 0, zone_hours = 0, zone_minutes = 0;
+        auto milliseconds = 0, zone_hours = 0, zone_minutes = 0;
 
-		auto year = stoi(time.substr(0, 4));
-		auto month = stoi(time.substr(5, 2));
-		auto day = stoi(time.substr(8, 2));
-		auto hour = stoi(time.substr(11, 2));
-		auto minute = stoi(time.substr(14, 2));
-		auto second = stoi(time.substr(17, 2));
+        const auto year = stoi(time.substr(0, 4));
+		const auto month = stoi(time.substr(5, 2));
+		const auto day = stoi(time.substr(8, 2));
+		const auto hour = stoi(time.substr(11, 2));
+		const auto minute = stoi(time.substr(14, 2));
+		const auto second = stoi(time.substr(17, 2));
 
 		// we have millis
 		if (time[19] == '.')
-			milli = stoi(time.substr(20, time.npos - 20));
+			milliseconds = stoi(time.substr(20, time.npos - 20));
 
 		auto negative = false;
+
+		// if there is no Z or null terminate
+		auto zonePos = time.find('+',19);
+		if (zonePos == time.npos)
+			zonePos = time.find('-', 19);
 
 		if (zonePos != time.npos) // we have zone
 		{
@@ -255,9 +268,7 @@ public:
 		if (zone_hours || zone_minutes)
 			stamp -= (negative ? -1 : 1) * ((zone_hours * 3600) + (zone_minutes * 60));
 
-		stamp = (stamp * 1000) + milli; // milliseconds
-
-		return stamp;
+		return (stamp * 1000) + milliseconds;
 	}
 
 	static std::string EpochToISO8601(int64_t epoch)
@@ -265,7 +276,7 @@ public:
 
 		// makes this: yyyy-mm-ddThh:mm:ss.mmmZ
 
-		auto pad2 = [](int number)
+        const auto pad2 = [](int number)
 		{
 			auto str = std::to_string(number);
 			if (str.length() < 2)
@@ -273,7 +284,7 @@ public:
 			return str;
 		};
 
-		auto padMilli = [](int64_t number)
+        const auto padMilli = [](int64_t number)
 		{
 			auto str = std::to_string(number);
 			while (str.length() < 3)
@@ -283,7 +294,7 @@ public:
 
 		epoch = fixMilli(epoch);
 
-		auto millis = epoch % 1000;
+		auto milliseconds = epoch % 1000;
 
 		epoch = fixUnix(epoch);
 		struct tm time;
@@ -297,8 +308,8 @@ public:
 			pad2(time.tm_min) + ':' +
 			pad2(time.tm_sec);
 
-		if (millis)
-			iso += "." + padMilli(millis);
+		if (milliseconds)
+			iso += "." + padMilli(milliseconds);
 
 		iso += "Z";
 

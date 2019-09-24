@@ -3828,6 +3828,9 @@ string openset::query::MacroDbg(Macro_s& macro)
     ss << endl << endl;
     ss << "Raw Derived Index (all index conditions are 'ever'):" << endl;
     outSpacer();
+    ss << "Captured Logic:" << endl;
+    ss << macro.capturedIndex << endl;
+    ss << "Reduced Logic:" << endl;
     ss << macro.rawIndex << endl;
     outSpacer();
     ss << endl;

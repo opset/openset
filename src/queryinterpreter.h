@@ -235,6 +235,7 @@ namespace openset
 			}
 
 			SegmentList* getSegmentList() const;
+            static int64_t convertStamp(const cvar& stamp);
 
             void extractMarshalParams(const int paramCount);
 

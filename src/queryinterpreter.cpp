@@ -146,6 +146,19 @@ openset::query::SegmentList* openset::query::Interpreter::getSegmentList() const
     return &macros.segments;
 }
 
+int64_t openset::query::Interpreter::convertStamp(const cvar& stamp)
+{
+    if (stamp.typeOf() == cvar::valueType::STR && Epoch::isISO8601(stamp))
+    {
+        const auto newStamp = Epoch::ISO8601ToEpoch(stamp);
+        if (newStamp == -1)
+            throw std::runtime_error("'" + stamp + "' is not an ISO8601 timestamp");
+        return newStamp;
+    }
+
+    return Epoch::fixMilli(stamp.getInt64());
+}
+
 void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
     for (auto i = 1; i <= paramCount; ++i) // PERF
@@ -498,27 +511,6 @@ void openset::query::Interpreter::marshal_break(const int paramCount)
     ++stackPtr;
 }
 
-void openset::query::Interpreter::marshal_dt_within(const int paramCount, const int64_t rowStamp)
-{
-    if (paramCount != 2)
-    {
-        error.set(
-            errors::errorClass_e::run_time,
-            errors::errorCode_e::sdk_param_count,
-            "date within bad parameter count");
-        *stackPtr = NONE;
-        ++stackPtr;
-        return;
-    }
-    --stackPtr;
-    auto compareStamp = stackPtr->getInt64();
-    compareStamp      = Epoch::fixMilli(compareStamp);
-    --stackPtr;
-    const auto milliseconds = stackPtr->getInt64();
-    *stackPtr               = within(compareStamp, rowStamp, milliseconds);
-    ++stackPtr;
-}
-
 void openset::query::Interpreter::marshal_ISO8601_to_stamp(const int paramCount, const int64_t rowStamp)
 {
     if (paramCount != 1)
@@ -535,44 +527,6 @@ void openset::query::Interpreter::marshal_ISO8601_to_stamp(const int paramCount,
     if (stamp.typeOf() == cvar::valueType::STR)
         stamp = Epoch::ISO8601ToEpoch(stamp);
     *stackPtr = stamp;
-}
-
-void openset::query::Interpreter::marshal_dt_between(const int paramCount, const int64_t rowStamp)
-{
-    if (paramCount != 2)
-    {
-        error.set(
-            errors::errorClass_e::run_time,
-            errors::errorCode_e::sdk_param_count,
-            "between clause requires two parameters");
-        *stackPtr = NONE;
-        ++stackPtr;
-        return;
-    }
-    --stackPtr;
-    auto end_stamp = *stackPtr;
-    --stackPtr;
-    auto start_stamp = *stackPtr; // If it's a strong then convert stamp to unixtime
-    if (start_stamp.typeOf() == cvar::valueType::STR)
-        start_stamp = Epoch::ISO8601ToEpoch(start_stamp); // If it's a strong then convert stamp to unixtime
-    if (end_stamp.typeOf() == cvar::valueType::STR)
-        end_stamp = Epoch::ISO8601ToEpoch(end_stamp);
-    if (start_stamp < 0 || end_stamp < 0)
-    {
-        error.set(
-            errors::errorClass_e::run_time,
-            errors::errorCode_e::sdk_param_count,
-            "date error in between statement");
-        *stackPtr = NONE;
-        ++stackPtr;
-        return;
-    } // make sure the stamp is in milliseconds
-    start_stamp = Epoch::fixMilli(start_stamp);
-    end_stamp   = Epoch::fixMilli(start_stamp);
-    *stackPtr   = (rowStamp >= start_stamp.getInt64() && rowStamp < end_stamp.getInt64())
-                      ? 1
-                      : 0;
-    ++stackPtr;
 }
 
 void openset::query::Interpreter::marshal_bucket(const int paramCount)
@@ -1154,7 +1108,9 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
         return;
 
     const auto currentRow = (stackPtr - 1)->getInt32();
-    cvar result(cvar::valueType::DICT); //FIXcvar::o();
+
+    cvar result(cvar::valueType::DICT);
+
     for (const auto& tableVar : macros.vars.tableVars)
     {
         auto key = tableVar.actual; // we pop the actual user id in this case
@@ -1370,74 +1326,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_round_year:
         *(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
-        break; /*case Marshals_e::marshal_iter_get:
-                *stackPtr = currentRow;
-                ++stackPtr;
-                break;
-            case Marshals_e::marshal_iter_set:
-                currentRow = (stackPtr - 1)->getInt64();
-                if (currentRow < 0 || currentRow >= static_cast<int>(rows->size()))
-                    throw std::runtime_error("row iterator out of range");
-                //rowIter = rows->begin() + currentRow;
-                --stackPtr;
-                break;
-        */ /*case Marshals_e::marshal_iter_move_first:
-                currentRow = 0;
-                //rows->begin() + currentRow;
-                break;
-            case Marshals_e::marshal_iter_move_last:
-                currentRow = rows->size() - 1;
-                if (currentRow < 0)
-                    throw std::runtime_error("iter_set_last called on empty set");
-                //rows->begin() + currentRow;
-                break;*/ /*
-                case Marshals_e::marshal_iter_next:
-                {
-                    ++currentRow;
-            
-                    if (currentRow == rowCount) // end of set
-                    {
-                        if (nestDepth)
-                        {
-                            breakDepth = 1;
-                            loopState = LoopState_e::in_break;
-                            *stackPtr = 0;
-                            ++stackPtr;
-                        }
-                        else
-                        {
-                            loopState = LoopState_e::in_exit;
-                            *stackPtr = 0;
-                            ++stackPtr;
-                        }
-                        --recursion;
-                        return true;
-                    }
-                }
-                break;
-                case Marshals_e::marshal_event_count:
-            
-                    if (eventCount == -1)
-                    {
-                        int64_t currentGrp = 0;
-                        auto countIter = rows->begin();
-                        eventCount = 0;
-            
-                        while (countIter != rows->end())
-                        {
-                            if (currentGrp != HashPair((*countIter)->cols[COL_STAMP], (*countIter)->cols[COL_EVENT]))
-                            {
-                                currentGrp = HashPair((*countIter)->cols[COL_STAMP], (*countIter)->cols[COL_EVENT]);
-                                ++eventCount;
-                            }
-                            ++countIter;
-                        }
-                    }
-                    *stackPtr = eventCount;
-                    ++stackPtr;
-                    break;
-                case Marshals_e::marshal_iter_prev:
-                    break;*/
+        break; 
     case Marshals_e::marshal_row_count:
         if (eventCount == -1)
         {
@@ -1456,12 +1345,6 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         }
         *stackPtr = eventCount;
         ++stackPtr;
-        break;
-    case Marshals_e::marshal_row_within:
-        marshal_dt_within(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
-        break;
-    case Marshals_e::marshal_row_between:
-        marshal_dt_between(inst->extra, (*rows)[currentRow]->cols[COL_STAMP]);
         break;
     case Marshals_e::marshal_population:
         marshal_population(inst->extra);
@@ -1735,10 +1618,27 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
 
 cvar* openset::query::Interpreter::lambda(int lambdaId, int currentRow)
 {
+    const auto beforePtr = stackPtr;
     opRunner(
         // call condition lambda
         &macros.code.front() + macros.lambdas[lambdaId],
-        currentRow); 
+        currentRow);
+
+    if (stackPtr < beforePtr)
+    {
+            error.set(
+                errors::errorClass_e::run_time,
+                errors::errorCode_e::exec_count_exceeded,
+                "stack under-run",
+                lastDebug ? lastDebug->toStrShort() : "stack under-run in lambda" );
+            loopState = LoopState_e::in_exit;
+    }
+    else if (stackPtr == beforePtr) // lambda left nothing on the stack, so add a default result
+    {
+        *stackPtr = NONE;
+        ++stackPtr;
+    }
+
     --stackPtr;
     return stackPtr;
 }
@@ -1759,7 +1659,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             errors::errorClass_e::run_time,
             errors::errorCode_e::recursion,
             "nesting depth was: " + to_string(recursion),
-            lastDebug->toStrShort());
+            lastDebug ? lastDebug->toStrShort() : "");
         loopState = LoopState_e::in_exit;
         *stackPtr = NONE;
         ++stackPtr;
@@ -1769,8 +1669,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
     while (loopState == LoopState_e::run && !error.inError() && !inReturn)
     {
         // tracks the last known script line number
-        if (inst->debug.number && inst->debug.number != -1)
-            lastDebug = &inst->debug; /* TODO LONG RUN CHECK --- we will do this differently
+        lastDebug = &inst->debug; /* TODO LONG RUN CHECK --- we will do this differently
         if (++loopCount > MAX_EXEC_COUNT)
         {
             error.set(
@@ -2808,6 +2707,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             --stackPtr;
             const auto source = *stackPtr;
 
+            ++nestDepth;
+
             if (source != NONE)
             {
                 if (!source.isContainer())
@@ -2827,6 +2728,27 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     {
                         *reference = i;
                         lambda(inst->index, currentRow);
+
+                        if (loopState == LoopState_e::in_break || inReturn)
+                        {
+                            if (breakDepth == 1 || nestDepth == 1)
+                            {
+                                loopState = LoopState_e::run;
+                            }
+                            else
+                            {
+                                --nestDepth;
+                                --recursion;
+                            }
+                            --breakDepth;
+                            if (breakDepth == 0)
+                                break;
+                            return;
+                        } 
+                        
+                        // no actual action, we are going to loop anyways
+                        if (loopState == LoopState_e::in_continue)
+                            loopState = LoopState_e::run;
                     }
                     break;
                 case cvar::valueType::DICT:
@@ -2834,6 +2756,27 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     {
                         *reference = i.first;
                         lambda(inst->index, currentRow);
+
+                        if (loopState == LoopState_e::in_break || inReturn)
+                        {
+                            if (breakDepth == 1 || nestDepth == 1)
+                            {
+                                loopState = LoopState_e::run;
+                            }
+                            else
+                            {
+                                --nestDepth;
+                                --recursion;
+                            }
+                            --breakDepth;
+                            if (breakDepth == 0)
+                                break;
+                            return;
+                        } 
+                        
+                        // no actual action, we are going to loop anyways
+                        if (loopState == LoopState_e::in_continue)
+                            loopState = LoopState_e::run;
                     }
                     break;
                 case cvar::valueType::SET:
@@ -2841,6 +2784,27 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     {
                         *reference = i;
                         lambda(inst->index, currentRow);
+
+                        if (loopState == LoopState_e::in_break || inReturn)
+                        {
+                            if (breakDepth == 1 || nestDepth == 1)
+                            {
+                                loopState = LoopState_e::run;
+                            }
+                            else
+                            {
+                                --nestDepth;
+                                --recursion;
+                            }
+                            --breakDepth;
+                            if (breakDepth == 0)
+                                break;
+                            return;
+                        } 
+                        
+                        // no actual action, we are going to loop anyways
+                        if (loopState == LoopState_e::in_continue)
+                            loopState = LoopState_e::run;
                     }
                     break;
                 }
@@ -2898,14 +2862,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
             if (filter.isRange)
             {
-                startStamp = lambda(filter.rangeStartBlock, currentRow)->getInt64();
-                endStamp = lambda(filter.rangeEndBlock, currentRow)->getInt64();
+                startStamp = convertStamp(*lambda(filter.rangeStartBlock, currentRow));
+                endStamp = convertStamp(*lambda(filter.rangeEndBlock, currentRow));
             }
 
             // .within - within is constrained to limits defined in .range
             if (filter.isWithin || filter.isLookAhead || filter.isLookBack)
             {
-                const auto withinStart = lambda(filter.withinStartBlock, currentRow)->getInt64();
+                const auto withinStart = convertStamp(*lambda(filter.withinStartBlock, currentRow));
                 const auto withinWindow = lambda(filter.withinWindowBlock, currentRow)->getInt64();
 
                 int64_t rangeStart, rangeEnd;
@@ -2935,14 +2899,25 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
             filterRangeStack.emplace_back(startStamp, endStamp);
 
+            ++nestDepth;
+
             // Iterate
             while (matches < matchLimit && currentRow < rowCount && currentRow >= 0)
             {
+                if (loopState == LoopState_e::in_exit || error.inError())
+                {
+                    *stackPtr = 0;
+                    ++stackPtr;
+                    --nestDepth;
+                    --recursion;
+                    return;
+                }                        // set the value of referenced `for variable` to the current row number
+
                 if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
                 {
                     if (filter.isReverse)
                         break;
-                    filter.isReverse ? --currentRow : ++currentRow;
+                    ++currentRow;
                     continue;
                 }
 
@@ -2950,7 +2925,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 {
                     if (filter.isReverse)
                     {
-                        filter.isReverse ? --currentRow : ++currentRow;
+                        --currentRow;
                         continue;
                     }
                     break;
@@ -2962,8 +2937,31 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     ++matches;
                 }
 
+                if (loopState == LoopState_e::in_break || inReturn)
+                {
+                    if (breakDepth == 1 || nestDepth == 1)
+                    {
+                        loopState = LoopState_e::run;
+                    }
+                    else
+                    {
+                        --nestDepth;
+                        --recursion;
+                    }
+                    --breakDepth;
+                    if (breakDepth == 0)
+                        break;
+                    return;
+                } 
+                
+                // no actual action, we are going to loop anyways
+                if (loopState == LoopState_e::in_continue)
+                    loopState = LoopState_e::run;
+
                 filter.isReverse ? --currentRow : ++currentRow;
             }
+
+            --nestDepth;
 
             filterRangeStack.pop_back();
             currentRow = savedRow;
@@ -2996,14 +2994,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
             if (filter.isRange)
             {
-                startStamp = lambda(filter.rangeStartBlock, currentRow)->getInt64();
-                endStamp = lambda(filter.rangeEndBlock, currentRow)->getInt64();
+                startStamp = convertStamp(*lambda(filter.rangeStartBlock, currentRow));
+                endStamp = convertStamp(*lambda(filter.rangeEndBlock, currentRow));
             }
 
             // .within - within is constrained to limits defined in .range
             if (filter.isWithin || filter.isLookAhead || filter.isLookBack)
             {
-                const auto withinStart = lambda(filter.withinStartBlock, currentRow)->getInt64();
+                const auto withinStart = convertStamp(*lambda(filter.withinStartBlock, currentRow));
                 const auto withinWindow = lambda(filter.withinWindowBlock, currentRow)->getInt64();
 
                 int64_t rangeStart, rangeEnd;
@@ -3046,7 +3044,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     {
                         if (filter.isReverse)
                             break;
-                        filter.isReverse ? --currentRow : ++currentRow;
+                        ++currentRow;
                         continue;
                     }
 
@@ -3054,7 +3052,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     {
                         if (filter.isReverse)
                         {
-                            filter.isReverse ? --currentRow : ++currentRow;
+                            --currentRow;
                             continue;
                         }
                         break;
@@ -3079,8 +3077,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         default:
             break;
         } // move to the next instruction
-        ++inst;
+        ++inst;    
     }
+    --recursion;
 }
 
 void openset::query::Interpreter::setScheduleCB(const function<void(int64_t functionHash, int seconds)>& cb)

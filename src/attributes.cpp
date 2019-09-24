@@ -254,12 +254,12 @@ Attributes::AttrList Attributes::getColumnValues(const int32_t column, const lis
 		// in query indexing
 	case listMode_e::NEQ:
 	case listMode_e::EQ:
-		if (const auto tattr = get(column, value); tattr)
-			result.push_back(tattr);
+		if (const auto tAttr = get(column, value); tAttr)
+			result.push_back(tAttr);
 		return result;
 	case listMode_e::PRESENT:		
-		if (const auto tattr = get(column, NONE); tattr)
-			result.push_back(tattr);
+		if (const auto tAttr = get(column, NONE); tAttr)
+			result.push_back(tAttr);
 		return result;
 		default: ;
 	}

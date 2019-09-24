@@ -122,6 +122,7 @@ namespace openset
         {
             marshal_tally,
             marshal_now,
+            marshal_row,
             marshal_last_event,
             marshal_first_event,
             marshal_bucket,
@@ -151,8 +152,6 @@ namespace openset
             marshal_get_year,
             marshal_round_year,
             marshal_row_count,
-            marshal_row_within,
-            marshal_row_between,
             marshal_population,
             marshal_intersection,
             marshal_union,
@@ -435,6 +434,7 @@ namespace openset
             { "year", Modifiers_e::year_number },
             { "date_year", Modifiers_e::year_date },
         };
+
         static const unordered_set<Modifiers_e> isTimeModifiers = {};
         static const unordered_set<string> RedundantSugar       = {
             { "of" },
@@ -443,8 +443,9 @@ namespace openset
         static const unordered_map<string, Marshals_e> Marshals = {
             { "tally", Marshals_e::marshal_tally },
             { "now", Marshals_e::marshal_now },
-            { "last_event", Marshals_e::marshal_last_event },
-            { "first_event", Marshals_e::marshal_first_event },
+            { "row", Marshals_e::marshal_row },
+            { "last_stamp", Marshals_e::marshal_last_event },
+            { "first_stamp", Marshals_e::marshal_first_event },
             { "bucket", Marshals_e::marshal_bucket },
             { "round", Marshals_e::marshal_round },
             { "trunc", Marshals_e::marshal_trunc },
@@ -455,27 +456,25 @@ namespace openset
             { "to_hours", Marshals_e::marshal_to_hours },
             { "to_days", Marshals_e::marshal_to_days },
             { "get_second", Marshals_e::marshal_get_second },
-            { "date_second", Marshals_e::marshal_round_second },
+            { "start_of_second", Marshals_e::marshal_round_second },
             { "get_minute", Marshals_e::marshal_get_minute },
-            { "date_minute", Marshals_e::marshal_round_minute },
+            { "start_of_minute", Marshals_e::marshal_round_minute },
             { "get_hour", Marshals_e::marshal_get_hour },
-            { "date_hour", Marshals_e::marshal_round_hour },
+            { "start_of_hour", Marshals_e::marshal_round_hour },
             { "date_day", Marshals_e::marshal_round_day },
             { "get_day_of_week", Marshals_e::marshal_get_day_of_week },
             { "get_day_of_month", Marshals_e::marshal_get_day_of_month },
             { "get_day_of_year", Marshals_e::marshal_get_day_of_year },
-            { "date_week", Marshals_e::marshal_round_week },
-            { "date_month", Marshals_e::marshal_round_month },
+            { "start_of_week", Marshals_e::marshal_round_week },
+            { "start_of_month", Marshals_e::marshal_round_month },
             { "get_month", Marshals_e::marshal_get_month },
             { "get_quarter", Marshals_e::marshal_get_quarter },
-            { "date_quarter", Marshals_e::marshal_round_quarter },
+            { "start_of_quarter", Marshals_e::marshal_round_quarter },
             { "get_year", Marshals_e::marshal_get_year },
-            { "date_year", Marshals_e::marshal_round_year },
+            { "start_of_year", Marshals_e::marshal_round_year },
             { "emit", Marshals_e::marshal_emit },
             { "schedule", Marshals_e::marshal_schedule },
             { "row_count", Marshals_e::marshal_row_count },
-            { "row_within", Marshals_e::marshal_row_within },
-            { "row_between", Marshals_e::marshal_row_between },
             { "population", Marshals_e::marshal_population },
             { "intersection", Marshals_e::marshal_intersection },
             { "union", Marshals_e::marshal_union },
@@ -530,34 +529,36 @@ namespace openset
         };
         static const unordered_set<string> SessionMarshals = {
             "session_count",
-        }; // these are marshals that do not take params by default, so they appear
+        }; 
+        
+        // these are marshals that do not take params by default, so they appear
         // like variables.
         static const unordered_set<string> MacroMarshals = {
             { "now" },
-            { "last_event" },
-            { "first_event" },
+            { "row" },
+            { "last_stamp" },
+            { "first_stamp" },
             { "session_count" },
             { "row_count" },
+            { "break" },
+            { "continue" },
             { "__internal_init_dict" },
             { "__internal_init_list" },
-        }; // Comparatives
-
+        }; 
+        
+        // Comparatives
         static const unordered_map<string, OpCode_e> Operators = {
             { ">=", OpCode_e::OPGTE },
             { "<=", OpCode_e::OPLTE },
             { ">", OpCode_e::OPGT },
             { "<", OpCode_e::OPLT },
             { "==", OpCode_e::OPEQ },
-            { "is", OpCode_e::OPEQ },
             { "=", OpCode_e::OPEQ },
             { "!=", OpCode_e::OPNEQ },
             { "<>", OpCode_e::OPNEQ },
-            { "not", OpCode_e::OPNOT },
             { "contains", OpCode_e::OPCONT },
             { "any", OpCode_e::OPANY },
             { "in", OpCode_e::OPIN },
-            { "not", OpCode_e::OPNOT },
-            { "isnot", OpCode_e::OPNEQ },
         };
         static const unordered_map<string, OpCode_e> MathAssignmentOperators = {
             { "+=", OpCode_e::MATHADDEQ },
@@ -621,25 +622,27 @@ namespace openset
 
             HintOp_s(const HintOp_e op, const int64_t value)
                 : op(op),
-                  value(value)
+                  value(value),
+                  hash(value)
             {}
 
             HintOp_s(const HintOp_e op, const double value)
                 : op(op),
-                  value(value)
+                  value(value),
+                  hash(static_cast<int64_t>(value * 1'000'000LL))
             {}
 
             HintOp_s(const HintOp_e op, const bool value)
                 : op(op),
-                  value(value)
+                  value(value),
+                  hash(value ? 1 : 0)
             {}
 
             HintOp_s(const HintOp_e op, const string& text)
                 : op(op),
-                  value(text)
-            {
-                hash  = MakeHash(*value.getStringPtr());
-            }
+                  value(text),
+                  hash(MakeHash(text))
+            {}
 
             explicit HintOp_s(const HintOp_e op)
                 : op(op),
@@ -886,8 +889,10 @@ namespace openset
             FilterList filters;
             InstructionList code;
             HintPairs indexes;
+            std::string capturedIndex;
             std::string rawIndex;
             HintOpList index;
+            bool indexIsCountable { false };
             string segmentName;
             SegmentList segments;
             MarshalSet marshalsReferenced;
