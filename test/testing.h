@@ -94,12 +94,12 @@ inline Fails runTests(Tests &tests)
 	for (auto &t : tests)
 	{
 		++idx;
-		try
+		//try
 		{
 			t.test();
 			cout << "PASSED - #" << idx << " '" << t.name << "'" << endl;
 		}
-		catch (TestFail_s & caught)
+		/*catch (TestFail_s & caught)
 		{
 			cout << "FAILED - #" << idx << " '" << t.name << "'" << endl;
 			cout << "         ASSERT(" << caught.expression << ")" << endl;
@@ -107,7 +107,7 @@ inline Fails runTests(Tests &tests)
 			if (caught.message.length())
 				cout << "         DETAIL: " << caught.message << endl;
 			failed.emplace_back(caught);
-		}
+		}*/
 	}
 
 	cout << "------------------------------------------------------" << endl;

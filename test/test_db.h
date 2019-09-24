@@ -15,6 +15,8 @@
 #include "../src/internoderouter.h"
 #include "../src/result.h"
 
+#include "test_helper.h"
+
 #include <unordered_set>
 
 // Our tests
@@ -211,6 +213,187 @@ inline Tests test_db()
                 person.commit();
             }
         },
+        {
+            "db: iterate a Set column in row",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+	                select
+		                count id
+                        count session
+		                count page
+		                count referral_source
+                    end
+
+                    if ('test' in props) == false
+                        props['test'] = {}
+                    end
+
+                    # set some props
+                    props['test']['this'] = 'hello'
+                    some_var = props['test']['this']
+
+                    props['fav_beers'] = set('cold', 'free')
+                    props['opposites'] = {
+                        'bows': 'arrows',
+                        'up': 'down',
+                        'inside': 'outside'
+                    }
+
+                    log(props)                  
+
+                    counter = 0
+
+                    # referral_search is nil in two rows, the `for` loop should skip those
+                    # even if we don't put a `&& referral_search.row(!= nil)` in the `each_row`
+
+	                each_row where page.row(!= nil) # 
+                        log(stamp, page, referral_search)
+                        for ref in referral_search
+                            counter = counter + 1
+		                    << id, referral_source, ref
+                        end
+                    end                  
+                    debug(counter == 6)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+                ASSERT(debug.size() == 1);
+                ASSERTDEBUGLOG(debug);
+
+                auto json = resultToJson(interpreter);
+
+                const auto underScoreNode = json.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
+
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 1);
+
+                const auto totalsNode = dataNodes[0]->xPath("/c");
+                const auto values     = cjson::stringify(totalsNode);
+
+                ASSERT(values == "[1,1,2,2]");
+
+                cout << cjson::stringify(&json, true) << endl;
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "db: are props still set",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+
+                    if 'test' in props
+                      debug(true)                
+                    end
+
+                    if 'this' in props['test']
+                      debug(true)                
+                    end
+
+                    if 'cold' in props['fav_beers']
+                      debug(true)
+                    end
+
+                    log(props)                  
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+                ASSERT(debug.size() == 3);
+                ASSERTDEBUGLOG(debug);
+
+                delete interpreter;                               
+            }
+        },
+
+        {
+            "db: iterate a Set column in row",
+            []
+            {
+                const auto testScript = 
+                R"osl(
+	                select
+		                count id
+                        count page
+                    end
+
+                    each_row.reverse().limit(1) where page == 'home page'
+                        match_stamp = stamp
+
+		                each_row.continue().next().reverse().within(10_seconds, match_stamp)
+                            where event == "page_view"
+			              << 'test1', 'home_page', page
+                        end
+                    end
+	                
+                    each_row.reverse().limit(1) where page == 'home page'
+                        match_stamp = stamp
+
+		                each_row.continue().next().reverse().within(100_seconds, match_stamp)
+                            where event == "page_view"
+			              << 'test2', 'home_page', page
+		                end
+                    end
+
+                    debug(counter == 6)
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+                //ASSERT(debug.size() == 1);
+                //ASSERTDEBUGLOG(debug);
+
+                auto json = resultToJson(interpreter);
+
+                const auto underScoreNode = json.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
+
+                /* This test runs two nearly identical matches. 
+                 * 
+                 * The difference the `iter_within` timing, in "test1" it checks
+                 * within 10 seconds, and there can be only one match.
+                 * 
+                 * In "test2" it checks within 100 seconds and there are two matches.
+                 * 
+                 * The results are sorted, so the second test shows up first.
+                 * 
+                 * On the root "_" node the first "c" should be [1,2]
+                 * In the second row "c" should be [1,1]
+                 * 
+                 * Note: you can see it by uncommenting the stringify above)
+                 */
+
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 2);
+
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,2]");
+
+                totalsNode = dataNodes[1]->xPath("/c");
+                values     = cjson::stringify(totalsNode);
+                ASSERT(values == "[1,1]");
+
+
+                cout << cjson::stringify(&json, true) << endl;
+
+                delete interpreter;                               
+            }
+        },
 
     };
 }
@@ -254,29 +437,6 @@ inline Tests bogus()
 
 	for row in rows:
 		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
-	)pyql");
-
-    auto test_within_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count page
-
-    # test props are still set
-    debug(len(props['fav_beers']) == 2)
-    debug('cold' in props['fav_beers'] and 'free' in props['fav_beers'])
-    debug(props['this'] == 'hello')
-  
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
-			tally('test1', 'home_page', sub_row['page'])
-		break
-	
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(100 seconds, row['stamp']):
-			tally('test2', 'home_page', sub_row['page'])
-		break
-
 	)pyql");
 
     auto test_continue_from = openset::query::QueryParser::fixIndent(
@@ -486,120 +646,6 @@ inline Tests bogus()
                 auto values     = cjson::stringify(totalsNode);
 
                 ASSERT(values == "[1,4,2]");
-            }
-        },
-        {
-            "db: test within()",
-            [=]()
-            {
-                openset::query::ParamVars params;
-
-                params["attr_page"]    = "page";
-                params["attr_ref"]     = "referral_source";
-                params["attr_keyword"] = "referral_search";
-                params["root_name"]    = "root";
-
-                auto table = openset::globals::database->getTable("__test001__");
-                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
-
-                openset::query::Macro_s queryMacros; // this is our compiled code block
-                openset::query::QueryParser p;
-
-                // compile this - passing in the template vars
-                p.compileQuery(test_within_pyql.c_str(), table->getColumns(), queryMacros, &params);
-
-                //cout << openset::query::MacroDbg(queryMacros) << endl;
-
-                // mount the compiled query to an interpretor
-                auto interpreter = new openset::query::Interpreter(queryMacros);
-
-                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-                interpreter->setResultObject(&resultSet);
-
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-                ASSERT(personRaw != nullptr);
-                auto mappedColumns = interpreter->getReferencedColumns();
-                ASSERT(mappedColumns.size() == 4);
-
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
-
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare();        // this actually decompresses
-
-                // this mounts the now decompressed data (in the person overlay)
-                // into the interpreter
-                interpreter->mount(&person);
-
-                // run it
-                interpreter->exec();
-                ASSERT(p.error.inError() == false);
-
-                // just getting a pointer to the results for nicer readability
-                auto result = interpreter->result;
-
-                //ASSERT(result->results.size() != 0);
-
-                // we are going to sort the list, this is done for merging, but
-                // being we have one partition in this test we won't actually be merging.
-                result->makeSortedList();
-
-                // the merger was made to merge a fancy result structure, we
-                // are going to manually stuff our result into this
-                std::vector<openset::result::ResultSet*> resultSets;
-                // populate or vector of results, so we can merge
-                //responseData.push_back(&res);
-                resultSets.push_back(interpreter->result);
-
-                // this is the merging object, it merges results from multiple 
-                // partitions into a result that can serialized to JSON, or to 
-                // binary for distributed queries
-                openset::result::ResultMuxDemux merger;
-                cjson resultJSON; // we are going to populate this
-                // make some JSON
-
-                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
-                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
-                /*
-				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
-                merger.mergeMacroLiterals(queryMacros, resultSets);
-				auto text = merger.mergeResultText(resultSets);
-				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
-                */
-
-                // NOTE - uncomment if you want to see the results
-                // cout << cjson::stringify(&resultJSON, true) << endl;
-
-                auto underScoreNode = resultJSON.xPath("/_");
-                ASSERT(underScoreNode != nullptr);
-
-                /* This test runs two nearly identical matches. 
-                 * 
-                 * The difference the `iter_within` timing, in "test1" it checks
-                 * within 10 seconds, and there can be only one match.
-                 * 
-                 * In "test2" it checks within 100 seconds and there are two matches.
-                 * 
-                 * The results are sorted, so the second test shows up first.
-                 * 
-                 * On the root "_" node the first "c" should be [1,2]
-                 * In the second row "c" should be [1,1]
-                 * 
-                 * Note: you can see it by uncommenting the stringify above)
-                 */
-
-                auto dataNodes = underScoreNode->getNodes();
-                ASSERT(dataNodes.size() == 2);
-
-                auto totalsNode = dataNodes[0]->xPath("/c");
-                auto values     = cjson::stringify(totalsNode);
-                ASSERT(values == "[1,2]");
-
-                totalsNode = dataNodes[1]->xPath("/c");
-                values     = cjson::stringify(totalsNode);
-                ASSERT(values == "[1,1]");
-
-                ASSERTDEBUGLOG(interpreter->debugLog);
             }
         },
         {

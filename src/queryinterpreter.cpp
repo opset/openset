@@ -161,13 +161,13 @@ int64_t openset::query::Interpreter::convertStamp(const cvar& stamp)
 
 void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
-    for (auto i = 1; i <= paramCount; ++i) // PERF
+    for (auto i = 0; i < paramCount; ++i) // PERF
     {
         --stackPtr; // if any of these params are undefined, exit
         if (stackPtr->typeOf() != cvar::valueType::STR && *stackPtr == NONE)
-            marshalParams[paramCount - i] = NONE;
+            marshalParams[i] = NONE;
         else
-            marshalParams[paramCount - i] = std::move(*stackPtr);
+            marshalParams[i] = std::move(*stackPtr);
     }
 }
 
@@ -539,9 +539,9 @@ void openset::query::Interpreter::marshal_bucket(const int paramCount)
         return;
     }
     --stackPtr;
-    const int64_t bucket = (*stackPtr * 100);
-    --stackPtr;
     int64_t value = (*stackPtr * 100);
+    --stackPtr;
+    const int64_t bucket = (*stackPtr * 100);
     if (bucket != 0)
     {
         value = (static_cast<int64_t>(value / bucket) * bucket);
@@ -567,14 +567,20 @@ void openset::query::Interpreter::marshal_round(const int paramCount)
         ++stackPtr;
         return;
     }
+
+    --stackPtr;
+    const auto value = (stackPtr)->getDouble();
+
     int64_t places = 0;
     if (paramCount == 2)
     {
         --stackPtr;
         places = *stackPtr;
     }
+
     const double power = pow(10.0, places);
-    *(stackPtr - 1)    = round((stackPtr - 1)->getDouble() * power) / power;
+    *(stackPtr)    = round(value * power) / power;
+    ++stackPtr;
 }
 
 void openset::query::Interpreter::marshal_fix(const int paramCount)
@@ -586,29 +592,35 @@ void openset::query::Interpreter::marshal_fix(const int paramCount)
         ++stackPtr;
         return;
     }
+
     const auto zeros = "0000000000"s;
     --stackPtr;
-    int64_t places = *stackPtr;
+    int64_t places      = *(stackPtr - 1);
     if (places > 10)
         places          = 10;
-    double value        = *(stackPtr - 1);
+    double value        = *(stackPtr);
+
     const auto negative = value < 0;
     if (negative)
         value        = std::abs(value);
-    const auto power = places
-                           ? pow(10.0, places)
-                           : 1;
+
+    const auto power = places ? pow(10.0, places): 1;
     const int64_t rounded = round(value * power);
+
     auto str              = to_string(rounded);
+
     if (str.length() <= places)
     {
         const auto missingPreZeros = (places - str.length()) + 1;
         str                        = zeros.substr(0, missingPreZeros) + str;
     }
+
     if (places)
         str.insert(str.end() - places, '.');
+
     if (negative)
         str         = "-" + str;
+
     *(stackPtr - 1) = str;
 }
 
@@ -1240,10 +1252,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     case Marshals_e::marshal_now:
         *stackPtr = Now();
         ++stackPtr;
-        break; /*case Marshals_e::marshal_event_time:
-                *stackPtr = (*rows)[currentRow]->cols[COL_STAMP];
-                ++stackPtr;
-                break;*/
+        break; 
+    case Marshals_e::marshal_row:
+        *stackPtr = currentRow;
+        ++stackPtr;
+        break;        
     case Marshals_e::marshal_last_event:
         *stackPtr = rows->back()->cols[COL_STAMP];
         ++stackPtr;
@@ -1740,9 +1753,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 case columnTypes_e::intColumn:
                     if (colValue == NONE)
                     {
-                        if (macros.vars.tableVars[inst->index].isSet)
-                            stackPtr->set();
-                        else
+                        //if (macros.vars.tableVars[inst->index].isSet)
+                        //    stackPtr->set();
+                        //else
                             *stackPtr = NONE;
                     }
                     else if (macros.vars.tableVars[inst->index].isSet)
@@ -1760,9 +1773,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 case columnTypes_e::doubleColumn:
                     if (colValue == NONE)
                     {
-                        if (macros.vars.tableVars[inst->index].isSet)
-                            stackPtr->set();
-                        else
+                        //if (macros.vars.tableVars[inst->index].isSet)
+                        //    stackPtr->set();
+                        //else
                             *stackPtr = NONE;
                     }
                     else if (macros.vars.tableVars[inst->index].isSet)
@@ -1780,9 +1793,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 case columnTypes_e::boolColumn:
                     if (colValue == NONE)
                     {
-                        if (macros.vars.tableVars[inst->index].isSet)
-                            stackPtr->set();
-                        else
+                        //if (macros.vars.tableVars[inst->index].isSet)
+                        //    stackPtr->set();
+                        //else
                             *stackPtr = NONE;
                     }
                     else if (macros.vars.tableVars[inst->index].isSet)
@@ -1801,9 +1814,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 case columnTypes_e::textColumn:
                     if (colValue == NONE)
                     {
-                        if (macros.vars.tableVars[inst->index].isSet)
-                            stackPtr->set();
-                        else
+                        //if (macros.vars.tableVars[inst->index].isSet)
+                          //  stackPtr->set();
+                        //else
                             *stackPtr = NONE;
                     }
                     else if (macros.vars.tableVars[inst->index].isSet)
@@ -1927,7 +1940,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             *stackPtr = cast<double>(inst->value) / cast<double>(1'000'000);
             ++stackPtr;
             break;
-        case OpCode_e::PSHLITNUL: // push a floating point value
+        case OpCode_e::PSHLITNUL: // push a null/none
             *stackPtr = NONE;
             ++stackPtr;
             break;
@@ -2842,9 +2855,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
             // .continue - are we continuing from a specific row 
             if (filter.isContinue)
-                currentRow = lambda(filter.continueBlock, currentRow)->getInt64();
+            {
+                if (filter.continueBlock != -1)
+                    currentRow = lambda(filter.continueBlock, currentRow)->getInt64();
+            }
             else
+            {
                 filter.isReverse ? currentRow = rowCount - 1 : currentRow = 0;
+            }
             
             // .next - are we advancing the cursor
             if (filter.isNext)

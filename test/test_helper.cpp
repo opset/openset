@@ -11,7 +11,7 @@
 #include "../src/queryinterpreter.h"
 
 
-openset::query::Interpreter* TestScriptRunner(const std::string& tableName, const std::string& script, openset::query::Macro_s& queryMacros, const bool debug)
+TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std::string& script, openset::query::Macro_s& queryMacros, const bool debug)
 {
     auto database = openset::globals::database;
     auto table    = database->getTable(tableName);
@@ -27,14 +27,11 @@ openset::query::Interpreter* TestScriptRunner(const std::string& tableName, cons
 
     ASSERT(p.error.inError() == false);
 
-    auto interpreter = new openset::query::Interpreter(queryMacros);
-
-    openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-    interpreter->setResultObject(&resultSet);
+    auto engine = new TestEngineContainer_s(queryMacros);       
 
     const auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
     ASSERT(personRaw != nullptr);
-    auto mappedColumns = interpreter->getReferencedColumns();
+    auto mappedColumns = engine->interpreter->getReferencedColumns();
 
     // MappedColumns? Why? Because the basic mapTable function (without a
     // columnList) maps all the columns in the table - which is what we want when
@@ -47,9 +44,41 @@ openset::query::Interpreter* TestScriptRunner(const std::string& tableName, cons
 
     // this mounts the now decompressed data (in the person overlay)
     // into the interpreter
-    interpreter->mount(&person); // run it
-    interpreter->exec();
+    engine->interpreter->mount(&person); // run it
+    engine->interpreter->exec();
 
-    ASSERT(interpreter->error.inError() == false);
-    return interpreter;
+    //ASSERT(interpreter->error.inError() == false);
+    return engine;
+}
+
+cjson resultToJson(TestEngineContainer_s* engine)
+{
+    auto result = engine->interpreter->result;
+
+    ASSERT(result->results.size() != 0);
+
+    // we are going to sort the list, this is done for merging, but
+    // being we have one partition in this test we won't actually be merging.
+    result->makeSortedList();
+
+    // the merger was made to merge a fancy result structure, we
+    // are going to manually stuff our result into this
+    std::vector<openset::result::ResultSet*> resultSets;
+
+    // populate or vector of results, so we can merge
+    //responseData.push_back(&res);
+    resultSets.push_back(engine->interpreter->result);
+
+    // this is the merging object, it merges results from multiple 
+    // partitions into a result that can serialized to JSON, or to 
+    // binary for distributed queries
+    openset::result::ResultMuxDemux merger;
+
+    // we are going to populate this
+    cjson resultJSON;
+
+    // make some JSON
+    merger.resultSetToJson(engine->interpreter->macros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+
+    return resultJSON;
 }

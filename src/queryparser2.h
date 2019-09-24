@@ -511,6 +511,24 @@ namespace openset::query
             while (c < end)
             {
 
+                if (c[0] == '#')
+                {
+                    current = trim(current);
+                    if (current.length())
+                    {
+                        accumulated.push_back(current);
+                        current.clear();
+                    }
+
+                    while (c < end)
+                    {
+                        if (*c == '\n' || *c == '\r')
+                            break;
+                        ++c;                        
+                    }
+                    continue;                    
+                }
+
                 // negative number, not math
                 if (c[0] == '-' && isDigit(c[1]))
                 {
@@ -1167,7 +1185,7 @@ namespace openset::query
                 if (startWord == "select")
                     continue;
 
-                for (auto i : line)
+                for (const auto &i : line)
                     cout << i << " ";
                 cout << endl;
 
@@ -1196,10 +1214,6 @@ namespace openset::query
 
                     idx = blockEnd;
                     blockId = subBlock->blockId;
-
-                    if (subBlock->blockId == 2)
-                        cout << "Debug";
-
                 }
 
                 block->lines.emplace_back(line);
@@ -2358,19 +2372,35 @@ namespace openset::query
                 else if (token == "__chain_continue" && !isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
-                    cout << token << " - ";
                     idx = parseParams(words, idx + 1, params);
 
-                    if (params.size() > 1)
+                    if (params.size() != 0)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            ".continue(<from>) takes one optional parameter",
+                            ".continue() takes no parameters",
                             lastDebug
                         };
 
-                    if (params.size())
-                        filter.continueBlock = addLinesAsBlock(params[0].first);
+                    filter.continueBlock = -1;
+                    filter.isContinue = true;
+                    ++idx;
+                    ++count;
+                }
+                else if (token == "__chain_from" && !isColumn)
+                {
+                    std::vector<std::pair<Blocks::Line,int>> params;
+                    idx = parseParams(words, idx + 1, params);
+
+                    if (params.size() != 1)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            ".from(<row>) takes one parameter",
+                            lastDebug
+                        };
+
+                    filter.continueBlock = addLinesAsBlock(params[0].first);
                     filter.isContinue = true;
 
                     ++count;
@@ -2483,9 +2513,6 @@ namespace openset::query
 
                 incUserVarAssignmentCount(variable);
                 auto variableIndex = userVarIndex(variable);
-
-                if (variable == " ")
-                    cout << "debug";
 
                 middle.emplace_back(
                     MiddleOp_e::push_user_ref,
@@ -2639,7 +2666,6 @@ namespace openset::query
             auto tokens = parseRawQuery(query);
             extractBlocks(tokens);
             processBlocks();
-            std::cout << "done" << std::endl;
         }
 
         void addDefaults()
@@ -2962,12 +2988,16 @@ namespace openset::query
             auto index = 0;
             for (auto& v : columns)
             {
+                const auto schemaInfo = tableColumns->getColumn(v);
+                
                 inMacros.vars.tableVars.push_back(Variable_s{v, ""});
                 inMacros.vars.tableVars.back().index = index;
                 inMacros.vars.tableVars.back().column = index;
                 inMacros.vars.tableVars.back().actual = v;
-                inMacros.vars.tableVars.back().schemaColumn = tableColumns->getColumn(v)->idx;
-                inMacros.vars.tableVars.back().schemaType = tableColumns->getColumn(v)->type; 
+                inMacros.vars.tableVars.back().isSet = schemaInfo->isSet;
+                inMacros.vars.tableVars.back().sortOrder = schemaInfo->idx;
+                inMacros.vars.tableVars.back().schemaColumn = schemaInfo->idx;
+                inMacros.vars.tableVars.back().schemaType = schemaInfo->type; 
                 ++index;
             }
 
@@ -2977,6 +3007,13 @@ namespace openset::query
             {
                 inMacros.vars.userVars.push_back(Variable_s{v, ""});
                 inMacros.vars.userVars.back().index = index;
+
+                if (v == "globals")
+                    inMacros.useGlobals = true;
+
+                if (v == "props")
+                  inMacros.useProps = true;
+
                 ++index;
             }
 
@@ -2989,7 +3026,9 @@ namespace openset::query
                 literal.value = v;
                 inMacros.vars.literals.emplace_back(literal);
                 ++index;
-            } 
+            }
+
+            inMacros.vars.columnVars = selectColumnInfo; 
 
             inMacros.filters = filters;
         }
@@ -3161,8 +3200,6 @@ namespace openset::query
                             tokensExpanded.insert(tokensExpanded.end(), ors.begin(), ors.end());
 
                             idx = endIdx + (isBefore ? 1 : 3);
-
-                            cout << endl;
                         }
                         else
                         {
@@ -3475,6 +3512,21 @@ namespace openset::query
                 addDefaults();
                 
                 initialParse(query);
+
+                if (!selectColumnInfo.size())
+                {
+                    const auto columnName = "id";
+                    const auto columnIdx = columnIndex(columnName);
+                    const auto selectIdx = selectsIndex(columnName);
+                   
+                    Variable_s var(columnName, columnName, "column", Modifiers_e::count);
+                    var.distinctColumnName = columnName;
+                    var.index = selectIdx; // index in variable array
+                    var.column = columnIdx; // index in grid
+                    var.schemaColumn = tableColumns->getColumn(columnName)->idx;
+                   
+                    selectColumnInfo.push_back(var);                     
+                }
 
                 compile(inMacros);
                 compileIndex(inMacros);
