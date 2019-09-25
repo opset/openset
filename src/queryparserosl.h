@@ -3421,7 +3421,7 @@ namespace openset::query
                 else if (isFloat(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, std::stof(value));
                 else
-                    index.emplace_back(HintOp_e::PUSH_VAL, std::stoll(value));
+                    index.emplace_back(HintOp_e::PUSH_VAL, static_cast<int64_t>(std::stoll(value)));
             };
 
             if (end == -1)
