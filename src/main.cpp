@@ -19,7 +19,7 @@ using namespace std::string_literals;
 void StartOpenSet(openset::config::CommandlineArgs args)
 {
 #ifdef _MSC_VER
-    // Goofy windows socket subsystem init. 
+    // Goofy windows socket subsystem init.
     // We shouldn't have to call this nowadays Microsoft
     WSADATA wsaData;
     const auto wVersionRequested = MAKEWORD(2, 0);
@@ -39,15 +39,15 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
     const auto banner =
         R"banner(
-  _______  _______  _______  __    _  _______  _______  _______ 
+  _______  _______  _______  __    _  _______  _______  _______
  |       ||       ||       ||  \  | ||       ||       ||       |
  |   _   ||    _  ||    ___||   \ | ||  _____||    ___||_     _|
- |  | |  ||   |_| ||   |___ |    \| || |_____ |   |___   |   |  
- |  | |  ||    ___||    ___||       ||_____  ||    ___|  |   |  
- |  |_|  ||   |    |   |___ | |\    | _____| ||   |___   |   |  
- |       ||   |    |       || | \   ||       ||       |  |   |  
- |_______||___|    |_______||_|  \__||_______||_______|  |___|  
-     
+ |  | |  ||   |_| ||   |___ |    \| || |_____ |   |___   |   |
+ |  | |  ||    ___||    ___||       ||_____  ||    ___|  |   |
+ |  |_|  ||   |    |   |___ | |\    | _____| ||   |___   |   |
+ |       ||   |    |       || | \   ||       ||       |  |   |
+ |_______||___|    |_______||_|  \__||_______||_______|  |___|
+
 )banner";
 
     cout << "\x1b[1;31m\b\b\b\b\b\b\b       " << endl;
@@ -103,7 +103,7 @@ int main(const int argc, char* argv[])
         }
     }
 
-    //if (test)
+    if (test)
     {
         const auto testRes = unitTest();
         exit(testRes ? 0 : 1); // exit with 1 on test fail

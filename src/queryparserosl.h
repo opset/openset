@@ -27,10 +27,10 @@ namespace openset::query
             int  conditionBlock {-1};
 
             LineItem_s(Line line) :
-                words(std::move(line)) 
+                words(std::move(line))
             {}
         };
-       
+
         struct Block_s
         {
             int blockId;
@@ -66,7 +66,7 @@ namespace openset::query
 
         Debugger_s() = default;
 
-        void set(Blocks::Line words, const int index = -1)            
+        void set(Blocks::Line words, const int index = -1)
         {
             line = std::move(words);
             consolidate(line, index);
@@ -83,7 +83,7 @@ namespace openset::query
         }
 
         void consolidate(const Blocks::Line& line, const int index = -1)
-        {            
+        {
             debugLine = "";
             int count = 0;
             for (const auto &word: line)
@@ -165,8 +165,8 @@ namespace openset::query
         in,
         contains,
         any,
-        and,
-        or,
+        op_and,
+        op_or,
         add,
         sub,
         mul,
@@ -189,7 +189,7 @@ namespace openset::query
         row_call,
         term,
     };
-   
+
     struct MiddleOp_s
     {
         MiddleOp_e op;
@@ -216,7 +216,7 @@ namespace openset::query
 
         MiddleOp_s(const MiddleOp_e op, const Blocks::Line& line, const int index) :
             op(op),
-            index(index)            
+            index(index)
         {
             debug.set(line, index);
         }
@@ -224,7 +224,7 @@ namespace openset::query
         MiddleOp_s(const MiddleOp_e op, cvar value, const Blocks::Line& line, const int index) :
             op(op),
             value1(std::move(value)),
-            index(index)            
+            index(index)
         {
             debug.set(line, index);
         }
@@ -233,7 +233,7 @@ namespace openset::query
             op(op),
             value1(std::move(value)),
             value2(std::move(value2)),
-            index(index)            
+            index(index)
         {
             debug.set(line, index);
         }
@@ -251,14 +251,14 @@ namespace openset::query
         { "in", MiddleOp_e::in },
         { "contains", MiddleOp_e::contains },
         { "any", MiddleOp_e::any },
-        { "&&", MiddleOp_e::and },
-        { "||", MiddleOp_e::or },
+        { "&&", MiddleOp_e::op_and },
+        { "||", MiddleOp_e::op_or },
         { "+", MiddleOp_e::add },
         { "-", MiddleOp_e::sub },
         { "*", MiddleOp_e::mul },
         { "/", MiddleOp_e::div },
     };
-    
+
     static const unordered_map<string, MiddleOp_e> inlineIterators = {
         {"sum", MiddleOp_e::sum_call },
         {"avg", MiddleOp_e::avg_call },
@@ -269,9 +269,9 @@ namespace openset::query
         {"test", MiddleOp_e::test_call },
         {"row", MiddleOp_e::row_call }
     };
-    
+
     class QueryParser2
-    {     
+    {
     public:
 
         using MidOps = std::vector<MiddleOp_s>;
@@ -312,7 +312,7 @@ namespace openset::query
                    return idx;
                ++idx;
             }
-            return -1;            
+            return -1;
         }
 
         static bool isDigit(const char value)
@@ -332,8 +332,8 @@ namespace openset::query
 
         static bool isFloat(const string& value)
         {
-            return (((value[0] >= '0' && value[0] <= '9') || 
-                (value[0] == '-' && value[1] >= '0' && value[1] <= '9')) && 
+            return (((value[0] >= '0' && value[0] <= '9') ||
+                (value[0] == '-' && value[1] >= '0' && value[1] <= '9')) &&
                 value.find('.') != string::npos);
         }
 
@@ -488,7 +488,9 @@ namespace openset::query
 
         bool isAssignedUserVar(const std::string& name)
         {
-            return userVarAssignments.find(name) != userVarAssignments.end();            
+            if (name == "props")
+                return true;
+            return userVarAssignments.find(name) != userVarAssignments.end();
         }
 
         static std::string stripQuotes(const string& text)
@@ -498,7 +500,7 @@ namespace openset::query
                 result = result.substr(1, result.length() - 2);
             return result;
         }
-        
+
         // step 1 - parse raw query string, generate array of tokens
         std::vector<std::string> parseRawQuery(const std::string& query) const
         {
@@ -524,9 +526,9 @@ namespace openset::query
                     {
                         if (*c == '\n' || *c == '\r')
                             break;
-                        ++c;                        
+                        ++c;
                     }
-                    continue;                    
+                    continue;
                 }
 
                 // negative number, not math
@@ -551,10 +553,10 @@ namespace openset::query
                 }
 
                 // quoted strings - with expansion of escaped values
-                if (*c == '\'' || *c == '\"')            
+                if (*c == '\'' || *c == '\"')
                 {
                     const auto endChar = *c;
-    
+
                     current = trim(current);
                     if (current.length())
                         accumulated.push_back(current);
@@ -617,14 +619,14 @@ namespace openset::query
                 if (c + 1 < end &&
                     ((c[0] == '!' && c[1] == '=') ||
                     (c[0] == '>' && c[1] == '=') ||
-                    (c[0] == '<' && c[1] == '=') || 
-                    (c[0] == '+' && c[1] == '=') || 
-                    (c[0] == '-' && c[1] == '=') || 
-                    (c[0] == '*' && c[1] == '=') || 
-                    (c[0] == '/' && c[1] == '=') || 
+                    (c[0] == '<' && c[1] == '=') ||
+                    (c[0] == '+' && c[1] == '=') ||
+                    (c[0] == '-' && c[1] == '=') ||
+                    (c[0] == '*' && c[1] == '=') ||
+                    (c[0] == '/' && c[1] == '=') ||
                     (c[0] == '<' && c[1] == '<') ||
-                    (c[0] == '<' && c[1] == '>') || 
-                    (c[0] == ':' && c[1] == ':') || 
+                    (c[0] == '<' && c[1] == '>') ||
+                    (c[0] == ':' && c[1] == ':') ||
                     (c[0] == '=' && c[1] == '=')))
                 {
                     current = trim(current);
@@ -698,7 +700,7 @@ namespace openset::query
             "select",
             "for",
             "each_row",
-        };           
+        };
 
         int __blockExtractionSeekEnd(std::vector<std::string>& tokens, int start, int end) const
         {
@@ -715,7 +717,7 @@ namespace openset::query
                     if (count == 0)
                         return start;
                 }
-                    
+
                 ++start;
             }
             return -1;
@@ -803,7 +805,7 @@ namespace openset::query
                 "/",
                 ",",
                 ":",
-                "where"                
+                "where"
             };
 
             const std::unordered_set<std::string> validAfterCondition = {
@@ -846,7 +848,7 @@ namespace openset::query
             const auto isNextChain = nextToken.find("__chain_") == 0;
 
             const int lookBackIndex = lookBack(tokens, offset);
-            const auto inChain = token == ")" && lookBackIndex > 0 ? 
+            const auto inChain = token == ")" && lookBackIndex > 0 ?
                 tokens[lookBackIndex-1].find("__chain_") == 0 : false;
 
             // end means stop
@@ -865,14 +867,14 @@ namespace openset::query
                 return false;
             }
 
-            // closing brackets... 
+            // closing brackets...
             if (token == ")" && !isNextChain && isNextAnItem)
                 return false;
 
             if (token == ")" && !isNextChain && !inChain && !isAfterBracketValid)
                 return false;
 
-            // closing brackets... 
+            // closing brackets...
             if ((token == "]" || token == "}") && (isNextAnItem || !isAfterBracketValid))
                 return false;
 
@@ -880,7 +882,7 @@ namespace openset::query
             // it's the end of a line, unless it's a `for x in y` scenario
             if (isItem && isNextAnItem && !isNextChain && nextToken != "in" && token != "in")
                 return false;
-            
+
             if (isNextChain)
                 return true;
 
@@ -904,14 +906,14 @@ namespace openset::query
 
             const auto variable = words[idx];
             ++idx;
-            
+
             // no subscript, just a variable (checked for function/table var by parseItem)
             if (idx >= static_cast<int>(words.size()) || words[idx] != "[")
             {
                 const auto nextToken = idx >= static_cast<int>(words.size()) ? std::string() : words[idx];
                 return nextToken == "=";
             }
-                        
+
             auto end = seekMatchingSquare(words, idx);
             ++idx;
 
@@ -937,8 +939,8 @@ namespace openset::query
             return false;
         }
 
-        // select 
-        int parseSelect(Blocks::Line& tokens, const int start) 
+        // select
+        int parseSelect(Blocks::Line& tokens, const int start)
         {
             const std::unordered_set<std::string> newStatementWords = {
                 "count",
@@ -966,7 +968,7 @@ namespace openset::query
                 // should be a modifier?
                 if (!ColumnModifiers.count(token))
                 {
-                    // THROW 
+                    // THROW
                 }
 
                 // should be a textual word
@@ -978,7 +980,7 @@ namespace openset::query
 
                 auto modifier = ColumnModifiers.find(token)->second;
                 const auto columnName = nextToken; // actual column name in table
-                auto keyColumn = "event"s; // distinct to itself
+                auto keyColumn = columnName; // distinct to itself
                 auto asName = columnName; // aliased as itself
 
                 if (!isTableColumn(columnName))
@@ -993,7 +995,7 @@ namespace openset::query
 
                 if (token == "as")
                 {
-                    
+
                     if (!nextToken.length() || !isTextual(nextToken))
                     {
                         // THROW
@@ -1008,7 +1010,7 @@ namespace openset::query
 
                 if (token == "key")
                 {
-                    
+
                     if (!nextToken.length() || !isTextual(nextToken))
                     {
                         // THROW
@@ -1022,7 +1024,7 @@ namespace openset::query
                     keyColumn = nextToken;
                     idx += 2;
                 }
-                
+
 
                 // already used, then throw and suggest using `as`
                 if (getTrackingIndex(selects, asName) != -1)
@@ -1041,11 +1043,10 @@ namespace openset::query
                     // session counting uses a specialized count method
                     modifier = ColumnModifiers.find("dist_count_person")->second;
 
-                    // reference session so it becomes part of dataset
+                    // reference session so it becomes part of data set
                     columnIndex("session");
                 }
 
-                
                 Variable_s var(columnName, asName, "column", modifier);
                 var.distinctColumnName = keyColumn;
 
@@ -1054,20 +1055,17 @@ namespace openset::query
                 var.schemaColumn = tableColumns->getColumn(columnName)->idx;
 
                 // if this is selection is keyed to another column lets reference it as well
-                if (keyColumn != "event")
-                {
-                    const auto keyIdx = columnIndex(keyColumn);
-                    var.distinctColumn = keyIdx; // index of key column in grid
-                }
-                
-                selectColumnInfo.push_back(var);                     
+                const auto keyIdx = columnIndex(keyColumn);
+                var.distinctColumn = keyIdx; // index of key column in grid
+
+                selectColumnInfo.push_back(var);
             }
 
             // THROW - should have found `end`
 
         }
 
-        int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction) 
+        int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction)
         {
             const std::unordered_set<std::string> forceNewLine = {
                 "if",
@@ -1158,16 +1156,16 @@ namespace openset::query
                 }
 
                 extraction.push_back(token);
-                                                               
+
                 if (!validNext(tokens, idx))
                     return idx + 1;
 
                 ++idx;
             }
 
-            return idx;            
+            return idx;
         }
-      
+
         void __extractBlock(Blocks::Line& tokens, Blocks::Block_s* block, const int start, const int end)
         {
 
@@ -1245,7 +1243,7 @@ namespace openset::query
                     --count;
 
                 if (!count && token == seek)
-                    return start;              
+                    return start;
                 ++start;
             }
             return -1;
@@ -1262,7 +1260,7 @@ namespace openset::query
                 const auto token = words[start];
 
                 if (token == seek)
-                    return start;              
+                    return start;
                 ++start;
             }
             return -1;
@@ -1415,18 +1413,18 @@ namespace openset::query
             ++idx; // skip past where look for logic
             const Blocks::Line logic(words.begin() + idx, words.end());
 
-            pushLogic(logic); 
+            pushLogic(logic);
 
             // if there is no logic, just straight iteration we push the logic block as -1
             // the interpreter will run in a true state for the logic if it sees -1
             const auto logicBlockId = logic.size() == 0 ? -1 : addLinesAsBlock(logic);
 
             middle.emplace_back(
-                iteratorOp, 
-                aggBlockId, 
-                logicBlockId, 
+                iteratorOp,
+                aggBlockId,
+                logicBlockId,
                 lastDebug.line,
-                0);                           
+                0);
         }
 
 
@@ -1507,9 +1505,9 @@ namespace openset::query
 
                         const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
                         middle.emplace_back(
-                            MiddleOp_e::marshal, 
-                            marshalIndex, 
-                            static_cast<int>(params.size()), 
+                            MiddleOp_e::marshal,
+                            marshalIndex,
+                            static_cast<int>(params.size()),
                             lastDebug.line,
                             relative + beforeIdx);
                     }
@@ -1525,9 +1523,9 @@ namespace openset::query
 
                         const auto marshalIndex = static_cast<int>(Marshals.find(token)->second);
                         middle.emplace_back(
-                            MiddleOp_e::marshal, 
-                            marshalIndex, 
-                            0, 
+                            MiddleOp_e::marshal,
+                            marshalIndex,
+                            0,
                             lastDebug.line,
                             relative + idx);
 
@@ -1567,11 +1565,11 @@ namespace openset::query
                     continue;
                 }
 
-                // if this is a text and the next token is a [ then this has to be as subscript                    
+                // if this is a text and the next token is a [ then this has to be as subscript
                 /*if (isTextual(token) && nextToken == "[")
-                {                    
+                {
                     idx = parseSubscript(words, idx, false) + 1;
-                    continue;                    
+                    continue;
                 }*/
 
                 // nested array or accessor?
@@ -1630,7 +1628,7 @@ namespace openset::query
                 // if this is an equality/inequality test we push the test immediately to leave
                 // a true/false on the stack
                 if (logicWords.count(token))
-                {                  
+                {
                     if (nextToken.length())
                     {
                         const auto beforeIdx = idx;
@@ -1662,7 +1660,7 @@ namespace openset::query
                         }
 
                         middle.emplace_back(
-                            ConditionToMiddleOp.find(token)->second, 
+                            ConditionToMiddleOp.find(token)->second,
                             lastDebug.line,
                             beforeIdx);
 
@@ -1679,8 +1677,8 @@ namespace openset::query
             // push any accumulated logical or math operators onto the stack in reverse
             std::for_each(ops.rbegin(), ops.rend(), [&](auto op) {
                middle.emplace_back(
-                   ConditionToMiddleOp.find(op.first)->second, 
-                   lastDebug.line, 
+                   ConditionToMiddleOp.find(op.first)->second,
+                   lastDebug.line,
                    op.second);
             });
 
@@ -1760,7 +1758,7 @@ namespace openset::query
                     lastDebug
                 };
             }
-                        
+
             const auto end = seekMatchingSquare(words, start);
             ++idx;
 
@@ -1788,9 +1786,9 @@ namespace openset::query
                 parseStatement(item.second, item.first, 0);
 
             middle.emplace_back(
-                MiddleOp_e::marshal, 
-                static_cast<int>(Marshals_e::marshal_make_list), 
-                static_cast<int>(params.size()), 
+                MiddleOp_e::marshal,
+                static_cast<int>(Marshals_e::marshal_make_list),
+                static_cast<int>(params.size()),
                 lastDebug.line,
                 start);
 
@@ -1828,13 +1826,13 @@ namespace openset::query
 
                 return idx;
             }
-                        
+
             auto end = seekMatchingSquare(words, idx);
             ++idx;
 
             while (idx < end)
             {
- 
+
                 auto value = extract(words, idx, end);
                 subScripts.push_front(make_pair(value,idx));
                 idx = end;
@@ -1879,7 +1877,7 @@ namespace openset::query
                 op,
                 variableIndex,
                 static_cast<int>(subScripts.size()),
-                lastDebug.line,  
+                lastDebug.line,
                 start);
 
             /*
@@ -1887,7 +1885,7 @@ namespace openset::query
             middle.emplace_back(
                 MiddleOp_e::marshal,
                 assignment ? static_cast<int>(Marshals_e::marshal_pop_subscript) : static_cast<int>(Marshals_e::marshal_push_subscript),
-                static_cast<int>(subScripts.size() + 1), 
+                static_cast<int>(subScripts.size() + 1),
                 lastDebug.line,
                 start);
             */
@@ -1910,7 +1908,7 @@ namespace openset::query
                     lastDebug
                 };
             }
-                        
+
             const auto end = seekMatchingCurly(words, start);
             ++idx;
 
@@ -1926,7 +1924,7 @@ namespace openset::query
                         "expecting ':' after key in dictionary",
                         lastDebug
                     };
-                               
+
                 if (commaPosition == -1 || colonPosition >= end)
                 {
                     auto key = words[idx];
@@ -1970,8 +1968,8 @@ namespace openset::query
                 // push the key
 
                 middle.emplace_back(
-                    MiddleOp_e::push_literal, 
-                    litIndex, 
+                    MiddleOp_e::push_literal,
+                    litIndex,
                     lastDebug.line,
                     item.second);
 
@@ -1981,9 +1979,9 @@ namespace openset::query
             }
 
             middle.emplace_back(
-                MiddleOp_e::marshal, 
-                static_cast<int>(Marshals_e::marshal_make_dict), 
-                static_cast<int>(values.size() * 2), 
+                MiddleOp_e::marshal,
+                static_cast<int>(Marshals_e::marshal_make_dict),
+                static_cast<int>(values.size() * 2),
                 lastDebug.line,
                 start);
 
@@ -2025,7 +2023,7 @@ namespace openset::query
                 item == "true" ||
                 item == "false" ||
                 item == "nil" ||
-                isString(item) || 
+                isString(item) ||
                 isFloat(item) ||
                 isNumeric(item) ||
                 isTableColumn(item)))
@@ -2106,7 +2104,7 @@ namespace openset::query
                     lastDebug
                 };
 
-            if (isString(item) || 
+            if (isString(item) ||
                 isFloat(item) ||
                 isNumeric(item) ||
                 isTableColumn(item))
@@ -2186,11 +2184,11 @@ namespace openset::query
                             errors::errorCode_e::syntax_error,
                             ".ever( <logic> ) requires a comparator",
                             lastDebug
-                        };                        
+                        };
                     }
-                                        
+
                     if (params.size())
-                        filter.evalBlock = addLinesAsBlock(params[0].first);                    
+                        filter.evalBlock = addLinesAsBlock(params[0].first);
 
                     filter.comparator = static_cast<int>(Operators.find(comparator)->second);
                     filter.isEver = true;
@@ -2224,11 +2222,11 @@ namespace openset::query
                             errors::errorCode_e::syntax_error,
                             ".is( <logic> ) requires a comparator",
                             lastDebug
-                        };                        
-                    }                   
-                                       
+                        };
+                    }
+
                     if (params.size())
-                        filter.evalBlock = addLinesAsBlock(params[0].first);                    
+                        filter.evalBlock = addLinesAsBlock(params[0].first);
 
                     filter.comparator = static_cast<int>(Operators.find(comparator)->second);
 
@@ -2466,7 +2464,7 @@ namespace openset::query
                 middle.emplace_back(filterOp, static_cast<int>(filters.size()), lastDebug.line, idx);
                 filters.push_back(filter);
             }
-            else 
+            else
             {
                 // set default filter
                 middle.emplace_back(filterOp, 0, lastDebug.line, idx);
@@ -2485,13 +2483,13 @@ namespace openset::query
             {
                 const auto idx = parseFilterChain(false, words, 1);
                 const Blocks::Line logic(words.begin() + idx, words.end());
-                pushLogic(logic); 
+                pushLogic(logic);
 
                 const auto logicBlockId = addLinesAsBlock(logic);
                 middle.emplace_back(
-                    MiddleOp_e::if_call, 
-                    codeBlockId, 
-                    logicBlockId, 
+                    MiddleOp_e::if_call,
+                    codeBlockId,
+                    logicBlockId,
                     lastDebug.line,
                     0);
             }
@@ -2503,7 +2501,7 @@ namespace openset::query
                         errors::errorCode_e::syntax_error,
                         "for loop is malformed",
                         lastDebug
-                    };                    
+                    };
 
                 // push the variable containing source data for our iterator
                 parseStatement(0, words, 3);
@@ -2519,11 +2517,11 @@ namespace openset::query
                     variableIndex,
                     lastDebug.line,
                     1);
-     
+
                 middle.emplace_back(
-                    MiddleOp_e::for_call, 
-                    codeBlockId, 
-                    0, 
+                    MiddleOp_e::for_call,
+                    codeBlockId,
+                    0,
                     lastDebug.line,
                     0);
             }
@@ -2541,17 +2539,17 @@ namespace openset::query
 
                 ++idx; // skip past where look for logic
                 const Blocks::Line logic(words.begin() + idx, words.end());
-                pushLogic(logic); 
+                pushLogic(logic);
 
                 // if there is no logic, just straight iteration we push the logic block as -1
                 // the interpreter will run in a true state for the logic if it sees -1
                 const auto logicBlockId = logic.size() == 0 ? -1 : addLinesAsBlock(logic);
                 middle.emplace_back(
-                    MiddleOp_e::each_call, 
-                    codeBlockId, 
-                    logicBlockId, 
+                    MiddleOp_e::each_call,
+                    codeBlockId,
+                    logicBlockId,
                     lastDebug.line,
-                    0);                
+                    0);
             }
 
             currentBlockType.pop_back();
@@ -2568,7 +2566,7 @@ namespace openset::query
                     lastDebug
                 };
 
-            // the `<<` statement doesn't take brackets, so we are adding them before 
+            // the `<<` statement doesn't take brackets, so we are adding them before
             // we call parseParams
             Blocks::Line modifiedSequence;
             modifiedSequence.push_back("(");
@@ -2583,11 +2581,11 @@ namespace openset::query
 
             const auto marshalIndex = static_cast<int>(Marshals.find("tally")->second);
             middle.emplace_back(
-                MiddleOp_e::marshal, 
-                marshalIndex, 
-                static_cast<int>(params.size()), 
+                MiddleOp_e::marshal,
+                marshalIndex,
+                static_cast<int>(params.size()),
                 lastDebug.line,
-                0);            
+                0);
         }
 
         void processBlocks()
@@ -2606,8 +2604,8 @@ namespace openset::query
 
                 if (block.blockId)
                     middle.emplace_back(
-                        MiddleOp_e::block, 
-                        static_cast<int>(block.blockId), 
+                        MiddleOp_e::block,
+                        static_cast<int>(block.blockId),
                         Blocks::Line{},
                         -1);
 
@@ -2616,7 +2614,7 @@ namespace openset::query
                     const auto& words = line.words;
                     lastDebug.set(words);
 
-                    // push row data to the accumulator 
+                    // push row data to the accumulator
                     if (words[0] == "<<")
                     {
                         parseTally(words);
@@ -2632,7 +2630,7 @@ namespace openset::query
                         continue;
                     }
 
-                    // is this an assignment?                    
+                    // is this an assignment?
                     if (const auto eqPos = seek("=", words, 0); eqPos != -1)
                     {
                         if (eqPos == static_cast<int>(words.size()))
@@ -2655,7 +2653,16 @@ namespace openset::query
 
                 }
 
-                middle.emplace_back(block.blockId == 0? MiddleOp_e::term : MiddleOp_e::ret, Blocks::Line{}, -1);
+                if (block.blockId == 0)
+                {
+                    // force a `false` onto the stack as a default if none specified before term
+                    middle.emplace_back(MiddleOp_e::push_false, lastDebug.line, 0);
+                    middle.emplace_back(MiddleOp_e::term, Blocks::Line{}, -1);
+                }
+                else
+                {
+                    middle.emplace_back(MiddleOp_e::ret, Blocks::Line{}, -1);
+                }
 
                 ++currentIdx;
             }
@@ -2678,7 +2685,7 @@ namespace openset::query
             columnIndex("event");
 
             // default filter is set for row searching with no limiters
-            const Filter_s filter; 
+            const Filter_s filter;
             filters.push_back(filter);
         }
 
@@ -2701,13 +2708,13 @@ namespace openset::query
                 switch (midOp.op)
                 {
                 case MiddleOp_e::push_user:
-                    /*if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
                             "variable: '" + userVars[midOp.value1.getInt64()] + "' is used but never assigned a value",
                             lastDebug
-                        };*/
+                        };
 
                     finCode.emplace_back(
                         OpCode_e::PSHUSRVAR,
@@ -2718,13 +2725,13 @@ namespace openset::query
                     break;
 
                 case MiddleOp_e::push_user_ref:
-                    /*if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
                             "variable: '" + userVars[midOp.value1.getInt64()] + "' is used but never assigned a value",
                             lastDebug
-                        };*/
+                        };
 
                     finCode.emplace_back(
                         OpCode_e::PSHUSRVREF,
@@ -2889,11 +2896,11 @@ namespace openset::query
                     finCode.emplace_back(OpCode_e::OPANY, 0, 0, 0, debug);
                     break;
 
-                case MiddleOp_e::and:
+                case MiddleOp_e::op_and:
                     finCode.emplace_back(OpCode_e::LGCAND, 0, 0, 0, debug);
                     break;
 
-                case MiddleOp_e::or:
+                case MiddleOp_e::op_or:
                     finCode.emplace_back(OpCode_e::LGCOR, 0, 0, 0, debug);
                     break;
 
@@ -2931,7 +2938,7 @@ namespace openset::query
                         OpCode_e::MARSHAL,
                         midOp.value1, // index of function
                         0,
-                        midOp.value2, // number of params to function 
+                        midOp.value2, // number of params to function
                         debug);
                     break;
 
@@ -2970,7 +2977,7 @@ namespace openset::query
                         debug);
                     break;
 
-                default: 
+                default:
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
@@ -2989,7 +2996,10 @@ namespace openset::query
             for (auto& v : columns)
             {
                 const auto schemaInfo = tableColumns->getColumn(v);
-                
+
+                if (v == "session"s)
+                    inMacros.sessionColumn = index;
+
                 inMacros.vars.tableVars.push_back(Variable_s{v, ""});
                 inMacros.vars.tableVars.back().index = index;
                 inMacros.vars.tableVars.back().column = index;
@@ -2997,10 +3007,9 @@ namespace openset::query
                 inMacros.vars.tableVars.back().isSet = schemaInfo->isSet;
                 inMacros.vars.tableVars.back().sortOrder = schemaInfo->idx;
                 inMacros.vars.tableVars.back().schemaColumn = schemaInfo->idx;
-                inMacros.vars.tableVars.back().schemaType = schemaInfo->type; 
+                inMacros.vars.tableVars.back().schemaType = schemaInfo->type;
                 ++index;
             }
-
 
             index = 0;
             for (auto& v : userVars)
@@ -3028,7 +3037,7 @@ namespace openset::query
                 ++index;
             }
 
-            inMacros.vars.columnVars = selectColumnInfo; 
+            inMacros.vars.columnVars = selectColumnInfo;
 
             inMacros.filters = filters;
         }
@@ -3056,6 +3065,10 @@ namespace openset::query
                         {
                             tokensUnchained.emplace_back(token);
                         }
+                        else if (token == "session") // can't index at current - computed at querytime
+                        {
+                            tokensUnchained.emplace_back("VOID");
+                        }
                         else if (isTableColumn(token))
                         {
                             tokensUnchained.emplace_back(token);
@@ -3082,14 +3095,14 @@ namespace openset::query
                                 }
                                 else
                                 {
-                                    idx = seekMatchingBrace(tokens, idx + 1);                       
+                                    idx = seekMatchingBrace(tokens, idx + 1);
                                 }
-                                ++idx;   
-                            }                        
+                                ++idx;
+                            }
 
                             continue;
 
-                        }                    
+                        }
                         else if (isMarshal(token))
                         {
                             tokensUnchained.emplace_back("VOID");
@@ -3114,7 +3127,7 @@ namespace openset::query
                         }
                         else
                         {
-                            // THROW ?? 
+                            // THROW ??
                         }
                     }
                     else
@@ -3128,11 +3141,11 @@ namespace openset::query
 
             // expand lists involved with `in`, `contains` and `any` - turn them into ORs
             Blocks::Line tokensExpanded;
-            {                
+            {
                 auto& tokens = tokensUnchained;
                 auto idx = 0;
                 auto end = static_cast<int>(tokens.size());
-               
+
                 while (idx < end)
                 {
                     auto& token = tokens[idx];
@@ -3150,7 +3163,7 @@ namespace openset::query
                         extraction.back() = ")";
                         std::vector<std::pair<Blocks::Line,int>> params;
                         parseParams(extraction, 0, params);
-                        
+
                         const auto before = idx - 1 < 0 ? std::string() : tokens[idx - 1];
                         const auto after = endIdx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[endIdx + 1];
 
@@ -3164,7 +3177,7 @@ namespace openset::query
                             // convert these to == tests - which in the index are inclusion tests
                             if (op == "in" || op == "contains" || op == "any")
                                 op = "==";
-                                                  
+
                             Blocks::Line ors;
 
                             ors.push_back("(");
@@ -3217,11 +3230,11 @@ namespace openset::query
 
             // remove math from logic
             Blocks::Line tokensWithoutMath;
-            {                
+            {
                 auto& tokens = tokensExpanded;
                 auto idx = 0;
                 auto end = static_cast<int>(tokens.size());
-               
+
                 while (idx < end)
                 {
                     auto& token = tokens[idx];
@@ -3270,8 +3283,8 @@ namespace openset::query
                             countable = false;
                             tokens[idx-1] = "";
                             tokens[idx]   = "";
-                            tokens[idx+1] = "";                                            
-                        }                    
+                            tokens[idx+1] = "";
+                        }
                         else if (isTableColumn(nextToken) && (isNumeric(prevToken) || isString(prevToken)))
                         {
                             tokens[idx-1] = nextToken;
@@ -3341,11 +3354,11 @@ namespace openset::query
                             stripped = true;
                         }
                         else if (
-                            (Operators.count(token) || LogicalOperators.count(token)) && 
+                            (Operators.count(token) || LogicalOperators.count(token)) &&
                             (nextToken == ")" || prevToken == "(")
                             )
                         {
-                            stripped = true;                            
+                            stripped = true;
                         }
                         // look for columns with no condition
                         else if (
@@ -3356,11 +3369,11 @@ namespace openset::query
                                 )
                             )
                         {
-                            stripped = true;                           
+                            stripped = true;
                         }
                         else
                         {
-                            output.emplace_back(token);                            
+                            output.emplace_back(token);
                         }
 
                         ++idx;
@@ -3370,7 +3383,7 @@ namespace openset::query
 
                     if (!stripped)
                         break;
-                }                
+                }
             }
 
             indexLogic = tokensFinalClean;
@@ -3398,7 +3411,7 @@ namespace openset::query
             const auto pushValue = [&](const std::string& value)
             {
                 if (isTableColumn(value))
-                    index.emplace_back(HintOp_e::PUSH_TBL, value);   
+                    index.emplace_back(HintOp_e::PUSH_TBL, value);
                 else if (isNil(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, NONE);
                 else if (isBool(value))
@@ -3416,7 +3429,7 @@ namespace openset::query
             auto idx = start;
 
             std::vector<std::string> ops;
-                       
+
             while (idx < end)
             {
                 const auto token = words[idx];
@@ -3455,7 +3468,7 @@ namespace openset::query
                 // if this is an equality/inequality test we push the test immediately to leave
                 // a true/false on the stack
                 if (logicWords.count(token))
-                {                  
+                {
                     if (nextToken.length())
                     {
                         const auto beforeIdx = idx;
@@ -3510,7 +3523,7 @@ namespace openset::query
                 tableColumns = columnsPtr;
 
                 addDefaults();
-                
+
                 initialParse(query);
 
                 if (!selectColumnInfo.size())
@@ -3518,14 +3531,14 @@ namespace openset::query
                     const auto columnName = "id";
                     const auto columnIdx = columnIndex(columnName);
                     const auto selectIdx = selectsIndex(columnName);
-                   
+
                     Variable_s var(columnName, columnName, "column", Modifiers_e::count);
                     var.distinctColumnName = columnName;
                     var.index = selectIdx; // index in variable array
                     var.column = columnIdx; // index in grid
                     var.schemaColumn = tableColumns->getColumn(columnName)->idx;
-                   
-                    selectColumnInfo.push_back(var);                     
+
+                    selectColumnInfo.push_back(var);
                 }
 
                 compile(inMacros);
@@ -3538,7 +3551,7 @@ namespace openset::query
                 tableColumns = columnsPtr;
 
                 addDefaults();
-                
+
                 initialParse(query);
                 compile(inMacros);
 
@@ -3570,7 +3583,7 @@ namespace openset::query
                     std::string { ex.what() } + "(1)",
                     additional);
                 return false;
-            } 
+            }
             catch (...) // giant WTF runtime exception
             {
                 std::string additional = "";

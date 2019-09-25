@@ -31,7 +31,7 @@ void openset::query::Interpreter::setResultObject(result::ResultSet* resultSet)
 void openset::query::Interpreter::configure()
 {
     /* Configure the grid (only on first mount)
-     * 
+     *
      * When we get our first mount we have access
      * to the table and schema objects. With these
      * we can prepare the grid to only expand
@@ -82,14 +82,14 @@ vector<string> openset::query::Interpreter::getReferencedColumns() const
 void openset::query::Interpreter::mount(Person* person)
 {
     /** \brief Mount a person object.
-     * 
-     * When the first person object is mounted we 
-     * will have access to the table and schema which 
+     *
+     * When the first person object is mounted we
+     * will have access to the table and schema which
      * are referenced in the grid object. At this point
      * we can call configure which will map the
      * columns in this query to the grid, allowing for
-     * selective expansion of grid data when 
-     * grid::prepare is called		
+     * selective expansion of grid data when
+     * grid::prepare is called
      */
     eventDistinct.clear();
     grid     = person->getGrid(); // const
@@ -229,27 +229,27 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  * upon when we switch to another person record before we re-execute the query script on that person.
                  *
                  * The key is a compound key made by taking in the following parameters:
-                 * 
+                 *
                  *   - index: the index of the column being counted in this iteratior of "columnVars"
                  *   - distinct: usually the value of the column in an event row, or an alternate column to count distinctly
-                 *               in the event row... or when it is a variable (rather than an event column) the 
+                 *               in the event row... or when it is a variable (rather than an event column) the
                  *               value of that variable.
                  *   - countKey: when counting people, stamp is zero (because we don't want to count a person more than once),
-                 *               otherwise it is set to the row-number so we don't count a value for a row twice... or 
+                 *               otherwise it is set to the row-number so we don't count a value for a row twice... or
                  *               when we are counting with the special flag "useStampedRowIds" we use the timestamp of the row
                  *               allowing multiple rows with the same stamp to be counted as if they were part of one larger
-                 *               row. 
+                 *               row.
                  *   - column:   integer version of the pointer to the result set ("resultColumns"). This is because each
                  *               result grouping has it's own "resultColumns" and we must distiguish whether we have counted
                  *               for a specific group or not before (i.e. the keys above could potentially be met on another group)
-                 *               
+                 *
                  */
                 distinctKey.set(
                     resCol.index,
                     (resCol.modifier == Modifiers_e::var)
                         ? fixToInt(resCol.value)
                         : columns->cols[resCol.distinctColumn],
-                    ((resCol.schemaColumn == COL_UUID) || (resCol.modifier == Modifiers_e::dist_count_person))
+                    (resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person)
                         ? 0
                         : (macros.useStampedRowIds
                                ? columns->cols[COL_STAMP]
@@ -768,8 +768,8 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
     --stackPtr;
     const auto b = *stackPtr;
     --stackPtr;
-    const auto a = *stackPtr; 
-    
+    const auto a = *stackPtr;
+
     // if we acquired IndexBits from getSegment_cb we may have to
     // delete them after we are done
     auto aDelete     = false;
@@ -805,7 +805,7 @@ void openset::query::Interpreter::marshal_union(const int paramCount)
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } 
+    }
 
     // copy then OR to get the union of these two segments
     bits->opCopy(*aBits);
@@ -1252,11 +1252,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     case Marshals_e::marshal_now:
         *stackPtr = Now();
         ++stackPtr;
-        break; 
+        break;
     case Marshals_e::marshal_row:
         *stackPtr = currentRow;
         ++stackPtr;
-        break;        
+        break;
     case Marshals_e::marshal_last_event:
         *stackPtr = rows->back()->cols[COL_STAMP];
         ++stackPtr;
@@ -1281,13 +1281,13 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         *(stackPtr - 1) /= int64_t(1'000); // in place
         break;
     case Marshals_e::marshal_to_minutes:
-        *(stackPtr - 1) /= int64_t(60'000); // in place							
+        *(stackPtr - 1) /= int64_t(60'000); // in place
         break;
     case Marshals_e::marshal_to_hours:
-        *(stackPtr - 1) /= int64_t(3'600'000); // in place							
+        *(stackPtr - 1) /= int64_t(3'600'000); // in place
         break;
     case Marshals_e::marshal_to_days:
-        *(stackPtr - 1) /= int64_t(86'400'000); // in place							
+        *(stackPtr - 1) /= int64_t(86'400'000); // in place
         break;
     case Marshals_e::marshal_get_second:
         *(stackPtr - 1) = Epoch::epochSecondNumber(*(stackPtr - 1));
@@ -1339,7 +1339,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_round_year:
         *(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
-        break; 
+        break;
     case Marshals_e::marshal_row_count:
         if (eventCount == -1)
         {
@@ -1714,7 +1714,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             *stackPtr = NONE;
             ++stackPtr;
             --recursion;
-            return;            
+            return;
         }
 
         switch (inst->op)
@@ -1735,7 +1735,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             else
             {
                 auto colValue = NONE; // extract property value from grid->propRow
-                
+
                 //if (macros.vars.tableVars[inst->index].isProp)
                 //{
                 //    colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
@@ -1872,7 +1872,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         {
             if (macros.vars.columnVars[inst->index].modifier != Modifiers_e::var)
             {
-                // push mapped column value into 
+                // push mapped column value into
                 // TODO range check
                 *stackPtr = (*rows)[currentRow]->cols[macros.vars.columnVars[inst->index].column];
                 ++stackPtr;
@@ -1911,15 +1911,15 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             ++stackPtr;
         }
         break;
-        case OpCode_e::PSHUSRVAR: // push a cvar							
+        case OpCode_e::PSHUSRVAR: // push a cvar
             *stackPtr = macros.vars.userVars[inst->index].value;
             ++stackPtr;
             break;
-        case OpCode_e::PSHUSRVREF: // push a cvar							
+        case OpCode_e::PSHUSRVREF: // push a cvar
             stackPtr->setReference(&macros.vars.userVars[inst->index].value);
             ++stackPtr;
             break;
-        case OpCode_e::PSHLITTRUE: // push boolean true						
+        case OpCode_e::PSHLITTRUE: // push boolean true
             *stackPtr = true;
             ++stackPtr;
             break;
@@ -1975,14 +1975,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
             else
             {
-                // TODO - can we do anything to the data? probably not					
+                // TODO - can we do anything to the data? probably not
             }
             break;
         case OpCode_e::CNDIF: // execute lambda, and if not 0 on stack
             // next a block.
             // IF is implemented with a lambda. If it returns true
             // the corresponding code block is run. After this
-            // it most proceed to the code line with the 
+            // it most proceed to the code line with the
             // first non-ELSE/ELIF
             opRunner(
                 // call condition lambda
@@ -2033,7 +2033,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         {
             --stackPtr;
 
-            const int64_t keyIdx = *stackPtr; // we are going to look back one instruction to see if we 
+            const int64_t keyIdx = *stackPtr; // we are going to look back one instruction to see if we
             // are putting values into a user variable or a column variable
             const auto isColumn = (inst - 1)->op == OpCode_e::COLIDX;
 
@@ -2050,7 +2050,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
             if (source.typeOf() == cvar::valueType::DICT)
             {
-                // enter loop, increment nest 
+                // enter loop, increment nest
                 ++nestDepth;
                 const auto from = source.getDict();
                 for (auto& x : *from)
@@ -2088,7 +2088,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     }
                     if (loopState == LoopState_e::in_continue)
                         loopState = LoopState_e::run; // no actual action, we are going to loop anyways
-                }                                     // out of loop, decrement nest 
+                }                                     // out of loop, decrement nest
                 --nestDepth;
             }
             else if (source.typeOf() == cvar::valueType::LIST)
@@ -2180,41 +2180,41 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
         }
         break; /*			case OpCode_e::ITNEXT:
-                                // fancy and strange stuff happens here					
+                                // fancy and strange stuff happens here
                                 {
                                     if (currentRow >= static_cast<int>(rows->size()))
                                         break;
-                
+
                                     const auto savedRow = currentRow;
                                     auto iterCount = 0;
                                     cvar lambda;
-                
-                                    // enter loop, increment nest 
+
+                                    // enter loop, increment nest
                                     ++nestDepth;
-                
+
                                     // store the time stamp of the last match
                                     matchStampPrev.push_back((*rows)[currentRow]->cols[0]);
-                
+
                                     // user right for count
                                     for (const auto rowCount = rows->size();
                                          iterCount < inst->value && currentRow < static_cast<int>(rowCount);
                                          ++currentRow)
                                     {
-                
+
                                         if (loopState == LoopState_e::in_exit || error.inError())
                                         {
                                             *stackPtr = 0;
                                             ++stackPtr;
-                
+
                                             matchStampPrev.pop_back();
                                             --nestDepth;
                                             --recursion;
                                             return;
                                         }
-                
+
                                         if (nestDepth == 1) // 1 is top loop, record the stamp on the match
                                             matchStampTop = (*rows)[currentRow]->cols[0];
-                
+
                                         if (inst->extra)
                                         {
                                             opRunner(// call the "where" lambda
@@ -2227,12 +2227,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                                         {
                                             lambda = 1;
                                         }
-                
+
                                         // call lambda to see if this row passes the test
                                         if (lambda.isEvalTrue()) // cool, we have row that matches
                                         {
                                             matchStampPrev.back() = (*rows)[currentRow]->cols[0];
-                
+
                                             // run the inner code block
                                             if (!inst->index)
                                             {
@@ -2244,17 +2244,17 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                                                 --recursion;
                                                 return;
                                             }
-                
+
                                             if (iterCount < inst->value)
                                                 opRunner(
                                                     &macros.code.front() + inst->index,
                                                     currentRow);
-                
+
                                             // increment run count
                                             ++iterCount;
-                
+
                                         }
-                
+
                                         if (loopState == LoopState_e::in_break || inReturn)
                                         {
                                             if (breakDepth == 1 || nestDepth == 1)
@@ -2266,28 +2266,28 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                                                 --nestDepth;
                                                 --recursion;
                                             }
-                
+
                                             --breakDepth;
-                
+
                                             if (breakDepth == 0)
                                                 break;
-                
+
                                             matchStampPrev.pop_back();
                                             return;
                                         }
-                
+
                                         // no actual action, we are going to loop anyways
                                         if (loopState == LoopState_e::in_continue)
                                             loopState = LoopState_e::run;
                                     }
-                
+
                                     matchStampPrev.pop_back();
-                
+
                                     currentRow = savedRow;
-                
-                                    // out of loop, decrement nest 
+
+                                    // out of loop, decrement nest
                                     --nestDepth;
-                
+
                                     // otherwise we move to the next line, loop is done
                                 }
                                 break;
@@ -2316,7 +2316,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             //  currentRow = 0;
             // number of matches when using match limiting on `for` loop
             auto iterCount    = 0; // result of lambda call
-            cvar lambdaResult = 0; // enter loop, increment nest 
+            cvar lambdaResult = 0; // enter loop, increment nest
             ++nestDepth;           // user right for count
             for (; iterCount < inst->value && currentRow >= 0 && currentRow < static_cast<int>(rowCount); ++currentRow)
             {
@@ -2379,7 +2379,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 if (loopState == LoopState_e::in_continue)
                     loopState = LoopState_e::run;
             }
-            currentRow = savedRow; // out of loop, decrement nest 
+            currentRow = savedRow; // out of loop, decrement nest
             --nestDepth;
         }
             break;
@@ -2405,7 +2405,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             //    currentRow = rowCount - 1;
             // number of matches when using match limiting on `for` loop
             auto iterCount    = 0; // result of lambda call
-            cvar lambdaResult = 0; // enter loop, increment nest 
+            cvar lambdaResult = 0; // enter loop, increment nest
             ++nestDepth;           // user right for count
             for (; iterCount < inst->value && currentRow >= 0 && currentRow < static_cast<int>(rowCount); --currentRow)
             {
@@ -2468,7 +2468,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 if (loopState == LoopState_e::in_continue)
                     loopState = LoopState_e::run;
             }
-            currentRow = savedRow; // out of loop, decrement nest 
+            currentRow = savedRow; // out of loop, decrement nest
             --nestDepth;
         }
             break;
@@ -2659,7 +2659,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             break;
         case OpCode_e::RETURN: // this is a soft return like END-OF-BLOCK, not like explicit return call
             //inReturn = true;
-            
+
             if (stack == stackPtr)
             {
                 *stackPtr = NONE;
@@ -2757,8 +2757,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                             if (breakDepth == 0)
                                 break;
                             return;
-                        } 
-                        
+                        }
+
                         // no actual action, we are going to loop anyways
                         if (loopState == LoopState_e::in_continue)
                             loopState = LoopState_e::run;
@@ -2785,8 +2785,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                             if (breakDepth == 0)
                                 break;
                             return;
-                        } 
-                        
+                        }
+
                         // no actual action, we are going to loop anyways
                         if (loopState == LoopState_e::in_continue)
                             loopState = LoopState_e::run;
@@ -2813,8 +2813,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                             if (breakDepth == 0)
                                 break;
                             return;
-                        } 
-                        
+                        }
+
                         // no actual action, we are going to loop anyways
                         if (loopState == LoopState_e::in_continue)
                             loopState = LoopState_e::run;
@@ -2822,7 +2822,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     break;
                 }
 
-            }           
+            }
         }
             break;
         case OpCode_e::CALL_IF: // execute lambda, and if not 0 on stack
@@ -2832,8 +2832,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 lambda(inst->index, currentRow);
                 if (inReturn) // error state?
-                    return; 
-                
+                    return;
+
                 // fast forward passed subsequent elif/else ops
                 ++inst;
                 //while (inst->op == OpCode_e::CNDELIF || inst->op == OpCode_e::CNDELSE)
@@ -2853,7 +2853,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             const auto rowCount  = static_cast<int>(rows->size());
             const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
 
-            // .continue - are we continuing from a specific row 
+            // .continue - are we continuing from a specific row
             if (filter.isContinue)
             {
                 if (filter.continueBlock != -1)
@@ -2863,7 +2863,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 filter.isReverse ? currentRow = rowCount - 1 : currentRow = 0;
             }
-            
+
             // .next - are we advancing the cursor
             if (filter.isNext)
                filter.isReverse ? --currentRow : ++currentRow;
@@ -2905,7 +2905,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 else
                 {
                     rangeStart = withinStart - withinWindow;
-                    rangeEnd = withinStart + withinWindow;                    
+                    rangeEnd = withinStart + withinWindow;
                 }
 
                 if (rangeStart > startStamp)
@@ -2948,7 +2948,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     }
                     break;
                 }
-                
+
                 if (logicLambda == -1 || lambda(logicLambda, currentRow)->isEvalTrue())
                 {
                     lambda(codeBlock, currentRow);
@@ -2970,8 +2970,8 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     if (breakDepth == 0)
                         break;
                     return;
-                } 
-                
+                }
+
                 // no actual action, we are going to loop anyways
                 if (loopState == LoopState_e::in_continue)
                     loopState = LoopState_e::run;
@@ -2994,7 +2994,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
 
             // THROW (in compiler?) isNext but not isLookAhead or isLookBack
-            
+
             // .next - are we advancing the cursor
             if (!filter.isRow && filter.isNext)
                filter.isReverse ? --currentRow : ++currentRow;
@@ -3037,7 +3037,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 else
                 {
                     rangeStart = withinStart - withinWindow;
-                    rangeEnd = withinStart + withinWindow;                    
+                    rangeEnd = withinStart + withinWindow;
                 }
 
                 if (rangeStart > startStamp)
@@ -3048,7 +3048,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
 
             auto pass = false;
-            
+
             if (filter.isRow)
             {
                 pass = lambda(filter.evalBlock, currentRow)->isEvalTrue();
@@ -3075,7 +3075,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         }
                         break;
                     }
-                    
+
                     if (lambda(filter.evalBlock, currentRow)->isEvalTrue())
                     {
                         pass = true;
@@ -3083,7 +3083,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     }
 
                     filter.isReverse ? --currentRow : ++currentRow;
-                }                          
+                }
             }
 
             *stackPtr = filter.isNegated ? !pass : pass;
@@ -3095,7 +3095,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         default:
             break;
         } // move to the next instruction
-        ++inst;    
+        ++inst;
     }
     --recursion;
 }
@@ -3132,7 +3132,7 @@ void openset::query::Interpreter::setCompareSegments(IndexBits* querySegment, st
         segmentIndexes.push_back(segment);
     }
     querySegment->reset(); // clean querySegment for this query
-    // now we replace querySegment with the union of all the segmentBits. 
+    // now we replace querySegment with the union of all the segmentBits.
     for (auto segmentBits : segments)
         querySegment->opOr(*segmentBits);
 }
@@ -3151,14 +3151,14 @@ void openset::query::Interpreter::execReset()
     stackPtr   = stack; //matchStampPrev.clear();
     eventDistinct.clear();
     for (auto i = 0; i < STACK_DEPTH; ++i)
-        stack[i].clear();   
+        stack[i].clear();
 }
 
 void openset::query::Interpreter::exec()
 {
     returns.clear(); // cannot be cleared in segment loop
     const auto inst = &macros.code.front();
-    //try
+    try
     {
         // if we have segment constraints
         if (segmentIndexes.size())
@@ -3195,7 +3195,7 @@ void openset::query::Interpreter::exec()
             grid->setProps(macros.vars.userVars[propsIndex].value);
 
     }
-   /*catch (const std::runtime_error& ex)
+    catch (const std::runtime_error& ex)
     {
         std::string additional = "";
         if (lastDebug)
@@ -3205,7 +3205,8 @@ void openset::query::Interpreter::exec()
             errors::errorCode_e::run_time_exception_triggered,
             std::string { ex.what() } + " (2)",
             additional);
-    } catch (...)
+    }
+    catch (...)
     {
         std::string additional = "";
         if (lastDebug)
@@ -3216,8 +3217,6 @@ void openset::query::Interpreter::exec()
             "unknown run-time error (3)",
             additional);
     }
-    */
-
 }
 
 void openset::query::Interpreter::exec(const string& functionName)

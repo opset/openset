@@ -6,10 +6,8 @@
 #include "../src/table.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
-#include "../src/queryparser.h"
-#include "../src/queryparser2.h"
+#include "../src/queryparserosl.h"
 #include "../src/queryinterpreter.h"
-
 
 TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std::string& script, openset::query::Macro_s& queryMacros, const bool debug)
 {
@@ -20,14 +18,14 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     openset::query::QueryParser2 p;
 
     // compile test script
-        p.compileQuery(script, table->getColumns(), queryMacros, nullptr);
-   
+    p.compileQuery(script, table->getColumns(), queryMacros, nullptr);
+
     if (debug)
         cout << openset::query::MacroDbg(queryMacros) << endl;
 
     ASSERT(p.error.inError() == false);
 
-    auto engine = new TestEngineContainer_s(queryMacros);       
+    auto engine = new TestEngineContainer_s(queryMacros);
 
     const auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
     ASSERT(personRaw != nullptr);
@@ -51,7 +49,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     return engine;
 }
 
-cjson resultToJson(TestEngineContainer_s* engine)
+cjson ResultToJson(TestEngineContainer_s* engine)
 {
     auto result = engine->interpreter->result;
 
@@ -69,16 +67,16 @@ cjson resultToJson(TestEngineContainer_s* engine)
     //responseData.push_back(&res);
     resultSets.push_back(engine->interpreter->result);
 
-    // this is the merging object, it merges results from multiple 
-    // partitions into a result that can serialized to JSON, or to 
+    // this is the merging object, it merges results from multiple
+    // partitions into a result that can serialized to JSON, or to
     // binary for distributed queries
     openset::result::ResultMuxDemux merger;
 
     // we are going to populate this
-    cjson resultJSON;
+    cjson resultJson;
 
     // make some JSON
-    merger.resultSetToJson(engine->interpreter->macros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+    merger.resultSetToJson(engine->interpreter->macros.vars.columnVars.size(), 1, resultSets, &resultJson);
 
-    return resultJSON;
+    return resultJson;
 }

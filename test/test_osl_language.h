@@ -13,59 +13,59 @@
 #include <unordered_set>
 
 // Our tests
-inline Tests test_pyql_language()
+inline Tests test_osl_language()
 {
     // An array of JSON events to insert.
     auto user1_raw_inserts =
         R"raw_inserts(
-	[
-		{
-			"id": "user1_@test.com",
-			"stamp": 1458820830,
-			"event" : "purchase",
-			"_":{
-				"fruit": "orange",
-				"price": 5.55
-			}
-		},
-		{
-			"id": "user1_@test.com",
-			"stamp": 1458820831,
-			"event" : "purchase",
-			"_":{
-				"fruit": "apple",
-				"price": 9.95
-			}
-		},
-		{
-			"id": "user1_@test.com",
-			"stamp": 1458820832,
-			"event" : "purchase",
-			"_":{
-				"fruit": "pear",
-				"price": 12.49
-			}
-		},
-		{
-			"id": "user1_@test.com",
-			"stamp": 1458820833,
-			"event" : "purchase",
-			"_":{
-				"fruit": "banana",
-				"price": 2.49
-			}
-		},
-		{
-			"id": "user1_@test.com",
-			"stamp": 1458820834,
-			"event" : "purchase",
-			"_":{
-				"fruit": "orange",
-				"price": 5.55
-			}
-		}
-	]
-	)raw_inserts";
+    [
+        {
+            "id": "user1_@test.com",
+            "stamp": 1458820830,
+            "event" : "purchase",
+            "_":{
+                "fruit": "orange",
+                "price": 5.55
+            }
+        },
+        {
+            "id": "user1_@test.com",
+            "stamp": 1458820831,
+            "event" : "purchase",
+            "_":{
+                "fruit": "apple",
+                "price": 9.95
+            }
+        },
+        {
+            "id": "user1_@test.com",
+            "stamp": 1458820832,
+            "event" : "purchase",
+            "_":{
+                "fruit": "pear",
+                "price": 12.49
+            }
+        },
+        {
+            "id": "user1_@test.com",
+            "stamp": 1458820833,
+            "event" : "purchase",
+            "_":{
+                "fruit": "banana",
+                "price": 2.49
+            }
+        },
+        {
+            "id": "user1_@test.com",
+            "stamp": 1458820834,
+            "event" : "purchase",
+            "_":{
+                "fruit": "orange",
+                "price": 5.55
+            }
+        }
+    ]
+    )raw_inserts";
 
     auto filler = ""s;
 
@@ -80,38 +80,6 @@ inline Tests test_pyql_language()
         *  the construction phase these are created as local objects to other classes.
         */
     return {
-        {
-            "test_pyql_language: test parser helper functions",
-            []
-            {
-                using namespace openset::query;
-                const auto EscapingAndBracketsInText = R"raw(this "is ('some text' \") \\ \"\t'" other '\"\'[()]\'")raw";
-                auto parts = QueryParser::breakLine(EscapingAndBracketsInText);
-
-                ASSERT(parts.size() == 4);
-                const auto goodBrackets = "this[that[((thing{that}){more})(here[there]{everywhere})]]";
-                parts = QueryParser::breakLine(goodBrackets);
-                ASSERT(QueryParser::checkBrackets(parts));
-                const auto badBrackets = "this[that[((thing{that}{more})(here[there]{everywhere})]]";
-                parts = QueryParser::breakLine(badBrackets);
-                ASSERT(!QueryParser::checkBrackets(parts)); // returns false
-                const auto testLineMiddle = "somevar = this['is']['a'][container['nested']] + blah"s;
-                parts = QueryParser::breakLine(testLineMiddle);
-                ASSERT(parts.size() == 17);
-
-                int reinsertIdx;
-                auto capture = QueryParser::extractVariable(parts, 2, reinsertIdx);
-                ASSERT(reinsertIdx == 2);
-                ASSERT(capture.size() == 13);
-                ASSERT(parts.size() == 4); // back track from last ] and capture var and deref
-
-                parts   = QueryParser::breakLine(testLineMiddle);
-                capture = QueryParser::extractVariableReverse(parts, 14, reinsertIdx);
-                ASSERT(reinsertIdx == 2);
-                ASSERT(capture.size() == 13);
-                ASSERT(parts.size() == 4);
-            }
-        },
         {
             "test_pyql_language: insert test data",
             [user1_raw_inserts]
@@ -150,7 +118,7 @@ inline Tests test_pyql_language()
             "test OSL basic assign and multiply",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
                     test_value = 123
                     new_value = test_value * 2
@@ -165,16 +133,16 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 2);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
         {
             "test OSL basic containers",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
-                    test_value = ["apple", "pear", "orange"]                    
+                    test_value = ["apple", "pear", "orange"]
                     debug(test_value[0] == "apple")
                     debug(test_value[1] != "apple")
                     debug(test_value[2] == "orange")
@@ -194,14 +162,14 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 10);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
         {
             "test OSL basic dictionary",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
                     test_value = {
                         fruits: ["apple", "orange", "pear", "banana"],
@@ -229,14 +197,14 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 7);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
         {
             "test OSL basic logic",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     test_value = 123
@@ -260,7 +228,7 @@ inline Tests test_pyql_language()
 
                     some_list = ["dog", ["cat", "tiger"], "hamster"]
 
-                    if some_list[1][0] == "cat" && (id == 1 + 2 && "apple" == fruit) && fruit.never(== "pear") && 
+                    if some_list[1][0] == "cat" && (id == 1 + 2 && "apple" == fruit) && fruit.never(== "pear") &&
                            fruit == (4 + ((7*2) / 3)) && test_value == 123
                         debug(true)
                     end
@@ -279,14 +247,14 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 4);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
         {
             "test OSL each",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     each_row where fruit.row(== "banana") && fruit.ever(== "donkey")
@@ -314,7 +282,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 2);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -322,7 +290,7 @@ inline Tests test_pyql_language()
             "test OSL break and continue",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     source_list = ["one", "two", "three", "four", "five", "six", "seven"]
@@ -361,7 +329,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 4);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -369,7 +337,7 @@ inline Tests test_pyql_language()
             "test OSL break with depth",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     number_list = ["one", "two", "three", "four", "five", "six", "seven"]
@@ -379,7 +347,7 @@ inline Tests test_pyql_language()
                     debug(len(letter_list) == 4)
 
                     counter = 0
-                    for number in number_list                      
+                    for number in number_list
 
                       for letter in letter_list
                         if number == "three" && letter == "c"
@@ -400,7 +368,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 3);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -409,7 +377,7 @@ inline Tests test_pyql_language()
             "test OSL each_row with limit",
             []
             {
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -428,7 +396,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 1);
                 ASSERTDEBUGLOG(debug);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -438,7 +406,7 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -459,7 +427,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug[0] < debug[2]);
                 ASSERT(debug[3] == true);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -469,7 +437,7 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -490,7 +458,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug[0] > debug[2]);
                 ASSERT(debug[3] == true);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -500,7 +468,7 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -522,7 +490,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 6);
                 ASSERT(debug[5] == true);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -532,7 +500,7 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -554,7 +522,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 5);
                 ASSERT(debug[4] == true);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -564,7 +532,7 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
 
                     counter = 0
@@ -584,7 +552,7 @@ inline Tests test_pyql_language()
                 ASSERT(debug.size() == 4);
                 ASSERT(debug[3] == true);
 
-                delete interpreter;                               
+                delete interpreter;
             }
         },
 
@@ -594,37 +562,37 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
-	                someVar = "3.14"
-	                debug(someVar == 3.14)
+                    someVar = "3.14"
+                    debug(someVar == 3.14)
 
-	                someDict = {
-		                "hello": "goodbye",
-		                "many": [1,2,3,4]
-	                }
+                    someDict = {
+                        "hello": "goodbye",
+                        "many": [1,2,3,4]
+                    }
 
-	                someDict = someDict + {"another": "thing"}
+                    someDict = someDict + {"another": "thing"}
 
                     debug(someDict["hello"] == "goodbye")
-	                debug(someDict["many"][1] == 2)
-	                debug(someDict["another"] == "thing")
+                    debug(someDict["many"][1] == 2)
+                    debug(someDict["another"] == "thing")
 
-	                debug(len(someDict) == 3)
+                    debug(len(someDict) == 3)
 
-	                someDict = someDict - ["hello", "many"]
-	                debug(len(someDict) == 1)
+                    someDict = someDict - ["hello", "many"]
+                    debug(len(someDict) == 1)
 
-	                someSet = set()
-	                someSet = someSet + "hello"
-	                someSet = someSet + "goodbye"
+                    someSet = set()
+                    someSet = someSet + "hello"
+                    someSet = someSet + "goodbye"
                     someSet = someSet + "what"
-	                someSet = someSet + "hello"
+                    someSet = someSet + "hello"
 
-	                debug(len(someSet) == 3)
+                    debug(len(someSet) == 3)
 
-	                someSet = someSet - "hello"
-	                debug(len(someSet) == 2)
+                    someSet = someSet - "hello"
+                    debug(len(someSet) == 2)
                 )osl"s;
 
                 openset::query::Macro_s queryMacros;
@@ -643,55 +611,55 @@ inline Tests test_pyql_language()
             {
 
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
-	                someDict = {
-		                "hello": "goodbye",
-		                "many": [1,2,3,4]
-	                }
+                    someDict = {
+                        "hello": "goodbye",
+                        "many": [1,2,3,4]
+                    }
 
-	                someDict = someDict + {"fresh": "prince"}
+                    someDict = someDict + {"fresh": "prince"}
 
-	                debug(len(someDict) == 3)
+                    debug(len(someDict) == 3)
 
-	                otherDict = {"objective": "apples"} + {"hunt": "red october"}
+                    otherDict = {"objective": "apples"} + {"hunt": "red october"}
 
-	                debug(len(otherDict) == 2)
+                    debug(len(otherDict) == 2)
 
-	                otherDict = otherDict + {"angels": "sang"}
+                    otherDict = otherDict + {"angels": "sang"}
                     log(otherDict)
 
-	                debug(len(otherDict) == 3)
+                    debug(len(otherDict) == 3)
 
-	                someDict = someDict - "hello"
+                    someDict = someDict - "hello"
 
-	                debug(len(someDict) == 2)
+                    debug(len(someDict) == 2)
 
-	                someDict["cheese"] = {
-		                "orange" : ["chedder"],
-		                "soft": ["mozza", "cream"]
-	                }
+                    someDict["cheese"] = {
+                        "orange" : ["chedder"],
+                        "soft": ["mozza", "cream"]
+                    }
 
-	                someDict["cheese"] = someDict["cheese"] - "orange"
+                    someDict["cheese"] = someDict["cheese"] - "orange"
 
-	                debug(len(someDict["cheese"]) == 1)
+                    debug(len(someDict["cheese"]) == 1)
 
-	                some_string = "merry"
-	                some_string = some_string + " new year"
+                    some_string = "merry"
+                    some_string = some_string + " new year"
 
-	                debug(some_string == "merry new year")
+                    debug(some_string == "merry new year")
 
-	                otherDict["angels"] = otherDict["angels"] + " in awe"
+                    otherDict["angels"] = otherDict["angels"] + " in awe"
 
                     debug(otherDict["angels"] == "sang in awe")
 
-	                some_set = set("one", "two", "three")
+                    some_set = set("one", "two", "three")
 
-	                debug(len(some_set) == 3)
+                    debug(len(some_set) == 3)
 
-	                some_set = some_set - "two"
+                    some_set = some_set - "two"
 
-	                debug(len(some_set) == 2)
+                    debug(len(some_set) == 2)
 
                     nested = {}
                     nested['yellow'] = {}
@@ -716,28 +684,28 @@ inline Tests test_pyql_language()
             []
             {
                 // date ranges are inclusive
-                const auto testScript = 
+                const auto testScript =
                 R"osl(
                     debug(round(33.544,2) == 33.54)
-	                debug(round(8.3854,2) == 8.39)
-	                debug(round(12.4912,2) == 12.49)
-	                debug(round(5.545,2) == 5.55)
+                    debug(round(8.3854,2) == 8.39)
+                    debug(round(12.4912,2) == 12.49)
+                    debug(round(5.545,2) == 5.55)
 
-	                debug(bucket(513, 25) == 500)
-	                debug(bucket(525, 25) == 525)
-	                debug(bucket(551, 25) == 550)
-	                debug(bucket(5.11, 0.25) == 5.00)
-	                debug(bucket(5.25, 0.25) == 5.25)
-	                debug(bucket(5.51, 0.25) == 5.50)
+                    debug(bucket(513, 25) == 500)
+                    debug(bucket(525, 25) == 525)
+                    debug(bucket(551, 25) == 550)
+                    debug(bucket(5.11, 0.25) == 5.00)
+                    debug(bucket(5.25, 0.25) == 5.25)
+                    debug(bucket(5.51, 0.25) == 5.50)
 
-	                debug(fix(0.01111, 2) == "0.01")
-	                debug(fix(0.015, 2) == "0.02")
-	                debug(fix(1234.5678, 2) == "1234.57")
-	                debug(fix(1234.5678, 0) == "1235")
-	                debug(fix(-0.01111, 2) == "-0.01")
-	                debug(fix(-0.015, 2) == "-0.02")
-	                debug(fix(-1234.5678, 2) == "-1234.57")
-	                debug(fix(-1234.5678, 0) == "-1235")
+                    debug(fix(0.01111, 2) == "0.01")
+                    debug(fix(0.015, 2) == "0.02")
+                    debug(fix(1234.5678, 2) == "1234.57")
+                    debug(fix(1234.5678, 0) == "1235")
+                    debug(fix(-0.01111, 2) == "-0.01")
+                    debug(fix(-0.015, 2) == "-0.02")
+                    debug(fix(-1234.5678, 2) == "-1234.57")
+                    debug(fix(-1234.5678, 0) == "-1235")
 
                 )osl"s;
 
@@ -757,113 +725,113 @@ inline Tests test_pyql_language()
      # test slicing lists
     some_array = ['zero', 'one', 'two', 'three', 'four', 'five']
 
-	new_array = some_array[1:3]
+    new_array = some_array[1:3]
     # 1
-	debug(len(new_array) == 2 and new_array[0] == 'one' and new_array[1] == 'two')
+    debug(len(new_array) == 2 and new_array[0] == 'one' and new_array[1] == 'two')
 
-	new_array = some_array[:2]
+    new_array = some_array[:2]
     # 2
-	debug(len(new_array) == 2 and new_array[0] == 'zero' and new_array[1] == 'one')
+    debug(len(new_array) == 2 and new_array[0] == 'zero' and new_array[1] == 'one')
 
-	new_array = some_array[2:]
+    new_array = some_array[2:]
     # 3
-	debug(len(new_array) == 4 and new_array[0] == 'two')
+    debug(len(new_array) == 4 and new_array[0] == 'two')
 
-	new_array = some_array[:]
+    new_array = some_array[:]
     # 4
-	debug(len(new_array) == 6 and new_array[0] == 'zero' and new_array[5] == 'five')
+    debug(len(new_array) == 6 and new_array[0] == 'zero' and new_array[5] == 'five')
 
-	new_array = some_array[-1:]
+    new_array = some_array[-1:]
     # 5
-	debug(len(new_array) == 1 and new_array[0] == 'five')
+    debug(len(new_array) == 1 and new_array[0] == 'five')
 
-	new_array = some_array[-3:-2]
+    new_array = some_array[-3:-2]
     # 6
-	debug(len(new_array) == 1 and new_array[0] == 'three')
+    debug(len(new_array) == 1 and new_array[0] == 'three')
 
     # test slicing strings
-	some_string = 'the rain in spain'
+    some_string = 'the rain in spain'
 
-	new_string = some_string[-5:]
+    new_string = some_string[-5:]
     # 7
-	debug(new_string == 'spain')
+    debug(new_string == 'spain')
 
-	new_string = some_string[:3]
+    new_string = some_string[:3]
     # 8
-	debug(new_string == 'the')
+    debug(new_string == 'the')
 
-	new_string = some_string[4:8]
+    new_string = some_string[4:8]
     # 9
-	debug(new_string == 'rain')
+    debug(new_string == 'rain')
 
-	# test find and rfind
+    # test find and rfind
     index = some_string.find('rain')
     # 10
-	debug(index == 4)
+    debug(index == 4)
 
     index = some_string.find('teeth')
     # 11
-	debug(index == -1)
+    debug(index == -1)
 
     index = some_string.find('in', 8)
     # 12
-	debug(index == 9)
+    debug(index == 9)
 
     index = some_string.rfind('in', 0)
     # 13
-	debug(index == 15)
+    debug(index == 15)
 
     index = some_string.rfind('the')
     # 14
-	debug(index == 0)
+    debug(index == 0)
 
     index = some_string.rfind('rain', 8)
     # 15
-	debug(index == 4)
+    debug(index == 4)
 
     index = some_string.find('rain', 0, 7)
     # 16
-	debug(index == -1)
+    debug(index == -1)
 
-	# test split
-	some_string = 'see spot run'
-	parts = some_string.split(' ')
+    # test split
+    some_string = 'see spot run'
+    parts = some_string.split(' ')
     # 17
-	debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
+    debug(parts[0] == 'see' and parts[1] == 'spot' and parts[2] == 'run')
 
-	some_string = 'this::is::fun'
-	parts = some_string.split('::')
+    some_string = 'this::is::fun'
+    parts = some_string.split('::')
     # 18
-	debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
+    debug(parts[0] == 'this' and parts[1] == 'is' and parts[2] == 'fun')
 
-	some_string = "this won't split"
-	parts = some_string.split('|')
+    some_string = "this won't split"
+    parts = some_string.split('|')
     # 19
-	debug(parts[0] == some_string)
+    debug(parts[0] == some_string)
 
-	# test strip
+    # test strip
 
-	some_string = '\t  this is a string \r\n'
-	clean = some_string.strip()
+    some_string = '\t  this is a string \r\n'
+    clean = some_string.strip()
     # 20
-	debug(clean == 'this is a string')
+    debug(clean == 'this is a string')
 
-	some_string = "\t \n \r"
-	clean = some_string.strip()
+    some_string = "\t \n \r"
+    clean = some_string.strip()
     # 21
-	debug(clean == '')
+    debug(clean == '')
 
-	some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
-	parts = url_decode(some_url)
+    some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
+    parts = url_decode(some_url)
 
     # 22
-	debug(parts['host'] == 'somehost.com')
+    debug(parts['host'] == 'somehost.com')
     # 23
     debug(parts['path'] == '/this/is/the/path')
     # 24
-	debug(parts['query'] == 'param1=one&param2=two&param3')
+    debug(parts['query'] == 'param1=one&param2=two&param3')
     # 25
-	debug(len(parts['params']) == 3)
+    debug(len(parts['params']) == 3)
     # 26
     debug(parts['params']['param1'] == 'one')
     # 27
@@ -871,10 +839,10 @@ inline Tests test_pyql_language()
     # 28
     debug(parts['params']['param3'] == True)
 
-	some_url = "/this/is/the/path?param1=one"
-	parts = url_decode(some_url)
+    some_url = "/this/is/the/path?param1=one"
+    parts = url_decode(some_url)
     # 29
-	debug(parts['host'] == None)
+    debug(parts['host'] == None)
     # 30
     debug(parts['path'] == '/this/is/the/path')
     # 31
@@ -882,22 +850,22 @@ inline Tests test_pyql_language()
     # 32
     debug(parts['params']['param1'] == 'one')
 
-	some_url = "/this/is/the/path"
-	parts = url_decode(some_url)
+    some_url = "/this/is/the/path"
+    parts = url_decode(some_url)
     # 34
-	debug(parts['host'] == None)
+    debug(parts['host'] == None)
     # 35
     debug(parts['path'] == '/this/is/the/path')
     # 36
     debug(len(parts['params']) == 0)
 
-	)pyql");
+    )pyql");
     // test sdk functions (1)
     auto test18_pyql = openset::query::QueryParser::fixIndent(
         R"pyql(
 
-	# bucket always rounds to the lower bucket
-	# it is useful when generating distributions
+    # bucket always rounds to the lower bucket
+    # it is useful when generating distributions
 
     test = {
         "favorite_bands": set("the hip", "run dmc"),

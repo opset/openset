@@ -19,7 +19,7 @@ namespace openset
             code,
             lambda,
             function
-        }; // Result Column Modifiers						
+        }; // Result Column Modifiers
         enum class Modifiers_e : int32_t
         {
             sum,
@@ -222,7 +222,7 @@ namespace openset
 namespace std
 {
     /*
-     * RANT - being these enums are classes of POD types, they should have automatic 
+     * RANT - being these enums are classes of POD types, they should have automatic
      *        hashing functions in GCC (they do in VC15+)
      */
     template <>
@@ -294,8 +294,8 @@ namespace openset
             { "BOTH", CompileTimeConstants_e::BOTH },
             { "FORWARD", CompileTimeConstants_e::FORWARD },
             { "REVERSE", CompileTimeConstants_e::REVERSE },
-        }; 
-        
+        };
+
         enum class TimeSwitch_e : int
         {
             seconds,
@@ -443,7 +443,7 @@ namespace openset
         static const unordered_map<string, Marshals_e> Marshals = {
             { "tally", Marshals_e::marshal_tally },
             { "now", Marshals_e::marshal_now },
-            { "row", Marshals_e::marshal_row },
+            { "cursor", Marshals_e::marshal_row },
             { "last_stamp", Marshals_e::marshal_last_event },
             { "first_stamp", Marshals_e::marshal_first_event },
             { "bucket", Marshals_e::marshal_bucket },
@@ -529,13 +529,13 @@ namespace openset
         };
         static const unordered_set<string> SessionMarshals = {
             "session_count",
-        }; 
-        
+        };
+
         // these are marshals that do not take params by default, so they appear
         // like variables.
         static const unordered_set<string> MacroMarshals = {
             { "now" },
-            { "row" },
+            { "cursor" },
             { "last_stamp" },
             { "first_stamp" },
             { "session_count" },
@@ -544,8 +544,8 @@ namespace openset
             { "continue" },
             { "__internal_init_dict" },
             { "__internal_init_list" },
-        }; 
-        
+        };
+
         // Comparatives
         static const unordered_map<string, OpCode_e> Operators = {
             { ">=", OpCode_e::OPGTE },
@@ -740,8 +740,8 @@ namespace openset
             {
                 return "@" + to_string(number) + " " + trim(text, " \t");
             }
-        }; 
-        
+        };
+
         // structure fo final build
         struct Instruction_s
         {

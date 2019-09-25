@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../src/queryinterpreter.h"
-#include "../src/queryparser2.h"
+#include "../src/queryparserosl.h"
 
 struct TestEngineContainer_s
 {
@@ -28,4 +28,4 @@ struct TestEngineContainer_s
 };
 
 TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std::string& script, openset::query::Macro_s& queryMacros, const bool debug = false);
-cjson resultToJson(TestEngineContainer_s* engine);
+cjson ResultToJson(TestEngineContainer_s* engine);
