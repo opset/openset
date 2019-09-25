@@ -6,10 +6,10 @@ using namespace openset::query;
 using namespace openset::db;
 
 openset::query::Indexing::Indexing() :
-	table(nullptr),
-	parts(nullptr),
-	partition(-1), 
-	stopBit(0)
+    table(nullptr),
+    parts(nullptr),
+    partition(-1),
+    stopBit(0)
 {}
 
 Indexing::~Indexing()
@@ -17,41 +17,41 @@ Indexing::~Indexing()
 
 void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber, int stopAtBit)
 {
-	indexes.clear();
-	table = tablePtr;
-	macros = queryMacros;
-	partition = partitionNumber;
-	parts = table->getPartitionObjects(partition, false);
-	stopBit = stopAtBit;
+    indexes.clear();
+    table = tablePtr;
+    macros = queryMacros;
+    partition = partitionNumber;
+    parts = table->getPartitionObjects(partition, false);
+    stopBit = stopAtBit;
 
-	// this will build all the indexes and store them 
-	// in a vector of indexes using an std::pair of name and index
-	bool countable;
-	for (auto &p : queryMacros.indexes)
+    // this will build all the indexes and store them
+    // in a vector of indexes using an std::pair of name and index
+    bool countable;
+    for (auto &p : queryMacros.indexes)
     {
         const auto index = buildIndex(p.second, countable);
-		indexes.emplace_back(p.first, index, countable);
+        indexes.emplace_back(p.first, index, countable);
     }
 }
 
 // returns an index by name
 openset::db::IndexBits* Indexing::getIndex(std::string name, bool &countable)
 {
-	for (auto &idx:indexes)
-	{
-		if (std::get<0>(idx) == name)
-		{
-			countable = std::get<2>(idx);
-			return &std::get<1>(idx);
-		}
-	}
+    for (auto &idx:indexes)
+    {
+        if (std::get<0>(idx) == name)
+        {
+            countable = std::get<2>(idx);
+            return &std::get<1>(idx);
+        }
+    }
 
-	return nullptr;
+    return nullptr;
 }
 
 /*
  Mode is ListMode_e from Attributes class - this enumerates a column
-and returns values that match the condition. 
+and returns values that match the condition.
 
 In getBits we take the last item on the stack and apply all matching indexes to
 the bits in the stack entry.
@@ -62,35 +62,35 @@ openset::db::IndexBits Indexing::compositeBits(const Attributes::listMode_e mode
     auto entry = stack.back();
 
     const auto colInfo = table->getColumns()->getColumn(entry.columnName);
-	auto attrList = parts->attributes.getColumnValues(colInfo->idx, mode, entry.hash);
+    auto attrList = parts->attributes.getColumnValues(colInfo->idx, mode, entry.hash);
 
     auto& resultBits = entry.bits; // where our bits will all accumulate
     resultBits.reset();
-	auto initialized = false;
+    auto initialized = false;
 
-	for (auto attr: attrList)
-	{
-		// get the bits
-        const auto workBits = attr->getBits();			
+    for (auto attr: attrList)
+    {
+        // get the bits
+        const auto workBits = attr->getBits();
 
-		if (initialized)
-		{
-			resultBits.opOr(*workBits);
-		}
-		else
-		{
-			resultBits.opCopy(*workBits);
-			initialized = true;
-		}
+        if (initialized)
+        {
+            resultBits.opOr(*workBits);
+        }
+        else
+        {
+            resultBits.opCopy(*workBits);
+            initialized = true;
+        }
 
-		// clean up them bits
-		delete workBits;
-	}
+        // clean up them bits
+        delete workBits;
+    }
 
-	if (!initialized)
-		resultBits.makeBits(64, 0);
+    if (!initialized)
+        resultBits.makeBits(64, 0);
 
-	return resultBits;
+    return resultBits;
 };
 
 /*
@@ -133,14 +133,14 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
 
     const auto maxLinId = parts->people.peopleCount();
 
-	if (!stopBit)
-	{
-        // fix 
+    if (!stopBit)
+    {
+        // fix
         countable = false;
-		IndexBits bits;
-		bits.makeBits(maxLinId, 1);
-		return bits;
-	}
+        IndexBits bits;
+        bits.makeBits(maxLinId, 1);
+        return bits;
+    }
 
     std::string columnName;
 
@@ -183,17 +183,17 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
             stack.emplace_back(columnName, op.value, op.hash);
             break;
         case HintOp_e::PUSH_TBL:
-            columnName = op.value;
+            columnName = op.value.getString();
             break;
         case HintOp_e::BIT_OR:
         {
             auto left = stack.back().bits;
             stack.pop_back();
-			auto right = stack.back().bits;
-			stack.pop_back();
+            auto right = stack.back().bits;
+            stack.pop_back();
 
-			left.opOr(right);
-			    stack.emplace_back(left);
+            left.opOr(right);
+                stack.emplace_back(left);
 
             ++count;
         }
@@ -202,11 +202,11 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
         {
             auto left = stack.back().bits;
             stack.pop_back();
-			auto right = stack.back().bits;
-			stack.pop_back();
+            auto right = stack.back().bits;
+            stack.pop_back();
 
-			left.opAnd(right);
-			    stack.emplace_back(left);
+            left.opAnd(right);
+                stack.emplace_back(left);
 
             ++count;
         }
@@ -215,17 +215,17 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
         }
     }
 
-	// No Index Hints? 
-	if (!stack.size() || !count)
-	{
-		IndexBits bits;
-		bits.makeBits(maxLinId, 1);
-		countable = false;
-		return bits;
-	}
+    // No Index Hints?
+    if (!stack.size() || !count)
+    {
+        IndexBits bits;
+        bits.makeBits(maxLinId, 1);
+        countable = false;
+        return bits;
+    }
 
-	auto res = stack.back().bits;
-	res.grow((stopBit / 64) + 1);
-	return res;
+    auto res = stack.back().bits;
+    res.grow((stopBit / 64) + 1);
+    return res;
 
 }
