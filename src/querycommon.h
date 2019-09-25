@@ -632,12 +632,6 @@ namespace openset
                   hash(static_cast<int64_t>(value * 1'000'000LL))
             {}
 
-            HintOp_s(const HintOp_e op, const bool value)
-                : op(op),
-                  value(value),
-                  hash(value ? 1 : 0)
-            {}
-
             HintOp_s(const HintOp_e op, const string& text)
                 : op(op),
                   value(text),

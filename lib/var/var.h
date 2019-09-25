@@ -162,7 +162,7 @@ public:
     using s = Set;
 
     cvar() :
-        type(valueType::INT64) // default type 
+        type(valueType::INT64) // default type
     {
         value.asInt64 = 0; // sets all values to 0
     }
@@ -220,7 +220,7 @@ public:
         }
     }
 
-    // assignment constructors 
+    // assignment constructors
     // so you can go:
     // cvar mycvar = 5;
 
@@ -589,33 +589,33 @@ public:
         return true;
     }
 
-    
+
     cvar* getMemberPtr(cvar& key, const bool throwIfMissing = false) const
     {
-        if (key == None) 
+        if (key == None)
             throw std::runtime_error("invalid key: None");
 
         if (type == valueType::LIST)
         {
-            if (throwIfMissing &&                 
+            if (throwIfMissing &&
                 (!listValue ||
                 key.getInt64() < 0 &&
                 key.getInt64() >= static_cast<int64_t>(listValue->size()
                )))
                throw std::runtime_error("index out of range '" + key.getString() + "' not in dictionary");
 
-            return 
+            return
                 listValue &&
                 key.getInt64() >= 0 &&
                 key.getInt64() < static_cast<int64_t>(listValue->size())
-                    ? &(*listValue)[key.getInt64()] 
+                    ? &(*listValue)[key.getInt64()]
                     : nullptr;
         }
         if (type == valueType::DICT)
         {
             if (throwIfMissing && (!dictValue || (*dictValue).find(key) == dictValue->end()))
                 throw std::runtime_error("key '" + key.getString() + "' not in dictionary");
-            return dictValue ? &(*dictValue)[key] : nullptr;  
+            return dictValue ? &(*dictValue)[key] : nullptr;
         }
         if (throwIfMissing)
             throw std::runtime_error("cannot access member in non dictionary or list type");
@@ -774,7 +774,7 @@ public:
             return (type == valueType::REF && reference) ? reference : nullptr;
     }
 
-    void setReference(cvar* ref) 
+    void setReference(cvar* ref)
     {
         reference = ref;
         type = valueType::REF;
@@ -861,9 +861,9 @@ public:
     }
 
     // interesting... const char* &source fails,
-    // and std::string isn't built in, so 
+    // and std::string isn't built in, so
     // the type would convert to bool (which all pointers or
-    // numeric types can be treated as bools). 
+    // numeric types can be treated as bools).
     // using a not reference (just char*) for string works.
     cvar& operator=(const char* source)
     {
@@ -1191,7 +1191,7 @@ public:
             else if (right.type == valueType::BOOL)
                 return this->getBool() == right.getBool();
             return *this == right.getString();
-        // TODO - add list/dict/set comparisions 
+        // TODO - add list/dict/set comparisions
         default:
             return false;
         }
@@ -1327,7 +1327,7 @@ private:
     }
 
     void appendList(const cvar& other) const
-    {	
+    {
         if (type != valueType::LIST ||
             other.type != valueType::LIST) // glue to lists together, return product
             throw std::runtime_error("only List containers can be merged with List containers");
@@ -1369,7 +1369,7 @@ private:
             removeDict(other);
             return;
         }
-        else if (type == valueType::SET) 
+        else if (type == valueType::SET)
         {
             removeSet(other);
             return;
@@ -1384,7 +1384,7 @@ private:
         result.remove(right);
         return result;
     }
-    
+
     void removeSet(const cvar& other) const
     {
         if (type != valueType::SET)
@@ -1397,7 +1397,7 @@ private:
         {
             for (auto &i : *(other.getList()))
                 if (setValue->count(i))
-                    setValue->erase(i);				
+                    setValue->erase(i);
         }
         else if (other.typeOf() == valueType::SET)
         {
@@ -2221,7 +2221,7 @@ public:
 
     cvar operator-(std::string& right) const
     {
-        if (type == valueType::LIST || 
+        if (type == valueType::LIST ||
             type == valueType::DICT ||
             type == valueType::SET)
             return remove(*this, cvar{ right });
@@ -2230,7 +2230,7 @@ public:
 
     cvar operator-(const std::string& right) const
     {
-        if (type == valueType::LIST || 
+        if (type == valueType::LIST ||
             type == valueType::DICT ||
             type == valueType::SET)
             return remove(*this, cvar{ right });
@@ -2239,7 +2239,7 @@ public:
 
     cvar operator-(const char* right) const
     {
-        if (type == valueType::LIST || 
+        if (type == valueType::LIST ||
             type == valueType::DICT ||
             type == valueType::SET)
             return remove(*this, cvar{ right });
@@ -2288,7 +2288,7 @@ public:
         return *this;
     }
 
-    // << overload for std::ostream 
+    // << overload for std::ostream
     friend std::ostream& operator<<(std::ostream& os, const cvar& source)
     {
         const auto result = source.getString();

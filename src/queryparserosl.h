@@ -3415,7 +3415,7 @@ namespace openset::query
                 else if (isNil(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, NONE);
                 else if (isBool(value))
-                    index.emplace_back(HintOp_e::PUSH_VAL, value == "false" || value == "False");
+                    index.emplace_back(HintOp_e::PUSH_VAL, (value == "false" || value == "False") ? 0 : 1);
                 else if (isString(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, stripQuotes(value));
                 else if (isFloat(value))
