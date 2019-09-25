@@ -620,6 +620,12 @@ namespace openset
             cvar value;
             int64_t hash {NONE};
 
+            HintOp_s(const HintOp_e op, const int value)
+                : op(op),
+                  value(value),
+                  hash(value)
+            {}
+
             HintOp_s(const HintOp_e op, const int64_t value)
                 : op(op),
                   value(value),
