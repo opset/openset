@@ -56,7 +56,7 @@ void OpenLoopQuery::prepare()
 
     maxLinearId = parts->people.peopleCount();
 
-    // generate the index for this query	
+    // generate the index for this query
     indexing.mount(table.get(), macros, loop->partition, maxLinearId);
     bool countable;
     index      = indexing.getIndex("_", countable);
@@ -150,7 +150,7 @@ bool OpenLoopQuery::run()
         if (sliceComplete())
             return true;
 
-        // are we done? This will return the index of the 
+        // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
         if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
         {

@@ -386,6 +386,270 @@ inline Tests test_db()
                 delete interpreter;
             }
         },
+        {
+            "db: index compiler basic",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.row(!= "blog")
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler cull session",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.row(!= "blog") && session.row(== 2)
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler cull user variable",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    some_var = 4
+
+                    each_row where page.row(!= "blog") && session.row(== 2) && some_var == 4
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler culling gong show",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    some_var = 4
+                    other_var = 1
+
+                    third_var = "hello"
+
+                    # the following if will be excluded because it doesn't have a table column in it's logic
+                    if (some_var == -1)
+                        third_var = "good-bye"
+                    end
+
+                    each_row where (other_var == 1 || page.row(!= "blog")) && (session.row(== 2) && (some_var == 4 || other_var == 2))
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+
+        {
+            "db: index compiler row, ever, never",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.row(!= "blog") || (page.never(=="blog") && referral_search.ever(contains "red"))
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 11);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "page"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "blog"s);
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[6].value == "referral_search"s);
+
+                ASSERT(queryMacros.index[7].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[7].value == "red"s);
+
+                ASSERT(queryMacros.index[8].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[9].op == openset::query::HintOp_e::BIT_AND);
+
+                ASSERT(queryMacros.index[10].op == openset::query::HintOp_e::BIT_OR);
+
+                delete interpreter;
+            }
+        },
+
+        {
+            "db: index compiler with table vars not using row, ever, never",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page != "blog" || (page == "blog" && referral_search contains "red")
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 11);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "page"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "blog"s);
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[6].value == "referral_search"s);
+
+                ASSERT(queryMacros.index[7].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[7].value == "red"s);
+
+                ASSERT(queryMacros.index[8].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[9].op == openset::query::HintOp_e::BIT_AND);
+
+                ASSERT(queryMacros.index[10].op == openset::query::HintOp_e::BIT_OR);
+
+                delete interpreter;
+            }
+        }
 
     };
 }

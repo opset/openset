@@ -12,8 +12,7 @@ openset::query::Indexing::Indexing() :
     stopBit(0)
 {}
 
-Indexing::~Indexing()
-{}
+Indexing::~Indexing() = default;
 
 void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber, int stopAtBit)
 {
@@ -26,11 +25,10 @@ void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber,
 
     // this will build all the indexes and store them
     // in a vector of indexes using an std::pair of name and index
-    bool countable;
     for (auto &p : queryMacros.indexes)
     {
-        const auto index = buildIndex(p.second, countable);
-        indexes.emplace_back(p.first, index, countable);
+        const auto index = buildIndex(p.second, queryMacros.indexIsCountable);
+        indexes.emplace_back(p.first, index, queryMacros.indexIsCountable);
     }
 }
 
@@ -56,12 +54,25 @@ and returns values that match the condition.
 In getBits we take the last item on the stack and apply all matching indexes to
 the bits in the stack entry.
  */
-openset::db::IndexBits Indexing::compositeBits(const Attributes::listMode_e mode)
+openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 {
 
-    auto entry = stack.back();
+    auto& entry = stack.back();
 
     const auto colInfo = table->getColumns()->getColumn(entry.columnName);
+
+    // if the value side is NONE we go check for presence
+
+    auto negate = false;
+
+    if (mode == Attributes::listMode_e::NEQ)
+    {
+        if (entry.hash == NONE)
+            mode = Attributes::listMode_e::PRESENT; // != NONE -- same as equals anything
+        else
+            negate = true; // != VAL -- anything other than VAL
+    }
+
     auto attrList = parts->attributes.getColumnValues(colInfo->idx, mode, entry.hash);
 
     auto& resultBits = entry.bits; // where our bits will all accumulate
@@ -89,6 +100,12 @@ openset::db::IndexBits Indexing::compositeBits(const Attributes::listMode_e mode
 
     if (!initialized)
         resultBits.makeBits(64, 0);
+
+    if (negate)
+    {
+        resultBits.grow((stopBit / 64) + 1); // grow it to it's fullest size before we flip them all
+        resultBits.opNot();
+    }
 
     return resultBits;
 };

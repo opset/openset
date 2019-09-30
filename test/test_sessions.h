@@ -8,7 +8,6 @@
 #include "../src/columns.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
-#include "../src/queryparser.h"
 #include "../src/internoderouter.h"
 #include "test_helper.h"
 
@@ -106,7 +105,7 @@ inline Tests test_sessions()
     ]
     )raw_inserts";
 
-    auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
+    const auto test1_osl = R"osl(
     agg:
         count id
         count session
@@ -119,7 +118,7 @@ inline Tests test_sessions()
 
     debug(session_count == 3)
 
-    )pyql");
+    )osl";
 
 
     /* In order to make the engine start there are a few required objects as

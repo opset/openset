@@ -2831,8 +2831,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             if (lambda(inst->extra, currentRow)->isEvalTrue())
             {
                 lambda(inst->index, currentRow);
-                if (inReturn) // error state?
+                if (inReturn)
+                {
+                    // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                    ++stackPtr;
                     return;
+                }
 
                 // fast forward passed subsequent elif/else ops
                 ++inst;

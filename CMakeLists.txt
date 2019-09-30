@@ -157,8 +157,6 @@ set(SOURCE_FILES
         src/queryindexing.h
         src/queryinterpreter.cpp
         src/queryinterpreter.h
-        src/queryparser.cpp
-        src/queryparser.h
         src/queryparserosl.cpp
         src/queryparserosl.h
         src/result.cpp

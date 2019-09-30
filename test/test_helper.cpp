@@ -15,7 +15,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     auto table    = database->getTable(tableName);
     auto parts    = table->getPartitionObjects(0, true); // partition zero for test
 
-    openset::query::QueryParser2 p;
+    openset::query::QueryParser p;
 
     // compile test script
     p.compileQuery(script, table->getColumns(), queryMacros, nullptr);

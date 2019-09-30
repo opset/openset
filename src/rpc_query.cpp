@@ -18,7 +18,7 @@
 #include "config.h"
 #include "sentinel.h"
 #include "querycommon.h"
-#include "queryparser.h"
+#include "queryparserosl.h"
 #include "database.h"
 #include "result.h"
 #include "table.h"
@@ -426,7 +426,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 message);
             return;
         }
-    } // set the sessionTime (timeout) value, this will get relayed 
+    } // set the sessionTime (timeout) value, this will get relayed
     // through the to oloop_query, the person object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
@@ -498,7 +498,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
         });
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
-    //      thread as they are executed serially, rather than in parallel. 
+    //      thread as they are executed serially, rather than in parallel.
     //
     //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
     //      as well as generally reduce the number of ResultSets needed (especially when partition
@@ -555,6 +555,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 {
                     // any error that is recorded should be considered a hard error, so report it
                     const auto errorMessage = r.data.error.getErrorJSON();
+                    Logger::get().error(errorMessage);
                     message->reply(http::StatusCode::client_error_bad_request, errorMessage);
                     // clean up stray resultSets
                     for (auto resultSet : resultSets)
@@ -665,7 +666,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     query::QueryPairs queries;
 
     // loop through the extracted functions (subQueries) and compile them
-    for (auto r : subQueries)
+    for (auto& r : subQueries)
     {
         if (r.sectionType != "segment")
             continue;
@@ -676,7 +677,9 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         if (p.error.inError())
         {
             cjson response;
-            message->reply(http::StatusCode::client_error_bad_request, cjson::stringify(&response, true));
+            const auto errorMessage = p.error.getErrorJSON();
+            Logger::get().error(errorMessage);
+            message->reply(http::StatusCode::client_error_bad_request, errorMessage);
             return;
         }
 
@@ -690,20 +693,26 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         const auto onInsert  = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
         const auto useCached = r.flags.contains("use_cached") ? r.flags["use_cached"].getBool() : false;
 
+        queryMacros.useCached = useCached;
+        queryMacros.isSegment = true;
+
         if (r.flags.contains("refresh"))
         {
             queryMacros.segmentRefresh = r.flags["refresh"];
             table->setSegmentRefresh(r.sectionName, queryMacros, r.flags["refresh"], zIndex, onInsert);
         }
+        else
+        {
+            // remove any segment caching that may have had a prior refresh setting
+            table->removeSegmentRefresh(r.sectionName);
+        }
 
-        queryMacros.useCached = useCached;
-        queryMacros.isSegment = true;
         queries.emplace_back(std::pair<std::string, query::Macro_s> { r.sectionName, queryMacros });
     }
 
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
-    //      thread as they are executed serially, rather than in parallel. 
+    //      thread as they are executed serially, rather than in parallel.
     //
     //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
     //      as well as generally reduce the number of ResultSets needed (especially when partition
@@ -911,8 +920,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             },
             message);
         return;
-    } 
-    
+    }
+
     // We are a Fork!
     OpenLoopColumn::ColumnQueryConfig_s queryInfo;
     queryInfo.columnName  = columnName;
@@ -963,7 +972,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         catch (const std::runtime_error&)
         {
             isError = true;
-        } 
+        }
         catch (...)
         {
             isError = true;
@@ -1043,8 +1052,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                 message);
             return;
         }
-    } 
-    
+    }
+
     // here we are going to force typing depending on the column type
     // note: prior to conversion these will all be strings
     switch (queryInfo.columnType)
@@ -1067,11 +1076,11 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         queryInfo.filterLow = queryInfo.filterLow.getString();
         break;
     default: ;
-    } 
-    
+    }
+
     // now lets make sure the `columnType` and the `mode` make sense together and
     // return an error if they do not.
-    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all && 
+    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all &&
         queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::eq)
     {
         switch (queryInfo.columnType)
@@ -1107,8 +1116,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             break;
         case columnTypes_e::boolColumn: default: ;
         }
-    } 
-    
+    }
+
     /*
     * We are originating the query.
     *
@@ -1137,8 +1146,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
-    } 
-    
+    }
+
     // create list of active_owner parititions for factory function
     const auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
@@ -1147,7 +1156,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         });
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
-    //      thread as they are executed serially, rather than in parallel. 
+    //      thread as they are executed serially, rather than in parallel.
     //
     //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
     //      as well as generally reduce the number of ResultSets needed (especially when partition
@@ -1179,8 +1188,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
-    } 
-    
+    }
+
     /*
     *  this Shuttle will gather our result sets roll them up and spit them back
     *
@@ -1212,8 +1221,8 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                     release_cb();
                     return;
                 }
-            } 
-        
+            }
+
             // 1. Merge the rows
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
@@ -1449,7 +1458,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
                 message);
             return;
         }
-    } // set the sessionTime (timeout) value, this will get relayed 
+    } // set the sessionTime (timeout) value, this will get relayed
     // through the to oloop_query, the person object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
@@ -1506,7 +1515,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
         });
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
-    //      thread as they are executed serially, rather than in parallel. 
+    //      thread as they are executed serially, rather than in parallel.
     //
     //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
     //      as well as generally reduce the number of ResultSets needed (especially when partition
@@ -1744,7 +1753,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
             query::QueryParser::SectionDefinitionList segmentList;
             query::QueryParser::SectionDefinitionList queryList;
             query::QueryParser::SectionDefinition_s useSection;
-            query::SegmentList segments; // extract the 
+            query::SegmentList segments; // extract the
             for (auto& s : subQueries)
                 if (s.sectionType == "segment")
                     segmentList.push_back(s);

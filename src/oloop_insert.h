@@ -7,47 +7,49 @@
 
 namespace openset
 {
-	namespace db
-	{
-		class Database;
-		class TablePartitioned;
-	};
+    namespace db
+    {
+        struct SegmentPartitioned_s;
+        class Database;
+        class TablePartitioned;
+    };
 };
 
 namespace openset
 {
-	namespace async
-	{
-		class AsyncLoop;
+    namespace async
+    {
+        class AsyncLoop;
 
 
-		/*
-			InsertCell - inserts event(s) into user records and
-				updates indexes.
-		*/
+        /*
+            InsertCell - inserts event(s) into user records and
+                updates indexes.
+        */
 
-		class OpenLoopInsert : public OpenLoop
-		{
-		private:
+        class OpenLoopInsert : public OpenLoop
+        {
+        private:
 
-			int sleepCounter = 0;
+            int sleepCounter = 0;
 
             openset::db::Database::TablePtr table;
-			openset::db::TablePartitioned* tablePartitioned;
-			int runCount;
+            openset::db::TablePartitioned* tablePartitioned;
+            int runCount;
 
-			std::vector<char*> localQueue;
-			decltype(localQueue)::iterator queueIter;
+            std::vector<char*> localQueue;
+            decltype(localQueue)::iterator queueIter;
 
 
-		public:
+        public:
 
-			explicit OpenLoopInsert(openset::db::Database::TablePtr table);
-			~OpenLoopInsert() final;
+            explicit OpenLoopInsert(openset::db::Database::TablePtr table);
+            ~OpenLoopInsert() final;
 
-			void prepare() final;
-			bool run() final;
-			void partitionRemoved() final {};
-		};
-	};
+            void prepare() final;
+            void OnInsert(const std::string& uuid, db::SegmentPartitioned_s* segment);
+            bool run() final;
+            void partitionRemoved() final {};
+        };
+    };
 };

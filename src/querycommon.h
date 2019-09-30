@@ -556,6 +556,8 @@ namespace openset
             { "=", OpCode_e::OPEQ },
             { "!=", OpCode_e::OPNEQ },
             { "<>", OpCode_e::OPNEQ },
+            { "[!=]", OpCode_e::OPNEQ },
+            { "[==]", OpCode_e::OPEQ },
             { "contains", OpCode_e::OPCONT },
             { "any", OpCode_e::OPANY },
             { "in", OpCode_e::OPIN },
@@ -610,6 +612,8 @@ namespace openset
             { "<", HintOp_e::LT },
             { "==", HintOp_e::EQ },
             { "!=", HintOp_e::NEQ },
+            { "[==]", HintOp_e::EQ },
+            { "[!=]", HintOp_e::NEQ },
             { "&&", HintOp_e::BIT_AND },
             { "||", HintOp_e::BIT_OR }
         };

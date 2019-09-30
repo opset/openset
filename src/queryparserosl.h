@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include "../lib/str/strtools.h"
 
-#include "queryparser.h"
+#include "queryparserosl.h"
 #include "querycommon.h"
 #include "columns.h"
 #include "errors.h"
@@ -270,9 +270,20 @@ namespace openset::query
         {"row", MiddleOp_e::row_call }
     };
 
-    class QueryParser2
+    class QueryParser
     {
     public:
+
+        struct SectionDefinition_s
+        {
+            string sectionType;
+            string sectionName;
+            cvar flags { cvar::valueType::DICT };
+            cvar params { cvar::valueType::DICT };
+            string code;
+        };
+
+        using SectionDefinitionList = std::vector<SectionDefinition_s>;
 
         using MidOps = std::vector<MiddleOp_s>;
         using Tracking = std::vector<std::string>;
@@ -300,8 +311,8 @@ namespace openset::query
         Debugger_s lastDebug;
         errors::Error error;
 
-        QueryParser2() = default;
-        ~QueryParser2() = default;
+        QueryParser() = default;
+        ~QueryParser() = default;
 
         static int getTrackingIndex(const Tracking& tracking, const std::string& item)
         {
@@ -362,7 +373,7 @@ namespace openset::query
             return isString(value) || isNumeric(value) || isTextual(value);
         }
 
-        cvar expandTime(const string& value) const
+        static cvar expandTime(const string& value, const Debugger_s lastDebug = {})
         {
             cvar result = 0;
 
@@ -415,6 +426,7 @@ namespace openset::query
                         errors::errorCode_e::syntax_error,
                         "invalid time shorthand",
                         lastDebug
+
                     };
                 }
 
@@ -967,15 +979,21 @@ namespace openset::query
 
                 // should be a modifier?
                 if (!ColumnModifiers.count(token))
-                {
-                    // THROW
-                }
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "expecting an aggregate in `select` statement",
+                        lastDebug
+                    };
 
                 // should be a textual word
                 if (!isTextual(nextToken))
-                {
-                    // THROW
-                }
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "expecting a text value in `as` statement",
+                        lastDebug
+                    };
 
 
                 auto modifier = ColumnModifiers.find(token)->second;
@@ -984,9 +1002,12 @@ namespace openset::query
                 auto asName = columnName; // aliased as itself
 
                 if (!isTableColumn(columnName))
-                {
-                    // THROW
-                }
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "expecting a table column",
+                        lastDebug
+                    };
 
                 idx += 2;
 
@@ -997,9 +1018,20 @@ namespace openset::query
                 {
 
                     if (!nextToken.length() || !isTextual(nextToken))
-                    {
-                        // THROW
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "expecting a name in `as` portion of `select` statement",
+                            lastDebug
+                        };
+
+                    if (isTableColumn(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "`as` portion of `select` statement cannot be a table column",
+                            lastDebug
+                        };
 
                     asName = nextToken;
                     idx += 2;
@@ -1012,14 +1044,20 @@ namespace openset::query
                 {
 
                     if (!nextToken.length() || !isTextual(nextToken))
-                    {
-                        // THROW
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "expecting a name in `key` portion of `select` statement",
+                            lastDebug
+                        };
 
                     if (!isTableColumn(nextToken))
-                    {
-                        // THROW - gotta be a column
-                    }
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "`key` portion of `select` must be a table column",
+                            lastDebug
+                        };
 
                     keyColumn = nextToken;
                     idx += 2;
@@ -1028,9 +1066,12 @@ namespace openset::query
 
                 // already used, then throw and suggest using `as`
                 if (getTrackingIndex(selects, asName) != -1)
-                {
-                    // THROW - suggest using AS
-                }
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "`as` name in `select` already in use",
+                        lastDebug
+                    };
 
                 // register this column as having been referenced
                 const auto columnIdx = columnIndex(columnName);
@@ -1047,12 +1088,15 @@ namespace openset::query
                     columnIndex("session");
                 }
 
+                const auto colInfo = tableColumns->getColumn(columnName);
+
                 Variable_s var(columnName, asName, "column", modifier);
                 var.distinctColumnName = keyColumn;
 
                 var.index = selectIdx; // index in variable array
                 var.column = columnIdx; // index in grid
-                var.schemaColumn = tableColumns->getColumn(columnName)->idx;
+                var.schemaColumn = colInfo->idx;
+                var.schemaType = colInfo->type;
 
                 // if this is selection is keyed to another column lets reference it as well
                 const auto keyIdx = columnIndex(keyColumn);
@@ -1202,7 +1246,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "unable to find end of code block",
+                            "unable to find end of code block (are you missing an `end` after a code block?)",
                             lastDebug
                         };
                     }
@@ -2063,13 +2107,13 @@ namespace openset::query
 
             if (isFloat(item))
             {
-                middle.emplace_back(MiddleOp_e::push_double, expandTime(item).getDouble(), lastDebug.line, start);
+                middle.emplace_back(MiddleOp_e::push_double, expandTime(item, lastDebug).getDouble(), lastDebug.line, start);
                 return start + 1;
             }
 
             if (isNumeric(item))
             {
-                middle.emplace_back(MiddleOp_e::push_int, expandTime(item).getInt64(), lastDebug.line, start);
+                middle.emplace_back(MiddleOp_e::push_int, expandTime(item, lastDebug).getInt64(), lastDebug.line, start);
                 return start + 1;
             }
 
@@ -3081,22 +3125,29 @@ namespace openset::query
                                     tokens[idx] == "__chain_ever" ||
                                     tokens[idx] == "__chain_never")
                                 {
-                                    if (tokens[idx] == "__chain_row")
-                                        countable = false;
-
+                                    const auto isRow = tokens[idx] == "__chain_row";
                                     const auto isNever = tokens[idx] == "__chain_never";
+
                                     const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
 
-                                    if (isNever)
-                                        tokens[idx + 2] = "!=";
+                                    if (isRow)
+                                        countable = false;
 
-                                    tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
+                                    if (isNever)
+                                        tokens[idx + 2] = "[!=]";
+                                    else if (tokens[idx + 2] == "==")
+                                        tokens[idx + 2] = "[==]";
+
+                                    if (!isRow)
+                                        tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
+
                                     idx = endOfLogic;
                                 }
                                 else
                                 {
                                     idx = seekMatchingBrace(tokens, idx + 1);
                                 }
+
                                 ++idx;
                             }
 
@@ -3150,6 +3201,9 @@ namespace openset::query
                 {
                     auto& token = tokens[idx];
                     auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                    if (token == "in" || token == "contains" || token == "any")
+                        token = "==";
 
                     // convert lists into ORs if left or right side is not a void
                     if (token == "[")
@@ -3314,9 +3368,12 @@ namespace openset::query
 
                     if (token != "" && token != "VOID")
                     {
-                        countable = false;
                         tokensVoidCleaned.emplace_back(token);
                         last = token;
+                    }
+                    else
+                    {
+                        countable = false;
                     }
 
                     ++idx;
@@ -3344,7 +3401,11 @@ namespace openset::query
                         auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
                         auto prevToken = idx < 1 ? std::string() : tokens[idx - 1];
 
-                        if (token == "(" && nextToken == ")")
+                        if ((prevToken == "" || nextToken == "") && LogicalOperators.count(token))
+                        {
+                            stripped = true;
+                        }
+                        else if (token == "(" && nextToken == ")")
                         {
                             stripped = true;
                             ++idx;
@@ -3360,16 +3421,33 @@ namespace openset::query
                         {
                             stripped = true;
                         }
-                        // look for columns with no condition
-                        else if (
-                                isTableColumn(token) &&
-                                (
-                                  (LogicalOperators.count(prevToken) || prevToken == "(") &&
-                                  (LogicalOperators.count(nextToken) || nextToken == ")")
-                                )
-                            )
+                        // look for stranded values
+                        else if (!isTableColumn(token) && prevToken == "(" && nextToken == ")")
                         {
                             stripped = true;
+                        }
+                        // look for columns with no condition
+                        else if (
+                            isTableColumn(token) &&
+                            (
+                                (LogicalOperators.count(prevToken) || prevToken == "(") &&
+                                (LogicalOperators.count(nextToken) || nextToken == ")")
+                            )
+                        )
+                        {
+                            // once a column has been stripped to down to a standalone column
+                            // with no conditions we simply test for presence of the column (!= nil)
+                            stripped = true;
+                            output.emplace_back(token);
+                            output.emplace_back("!=");
+                            output.emplace_back("nil");
+                        }
+                        else if (isTableColumn(token) && nextToken == "!=")
+                        {
+                            // if it isn't a not_equal from an ever/never (which was changed to `[!=]`)
+                            // change this for presence checking (ever != nil)
+                            output.emplace_back(token);
+                            tokens[idx + 2] = "nil";
                         }
                         else
                         {
@@ -3402,6 +3480,8 @@ namespace openset::query
             const std::unordered_set<std::string> logicWords = {
                 "==",
                 "!=",
+                "[==]",
+                "[!=]",
                 ">",
                 "<",
                 "<=",
@@ -3514,17 +3594,27 @@ namespace openset::query
             inMacros.indexIsCountable = processLogic();
             parseIndex(inMacros.index, indexLogic, 0);
 
+            inMacros.indexes.emplace_back("_", inMacros.index);
+
             for (const auto &word: indexLogic)
                 inMacros.rawIndex += word + " ";
         }
 
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
         {
+
+            try
+            {
+
                 tableColumns = columnsPtr;
 
                 addDefaults();
 
+                rawScript = query;
+                inMacros.rawScript = rawScript;
+
                 initialParse(query);
+
 
                 if (!selectColumnInfo.size())
                 {
@@ -3545,17 +3635,16 @@ namespace openset::query
                 compileIndex(inMacros);
 
                 return true;
-
-            try
+            }
+            catch (const QueryParse2Error_s& ex)
             {
-                tableColumns = columnsPtr;
-
-                addDefaults();
-
-                initialParse(query);
-                compile(inMacros);
-
-                return true;
+                error.set(
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    std::string{ ex.getMessage()}+"(0)",
+                    ex.getDetail()
+                );
+                return false;
             }
             catch (const std::exception& ex)
             {
@@ -3565,7 +3654,7 @@ namespace openset::query
 
                 error.set(
                     errors::errorClass_e::parse,
-                    errors::errorCode_e::run_time_exception_triggered,
+                    errors::errorCode_e::syntax_error,
                     std::string{ ex.what() }+"(1)",
                     additional
                 );
@@ -3579,8 +3668,8 @@ namespace openset::query
 
                 error.set(
                     errors::errorClass_e::parse,
-                    errors::errorCode_e::run_time_exception_triggered,
-                    std::string { ex.what() } + "(1)",
+                    errors::errorCode_e::syntax_error,
+                    std::string { ex.what() } + "(2)",
                     additional);
                 return false;
             }
@@ -3592,13 +3681,141 @@ namespace openset::query
 
                 error.set(
                     errors::errorClass_e::parse,
-                    errors::errorCode_e::run_time_exception_triggered,
-                    "unknown exception in parser",
+                    errors::errorCode_e::syntax_error,
+                    "unknown exception in parser (3)",
                     additional);
                 return false;
             }
+        }
 
+        static SectionDefinitionList extractSections(const char* query, const Debugger_s lastDebug = {})
+        {
+            vector<SectionDefinition_s> result;
+            vector<string> accumulatedLines;
+            string current;
+            string functionName;
+            auto c         = query; // cursor
+            const auto end = query + strlen(query) + 1;
+            cvar params(cvar::valueType::DICT);
+            cvar flags(cvar::valueType::DICT);
+            std::string sectionType;
+            std::string sectionName;
+            const auto storeSection = [&]()
+            {
+                string code;
+                for (auto& s : accumulatedLines)
+                    code += s + '\n';
+                code += '\n';
+
+                // this allows you to indent the code under the @section if preferred
+                accumulatedLines.clear();
+                result.emplace_back(
+                    SectionDefinition_s {
+                        sectionType,
+                        sectionName,
+                        flags,
+                        params,
+                        code
+                    });
+                sectionName = "";
+                sectionType = "";
+                params.dict(); // clear them
+                flags.dict();
+            };
+            while (c < end)
+            {
+                switch (*c)
+                {
+                case '\r':
+                    break;
+                case '\t':
+                    current += "    "; // convert tab to 4 spaces
+                    break;
+                case 0: case '\n':
+                {
+                    auto tabDepth = 0; // count our spaces
+                    for (const auto s : current)
+                    {
+                        if (s == ' ')
+                            ++tabDepth;
+                        else
+                            break;
+                    }                             // convert spaces to tab counts (4 spaces
+                    tabDepth /= 4;                // remove leading spaces (or any other characters we don't want)
+                    current = trim(current, " "); // if this line isn't empty, and isn't a comment
+                    // store it
+                    if (current.length() && current[0] != '#')
+                    {
+                        // add the tabs back in
+                        if (tabDepth) // FIX
+                            for (auto i = 0; i < tabDepth; ++i)
+                                current = "    " + current;
+                        if (current[0] == '@')
+                        {
+                            if (sectionName.length())
+                                storeSection();
+                            auto sectionParts = split(current.substr(1), ' ');
+                            if (sectionParts.size() >= 2)
+                            {
+                                sectionType = sectionParts[0];
+                                sectionName = sectionParts[1];
+                                for (auto idx = 2; idx < static_cast<int>(sectionParts.size()); ++idx)
+                                {
+                                    auto keyVal = split(sectionParts[idx], '=');
+
+                                    if (keyVal.size() == 1)
+                                        keyVal.emplace_back("True");
+
+                                    if (keyVal[0] == "ttl" || keyVal[0] == "refresh")
+                                        // these are special and allow for time appends like 's' or 'm', or 'd'
+                                        flags[keyVal[0]] = expandTime(keyVal[1], lastDebug) * 1000;
+
+                                    else if (keyVal[0] == "use_cached")
+                                        flags["use_cached"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
+                                            't');
+
+                                    else if (keyVal[0] == "on_insert")
+                                        flags["on_insert"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
+                                            't');
+
+                                    else if (keyVal[0] == "z_index")
+                                        flags["z_index"] = stoll(keyVal[1]);
+
+                                    else if (isFloat(keyVal[1]))
+                                        params[keyVal[0]] = stod(keyVal[1]);
+                                    else if (isNumeric(keyVal[1]))
+                                        params[keyVal[0]] = stoll(keyVal[1]);
+                                    else if (isBool(keyVal[1]))
+                                        params[keyVal[0]] = (keyVal[1] == "True" || keyVal[1] == "true");
+                                    else
+                                        params[keyVal[0]] = stripQuotes(keyVal[1]);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            accumulatedLines.emplace_back(current);
+                        }
+                    }
+
+                    // reset the line accumulator
+                    current.clear();
+                }
+                    break;
+                default:
+                    current += *c;
+                }
+                ++c;
+            }
+            if (sectionName.length())
+                storeSection();
+            return result;
         }
 
     };
+
+    string MacroDbg(Macro_s& macro);
+
 };
+
+
