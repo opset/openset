@@ -162,10 +162,6 @@ namespace openset
             int segmentColumnShift{ 0 };
             std::vector<IndexBits*> segmentIndexes;
 
-            // row match values
-            //int64_t matchStampTop{ 0 };
-            //vector<int64_t> matchStampPrev{ 0 };
-
             // switches
             InterpretMode_e interpretMode{ InterpretMode_e::query };
             LoopState_e loopState{ LoopState_e::run }; // run, continue, break, exit
@@ -178,8 +174,6 @@ namespace openset
             int32_t eventCount{ -1 }; // -1 is uninitialized, calculation cached here
 
             // callbacks to external code (i.e. triggers)
-            function<void(int64_t functionHash, int seconds)> schedule_cb{ nullptr };
-            function<void(string emitMessage)> emit_cb{ nullptr };
             function<IndexBits*(const string&, bool&)> getSegment_cb{ nullptr };
 
             // distinct counting structures

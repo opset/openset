@@ -17,7 +17,7 @@ namespace openset::db
         int64_t stamp{ Now() };
         int64_t tableHash{ 0 };
         int32_t partition{ -1 };
-        char* jsonData { nullptr };        
+        char* jsonData { nullptr };
         SideLogCursor_s* next { nullptr };
 
         SideLogCursor_s() = default;
@@ -33,19 +33,19 @@ namespace openset::db
         void serialize(HeapStack* mem) const
         {
             const auto serializedStamp = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
-	        *serializedStamp = stamp;
+            *serializedStamp = stamp;
 
-	        const auto serializedTableHash = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
-	        *serializedTableHash = tableHash;
+            const auto serializedTableHash = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
+            *serializedTableHash = tableHash;
 
-	        const auto serializedPartition = recast<int32_t*>(mem->newPtr(sizeof(int32_t)));
-	        *serializedPartition = partition;
+            const auto serializedPartition = recast<int32_t*>(mem->newPtr(sizeof(int32_t)));
+            *serializedPartition = partition;
 
-	        const auto serializedJsonLength = recast<int32_t*>(mem->newPtr(sizeof(int32_t)));
-	        *serializedJsonLength = strlen(jsonData);
+            const auto serializedJsonLength = recast<int32_t*>(mem->newPtr(sizeof(int32_t)));
+            *serializedJsonLength = strlen(jsonData);
 
             const auto serializedJson = mem->newPtr(*serializedJsonLength);
-            memcpy(serializedJson, jsonData, *serializedJsonLength);            
+            memcpy(serializedJson, jsonData, *serializedJsonLength);
         }
 
         void deserialize(char* &mem)
@@ -76,6 +76,7 @@ namespace openset::db
         const int64_t MIN_LOG_SIZE = 1'000;
 
         int64_t logSize{ 0 };
+        int64_t lastLogSize{ 0 };
 
         SideLogCursor_s* head { nullptr };
         SideLogCursor_s* tail { nullptr };
@@ -101,7 +102,7 @@ namespace openset::db
             if (const auto readEntry = readHeads.find(key); readEntry != readHeads.end())
                 return readEntry->second;
 
-            return nullptr;            
+            return nullptr;
         }
 
         void setLastRead(const int64_t tableHash, const int32_t partition, SideLogCursor_s* link)
@@ -128,11 +129,12 @@ namespace openset::db
         }
 
         void trimSideLog()
-        {           
-            if (lastTrim + 60'000 < Now())
+        {
+            if (lastTrim + 60'000 < Now() && lastLogSize != logSize)
             {
                 lastTrim = Now();
                 Logger::get().debug("transaction log at " + to_string(logSize) + " transactions");
+                lastLogSize = logSize;
             }
 
             const auto keepStamp = Now() - LOG_MAX_AGE;
@@ -140,13 +142,13 @@ namespace openset::db
 
             if (referencedEntries.count(nullptr))
                 return;
-            
+
             auto cursor = head;
 
             auto count = 0;
 
-            while (cursor && 
-                   logSize > MIN_LOG_SIZE &&                   
+            while (cursor &&
+                   logSize > MIN_LOG_SIZE &&
                    cursor->stamp < keepStamp &&
                    referencedEntries.count(cursor) == 0)
             {
@@ -155,19 +157,19 @@ namespace openset::db
                 // free json data
                 PoolMem::getPool().freePtr(cursor->jsonData);
                 // free struct - was created with placement new, destructor need not be called
-                PoolMem::getPool().freePtr(cursor); 
+                PoolMem::getPool().freePtr(cursor);
 
                 --logSize;
                 ++count;
 
                 cursor = nextEntry;
             }
-             
+
             head = cursor;
 
             if (!head)
                 tail = nullptr;
-            
+
         }
 
         void resetReadHeads()
@@ -176,7 +178,7 @@ namespace openset::db
                 head.second = nullptr;
         }
 
-        
+
     public:
 
         // singleton
@@ -202,8 +204,8 @@ namespace openset::db
             const auto tableHash = table->getTableHash();
 
             // create with placement new
-            const auto newEntry = 
-                new (PoolMem::getPool().getPtr(sizeof(SideLogCursor_s))) 
+            const auto newEntry =
+                new (PoolMem::getPool().getPtr(sizeof(SideLogCursor_s)))
                     SideLogCursor_s(tableHash, partition, json);
 
             ++logSize;
@@ -229,10 +231,10 @@ namespace openset::db
 
             csLock lock(cs);
 
-            auto lastCursor = getLastRead(tableHash, partition);          
+            auto lastCursor = getLastRead(tableHash, partition);
             auto cursor = lastCursor;
 
-            if (!cursor) 
+            if (!cursor)
                 cursor = head;
             else
                 cursor = cursor->next;
@@ -246,7 +248,7 @@ namespace openset::db
 
             while (cursor)
             {
-                lastCursor = cursor;                
+                lastCursor = cursor;
 
                 if (cursor->tableHash == tableHash && cursor->partition == partition)
                 {
@@ -255,7 +257,7 @@ namespace openset::db
                     if (static_cast<int>(resultList.size()) == limit)
                         break;
                 }
-                
+
                 cursor = cursor->next;
             }
 
@@ -276,33 +278,33 @@ namespace openset::db
         {
             csLock lock(cs);
             const auto tableHash = table->getTableHash();
-            setLastRead(tableHash, partition, nullptr);            
+            setLastRead(tableHash, partition, nullptr);
         }
 
         void removeReadHeadsByPartition(const int32_t partition)
         {
             csLock lock(cs);
 
- 		    for (auto iter = readHeads.begin(); iter != readHeads.end();)
-		    {
-			    if (iter->first.second == partition)
-				    iter = readHeads.erase(iter);
-			    else
-				    ++iter;
-		    }
+            for (auto iter = readHeads.begin(); iter != readHeads.end();)
+            {
+                if (iter->first.second == partition)
+                    iter = readHeads.erase(iter);
+                else
+                    ++iter;
+            }
         }
-        
+
         void serialize(HeapStack* mem)
         {
             csLock lock(cs);
 
-	        // grab 8 bytes, this will contain the number of entries in the Log
-	        const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
-	        *sectionLength = 0;
+            // grab 8 bytes, this will contain the number of entries in the Log
+            const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
+            *sectionLength = 0;
 
             auto count = 0;
             auto cursor = head;
-            
+
             while (cursor)
             {
                 ++count;
@@ -321,7 +323,7 @@ namespace openset::db
             auto read = mem;
 
             const auto sectionLength = *recast<int64_t*>(read);
-	        read += sizeof(int64_t);
+            read += sizeof(int64_t);
 
             // reset log size
             logSize = 0;
@@ -335,8 +337,8 @@ namespace openset::db
             for (auto i = 0; i < sectionLength; ++i)
             {
                 // create with placement new
-                const auto newEntry = 
-                    new (PoolMem::getPool().getPtr(sizeof(SideLogCursor_s))) 
+                const auto newEntry =
+                    new (PoolMem::getPool().getPtr(sizeof(SideLogCursor_s)))
                         SideLogCursor_s();
 
                 newEntry->deserialize(read);
@@ -351,7 +353,7 @@ namespace openset::db
                 tail = newEntry;
 
                 ++logSize;
-               
+
             }
 
             // here we append (and update the sequence numbers)
@@ -363,13 +365,13 @@ namespace openset::db
             {
                 const auto newStamp = Now();
 
-                auto cursor = oldHead;               
+                auto cursor = oldHead;
 
                 while (cursor)
                 {
                     ++logSize;
                     const auto next = cursor->next;
-                    cursor->stamp = newStamp;                                 
+                    cursor->stamp = newStamp;
                     cursor->next = nullptr;
 
                     if (tail)
@@ -383,7 +385,7 @@ namespace openset::db
 
             // reset the read-head so this entire new transaction log
             // will get replayed through the insert mechanism
-            resetReadHeads();          
+            resetReadHeads();
         }
     };
 }

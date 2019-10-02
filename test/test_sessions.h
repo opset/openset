@@ -214,7 +214,7 @@ inline Tests test_sessions()
 
                     log(cursor)
 
-                    each_row where event.row(== "some event")
+                    each_row where event.is(== "some event")
 
                       << "all", some_str
 

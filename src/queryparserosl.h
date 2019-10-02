@@ -500,7 +500,7 @@ namespace openset::query
 
         bool isAssignedUserVar(const std::string& name)
         {
-            if (name == "props")
+            if (name == "props" || name == "each_value")
                 return true;
             return userVarAssignments.find(name) != userVarAssignments.end();
         }
@@ -1227,10 +1227,6 @@ namespace openset::query
                 if (startWord == "select")
                     continue;
 
-                for (const auto &i : line)
-                    cout << i << " ";
-                cout << endl;
-
                 auto blockId = -1;
 
                 // go recursive for sub block
@@ -1456,7 +1452,6 @@ namespace openset::query
 
             ++idx; // skip past where look for logic
             const Blocks::Line logic(words.begin() + idx, words.end());
-
             pushLogic(logic);
 
             // if there is no logic, just straight iteration we push the logic block as -1
@@ -1469,6 +1464,8 @@ namespace openset::query
                 logicBlockId,
                 lastDebug.line,
                 0);
+
+            return end;
         }
 
 
@@ -2242,7 +2239,7 @@ namespace openset::query
 
                     ++count;
                 }
-                else if (token == "__chain_row" && isColumn)
+                else if (token == "__chain_is" && isColumn)
                 {
                     std::vector<std::pair<Blocks::Line,int>> params;
                     idx = parseParams(words, idx + 1, params);
@@ -2497,8 +2494,6 @@ namespace openset::query
                         "'.look_ahead' and '.look_back' cannot be used in conjunction with '.within', they perform similar tasks.",
                         lastDebug
                     };
-
-
             }
 
             const auto filterOp = isColumn ? MiddleOp_e::column_filter : MiddleOp_e::logic_filter;
@@ -2978,6 +2973,8 @@ namespace openset::query
                     break;
 
                 case MiddleOp_e::marshal:
+                    inMacros.marshalsReferenced.insert(static_cast<Marshals_e>(midOp.value1.getInt32()));
+
                     finCode.emplace_back(
                         OpCode_e::MARSHAL,
                         midOp.value1, // index of function
@@ -3016,6 +3013,71 @@ namespace openset::query
                     finCode.emplace_back(
                         OpCode_e::CALL_EACH,
                         midOp.value1, // code block if lambda is true
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+
+                case MiddleOp_e::sum_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_SUM,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::avg_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_AVG,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::max_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_MAX,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::min_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_MIN,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::count_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_CNT,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::dcount_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_DCNT,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::test_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_TST,
+                        midOp.value1, // code for value
+                        filter,       // filter ID
+                        midOp.value2, // lambda for logic
+                        debug);
+                    break;
+                case MiddleOp_e::row_call:
+                    finCode.emplace_back(
+                        OpCode_e::CALL_ROW,
+                        midOp.value1, // code for value
                         filter,       // filter ID
                         midOp.value2, // lambda for logic
                         debug);
@@ -3121,11 +3183,11 @@ namespace openset::query
 
                             while (tokens[idx].find("__chain_") != string::npos)
                             {
-                                if (tokens[idx] == "__chain_row" ||
+                                if (tokens[idx] == "__chain_is" ||
                                     tokens[idx] == "__chain_ever" ||
                                     tokens[idx] == "__chain_never")
                                 {
-                                    const auto isRow = tokens[idx] == "__chain_row";
+                                    const auto isRow = tokens[idx] == "__chain_is";
                                     const auto isNever = tokens[idx] == "__chain_never";
 
                                     const auto endOfLogic = seekMatchingBrace(tokens, idx + 1);
@@ -3318,7 +3380,7 @@ namespace openset::query
             }
 
             // swap logic so table columns are on the left and values are on the right
-            // and strip out VOID == VOID type occurences.
+            // and strip out VOID == VOID type occurrences.
             {
                 auto& tokens = tokensWithoutMath;
                 auto idx = 0;
@@ -3733,23 +3795,11 @@ namespace openset::query
                     break;
                 case 0: case '\n':
                 {
-                    auto tabDepth = 0; // count our spaces
-                    for (const auto s : current)
-                    {
-                        if (s == ' ')
-                            ++tabDepth;
-                        else
-                            break;
-                    }                             // convert spaces to tab counts (4 spaces
-                    tabDepth /= 4;                // remove leading spaces (or any other characters we don't want)
                     current = trim(current, " "); // if this line isn't empty, and isn't a comment
                     // store it
                     if (current.length() && current[0] != '#')
                     {
                         // add the tabs back in
-                        if (tabDepth) // FIX
-                            for (auto i = 0; i < tabDepth; ++i)
-                                current = "    " + current;
                         if (current[0] == '@')
                         {
                             if (sectionName.length())

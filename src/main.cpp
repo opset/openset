@@ -56,7 +56,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 #ifdef _MSC_VER
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
 #endif
-    cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Crowd Conduct Corp." << endl;
+    cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Seth Hamilton." << endl;
     cout << "\x1b[0m\b\b\b\b        " << endl;
 
 #ifdef _MSC_VER

@@ -257,19 +257,19 @@ inline Tests test_osl_language()
                 const auto testScript =
                 R"osl(
 
-                    each_row where fruit.row(== "banana") && fruit.ever(== "donkey")
+                    each_row where fruit.is(== "banana") && fruit.ever(== "donkey")
                         debug(true)
                     end
 
-                    each_row where fruit.row(== "banana") && fruit.ever(== "pear")
+                    each_row where fruit.is(== "banana") && fruit.ever(== "pear")
                         debug(true)
                     end
 
-                    each_row where fruit.row(== "banana") && fruit.never(== "pear")
+                    each_row where fruit.is(== "banana") && fruit.never(== "pear")
                         debug(true)
                     end
 
-                    each_row where fruit.row(== "banana")
+                    each_row where fruit.is(== "banana")
                         debug(true)
                     end
 
@@ -473,8 +473,8 @@ inline Tests test_osl_language()
 
                     counter = 0
 
-                    each_row.limit(1) where event.row(== "purchase")
-                      each_row.continue() where event.row(== "purchase")
+                    each_row.limit(1) where event.is(== "purchase")
+                      each_row.continue() where event.is(== "purchase")
                         counter = counter + 1
                         debug(stamp)
                       end
@@ -505,8 +505,8 @@ inline Tests test_osl_language()
 
                     counter = 0
 
-                    each_row.limit(1) where event.row(== "purchase")
-                      each_row.continue().next() where event.row(== "purchase")
+                    each_row.limit(1) where event.is(== "purchase")
+                      each_row.continue().next() where event.is(== "purchase")
                         counter = counter + 1
                         debug(stamp)
                       end
@@ -537,7 +537,7 @@ inline Tests test_osl_language()
 
                     counter = 0
 
-                    each_row.from(2) where event.row(== "purchase")
+                    each_row.from(2) where event.is(== "purchase")
                       counter = counter + 1
                       debug(stamp)
                     end

@@ -244,7 +244,7 @@ inline Tests test_db()
                     # referral_search is nil in two rows, the `for` loop should skip those
                     # even if we don't put a `&& referral_search.row(!= nil)` in the `each_row`
 
-                    each_row where page.row(!= nil) #
+                    each_row where page.is(!= nil) #
                         log(stamp, page, referral_search)
                         for ref in referral_search
                             counter = counter + 1
@@ -397,7 +397,7 @@ inline Tests test_db()
                         count id
                     end
 
-                    each_row where page.row(!= "blog")
+                    each_row where page.is(!= "blog")
                         << page
                     end
 
@@ -432,7 +432,7 @@ inline Tests test_db()
                         count id
                     end
 
-                    each_row where page.row(!= "blog") && session.row(== 2)
+                    each_row where page.is(!= "blog") && session.is(== 2)
                         << page
                     end
 
@@ -469,7 +469,7 @@ inline Tests test_db()
 
                     some_var = 4
 
-                    each_row where page.row(!= "blog") && session.row(== 2) && some_var == 4
+                    each_row where page.is(!= "blog") && session.is(== 2) && some_var == 4
                         << page
                     end
 
@@ -514,7 +514,7 @@ inline Tests test_db()
                         third_var = "good-bye"
                     end
 
-                    each_row where (other_var == 1 || page.row(!= "blog")) && (session.row(== 2) && (some_var == 4 || other_var == 2))
+                    each_row where (other_var == 1 || page.is(!= "blog")) && (session.is(== 2) && (some_var == 4 || other_var == 2))
                         << page
                     end
 
@@ -550,7 +550,7 @@ inline Tests test_db()
                         count id
                     end
 
-                    each_row where page.row(!= "blog") || (page.never(=="blog") && referral_search.ever(contains "red"))
+                    each_row where page.is(!= "blog") || (page.never(=="blog") && referral_search.ever(contains "red"))
                         << page
                     end
 

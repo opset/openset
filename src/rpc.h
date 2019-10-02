@@ -63,19 +63,6 @@ namespace openset::comms
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/batch(\/|\?|\#|)$)"), RpcQuery::batch, { { 1, "table" } } },
         // RpcInsert
         { "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },
-        // RpcRevent
-        /*{
-            "POST",
-            std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::revent_create,
-            { { 1, "table" }, { 2, "name" } }
-        },
-        {
-            "GET",
-            std::regex(R"(^/v1/revent/([a-z0-9_]+)/trigger/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::revent_describe,
-            { { 1, "table" }, { 2, "name" } }
-        },*/
         {
             "DELETE",
             std::regex(R"(^/v1/trigger/([a-z0-9_]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),

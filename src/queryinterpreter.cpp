@@ -11,7 +11,9 @@ const int STACK_DEPTH       = 64;
 
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode)
     : macros(macros),
-      interpretMode(interpretMode)
+      interpretMode(interpretMode),
+      rowKey()
+
 {
     stack    = new cvar[STACK_DEPTH];
     stackPtr = stack;
@@ -53,7 +55,7 @@ void openset::query::Interpreter::configure()
                     error.set(
                         errors::errorClass_e::run_time,
                         errors::errorCode_e::column_not_in_table,
-                        "column_nname: " + cvar.actual);
+                        "column_name: " + cvar.actual);
                     return;
                 }
             }
@@ -230,7 +232,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  *
                  * The key is a compound key made by taking in the following parameters:
                  *
-                 *   - index: the index of the column being counted in this iteratior of "columnVars"
+                 *   - index: the index of the column being counted in this iterator of "columnVars"
                  *   - distinct: usually the value of the column in an event row, or an alternate column to count distinctly
                  *               in the event row... or when it is a variable (rather than an event column) the
                  *               value of that variable.
@@ -240,7 +242,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  *               allowing multiple rows with the same stamp to be counted as if they were part of one larger
                  *               row.
                  *   - column:   integer version of the pointer to the result set ("resultColumns"). This is because each
-                 *               result grouping has it's own "resultColumns" and we must distiguish whether we have counted
+                 *               result grouping has it's own "resultColumns" and we must distinguish whether we have counted
                  *               for a specific group or not before (i.e. the keys above could potentially be met on another group)
                  *
                  */
@@ -337,50 +339,6 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
         aggColumns(aggs);
         ++depth;
     }
-}
-
-void openset::query::Interpreter::marshal_schedule(const int paramCount)
-{
-    if (paramCount != 2)
-    {
-        error.set(
-            errors::errorClass_e::run_time,
-            errors::errorCode_e::sdk_param_count,
-            "schedule doesn't have the correct number of parameters");
-        *stackPtr = NONE;
-        ++stackPtr;
-        return;
-    }
-    --stackPtr;
-    const auto functionHash = MakeHash(*stackPtr); // pop
-    --stackPtr;
-    auto scheduleAt = *stackPtr; // pop
-    if (schedule_cb)
-        schedule_cb(functionHash, scheduleAt);
-    *stackPtr = NONE; // push
-    ++stackPtr;
-}
-
-void openset::query::Interpreter::marshal_emit(const int paramCount)
-{
-    if (paramCount != 1)
-    {
-        error.set(
-            errors::errorClass_e::run_time,
-            errors::errorCode_e::sdk_param_count,
-            "emit doesn't have the correct number of parameters");
-        *stackPtr = NONE;
-        ++stackPtr;
-        return;
-    }
-    jobState  = true;
-    loopState = LoopState_e::in_exit;
-    --stackPtr;
-    const auto emitMessage = *stackPtr; // pop
-    if (emit_cb)
-        emit_cb(emitMessage);
-    *stackPtr = NONE; // push
-    ++stackPtr;
 }
 
 void __nestItercvar(const cvar* cvariable, string& result)
@@ -684,7 +642,9 @@ void openset::query::Interpreter::marshal_population(const int paramCount)
         return;
     }
     --stackPtr;
-    const auto a = *stackPtr; // if we acquired IndexBits from getSegment_cb we must
+    const auto a = *stackPtr;
+
+    // if we acquired IndexBits from getSegment_cb we must
     // delete them after we are done, or it'll leak
     auto aDelete     = false;
     IndexBits* aBits = nullptr;
@@ -699,7 +659,9 @@ void openset::query::Interpreter::marshal_population(const int paramCount)
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } // copy then AND NOT to get the compliment of these two segments
+    }
+
+    // copy then AND NOT to get the compliment of these two segments
     bits->opCopy(*aBits);
     if (aDelete)
         delete aBits;
@@ -720,7 +682,9 @@ void openset::query::Interpreter::marshal_intersection(const int paramCount)
     --stackPtr;
     const auto b = *stackPtr;
     --stackPtr;
-    const auto a = *stackPtr; // if we acquired IndexBits from getSegment_cb we must
+    const auto a = *stackPtr;
+
+    // if we acquired IndexBits from getSegment_cb we must
     // delete them after we are done, or it'll leak
     auto aDelete     = false;
     auto bDelete     = false;
@@ -751,7 +715,9 @@ void openset::query::Interpreter::marshal_intersection(const int paramCount)
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } // copy then AND to get the intersection of these two segments
+    }
+
+    // copy then AND to get the intersection of these two segments
     bits->opCopy(*aBits);
     bits->opAnd(*bBits);
 }
@@ -830,7 +796,9 @@ void openset::query::Interpreter::marshal_compliment(const int paramCount)
         return;
     }
     --stackPtr;
-    const auto a = *stackPtr; // if we acquired IndexBits from getSegment_cb we must
+    const auto a = *stackPtr;
+
+    // if we acquired IndexBits from getSegment_cb we must
     // delete them after we are done, or it'll leak
     auto aDelete     = false;
     IndexBits* aBits = nullptr;
@@ -867,7 +835,9 @@ void openset::query::Interpreter::marshal_difference(const int paramCount)
     --stackPtr;
     const auto b = *stackPtr;
     --stackPtr;
-    const auto a = *stackPtr; // if we acquired IndexBits from getSegment_cb we must
+    const auto a = *stackPtr;
+
+    // if we acquired IndexBits from getSegment_cb we must
     // delete them after we are done, or it'll leak
     auto aDelete     = false;
     auto bDelete     = false;
@@ -916,7 +886,9 @@ void openset::query::Interpreter::marshal_slice(const int paramCount)
     const auto reference = stackPtr - 3;
     auto startIndex      = (stackPtr - 2)->getInt64();
     auto endIndex        = (stackPtr - 1)->getInt64();
-    stackPtr -= 2; // we will return our result at this position
+    stackPtr -= 2;
+
+    // we will return our result at this position
     // local function to sort our missing, negative, or out of range indexes
     const auto fixIndexes = [](size_t valueLength, int64_t& startIndex, int64_t& endIndex)
     {
@@ -935,7 +907,9 @@ void openset::query::Interpreter::marshal_slice(const int paramCount)
         if (startIndex < 0)
             startIndex = 0;
         if (startIndex > valueLength)
-            startIndex = valueLength; // we will swap for a valid range if they are reversed for whatever reason
+            startIndex = valueLength;
+
+        // we will swap for a valid range if they are reversed for whatever reason
         if (endIndex < startIndex)
             std::swap(startIndex, endIndex);
     };
@@ -1063,7 +1037,7 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
         throw std::runtime_error("url_decode malformed");
     const auto paramType = (stackPtr - 1)->typeOf();
     if (paramType == cvar::valueType::DICT || paramType == cvar::valueType::SET || paramType == cvar::valueType::LIST)
-        throw std::runtime_error(".url_decode expecting string or convertable type");
+        throw std::runtime_error(".url_decode expecting string or convertible type");
     const auto url = (stackPtr - 1)->getString();
     auto& result   = *(stackPtr - 1);
     result.dict();
@@ -1071,7 +1045,9 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
     result["path"]      = NONE;
     result["query"]     = NONE;
     result["params"]    = cvar::Dict {};
-    size_t start        = 0; // look for the // after the protocal, if its here we have a host
+    size_t start        = 0;
+
+    // look for the // after the protocal, if its here we have a host
     if (auto slashSlash = url.find("//"); slashSlash != std::string::npos)
     {
         slashSlash += 2;
@@ -1080,7 +1056,9 @@ void openset::query::Interpreter::marshal_url_decode(const int paramCount) const
             return;
         result["host"] = url.substr(slashSlash, endPos - (slashSlash));
         start          = endPos;
-    } // we have a question mark
+    }
+
+    // we have a question mark
     if (auto qpos = url.find('?', start); qpos != std::string::npos)
     {
         result["path"] = url.substr(start, qpos - start);
@@ -1257,11 +1235,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         *stackPtr = currentRow;
         ++stackPtr;
         break;
-    case Marshals_e::marshal_last_event:
+    case Marshals_e::marshal_last_stamp:
         *stackPtr = rows->back()->cols[COL_STAMP];
         ++stackPtr;
         break;
-    case Marshals_e::marshal_first_event:
+    case Marshals_e::marshal_first_stamp:
         *stackPtr = rows->front()->cols[COL_STAMP];
         ++stackPtr;
         break;
@@ -1288,6 +1266,9 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_to_days:
         *(stackPtr - 1) /= int64_t(86'400'000); // in place
+        break;
+    case Marshals_e::marshal_to_weeks:
+        *(stackPtr - 1) /= int64_t(86'400'000 * 7); // in place
         break;
     case Marshals_e::marshal_get_second:
         *(stackPtr - 1) = Epoch::epochSecondNumber(*(stackPtr - 1));
@@ -1395,12 +1376,6 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_log:
         marshal_log(inst->extra);
-        break;
-    case Marshals_e::marshal_emit:
-        marshal_emit(inst->extra);
-        break;
-    case Marshals_e::marshal_schedule:
-        marshal_schedule(inst->extra);
         break;
     case Marshals_e::marshal_debug:
         --stackPtr;
@@ -1575,9 +1550,9 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_keys:
         if (inst->extra != 1)
-            throw std::runtime_error("keys requires reference parameter");
+            throw std::runtime_error("keys requires one parameter");
         {
-            const auto var = (stackPtr - 1)->getReference();
+            const auto var = (stackPtr - 1);
             auto res       = (stackPtr - 1);
             if (var->typeOf() == cvar::valueType::DICT)
             {
@@ -1593,7 +1568,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         if (macros.sessionColumn == -1)
             throw std::runtime_error("session column could not be found");
         ++stackPtr;
-        *(stackPtr - 1) = rows->back()->cols[macros.sessionColumn];
+        *(stackPtr - 1) = rowCount ? rows->back()->cols[macros.sessionColumn] : 0;
         break;
     case Marshals_e::marshal_str_split:
         marshal_split(inst->extra);
@@ -1887,7 +1862,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         case OpCode_e::PSHUSROBJ:
         {
             auto* tcvar = &macros.vars.userVars[inst->index].value;
-            for (auto x = 0; x < inst->extra; ++x)
+            for (int64_t x = 0; x < inst->extra; ++x)
             {
                 --stackPtr;
                 tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -1902,7 +1877,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         case OpCode_e::PSHUSROREF:
         {
             auto* tcvar = &macros.vars.userVars[inst->index].value;
-            for (auto x = 0; x < inst->extra; ++x)
+            for (int64_t x = 0; x < inst->extra; ++x)
             {
                 --stackPtr;
                 tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -1947,7 +1922,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         case OpCode_e::POPUSROBJ:
         {
             auto* tcvar = &macros.vars.userVars[inst->index].value;
-            for (auto x = 0; x < inst->extra - 1; ++x)
+            for (int64_t x = 0; x < inst->extra - 1; ++x)
             {
                 --stackPtr;
                 // throw if missing key while popping
@@ -2029,449 +2004,6 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             if (inReturn)
                 return;
             break;
-        case OpCode_e::ITFOR:
-        {
-            --stackPtr;
-
-            const int64_t keyIdx = *stackPtr; // we are going to look back one instruction to see if we
-            // are putting values into a user variable or a column variable
-            const auto isColumn = (inst - 1)->op == OpCode_e::COLIDX;
-
-            int64_t valueIdx    = 0;
-
-            if (inst->value == 2)
-            {
-                --stackPtr;
-                valueIdx = *stackPtr;
-            }
-
-            --stackPtr;
-            auto source = move(*stackPtr);
-
-            if (source.typeOf() == cvar::valueType::DICT)
-            {
-                // enter loop, increment nest
-                ++nestDepth;
-                const auto from = source.getDict();
-                for (auto& x : *from)
-                {
-                    if (loopState == LoopState_e::in_exit || error.inError())
-                    {
-                        *stackPtr = 0;
-                        ++stackPtr;
-                        --nestDepth;
-                        --recursion;
-                        return;
-                    }
-                    if (isColumn)
-                        macros.vars.columnVars[keyIdx].value = x.first;
-                    else
-                        macros.vars.userVars[keyIdx].value = x.first;
-                    if (inst->value == 2)
-                        macros.vars.userVars[valueIdx].value = x.second;
-                    opRunner(&macros.code.front() + inst->index, currentRow);
-                    if (loopState == LoopState_e::in_break || inReturn)
-                    {
-                        if (breakDepth == 1 || nestDepth == 1)
-                        {
-                            loopState = LoopState_e::run;
-                        }
-                        else
-                        {
-                            --nestDepth;
-                            --recursion;
-                        }
-                        --breakDepth;
-                        if (breakDepth == 0)
-                            break;
-                        return;
-                    }
-                    if (loopState == LoopState_e::in_continue)
-                        loopState = LoopState_e::run; // no actual action, we are going to loop anyways
-                }                                     // out of loop, decrement nest
-                --nestDepth;
-            }
-            else if (source.typeOf() == cvar::valueType::LIST)
-            {
-                const auto from = source.getList();
-                for (auto& x : *from)
-                {
-                    if (loopState == LoopState_e::in_exit || error.inError())
-                    {
-                        *stackPtr = 0;
-                        ++stackPtr;
-                        --nestDepth;
-                        --recursion;
-                        return;
-                    }
-                    if (isColumn)
-                        macros.vars.columnVars[keyIdx].value = x;
-                    else
-                        macros.vars.userVars[keyIdx].value = x;
-                    opRunner(&macros.code.front() + inst->index, currentRow);
-                    if (loopState == LoopState_e::in_break || inReturn)
-                    {
-                        if (breakDepth == 1 || nestDepth == 1)
-                        {
-                            loopState = LoopState_e::run;
-                        }
-                        else
-                        {
-                            --nestDepth;
-                            --recursion;
-                        }
-                        --breakDepth;
-                        if (breakDepth == 0)
-                            break;
-                        return;
-                    }
-                    if (loopState == LoopState_e::in_continue)
-                        loopState = LoopState_e::run; // no actual action, we are going to loop anyways
-                }
-            }
-            else if (source.typeOf() == cvar::valueType::SET)
-            {
-                const auto from = source.getSet();
-
-                for (auto& x : *from)
-                {
-                    if (loopState == LoopState_e::in_exit || error.inError())
-                    {
-                        *stackPtr = 0;
-                        ++stackPtr;
-                        --nestDepth;
-                        --recursion;
-                        return;
-                    }
-
-                    if (isColumn)
-                        macros.vars.columnVars[keyIdx].value = x;
-                    else
-                        macros.vars.userVars[keyIdx].value = x;
-
-                    opRunner(&macros.code.front() + inst->index, currentRow);
-
-                    if (loopState == LoopState_e::in_break || inReturn)
-                    {
-                        if (breakDepth == 1 || nestDepth == 1)
-                        {
-                            loopState = LoopState_e::run;
-                        }
-                        else
-                        {
-                            --nestDepth;
-                            --recursion;
-                        }
-                        --breakDepth;
-                        if (breakDepth == 0)
-                            break;
-                        return;
-                    }
-                    if (loopState == LoopState_e::in_continue)
-                        loopState = LoopState_e::run; // no actual action, we are going to loop anyways
-                }
-            }
-            else
-            {
-                error.set(errors::errorClass_e::run_time, errors::errorCode_e::iteration_error, inst->debug.toStr());
-                loopState = LoopState_e::in_exit;
-                --recursion;
-                return;
-            }
-        }
-        break; /*			case OpCode_e::ITNEXT:
-                                // fancy and strange stuff happens here
-                                {
-                                    if (currentRow >= static_cast<int>(rows->size()))
-                                        break;
-
-                                    const auto savedRow = currentRow;
-                                    auto iterCount = 0;
-                                    cvar lambda;
-
-                                    // enter loop, increment nest
-                                    ++nestDepth;
-
-                                    // store the time stamp of the last match
-                                    matchStampPrev.push_back((*rows)[currentRow]->cols[0]);
-
-                                    // user right for count
-                                    for (const auto rowCount = rows->size();
-                                         iterCount < inst->value && currentRow < static_cast<int>(rowCount);
-                                         ++currentRow)
-                                    {
-
-                                        if (loopState == LoopState_e::in_exit || error.inError())
-                                        {
-                                            *stackPtr = 0;
-                                            ++stackPtr;
-
-                                            matchStampPrev.pop_back();
-                                            --nestDepth;
-                                            --recursion;
-                                            return;
-                                        }
-
-                                        if (nestDepth == 1) // 1 is top loop, record the stamp on the match
-                                            matchStampTop = (*rows)[currentRow]->cols[0];
-
-                                        if (inst->extra)
-                                        {
-                                            opRunner(// call the "where" lambda
-                                                &macros.code.front() + inst->extra,
-                                                currentRow);
-                                            --stackPtr;
-                                            lambda = *stackPtr;
-                                        }
-                                        else
-                                        {
-                                            lambda = 1;
-                                        }
-
-                                        // call lambda to see if this row passes the test
-                                        if (lambda.isEvalTrue()) // cool, we have row that matches
-                                        {
-                                            matchStampPrev.back() = (*rows)[currentRow]->cols[0];
-
-                                            // run the inner code block
-                                            if (!inst->index)
-                                            {
-                                                error.set(
-                                                    errors::errorClass_e::run_time,
-                                                    errors::errorCode_e::iteration_error,
-                                                    inst->debug.toStr());
-                                                loopState = LoopState_e::in_exit;
-                                                --recursion;
-                                                return;
-                                            }
-
-                                            if (iterCount < inst->value)
-                                                opRunner(
-                                                    &macros.code.front() + inst->index,
-                                                    currentRow);
-
-                                            // increment run count
-                                            ++iterCount;
-
-                                        }
-
-                                        if (loopState == LoopState_e::in_break || inReturn)
-                                        {
-                                            if (breakDepth == 1 || nestDepth == 1)
-                                            {
-                                                loopState = LoopState_e::run;
-                                            }
-                                            else
-                                            {
-                                                --nestDepth;
-                                                --recursion;
-                                            }
-
-                                            --breakDepth;
-
-                                            if (breakDepth == 0)
-                                                break;
-
-                                            matchStampPrev.pop_back();
-                                            return;
-                                        }
-
-                                        // no actual action, we are going to loop anyways
-                                        if (loopState == LoopState_e::in_continue)
-                                            loopState = LoopState_e::run;
-                                    }
-
-                                    matchStampPrev.pop_back();
-
-                                    currentRow = savedRow;
-
-                                    // out of loop, decrement nest
-                                    --nestDepth;
-
-                                    // otherwise we move to the next line, loop is done
-                                }
-                                break;
-                            case OpCode_e::ITPREV:
-                                // more fancy and strange stuff happens here
-                                break;*/
-        case OpCode_e::ITFORR: case OpCode_e::ITFORRC: case OpCode_e::ITFORRCF:
-        {
-            --stackPtr;
-            const auto reference = stackPtr->getReference();
-            const auto rowCount  = static_cast<int>(rows->size());
-            if (currentRow >= rowCount || currentRow < 0)
-                break;
-            const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
-            if (inst->op == OpCode_e::ITFORRCF)
-            {
-                --stackPtr;
-                currentRow = *stackPtr; // ITFORRCF (Iterate-for-row-continue-from) starts from stack value
-            }
-            else if (inst->op == OpCode_e::ITFORR)
-                currentRow = 0;
-            else
-                ++currentRow; // ITFORCC starts on next row
-            // bad math check
-            //if (currentRow < 0)
-            //  currentRow = 0;
-            // number of matches when using match limiting on `for` loop
-            auto iterCount    = 0; // result of lambda call
-            cvar lambdaResult = 0; // enter loop, increment nest
-            ++nestDepth;           // user right for count
-            for (; iterCount < inst->value && currentRow >= 0 && currentRow < static_cast<int>(rowCount); ++currentRow)
-            {
-                if (loopState == LoopState_e::in_exit || error.inError())
-                {
-                    *stackPtr = 0;
-                    ++stackPtr;
-                    --nestDepth;
-                    --recursion;
-                    return;
-                }                        // set the value of referenced `for variable` to the current row number
-                *reference = currentRow; // run the `if` conditional lambda if present, or
-                // default to passing (True)
-                if (inst->extra) // Lambda for `if` conditional
-                {
-                    opRunner(
-                        // call the "where" lambda
-                        &macros.code.front() + inst->extra,
-                        currentRow);
-                    --stackPtr;
-                    lambdaResult = *stackPtr; // return value from `if` evaluation
-                }
-                else
-                {
-                    lambdaResult = 1;
-                }                              // call lambda to see if this row passes the test
-                if (lambdaResult.isEvalTrue()) // cool, we have row that matches
-                {
-                    // run the inner code block
-                    if (!inst->index)
-                    {
-                        error.set(
-                            errors::errorClass_e::run_time,
-                            errors::errorCode_e::iteration_error,
-                            inst->debug.toStr());
-                        loopState = LoopState_e::in_exit;
-                        --recursion;
-                        return;
-                    }
-                    if (iterCount < inst->value)
-                        opRunner(&macros.code.front() + inst->index, currentRow); // increment run count
-                    ++iterCount;
-                }
-                if (loopState == LoopState_e::in_break || inReturn)
-                {
-                    if (breakDepth == 1 || nestDepth == 1)
-                    {
-                        loopState = LoopState_e::run;
-                    }
-                    else
-                    {
-                        --nestDepth;
-                        --recursion;
-                    }
-                    --breakDepth;
-                    if (breakDepth == 0)
-                        break;
-                    return;
-                } // no actual action, we are going to loop anyways
-                if (loopState == LoopState_e::in_continue)
-                    loopState = LoopState_e::run;
-            }
-            currentRow = savedRow; // out of loop, decrement nest
-            --nestDepth;
-        }
-            break;
-        case OpCode_e::ITRFORR: case OpCode_e::ITRFORRC: case OpCode_e::ITRFORRCF:
-        {
-            --stackPtr;
-            const auto reference = stackPtr->getReference();
-            const auto rowCount  = static_cast<int>(rows->size());
-            if (currentRow >= rowCount || currentRow < 0)
-                break;
-            const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
-            if (inst->op == OpCode_e::ITRFORRCF)
-            {
-                --stackPtr;
-                currentRow = *stackPtr; // ITFORRCF (Iterate-for-row-continue-from) starts from stack value
-            }
-            else if (inst->op == OpCode_e::ITRFORR)
-                currentRow = rowCount - 1;
-            else
-                --currentRow; // ITFORCC starts on next row
-            // bad math check
-            //if (currentRow > rowCount)
-            //    currentRow = rowCount - 1;
-            // number of matches when using match limiting on `for` loop
-            auto iterCount    = 0; // result of lambda call
-            cvar lambdaResult = 0; // enter loop, increment nest
-            ++nestDepth;           // user right for count
-            for (; iterCount < inst->value && currentRow >= 0 && currentRow < static_cast<int>(rowCount); --currentRow)
-            {
-                if (loopState == LoopState_e::in_exit || error.inError())
-                {
-                    *stackPtr = 0;
-                    ++stackPtr;
-                    --nestDepth;
-                    --recursion;
-                    return;
-                }                        // set the value of referenced `for variable` to the current row number
-                *reference = currentRow; // run the `if` conditional lambda if present, or
-                // default to passing (True)
-                if (inst->extra) // Lambda for `if` conditional
-                {
-                    opRunner(
-                        // call the "where" lambda
-                        &macros.code.front() + inst->extra,
-                        currentRow);
-                    --stackPtr;
-                    lambdaResult = *stackPtr; // return value from `if` evaluation
-                }
-                else
-                {
-                    lambdaResult = 1;
-                }                              // call lambda to see if this row passes the test
-                if (lambdaResult.isEvalTrue()) // cool, we have row that matches
-                {
-                    // run the inner code block
-                    if (!inst->index)
-                    {
-                        error.set(
-                            errors::errorClass_e::run_time,
-                            errors::errorCode_e::iteration_error,
-                            inst->debug.toStr());
-                        loopState = LoopState_e::in_exit;
-                        --recursion;
-                        return;
-                    }
-                    if (iterCount < inst->value)
-                        opRunner(&macros.code.front() + inst->index, currentRow); // increment run count
-                    ++iterCount;
-                }
-                if (loopState == LoopState_e::in_break || inReturn)
-                {
-                    if (breakDepth == 1 || nestDepth == 1)
-                    {
-                        loopState = LoopState_e::run;
-                    }
-                    else
-                    {
-                        --nestDepth;
-                        --recursion;
-                    }
-                    --breakDepth;
-                    if (breakDepth == 0)
-                        break;
-                    return;
-                } // no actual action, we are going to loop anyways
-                if (loopState == LoopState_e::in_continue)
-                    loopState = LoopState_e::run;
-            }
-            currentRow = savedRow; // out of loop, decrement nest
-            --nestDepth;
-        }
-            break;
         case OpCode_e::SETROW:
             currentRow = macros.vars.userVars[inst->index].value;
             break;
@@ -2510,7 +2042,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
             else
             {
-                for (auto x = 0; x < inst->extra - 1; ++x)
+                for (int64_t x = 0; x < inst->extra - 1; ++x)
                 {
                     --stackPtr;
                     tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -2532,7 +2064,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
             else
             {
-                for (auto x = 0; x < inst->extra - 1; ++x)
+                for (int64_t x = 0; x < inst->extra - 1; ++x)
                 {
                     --stackPtr;
                     tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -2554,7 +2086,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
             else
             {
-                for (auto x = 0; x < inst->extra - 1; ++x)
+                for (int64_t x = 0; x < inst->extra - 1; ++x)
                 {
                     --stackPtr;
                     tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -2576,7 +2108,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             }
             else
             {
-                for (auto x = 0; x < inst->extra - 1; ++x)
+                for (int64_t x = 0; x < inst->extra - 1; ++x)
                 {
                     --stackPtr;
                     tcvar = tcvar->getMemberPtr(*stackPtr); // *stackPtr is our key
@@ -2742,7 +2274,15 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         *reference = i;
                         lambda(inst->index, currentRow);
 
-                        if (loopState == LoopState_e::in_break || inReturn)
+                        if (inReturn)
+                        {
+                            // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                            ++stackPtr;
+                            return;
+                        }
+
+
+                        if (loopState == LoopState_e::in_break)
                         {
                             if (breakDepth == 1 || nestDepth == 1)
                             {
@@ -2770,7 +2310,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         *reference = i.first;
                         lambda(inst->index, currentRow);
 
-                        if (loopState == LoopState_e::in_break || inReturn)
+                        if (inReturn)
+                        {
+                            // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                            ++stackPtr;
+                            return;
+                        }
+
+                        if (loopState == LoopState_e::in_break)
                         {
                             if (breakDepth == 1 || nestDepth == 1)
                             {
@@ -2798,7 +2345,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         *reference = i;
                         lambda(inst->index, currentRow);
 
-                        if (loopState == LoopState_e::in_break || inReturn)
+                        if (inReturn)
+                        {
+                            // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                            ++stackPtr;
+                            return;
+                        }
+
+                        if (loopState == LoopState_e::in_break)
                         {
                             if (breakDepth == 1 || nestDepth == 1)
                             {
@@ -2849,7 +2403,6 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             break;
         case OpCode_e::CALL_EACH:
         {
-            auto startRow = currentRow;
             const auto codeBlock = inst->index;
             const auto logicLambda = inst->extra;
             const auto filter = macros.filters[inst->value];
@@ -2956,11 +2509,20 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 if (logicLambda == -1 || lambda(logicLambda, currentRow)->isEvalTrue())
                 {
                     lambda(codeBlock, currentRow);
+
+                    if (inReturn)
+                    {
+                        // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                        ++stackPtr;
+                        return;
+                    }
+
                     ++matches;
                 }
 
                 if (loopState == LoopState_e::in_break || inReturn)
                 {
+
                     if (breakDepth == 1 || nestDepth == 1)
                     {
                         loopState = LoopState_e::run;
@@ -2990,9 +2552,236 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         }
             break;
 
+        case OpCode_e::CALL_SUM:
+        case OpCode_e::CALL_AVG:
+        case OpCode_e::CALL_MIN:
+        case OpCode_e::CALL_MAX:
+        case OpCode_e::CALL_CNT:
+        case OpCode_e::CALL_DCNT:
+        case OpCode_e::CALL_TST:
+        case OpCode_e::CALL_ROW:
+        {
+            const auto valueBlock = inst->index;
+            const auto logicLambda = inst->extra;
+            const auto filter = macros.filters[inst->value];
+
+            const auto rowCount  = static_cast<int>(rows->size());
+            const auto savedRow = currentRow;
+
+            // .continue - are we continuing from a specific row
+            if (filter.isContinue)
+            {
+                if (filter.continueBlock != -1)
+                    currentRow = lambda(filter.continueBlock, currentRow)->getInt64();
+            }
+            else
+            {
+                filter.isReverse ? currentRow = rowCount - 1 : currentRow = 0;
+            }
+
+            // .next - are we advancing the cursor
+            if (filter.isNext)
+               filter.isReverse ? --currentRow : ++currentRow;
+
+            // .limit - set match limit
+            int64_t matches = 0;
+            auto matchLimit = LLONG_MAX;
+            if (filter.isLimit)
+                matchLimit = lambda(filter.limitBlock, currentRow)->getInt64();
+
+            // .range - set date limiters
+            auto startStamp = LLONG_MIN;
+            auto endStamp = LLONG_MAX;
+
+            if (filter.isRange)
+            {
+                startStamp = convertStamp(*lambda(filter.rangeStartBlock, currentRow));
+                endStamp = convertStamp(*lambda(filter.rangeEndBlock, currentRow));
+            }
+
+            // .within - within is constrained to limits defined in .range
+            if (filter.isWithin || filter.isLookAhead || filter.isLookBack)
+            {
+                const auto withinStart = convertStamp(*lambda(filter.withinStartBlock, currentRow));
+                const auto withinWindow = lambda(filter.withinWindowBlock, currentRow)->getInt64();
+
+                int64_t rangeStart, rangeEnd;
+
+                if (filter.isLookAhead)
+                {
+                    rangeStart = withinStart;
+                    rangeEnd = withinStart + withinWindow;
+                }
+                else if (filter.isLookBack)
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart;
+                }
+                else
+                {
+                    rangeStart = withinStart - withinWindow;
+                    rangeEnd = withinStart + withinWindow;
+                }
+
+                if (rangeStart > startStamp)
+                    startStamp = rangeStart;
+
+                if (rangeEnd < endStamp)
+                    endStamp = rangeEnd;
+            }
+
+            filterRangeStack.emplace_back(startStamp, endStamp);
+
+            ++nestDepth;
+
+            auto lastMatchingRow = -1;
+            auto count = 0;
+            cvar collector = 0;
+
+            switch (inst->op)
+            {
+                case OpCode_e::CALL_MIN:
+                    collector = LLONG_MAX;
+                break;
+                case OpCode_e::CALL_MAX:
+                    collector = LLONG_MIN;
+                break;
+                case OpCode_e::CALL_DCNT:
+                    // use collector as a set, we wil push the expression result into the set and count it.
+                    collector.set();
+                break;
+            }
+
+
+            // Iterate
+            while (matches < matchLimit && currentRow < rowCount && currentRow >= 0)
+            {
+                if (loopState == LoopState_e::in_exit || error.inError())
+                {
+                    *stackPtr = 0;
+                    ++stackPtr;
+                    --nestDepth;
+                    --recursion;
+                    return;
+                }
+
+                if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                {
+                    if (filter.isReverse)
+                        break;
+                    ++currentRow;
+                    continue;
+                }
+
+                if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                {
+                    if (filter.isReverse)
+                    {
+                        --currentRow;
+                        continue;
+                    }
+                    break;
+                }
+
+                if (logicLambda == -1 || lambda(logicLambda, currentRow)->isEvalTrue())
+                {
+                    lastMatchingRow = currentRow;
+
+                    // these tests exit on first match
+                    if (inst->op == OpCode_e::CALL_TST || inst->op == OpCode_e::CALL_ROW)
+                        break;
+
+                    auto value = *lambda(valueBlock, currentRow);
+
+                    if (value != NONE)
+                    {
+                        ++count;
+                        switch (inst->op)
+                        {
+                            case OpCode_e::CALL_AVG:
+                            case OpCode_e::CALL_SUM:
+                                collector += value;
+                            break;
+                            case OpCode_e::CALL_MIN:
+                                if (value < collector)
+                                    collector = value;
+                            break;
+                            case OpCode_e::CALL_MAX:
+                                if (value > collector)
+                                    collector = value;
+                            break;
+                            case OpCode_e::CALL_DCNT:
+                                collector.getSet()->insert(value);
+                            break;
+                        }
+                    }
+
+                    if (inReturn)
+                    {
+                        // lambda decremented the stack, but return was called so we want to advance to stack to expose it's result
+                        ++stackPtr;
+                        return;
+                    }
+
+                    ++matches;
+                }
+
+                // no actual action, we are going to loop anyways
+                if (loopState == LoopState_e::in_continue)
+                    loopState = LoopState_e::run;
+
+                filter.isReverse ? --currentRow : ++currentRow;
+            }
+
+            --nestDepth;
+
+            filterRangeStack.pop_back();
+
+            // failed to find a matching row
+            if (inst->op == OpCode_e::CALL_TST)
+            {
+                *stackPtr = lastMatchingRow != -1;
+                ++stackPtr;
+            }
+            else if (inst->op == OpCode_e::CALL_ROW)
+            {
+                *stackPtr = lastMatchingRow != -1 ? lastMatchingRow : NONE;
+                ++stackPtr;
+            }
+            else
+            {
+                switch (inst->op)
+                {
+                    case OpCode_e::CALL_AVG:
+                    {
+                        collector = collector == LLONG_MIN || collector == LLONG_MAX ? 0 : collector;
+                        *stackPtr = count == 0 ? 0.0 : collector / static_cast<double>(count);
+                        ++stackPtr;
+                    }
+                    break;
+                    case OpCode_e::CALL_SUM:
+                    case OpCode_e::CALL_MIN:
+                    case OpCode_e::CALL_MAX:
+                        *stackPtr = collector == LLONG_MIN || collector == LLONG_MAX ? 0 : collector;
+                        ++stackPtr;
+                    break;
+                    case OpCode_e::CALL_CNT:
+                        *stackPtr = count;
+                        ++stackPtr;
+                    break;
+                    case OpCode_e::CALL_DCNT:
+                        *stackPtr = static_cast<int64_t>(collector.getSet()->size());
+                        ++stackPtr;
+                    break;
+                }
+            }
+
+            currentRow = savedRow;
+        }
+            break;
+
         case OpCode_e::PSHTBLFLT:
         {
-            auto startRow = currentRow;
             const auto filter = macros.filters[inst->value];
             const auto rowCount  = static_cast<int>(rows->size());
             const auto savedRow = currentRow; // reset row position if using ITFORR, ITFORRC, ITFORRCF
@@ -3104,16 +2893,6 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
     --recursion;
 }
 
-void openset::query::Interpreter::setScheduleCB(const function<void(int64_t functionHash, int seconds)>& cb)
-{
-    schedule_cb = cb;
-}
-
-void openset::query::Interpreter::setEmitCB(const function<void(string emitMessage)>& cb)
-{
-    emit_cb = cb;
-}
-
 void openset::query::Interpreter::setGetSegmentCB(const function<IndexBits*(const string&, bool&)>& cb)
 {
     getSegment_cb = cb;
@@ -3152,7 +2931,7 @@ void openset::query::Interpreter::execReset()
     inReturn   = false;
     jobState   = false;
     loopState  = LoopState_e::run;
-    stackPtr   = stack; //matchStampPrev.clear();
+    stackPtr   = stack;
     eventDistinct.clear();
     for (auto i = 0; i < STACK_DEPTH; ++i)
         stack[i].clear();

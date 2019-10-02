@@ -50,12 +50,9 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
     Person person;
 
     // map a table, partition and entire schema to the Person object
-    if (!person.mapTable(tablePartitioned->table, loop->partition))
-    {
-        // deleted partition - remove worker loop
-        suicide();
+    auto mappedColumns = segment->interpreter->getReferencedColumns();
+    if (!person.mapTable(tablePartitioned->table, loop->partition, mappedColumns))
         return;
-    }
 
     // mount the person
     const auto personData = tablePartitioned->people.getMakePerson(uuid);

@@ -28,5 +28,5 @@ void openset::comms::RpcStatus::status(const openset::web::MessagePtr & message,
     for (auto &t : tables)
         tableNode->push(t);
 
-    message->reply(http::StatusCode::success_ok, doc);       
+    message->reply(http::StatusCode::success_ok, doc);
 }

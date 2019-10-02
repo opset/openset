@@ -113,6 +113,14 @@ namespace openset
             CALL_FOR,    // Call in `for` loop
             CALL_EACH,   // Call in `each` loop
             CALL_IF,     // Call `if`
+            CALL_SUM,
+            CALL_AVG,
+            CALL_MIN,
+            CALL_MAX,
+            CALL_CNT,
+            CALL_DCNT,
+            CALL_TST,
+            CALL_ROW,
             RETURN,      // Pops the call stack leaves last item on stack
             TERM,        // this script is done
             LGCNSTAND,
@@ -123,8 +131,8 @@ namespace openset
             marshal_tally,
             marshal_now,
             marshal_row,
-            marshal_last_event,
-            marshal_first_event,
+            marshal_last_stamp,
+            marshal_first_stamp,
             marshal_bucket,
             marshal_round,
             marshal_trunc,
@@ -134,6 +142,7 @@ namespace openset
             marshal_to_minutes,
             marshal_to_hours,
             marshal_to_days,
+            marshal_to_weeks,
             marshal_get_second,
             marshal_round_second,
             marshal_get_minute,
@@ -162,8 +171,6 @@ namespace openset
             marshal_break,
             marshal_continue,
             marshal_log,
-            marshal_emit,
-            marshal_schedule,
             marshal_debug,
             marshal_exit,
             marshal_init_dict,
@@ -276,24 +283,6 @@ namespace openset
             { "hours", 3'600'000 },
             { "day", 86'400'000 },
             { "days", 86'400'000 }
-        };
-        static const unordered_map<string, int64_t> WithinConstants = {
-            { "live", MakeHash("live") },
-            { "first_event", MakeHash("first_event") },
-            { "last_event", MakeHash("last_event") },
-        };
-
-        enum class CompileTimeConstants_e
-        {
-            BOTH,
-            FORWARD,
-            REVERSE,
-        };
-
-        static const unordered_map<string, CompileTimeConstants_e> CompileTimeConstantsMap = {
-            { "BOTH", CompileTimeConstants_e::BOTH },
-            { "FORWARD", CompileTimeConstants_e::FORWARD },
-            { "REVERSE", CompileTimeConstants_e::REVERSE },
         };
 
         enum class TimeSwitch_e : int
@@ -411,6 +400,14 @@ namespace openset
             { OpCode_e::CALL_FOR, "CALLFOR" },
             { OpCode_e::CALL_EACH, "CALLEACH" },
             { OpCode_e::CALL_IF, "CALLIF" },
+            { OpCode_e::CALL_SUM, "CALLSUM" },
+            { OpCode_e::CALL_AVG, "CALLAVG" },
+            { OpCode_e::CALL_MIN, "CALLMIN" },
+            { OpCode_e::CALL_MAX, "CALLMAX" },
+            { OpCode_e::CALL_CNT, "CALLCNT" },
+            { OpCode_e::CALL_DCNT, "CALLDCNT" },
+            { OpCode_e::CALL_TST, "CALLTST" },
+            { OpCode_e::CALL_ROW, "CALLROW" },
             { OpCode_e::RETURN, "RETURN" },
             { OpCode_e::TERM, "TERM" }
 
@@ -444,8 +441,8 @@ namespace openset
             { "tally", Marshals_e::marshal_tally },
             { "now", Marshals_e::marshal_now },
             { "cursor", Marshals_e::marshal_row },
-            { "last_stamp", Marshals_e::marshal_last_event },
-            { "first_stamp", Marshals_e::marshal_first_event },
+            { "last_stamp", Marshals_e::marshal_last_stamp },
+            { "first_stamp", Marshals_e::marshal_first_stamp },
             { "bucket", Marshals_e::marshal_bucket },
             { "round", Marshals_e::marshal_round },
             { "trunc", Marshals_e::marshal_trunc },
@@ -455,6 +452,7 @@ namespace openset
             { "to_minutes", Marshals_e::marshal_to_minutes },
             { "to_hours", Marshals_e::marshal_to_hours },
             { "to_days", Marshals_e::marshal_to_days },
+            { "to_weeks", Marshals_e::marshal_to_weeks },
             { "get_second", Marshals_e::marshal_get_second },
             { "start_of_second", Marshals_e::marshal_round_second },
             { "get_minute", Marshals_e::marshal_get_minute },
@@ -472,8 +470,6 @@ namespace openset
             { "start_of_quarter", Marshals_e::marshal_round_quarter },
             { "get_year", Marshals_e::marshal_get_year },
             { "start_of_year", Marshals_e::marshal_round_year },
-            { "emit", Marshals_e::marshal_emit },
-            { "schedule", Marshals_e::marshal_schedule },
             { "row_count", Marshals_e::marshal_row_count },
             { "population", Marshals_e::marshal_population },
             { "intersection", Marshals_e::marshal_intersection },
@@ -509,7 +505,7 @@ namespace openset
             { "__notcontains", Marshals_e::marshal_not_contains },
             { "__pop", Marshals_e::marshal_pop },
             { "__clear", Marshals_e::marshal_clear },
-            { "__keys", Marshals_e::marshal_keys },
+            { "keys", Marshals_e::marshal_keys },
             { "__split", Marshals_e::marshal_str_split },
             { "__find", Marshals_e::marshal_str_find },
             { "__rfind", Marshals_e::marshal_str_rfind },
@@ -541,6 +537,7 @@ namespace openset
             { "session_count" },
             { "row_count" },
             { "break" },
+            { "exit" },
             { "continue" },
             { "__internal_init_dict" },
             { "__internal_init_list" },
