@@ -2754,8 +2754,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 {
                     case OpCode_e::CALL_AVG:
                     {
-                        collector = collector == LLONG_MIN || collector == LLONG_MAX ? 0 : collector;
-                        if (count)
+                        if (count && collector != 0)
                             *stackPtr = collector / static_cast<double>(count);
                         else
                             *stackPtr = 0;
