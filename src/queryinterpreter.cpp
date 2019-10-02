@@ -2755,14 +2755,20 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     case OpCode_e::CALL_AVG:
                     {
                         collector = collector == LLONG_MIN || collector == LLONG_MAX ? 0 : collector;
-                        *stackPtr = count == 0 ? 0.0 : collector / static_cast<double>(count);
+                        if (count)
+                            *stackPtr = collector / static_cast<double>(count);
+                        else
+                            *stackPtr = 0;
                         ++stackPtr;
                     }
                     break;
                     case OpCode_e::CALL_SUM:
                     case OpCode_e::CALL_MIN:
                     case OpCode_e::CALL_MAX:
-                        *stackPtr = collector == LLONG_MIN || collector == LLONG_MAX ? 0 : collector;
+                        if (collector == LLONG_MIN || collector == LLONG_MAX)
+                            *stackPtr = 0;
+                        else
+                            *stackPtr = collector;
                         ++stackPtr;
                     break;
                     case OpCode_e::CALL_CNT:
