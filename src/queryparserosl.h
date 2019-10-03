@@ -3195,13 +3195,15 @@ namespace openset::query
                                     if (isRow)
                                         countable = false;
 
-                                    if (isNever)
-                                        tokens[idx + 2] = "[!=]";
-                                    else if (tokens[idx + 2] == "==")
-                                        tokens[idx + 2] = "[==]";
-
                                     if (!isRow)
-                                        tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
+                                    {
+                                        if (isNever)
+                                            tokens[idx + 2] = "[!=]";
+                                        else if (tokens[idx + 2] == "==")
+                                            tokens[idx + 2] = "[==]";
+                                    }
+
+                                    tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
 
                                     idx = endOfLogic;
                                 }
