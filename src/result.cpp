@@ -62,7 +62,7 @@ void ResultSet::makeSortedList()
 
 void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 {
-    // fix const auto 
+    // fix const auto
     resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
 
     accTypes.resize(resultWidth, ResultTypes_e::Int);
@@ -276,7 +276,7 @@ ResultSet::RowVector mergeResultSets(
         auto idx       = 0;
 
         // we have an iterator of iterators (it)
-        // we have multiple iterators from multiple results, we are looking for 
+        // we have multiple iterators from multiple results, we are looking for
         // the one with the lowest key.
         for (auto it = iterators.begin(); it != iterators.end(); ++it, ++idx)
         {
@@ -286,7 +286,7 @@ ResultSet::RowVector mergeResultSets(
             if (t == mergeList[idx]->end()) // this iterator is done, so skip
                 continue;
 
-            // is it less than equal or 
+            // is it less than equal or
             // not set (lowestIdx defaults to end(), so not set)
             if (lowestIdx == iterators.end() ||
                 (*t).first < (**lowestIdx).first ||
@@ -374,7 +374,7 @@ ResultSet::RowVector mergeResultSets(
         }
         else
         {
-            // no more rows... 
+            // no more rows...
             break;
         }
     }
@@ -425,7 +425,7 @@ char* ResultMuxDemux::multiSetToInternode(
     *blockCount           = rows.size();
 
     // next 8 bytes of block are the offset into the block
-    // where text values are going to be stored. 
+    // where text values are going to be stored.
     // Note: this is a pointer to the the second 8 bytes of the block
     const auto textCount = reinterpret_cast<int64_t*>(mem.newPtr(8));
     *textCount           = mergedText.size();
@@ -452,7 +452,7 @@ char* ResultMuxDemux::multiSetToInternode(
         memcpy(accumulatorPtr, r.second->columns, accumulatorSize);
     }
 
-    // lets encode the text. 
+    // lets encode the text.
     // text is stored with the hash value (8 bytes) and
     // a null terminated c-style string, it can contain UTF-8 or whatever,
     // we don't really care, it's all just bytes to us.
@@ -511,7 +511,7 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
     read += 8;
 
     // we are going to make a sorta-bogus result object.
-    // the actual 
+    // the actual
     auto result = new openset::result::ResultSet(resultWidth);
 
     // we are making a partial result set, just sorteResult vector filled
@@ -632,7 +632,7 @@ void ResultMuxDemux::resultSetToJson(
         auto entry       = current->pushObject();
         const auto depth = r.first.getDepth() - 1;
 
-        // set group - this could be text... so, lets see if we cached it (all text 
+        // set group - this could be text... so, lets see if we cached it (all text
         // stored by script will be cached)
 
         switch (currentKey.types[depth])
@@ -751,31 +751,31 @@ void ResultMuxDemux::resultSetToJson(
     }
 
     /*
-	if (macros.isSegment)
-	{
-		// lock the globals while we modify them
-		csLock gLock(*table->getGlobalsLock());
+    if (macros.isSegment)
+    {
+        // lock the globals while we modify them
+        csLock gLock(*table->getGlobalsLock());
 
-		// set globals for the table
-		const auto tableGlobals = table->getGlobalsPtr();
+        // set globals for the table
+        const auto tableGlobals = table->getGlobalsPtr();
 
-		if (!tableGlobals->contains("segment"))
-		{
-			(*tableGlobals)["segment"] = cvar{};
-			(*tableGlobals)["segment"].dict();
-		}
+        if (!tableGlobals->contains("segment"))
+        {
+            (*tableGlobals)["segment"] = cvar{};
+            (*tableGlobals)["segment"].dict();
+        }
 
-		const auto resultNodes = doc->xPath("/_");
+        const auto resultNodes = doc->xPath("/_");
 
-		if (resultNodes)
-			for (auto n : resultNodes->getNodes()) // _ is an array
-			{
-				auto segmentName = n->xPathString("/g", "");
-				const auto columns = n->xPath("/c");
-				if (columns && segmentName.length())
-					(*tableGlobals)["segment"][segmentName] = columns->at(0)->getInt();
-			}			
-	}
+        if (resultNodes)
+            for (auto n : resultNodes->getNodes()) // _ is an array
+            {
+                auto segmentName = n->xPathString("/g", "");
+                const auto columns = n->xPath("/c");
+                if (columns && segmentName.length())
+                    (*tableGlobals)["segment"][segmentName] = columns->at(0)->getInt();
+            }
+    }
     */
 }
 

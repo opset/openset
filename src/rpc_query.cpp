@@ -336,7 +336,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
     if (message->isParam("sort"))
     {
         sortColumnName = message->getParamString("sort");
-        if (sortColumnName == "key" || sortColumnName == "g")
+        if (sortColumnName == "group")
             sortMode = ResultSortMode_e::key;
     }
     const auto log = "Inbound events query (fork: "s + (isFork
@@ -461,7 +461,9 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 message);
             return;
         }
-    } /*
+    }
+
+    /*
     * We are originating the query.
     *
     * At this point in the function we have validated that the
@@ -471,9 +473,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
     * We will call our forkQuery function.
     *
     * forQuery will call all the nodes (including this one) with the
-    * `is_fork` varaible set to true.
-    *
-    *
+    * `is_fork` variable set to true.
     */
     if (!isFork)
     {

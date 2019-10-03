@@ -235,8 +235,6 @@ namespace openset
 
             void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
 
-            void marshal_schedule(const int paramCount);
-            void marshal_emit(const int paramCount);
             void marshal_log(const int paramCount);
             void marshal_break(const int paramCount);
             void marshal_dt_within(const int paramCount, const int64_t rowStamp);
