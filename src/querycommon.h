@@ -19,7 +19,7 @@ namespace openset
             code,
             lambda,
             function
-        }; // Result Column Modifiers						
+        }; // Result Column Modifiers
         enum class Modifiers_e : int32_t
         {
             sum,
@@ -52,7 +52,9 @@ namespace openset
         enum class OpCode_e : int32_t
         {
             NOP = 0,     // No operation
+            LAMBDA,      // lambda
             PSHTBLCOL,   // push column
+            PSHTBLFLT,   // push column
             PSHRESCOL,   // push result Column (may be grid, may be variable)
             //PSHRESGRP, // push group_by (may be grid, may be variable)
             VARIDX,      // placeholder for an index to a variable
@@ -101,10 +103,24 @@ namespace openset
             OPNEQ,       // != <>
             OPWTHN,      // fuzzy range +/-
             OPNOT,       // !
+            OPCONT,      // left contains all of right
+            OPANY,       // left contains any contains any right
+            OPIN,        // left in right
             LGCAND,      // logical and
             LGCOR,       // logical or
             MARSHAL,     // Marshal an internal C++ function
             CALL,        // Call a script defined function
+            CALL_FOR,    // Call in `for` loop
+            CALL_EACH,   // Call in `each` loop
+            CALL_IF,     // Call `if`
+            CALL_SUM,
+            CALL_AVG,
+            CALL_MIN,
+            CALL_MAX,
+            CALL_CNT,
+            CALL_DCNT,
+            CALL_TST,
+            CALL_ROW,
             RETURN,      // Pops the call stack leaves last item on stack
             TERM,        // this script is done
             LGCNSTAND,
@@ -114,8 +130,9 @@ namespace openset
         {
             marshal_tally,
             marshal_now,
-            marshal_last_event,
-            marshal_first_event,
+            marshal_row,
+            marshal_last_stamp,
+            marshal_first_stamp,
             marshal_bucket,
             marshal_round,
             marshal_trunc,
@@ -125,6 +142,7 @@ namespace openset
             marshal_to_minutes,
             marshal_to_hours,
             marshal_to_days,
+            marshal_to_weeks,
             marshal_get_second,
             marshal_round_second,
             marshal_get_minute,
@@ -143,8 +161,6 @@ namespace openset
             marshal_get_year,
             marshal_round_year,
             marshal_row_count,
-            marshal_row_within,
-            marshal_row_between,
             marshal_population,
             marshal_intersection,
             marshal_union,
@@ -155,14 +171,14 @@ namespace openset
             marshal_break,
             marshal_continue,
             marshal_log,
-            marshal_emit,
-            marshal_schedule,
             marshal_debug,
             marshal_exit,
             marshal_init_dict,
             marshal_init_list,
             marshal_make_dict,
             marshal_make_list,
+            marshal_pop_subscript,
+            marshal_push_subscript,
             marshal_set,
             marshal_list,
             marshal_dict,
@@ -189,24 +205,23 @@ namespace openset
             marshal_str_slice,
             marshal_str_strip,
             marshal_url_decode,
-            marshal_get_row
+            marshal_get_row,
+            marshal_eval_column_filter
         }; // enum used for query index optimizer
         enum class HintOp_e : int64_t
         {
             UNSUPPORTED,
-            PUSH_EQ,
-            PUSH_NEQ,
-            PUSH_GT,
-            PUSH_GTE,
-            PUSH_LT,
-            PUSH_LTE,
-            PUSH_PRESENT,
-            PUSH_NOT,
-            PUSH_NOP,
+            EQ,
+            NEQ,
+            GT,
+            GTE,
+            LT,
+            LTE,
+            PUSH_VAL,
+            PUSH_TBL,
             BIT_OR,
             BIT_AND,
-            NST_BIT_OR,
-            NST_BIT_AND
+
         };
     }
 }
@@ -214,7 +229,7 @@ namespace openset
 namespace std
 {
     /*
-     * RANT - being these enums are classes of POD types, they should have automatic 
+     * RANT - being these enums are classes of POD types, they should have automatic
      *        hashing functions in GCC (they do in VC15+)
      */
     template <>
@@ -269,11 +284,6 @@ namespace openset
             { "day", 86'400'000 },
             { "days", 86'400'000 }
         };
-        static const unordered_map<string, int64_t> WithinConstants = {
-            { "live", MakeHash("live") },
-            { "first_event", MakeHash("first_event") },
-            { "last_event", MakeHash("last_event") },
-        };
 
         enum class TimeSwitch_e : int
         {
@@ -300,6 +310,7 @@ namespace openset
             { "val", Modifiers_e::value },
             { "variable", Modifiers_e::var },
             { "var", Modifiers_e::var },
+            { "lambda", Modifiers_e::var },
         }; // Modifier to String (for debug output)
         static const unordered_map<Modifiers_e, string> ModifierDebugStrings = {
             { Modifiers_e::sum, "SUM" },
@@ -330,7 +341,9 @@ namespace openset
         }; // opCode to String (for debug output)
         static const unordered_map<OpCode_e, string> OpDebugStrings = {
             { OpCode_e::NOP, "NOP" },
+            { OpCode_e::LAMBDA, "LAMBDA" },
             { OpCode_e::PSHTBLCOL, "PSHTBLCOL" },
+            { OpCode_e::PSHTBLFLT, "PSHTBLFLT"},
             { OpCode_e::PSHRESCOL, "PSHRESCOL" },
             { OpCode_e::VARIDX, "VARIDX" },
             { OpCode_e::COLIDX, "COLIDX" },
@@ -379,8 +392,22 @@ namespace openset
             { OpCode_e::OPNOT, "OPNOT" },
             { OpCode_e::LGCAND, "LGCAND" },
             { OpCode_e::LGCOR, "LGCOR" },
+            { OpCode_e::OPCONT, "CONT" },
+            { OpCode_e::OPANY, "ANY" },
+            { OpCode_e::OPIN, "IN" },
             { OpCode_e::MARSHAL, "MARSHAL" },
             { OpCode_e::CALL, "CALL" },
+            { OpCode_e::CALL_FOR, "CALLFOR" },
+            { OpCode_e::CALL_EACH, "CALLEACH" },
+            { OpCode_e::CALL_IF, "CALLIF" },
+            { OpCode_e::CALL_SUM, "CALLSUM" },
+            { OpCode_e::CALL_AVG, "CALLAVG" },
+            { OpCode_e::CALL_MIN, "CALLMIN" },
+            { OpCode_e::CALL_MAX, "CALLMAX" },
+            { OpCode_e::CALL_CNT, "CALLCNT" },
+            { OpCode_e::CALL_DCNT, "CALLDCNT" },
+            { OpCode_e::CALL_TST, "CALLTST" },
+            { OpCode_e::CALL_ROW, "CALLROW" },
             { OpCode_e::RETURN, "RETURN" },
             { OpCode_e::TERM, "TERM" }
 
@@ -404,6 +431,7 @@ namespace openset
             { "year", Modifiers_e::year_number },
             { "date_year", Modifiers_e::year_date },
         };
+
         static const unordered_set<Modifiers_e> isTimeModifiers = {};
         static const unordered_set<string> RedundantSugar       = {
             { "of" },
@@ -412,8 +440,9 @@ namespace openset
         static const unordered_map<string, Marshals_e> Marshals = {
             { "tally", Marshals_e::marshal_tally },
             { "now", Marshals_e::marshal_now },
-            { "last_event", Marshals_e::marshal_last_event },
-            { "first_event", Marshals_e::marshal_first_event },
+            { "cursor", Marshals_e::marshal_row },
+            { "last_stamp", Marshals_e::marshal_last_stamp },
+            { "first_stamp", Marshals_e::marshal_first_stamp },
             { "bucket", Marshals_e::marshal_bucket },
             { "round", Marshals_e::marshal_round },
             { "trunc", Marshals_e::marshal_trunc },
@@ -423,28 +452,25 @@ namespace openset
             { "to_minutes", Marshals_e::marshal_to_minutes },
             { "to_hours", Marshals_e::marshal_to_hours },
             { "to_days", Marshals_e::marshal_to_days },
+            { "to_weeks", Marshals_e::marshal_to_weeks },
             { "get_second", Marshals_e::marshal_get_second },
-            { "date_second", Marshals_e::marshal_round_second },
+            { "start_of_second", Marshals_e::marshal_round_second },
             { "get_minute", Marshals_e::marshal_get_minute },
-            { "date_minute", Marshals_e::marshal_round_minute },
+            { "start_of_minute", Marshals_e::marshal_round_minute },
             { "get_hour", Marshals_e::marshal_get_hour },
-            { "date_hour", Marshals_e::marshal_round_hour },
+            { "start_of_hour", Marshals_e::marshal_round_hour },
             { "date_day", Marshals_e::marshal_round_day },
             { "get_day_of_week", Marshals_e::marshal_get_day_of_week },
             { "get_day_of_month", Marshals_e::marshal_get_day_of_month },
             { "get_day_of_year", Marshals_e::marshal_get_day_of_year },
-            { "date_week", Marshals_e::marshal_round_week },
-            { "date_month", Marshals_e::marshal_round_month },
+            { "start_of_week", Marshals_e::marshal_round_week },
+            { "start_of_month", Marshals_e::marshal_round_month },
             { "get_month", Marshals_e::marshal_get_month },
             { "get_quarter", Marshals_e::marshal_get_quarter },
-            { "date_quarter", Marshals_e::marshal_round_quarter },
+            { "start_of_quarter", Marshals_e::marshal_round_quarter },
             { "get_year", Marshals_e::marshal_get_year },
-            { "date_year", Marshals_e::marshal_round_year },
-            { "emit", Marshals_e::marshal_emit },
-            { "schedule", Marshals_e::marshal_schedule },
+            { "start_of_year", Marshals_e::marshal_round_year },
             { "row_count", Marshals_e::marshal_row_count },
-            { "row_within", Marshals_e::marshal_row_within },
-            { "row_between", Marshals_e::marshal_row_between },
             { "population", Marshals_e::marshal_population },
             { "intersection", Marshals_e::marshal_intersection },
             { "union", Marshals_e::marshal_union },
@@ -467,6 +493,8 @@ namespace openset
             { "str", Marshals_e::marshal_str },
             { "__internal_make_dict", Marshals_e::marshal_make_dict },
             { "__internal_make_list", Marshals_e::marshal_make_list },
+            { "__internal_pop_subscript", Marshals_e::marshal_pop_subscript },
+            { "__internal_push_subscript", Marshals_e::marshal_push_subscript },
             { "len", Marshals_e::marshal_len },
             { "__append", Marshals_e::marshal_append },
             { "__update", Marshals_e::marshal_update },
@@ -477,7 +505,7 @@ namespace openset
             { "__notcontains", Marshals_e::marshal_not_contains },
             { "__pop", Marshals_e::marshal_pop },
             { "__clear", Marshals_e::marshal_clear },
-            { "__keys", Marshals_e::marshal_keys },
+            { "keys", Marshals_e::marshal_keys },
             { "__split", Marshals_e::marshal_str_split },
             { "__find", Marshals_e::marshal_str_find },
             { "__rfind", Marshals_e::marshal_str_rfind },
@@ -485,7 +513,8 @@ namespace openset
             { "__strip", Marshals_e::marshal_str_strip },
             { "range", Marshals_e::marshal_range },
             { "url_decode", Marshals_e::marshal_url_decode },
-            { "get_row", Marshals_e::marshal_get_row }
+            { "get_row", Marshals_e::marshal_get_row },
+            { "__eval_column_filter", Marshals_e::marshal_eval_column_filter}
         };
         static const unordered_set<Marshals_e> SegmentMathMarshals = {
             { Marshals_e::marshal_population },
@@ -496,29 +525,39 @@ namespace openset
         };
         static const unordered_set<string> SessionMarshals = {
             "session_count",
-        }; // these are marshals that do not take params by default, so they appear
+        };
+
+        // these are marshals that do not take params by default, so they appear
         // like variables.
         static const unordered_set<string> MacroMarshals = {
             { "now" },
-            { "last_event" },
-            { "first_event" },
+            { "cursor" },
+            { "last_stamp" },
+            { "first_stamp" },
             { "session_count" },
             { "row_count" },
+            { "break" },
+            { "exit" },
+            { "continue" },
             { "__internal_init_dict" },
             { "__internal_init_list" },
-        }; // Comparatives
+        };
+
+        // Comparatives
         static const unordered_map<string, OpCode_e> Operators = {
             { ">=", OpCode_e::OPGTE },
             { "<=", OpCode_e::OPLTE },
             { ">", OpCode_e::OPGT },
             { "<", OpCode_e::OPLT },
             { "==", OpCode_e::OPEQ },
-            { "is", OpCode_e::OPEQ },
             { "=", OpCode_e::OPEQ },
             { "!=", OpCode_e::OPNEQ },
             { "<>", OpCode_e::OPNEQ },
-            { "not", OpCode_e::OPNOT },
-            { "isnot", OpCode_e::OPNEQ },
+            { "[!=]", OpCode_e::OPNEQ },
+            { "[==]", OpCode_e::OPEQ },
+            { "contains", OpCode_e::OPCONT },
+            { "any", OpCode_e::OPANY },
+            { "in", OpCode_e::OPIN },
         };
         static const unordered_map<string, OpCode_e> MathAssignmentOperators = {
             { "+=", OpCode_e::MATHADDEQ },
@@ -543,10 +582,8 @@ namespace openset
             { "/", OpCode_e::MATHDIV }
         }; // Conditionals
         static const unordered_map<string, OpCode_e> LogicalOperators = {
-            { "and", OpCode_e::LGCAND },
-            { "or", OpCode_e::LGCOR },
-            { "nest_and", OpCode_e::LGCNSTAND },
-            { "nest_or", OpCode_e::LGCNSTOR },
+            { "&&", OpCode_e::LGCAND },
+            { "||", OpCode_e::LGCOR },
         };
         static const unordered_map<OpCode_e, string> LogicalOperatorsDebug = {
             { OpCode_e::LGCAND, "and" },
@@ -554,71 +591,63 @@ namespace openset
         };
         static const unordered_map<HintOp_e, string> HintOperatorsDebug = {
             { HintOp_e::UNSUPPORTED, "UNSUP" },
-            { HintOp_e::PUSH_EQ, "PUSH_EQ" },
-            { HintOp_e::PUSH_NEQ, "PUSH_NEQ" },
-            { HintOp_e::PUSH_GT, "PUSH_GT" },
-            { HintOp_e::PUSH_GTE, "PUSH_GTE" },
-            { HintOp_e::PUSH_LT, "PUSH_LT" },
-            { HintOp_e::PUSH_LTE, "PUSH_LTE" },
-            { HintOp_e::PUSH_PRESENT, "PUSH_PRES" },
-            { HintOp_e::PUSH_NOP, "PUSH_NOP" },
-            { HintOp_e::BIT_OR, "BIT_OR" },
-            { HintOp_e::BIT_AND, "BIT_AND" },
-            { HintOp_e::NST_BIT_OR, "NST_BIT_OR" },
-            { HintOp_e::NST_BIT_AND, "NST_BIT_AND" },
-
+            { HintOp_e::EQ, "EQ" },
+            { HintOp_e::NEQ, "NEQ" },
+            { HintOp_e::GT, "GT" },
+            { HintOp_e::GTE, "GTE" },
+            { HintOp_e::LT, "LT" },
+            { HintOp_e::LTE, "LTE" },
+            { HintOp_e::BIT_OR, "OR" },
+            { HintOp_e::BIT_AND, "AND" },
+            { HintOp_e::PUSH_VAL, "PSH_VAL" },
+            { HintOp_e::PUSH_TBL, "PSH_TBL" },
         };
-        static const unordered_map<OpCode_e, HintOp_e> OpToHintOp = {
-            { OpCode_e::OPGTE, HintOp_e::PUSH_GTE },
-            { OpCode_e::OPLTE, HintOp_e::PUSH_LTE },
-            { OpCode_e::OPGT, HintOp_e::PUSH_GT },
-            { OpCode_e::OPLT, HintOp_e::PUSH_LT },
-            { OpCode_e::OPEQ, HintOp_e::PUSH_EQ },
-            { OpCode_e::OPNEQ, HintOp_e::PUSH_NEQ },
-            { OpCode_e::OPNOT, HintOp_e::PUSH_NOT },
-            { OpCode_e::LGCAND, HintOp_e::BIT_AND },
-            { OpCode_e::LGCOR, HintOp_e::BIT_OR },
-            { OpCode_e::LGCNSTOR, HintOp_e::NST_BIT_OR },
-            { OpCode_e::LGCNSTAND, HintOp_e::NST_BIT_AND },
+        static const unordered_map<std::string, HintOp_e> OpToHintOp = {
+            { ">=", HintOp_e::GTE },
+            { "<=", HintOp_e::LTE },
+            { ">", HintOp_e::GT },
+            { "<", HintOp_e::LT },
+            { "==", HintOp_e::EQ },
+            { "!=", HintOp_e::NEQ },
+            { "[==]", HintOp_e::EQ },
+            { "[!=]", HintOp_e::NEQ },
+            { "&&", HintOp_e::BIT_AND },
+            { "||", HintOp_e::BIT_OR }
         };
 
         struct HintOp_s
         {
             HintOp_e op;
-            string column;
-            int64_t intValue;
-            string textValue;
-            bool numeric;
+            cvar value;
+            int64_t hash {NONE};
 
-            HintOp_s(const HintOp_e op, const string& column, const int64_t intValue)
+            HintOp_s(const HintOp_e op, const int value)
                 : op(op),
-                  column(column),
-                  intValue(intValue),
-                  numeric(true)
+                  value(value),
+                  hash(value)
             {}
 
-            HintOp_s(const HintOp_e op, const string& column, const string& text)
+            HintOp_s(const HintOp_e op, const int64_t value)
                 : op(op),
-                  column(column),
-                  intValue(0),
-                  numeric(false)
-            {
-                if (text == "None") // special case
-                {
-                    intValue = NONE;
-                    numeric  = true;
-                }
-                else
-                {
-                    textValue = text.substr(1, text.length() - 2);
-                    intValue  = MakeHash(textValue);
-                }
-            }
+                  value(value),
+                  hash(value)
+            {}
+
+            HintOp_s(const HintOp_e op, const double value)
+                : op(op),
+                  value(value),
+                  hash(static_cast<int64_t>(value * 1'000'000LL))
+            {}
+
+            HintOp_s(const HintOp_e op, const string& text)
+                : op(op),
+                  value(text),
+                  hash(MakeHash(text))
+            {}
 
             explicit HintOp_s(const HintOp_e op)
                 : op(op),
-                  intValue(0),
-                  numeric(false)
+                  value(0)
             {}
         };
 
@@ -712,7 +741,9 @@ namespace openset
             {
                 return "@" + to_string(number) + " " + trim(text, " \t");
             }
-        }; // structure fo final build
+        };
+
+        // structure fo final build
         struct Instruction_s
         {
             OpCode_e op;
@@ -784,12 +815,62 @@ namespace openset
             int64_t functionHash;
         };
 
+        enum class ColumnFilterOperator_e
+        {
+            eq,
+            neq,
+            gt,
+            gte,
+            lt,
+            lte
+        };
+
+        struct Filter_s
+        {
+            int64_t personID {LLONG_MIN};
+            bool cacheable {false};
+
+            bool isRow {false};
+            bool isEver {false};
+            bool isLimit {false};
+            bool isWithin {false};
+            bool isRange {false};
+            bool isFullSet {false};
+            bool isReverse {false};
+            bool isContinue {false};
+            bool isNegated {false};
+            bool isNext {false};
+            bool isLookAhead {false}; // for within
+            bool isLookBack {false}; // for within
+
+            int evalBlock {-1};
+            int continueBlock {-1};
+            int withinStartBlock {-1};
+            int withinWindowBlock {-1};
+            int rangeStartBlock {-1};
+            int rangeEndBlock {-1};
+
+            int limitBlock {-1};
+            int count {1};
+
+            int comparator {-1};
+
+            int64_t rangeStart {0};
+            int64_t rangeEnd {LLONG_MAX};
+            int64_t withinStart {0};
+            int64_t withinWindow {LLONG_MAX};
+            int64_t continueFrom {0};
+        };
+        using FilterList = vector<Filter_s>;
         using CountList = vector<Count_S>; // structure for variables
+        using BlockMap = vector<int>;
+
         struct Variables_S
         {
             VarList userVars;
             VarList tableVars;
             VarList columnVars;
+            BlockMap blockList;
             ColumnLambdas columnLambdas;
             FunctionList functions;
             LiteralsList literals;
@@ -800,17 +881,26 @@ namespace openset
         using HintPairs = vector<HintPair>;
         using ParamVars = unordered_map<string, cvar>;
         using SegmentList = vector<std::string>; // struct containing compiled macro
+        using LambdaLookAside = vector<int>;
+
         struct Macro_s
         {
             Variables_S vars;
+            LambdaLookAside lambdas;
+            FilterList filters;
             InstructionList code;
             HintPairs indexes;
+            std::string capturedIndex;
+            std::string rawIndex;
+            HintOpList index;
+            bool indexIsCountable { false };
             string segmentName;
             SegmentList segments;
             MarshalSet marshalsReferenced;
             int64_t segmentTTL { -1 };
             int64_t segmentRefresh { -1 };
             int sessionColumn { -1 };
+
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
             bool isSegment { false };

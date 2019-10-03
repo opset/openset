@@ -1,113 +1,81 @@
-![OpenSet](docs/img/openset_compact.svg)
+###
 
-OpenSet is a MIT licensed programmable engine for rapidly extracting behavior from user event data.
+![OpenSet](docs/img/openset_blue.svg)
 
-If you have apps, websites, or IoT devices that generate user event data, you might find OpenSet really useful.
+#### OpenSet is a MIT licensed programmable Customer Data Platform.
 
-OpenSet is a streaming solution and can ingest data at up to 35,000 lines per second per node (fully indexed and replicated). OpenSet has been tested on datasets with millions of users and billions of rows.
+###
 
 | Platform    | Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   |  0.3.2  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 |  0.3.2  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   |  0.4.0  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.4.0  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.3.2 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.4.0 release notes below.
 
-## Links
+# What's it do?
+
+-   Customer Analytics
+-   Customer Segmentation
+-   Eventing on Customer state changes and conditions
+-   Sequence Analysis (cohorts, funnels, paths)
+-   Customer History
+
+# Introduction
+
+OpenSet was designed to make Customer Data easier leverage for developers.
+
+OpenSet can scale to support customer bases in the millions of customers.
+
+OpenSet can ingest data from real-time streams.
+
+OpenSet is programmable with a well featured scripting language - meaning you can ask questions that would be difficult to express with SQL or GraphQL.
+
+OpenSet understand sequence, so asking before and after questions about Customers is greatly simplified (i.e. paths, funnels, next action, cohorts and attribution).
+
+OpenSet can maintain up-to-date segments based on complex rules.
+
+OpenSet can emit events when someone enters or exits a segment.
+
+OpenSet uses an HTTP/REST interface making it accessible from your favorite language.
+
+OpenSet can be clustered so you can scale for performance and redundancy.
+
+# Links
 
 -   [Documentation](https://github.com/perple-io/openset/tree/master/docs)
 -   [Docker Images](https://github.com/perple-io/openset/tree/master/docs/docker)
--   [Sample Code](https://github.com/opset/openset_samples)
--   [Admin Tools](https://github.com/perple-io/openset/tree/master/tools)
 
-## Strong Points
+# Examples using curl
 
-1. Conditional Triggering (Re-eventing)
-2. Sequence Extraction
-3. Analytics & Segmentation
-4. Person Extraction
+We've put together a few examples to get you started. These examples require `git`, `docker` and `curl`.
 
-### 1. Conditional Triggering (Re-eventing)
+You should be able to **cut and paste** the steps below on OSX, Linux or WSL.
 
-![Segments](docs/img/re-event-matrix.svg)
-
-Translate live event streams into behavioral event streams. OpenSet will ingest streams of raw data and convert that into behavioral data for individuals in the dataset. You can have OpenSet notify you when a specific behavior is met (or not met).
-
-For example:
-
--   people who used your app more than 5 times.
--   people that have been actively using your app for 90 days.
--   people that have not used feature X in 30 days.
--   people that used feature X but not feature Y within their first 14 days.
--   people who spent at least $1000 in your app store a year ago, but has spent less than $1000 in the last 365 days.
--   people who were in Spain visited Spain but did not visit another European destination within 180 days.
-
-Triggers use are part of OpenSets powerful segmentation abilities. You simply subscribe to a segment and you will
-be notified when someone enters or exits that segment via web-hook.
-
-### 2. Sequence Extraction
-
-![Segments](docs/img/chains-of-events.svg)
-
-Extract the common sequences that lead people to a target behavior.
-
--   extract the countries of origin for people that visited a given destination.
--   extract the sequence of countries visited by people that arrived at a given destination.
--   extract the app features used by customers before upgrading to your premium plan.
-
-Extract the next thing, or the next _n_ things people do after they perform a target behavior:
-
--   what products are commonly purchased near product X
--   what are products purchased within the next 30 days after product X
--   what features do users utilize after feature X.
-
-Extract sequences between a source and target behavior:
-
--   What countries do people visit after visiting country X, but before visiting country Y.
--   What site features do customers use after coming from promo X but before signing up.
-
-### 3. Analytics & Segmentation
-
-OpenSet can generate multi-level pivots with custom aggregations and population counts at parent and child nodes branches. You can specify up to 16 pivot depths, with combinations of event properties, counts, duration values, or date values.
-
-![Pivots](docs/img/pivots.svg)
-
-OpenSet brings behavior to segmentation. With OpenSet you can cluster people into segments using event attributes as well as event sequences. Derivative segments can be generated from other segments using intersection, union, complement and difference. Segments can even be compared to extract differences between their respective populations.
-
-![Segments](docs/img/segment_circles.svg)
-
-### 4. Person Extraction
-
-Load or stream events (app, web, IoT, etc) into OpenSet and extract the history and attributes for single users in milliseconds. It doesn't matter if you have millions of events, or you are inserting thousand of events per second, OpenSet extract users by ID in real-time.
-
-![Segments](docs/img/one-person.svg)
-
-# example using curl
-
-**1**. Clone the Samples:
+**1. clone the samples in the `openset_samples` repo.**
 
 ```bash
 cd ~
 git clone https://github.com/opset/openset_samples.git
 ```
 
-**2**. Install [Docker](https://www.docker.com/) and start OpenSet (interactive):
+**2. Install [Docker](https://www.docker.com/) and start OpenSet (in interactive mode).**
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.3.2
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.0
 ```
 
-> **Note** The newest docker build can be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
+> **Note** The OpenSet images can always be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
 
-**3**. Open another console (go to home directory):
+**3. Open another console (go to home directory).**
 
 ```bash
 cd ~
 ```
 
-**4**. Initialize OpenSet:
+**4. Initialize OpenSet.**
 
-> `json_pp` is part of most linux distributions. If you don't want pretty printed json, remove `| json_pp`
+> :bulb: `json_pp` is part of most Linux distributions. If you don't want "pretty printed" JSON, or don't have `json_pp` then remove `| json_pp` from the following examples.
 
 ```python
 curl -X PUT http://127.0.0.1:8080/v1/cluster/init?partitions=24 | json_pp
@@ -121,7 +89,7 @@ response:
 }
 ```
 
-**5**. Create a table:
+**5. Create a table named `highstreet`.**
 
 ```bash
 curl \
@@ -142,7 +110,7 @@ curl \
     ],
     "z_order": [
       "purchase",
-      "cast_item"
+      "cart_item"
     ]
 }
 EOF
@@ -157,15 +125,15 @@ response:
 }
 ```
 
-**6**. Let's insert some json data from the `openset_samples/data` folder:
-
-> clone the [openset_samples](https://github.com/opset/openset_samples)
+**6. Let's insert some json data from the `openset_samples/data` folder.**
 
 ```bash
 curl \
 -X POST http://127.0.0.1:8080/v1/insert/highstreet \
 --data-binary @openset_samples/data/highstreet_events.json | json_pp
 ```
+
+> :bulb: please take a look at `highstreet_events.json`, this is the format used to insert data into OpenSet. You will see that the object keys match the columns created in step #5.
 
 response:
 
@@ -175,35 +143,43 @@ response:
 }
 ```
 
-> :pushpin: view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
+> :bulb: view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
 
-**7**. Let's run a PyQL `event` query
+**7. Let's perform an `event` query.**
 
-This script can be found at `openset_samples/pyql/simple.pyql` folder.
+This query searches through each customer looking for matching events in a customers history.
 
-```bash
+When a matching event is found the `<<` statement pushes the event through the aggregator where it is tabulated and grouped. `group by` functionality is provided by providing grouping names to the `<<` statement.
+
+A cool feature of OpenSet grouping is that all branches of the result set will be correctly counted (including unique user counting).
+
+```ruby
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/event \
---data-binary @- << PYQL | json_pp
-# our pyql script
+--data-binary @- << EOF | json_pp
 
-aggregate: # define our output columns
+# define which columns we want to aggregate
+select
     count id
     count product_name as purchased
-    sum product_price as total_spent with product_name
+    sum product_price as total_spent
+end
 
-# iterate events where the product_group set contains 'outdoor'
-# and product_name is 'fly_rod' or 'guilded_spoon'
-for row in rows if
-        'outdoor' in product_group and
-        product_name in ['fly rod', 'gilded spoon']:
+# for each person iterate events where the product_group set
+# contains 'outdoor' and product_name is 'fly_rod' or 'gilded_spoon'
+each_row where
+        product_group.is(contains 'outdoor') &&
+        product_name.is(in ['fly rod', 'gilded spoon'])
 
-    # make a branch: /day_of_week/product_name
-    # and aggregate person, product purchase, and total
-    tally(get_day_of_week(row['stamp']), product_name)
+    # push the current row into the aggregater so
+    # the columns defined in the `select` block are
+    # updated. Group aggregations by `day_of_week` and
+    # `product_name`
+    << get_day_of_week(stamp), product_name
+end
 
-#end of pyql script
-PYQL
+# end of script
+EOF
 ```
 
 response (counts are people, count product, sum price):
@@ -249,60 +225,57 @@ response (counts are people, count product, sum price):
 }
 ```
 
-**8**. Let's make 4 segments (this script can be found at `openset_samples/pyql/segments.pyql`):
+**8. Let's make 5 segments**
 
-```bash
+```ruby
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/segment \
---data-binary @- << PYQL | json_pp
-# our pyql script
-
-@segment products_home ttl=300s use_cached=True refresh=300s on_insert=True
-
-# match one of these
-for row in rows if
-        'basement' in product_group or    # product_group is a set
-        'garage' in product_group or
-        'kitchen' in product_group or
-        'bedroom' in product_group or
-        'bathroom' in product_group:
-    return True
-return False
-
-@segment products_yard ttl=300s use_cached=True refresh=300s on_insert=True
+-X POST "http://127.0.0.1:8080/v1/query/highstreet/segment?debug=false" \
+--data-binary @- << EOF | json_pp
+# our osl script
+@segment products_home use_cached=false refresh=5_minutes on_insert=true
 
 # match one of these
-for row in rows if
-        'basement' in product_group or
-        'garage' in product_group:
-    return True
-return False
 
-@segment products_outdoor ttl=300s use_cached=True refresh=300s on_insert=True
+if product_group.ever(any ['basement', 'garage', 'kitchen', 'bedroom', 'bathroom'])
+  return(true)
+end
 
-# match one of these
-for row in rows if
-        'outdoor' in product_group or
-        'angling' in product_group:
-    return True
-return False
+@segment products_yard use_cached=true refresh=5_minutes on_insert=true
 
-@segment products_commercial ttl=300s use_cached=True refresh=300s on_insert=True
+if product_group.ever(contains 'basement') || product_group.ever(contains 'garage')
+    return(true)
+end
 
-# match one of these
-for row in rows if
-        'restaurant' in product_group:
-    return True
-return False
+@segment products_outdoor use_cached=true refresh=300s on_insert=true
 
-@segment products_yard_and_outdoor ttl=300s use_cached=True refresh=60s on_insert=True z_index=1000
+if product_group.ever(contains 'outdoor') || product_group.ever(contains 'angling')
+    return(true)
+end
 
-# create a new segment containing both products_yard and products_outdoor
-union('products_outdoor', 'products_yard')
+@segment products_commercial use_cached=true refresh=5_minutes on_insert=true
 
-#end of pyql script
+if product_group.ever(contains 'restaurant')
+    return(true)
+end
 
-PYQL
+@segment grommet_then_panini use_cached=true refresh=5_minutes on_insert=true
+
+# iterate rows where the columns match the conditions
+each_row where
+    event.is(== 'cart_item') &&
+    product_name.is(== 'grommet')
+
+  # nested row iteration continuing on the next row after
+  # the above match
+  each_row.continue().next() where
+      event.is(== 'cart_item') &&
+      product_name.is(== 'panini press')
+    return(true)
+  end
+end
+
+# end of script
+EOF
 ```
 
 response (counts are people):
@@ -334,7 +307,9 @@ response (counts are people):
 }
 ```
 
-**9**. Let's query a column:
+**9. Let's query a column**
+
+This will return customer counts for all the values in a column.
 
 ```bash
 curl \
@@ -392,7 +367,9 @@ response (counts are people):
 }
 ```
 
-**10**. Let's query a column in segment compare mode (all `*` against `products_outdoor`:
+**10. Let's query a column in segment compare mode**
+
+Same query as above, but now we are comparing a all customers `*` vs customers in the segment `products_outdoor`:
 
 ```bash
 curl \
@@ -462,7 +439,7 @@ response (counts are people for each segment):
 
 **11.** Let's query a numeric column and `bucket` the results by `50` dollar increments
 
-> :pushpin: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
+> :bulb: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
 
 ```bash
 curl \
@@ -496,78 +473,31 @@ response (counts are people):
 }
 ```
 
-**12.** Let's do a histogram query using an aggregator
+**13. Let's make a another histogram query using time**
 
-Let's generate a histogram of cart `total`, and bucket by `250` starting at `0` for each person in the database.
+Let's generate a histogram breaking down the number of weeks since `last_stamp` for each person in the database.
 
-The pyql query in the POST body returns a value generated using an inline aggregation function on the database column `table`.
+> :bulb: `last_stamp` is a built in variable that holds the timestamp for the last event in a customers dataset. `now` is a variable that holds the current timestamp.
 
 ```bash
 curl \
--X POST 'http://127.0.0.1:8080/v1/query/highstreet/histogram/customer_value?bucket=250&min=0' \
---data-binary @- << PYQL | json_pp
-# our pyql script
+-X POST 'http://127.0.0.1:8080/v1/query/highstreet/histogram/weeks_since' \
+--data-binary @- << EOF | json_pp
+# our osl script
 
-return SUM total if total != None # inline aggregation
+return( to_weeks(now - last_stamp) )
 
-#end of pyql script
-PYQL
+#end of osl script
+EOF
 ```
 
-response (counts are people):
+response (counts are people, weeks will vary as the dataset ages):
 
 ```json
 {
     "_": [
         {
-            "g": "customer_value",
-            "c": [3],
-            "_": [
-                {
-                    "g": 750,
-                    "c": [1]
-                },
-                {
-                    "g": 500,
-                    "c": [0]
-                },
-                {
-                    "g": 250,
-                    "c": [1]
-                },
-                {
-                    "g": 0,
-                    "c": [1]
-                }
-            ]
-        }
-    ]
-}
-```
-
-**13.** Let's do a another histogram query using time
-
-Let's generate a histogram breaking down the number of weeks since `last_event` for each person in the database.
-
-```bash
-curl \
--X POST 'http://127.0.0.1:8080/v1/query/highstreet/histogram/days_since' \
---data-binary @- << PYQL | json_pp
-# our pyql script
-
-return int(to_days(now - last_event) / 7)
-
-#end of pyql script
-PYQL
-```
-
-response (counts are people):
-
-```json
-{
-    "_": [
-        {
-            "g": "days_since",
+            "g": "weeks_since",
             "c": [3],
             "_": [
                 {
@@ -584,67 +514,82 @@ response (counts are people):
 }
 ```
 
-**14.** Let's do a sequence query.
+**14. Let's execute a complex sequence query.**
 
-Let's extract `for each product` the `first` product purchased `immediately after` but `not in the same cart`.
+This query looks at each product in a cart, and reports which products were purchased immediately after in a subsequent cart, along with a distinct customer count, number or purchases, and total revenue of subsequent purchases.
 
-```bash
+The sample dataset includes two types of events, `purchase` events, which contain metrics about the shopping cart, and `cart_item` events. The `cart_item` events always follow the `purchase` events (when they share the same timestamp) because we specified a `z-order` when we created the table.
+
+This query searches for `purchase` events and records all the subsequent `product_name` values for each `cart_item` event associated with a matched `purchase`.
+
+The query then searches for the next subsequent `purchase` event and records the `order_id`. Lastly it matches each `cart_item` event with that `order_id`. For each matching `cart_item` even, the query pushes the row to aggregator grouping by the original `product_name` and the subsequent `product_name`.
+
+```ruby
 curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/event \
---data-binary @- << PYQL | json_pp
-# our pyql script
+--data-binary @- << EOF | json_pp
+# our osl script
 
-aggregate: # define our output columns
+select # define our output columns
     count id
     count product_name as purchased
     sum product_price as total_revenue
+end
 
 # STEP 1
 # search for a purchase events
-for purchase_row in rows
-    if event == 'purchase':
+each_row where event.is(== 'purchase')
 
-    # products will hold the `product_name`s that
-    # are found in the `cart_item`s associated with
-    # the above purchase
-    products = set()
+  # products will hold the `product_name`s that
+  # are found in the `cart_item`s associated with
+  # the above purchase
+  products = set()
+  matched_order_id = order_id
 
-    # STEP 2
-    # gather the product names for the above purchase
-    continue for item_row in rows if
-            event == 'cart_item' and
-            order_id == purchase_row['order_id']:
+  # STEP 2
+  # gather the product names for the above purchase
+  each_row.continue().next() where
+      event.is(== 'cart_item') &&
+      order_id.is(== matched_order_id)
 
-        products.add(item_row['product_name'])
+    # product_names from cart_item events to set
+    products = products + product_name
 
     # STEP 3
     # find the just the NEXT purchase (continue for 1)
-    continue for 1 sub_purchase_row in rows if
-            event == 'purchase' and
-            order_id != purchase_row['order_id']: # match one
+    each_row.continue().next().limit(1) where
+        event.is(== 'purchase') &&
+        order_id.is(!= matched_order_id) # match one
 
-        # STEP 4
-        # for each 'cart_item' row
-        # iterate the products capture in
-        # Step 2 with the product_name in the row
-        continue for sub_item_row in rows if
-                event == 'cart_item' and
-                order_id == sub_purchase_row['order_id']:
+      subsequent_order_id = order_id
 
-            for product in products:
-                # Tally counts for each product in the
-                # subusequent purchase for each product in
-                # the first match
+      # STEP 4
+      # for each 'cart_item' event iterate the products
+      # captured in Step 2
+      each_row.continue().next() where
+          event.is(== 'cart_item') &&
+          order_id.is(== subsequent_order_id)
 
-                if product == sub_item_row['product_name']:
-                    continue
+        for product in products
+          # Tally counts for each product in the
+          # subusequent purchase for each product in
+          # the first match
 
-                tally(product, sub_item_row['product_name'])
+          if product == product_name # remove repurchases
+            continue
+          end
 
+          << product, product_name
+        end
+
+      end
+    end
+  end
+end
 # loop to top
 
-#end of pyql script
-PYQL
+#end of osl script
+EOF
 ```
 
 response (counts are people, count product, sum price):
@@ -720,136 +665,28 @@ response (counts are people, count product, sum price):
 }
 ```
 
-**How does the sequence query work?**
-
-Event queries use row iteration. Internally each person has a row set. Those row sets are sorted by time. A query is run against each person, iterating through the events in the row set looking for matches.
-
-In this case we want to find the products purchased immediately after another purchase. We do so by iterating events and matching the `purchase` event. When we match we perform a nested match for another `purchase` event and `tally` the `product_name`s from second match under the `product_name`s from the first match. The aggregators count `people` and `product_name` and sum `product_price`.
-
-# RoadMap
-
-OpenSet is in Alpha. There may be semi-breaking changes going forward.
-
--   External data. This feature will allow complex data structures to be passed to OpenSet for use in queries. These will data structures will be global to a table and can be used from any `pyql` script as standard `python` data types.
-
 # Inspiration
 
 Way back in 2005 I came across an interesting problem while at DeepMetrix. We produced an excellent little product called LiveStats. Everyday a million websites got their metrics using our software.
 
 LiveStats created roughly 40 reports. The reports were predefined and continuously updated using data from weblogs and page-scripts.
 
-This approach seemed perfect... until one day Anheuser-Busch called (they make a beer you've probably heard of). They wanted a solution that could drill into data, and look at that data in any way they saw fit. It was a compelling problem and they were willing to pay handsomely if we could solve it.
+The "40 reports" model seemed please most everyone. That was until one day Anheuser-Busch called wanting something that didn't seem possible. They wanted a solution that could drill into customer data any way they saw fit - and they had a lot of data.
 
-Unfortunately, we had to say no. We didn't have the technology or the capacity to handle their requirements at that time. Back then most servers were 32bits, 4 cores was a lot and 4GB was twice as much as you could actually address... not to mention enterprise class hard drives had less capacity than your typical smartphone today... and... our stack was SQL.
+The problem wasn't mining the data, the problem was doing so in a timely fashion. Computers weren't fast, and SQL would take hours or days to compute some of the results if was able to complete the task.
 
-Failure got me thinking, and here we are today.
+Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
 
-## OpenSet 0.3.2 release notes
+# OpenSet 0.4.0 release notes
 
--   fixed a stack under-run issue
-
--   fixed segment compare issue
-
-## OpenSet 0.3.1 release notes
-
--   Triggering is now unified with segmentation. Rather than having independent scripts, they now rely on segment scripts, and will notify with entered and exited events. Documentation for Triggers and Rest endpoints has been updated.
-
--   Segments now have an `on_insert` flag. Segments can now be kept super-live by having segment code executed at the time of insert. There is overhead in performing this task, so if regular timed refreshes work, it is suggested you use those instead (they will trigger as well if you subscribe to them).
-
-## OpenSet 0.2.1x release notes
-
--   support for properties by way of the `props` variable within your scripts. A property can be read or modified during any query, segment, or trigger. The script compiler will optimize if `props` are not used. Reading `props` will slow down execution of your scripts. Writing `props` will slow down execution a little bit more. Expect a 2x slowdown when getting and setting props. It should be noted only changed `props` are written back:
-
-```python
-    if 'test' not in props:
-        props['test'] = dict()
-
-    # set some props
-    props['test']['this'] = 'hello'
-
-```
-
--   support for reverse iterators:
-
-```python
-   for some_row in reverse rows if name == 'Klara':
-       # do something with row
-```
-
--   support for continuation from a specific row:
-
-```python
-   some_row_number = 4
-
-      continue from some_row_number for some_row in rows:
-          # some_row will contain row values iterating forward from row 4
-```
-
-or in reverse:
-
-```python
-   some_row_number = 4
-
-   continue from some_row_number for some_row in reverse rows:
-       # some_row will contain row values iterating in reverse from row 4
-```
-
--   Row searching with `FIRST VALUE`, `LAST VALUE`, `FIRST ROW` and `LAST ROW`. Searches will return `None` when no row or value is found.
-
-```python
-   # find the first row number where the fruit column is not "orange"
-   matched_row = FIRST ROW where fruit != "orange"
-
-   row_content = get_row(matched_row)
-
-   if row_content['fruit'] == 'apple':
-       # do something
-```
-
-or
-
-```
-   row_content = get_row(FIRST ROW where fruit == "pear")
-```
-
-or
-
-```python
-   # find the last row number wehre the fruit column is not "orange"
-   matched_row = LAST ROW where fruit != "orange"
-```
-
-or
-
-```python
-   # find the last value of recorded for the fruit column that is not "orange"
-   # Note: the value column is provided after search `LAST VALUE` like in other
-   # aggregators.
-   last_fruit = LAST VALUE fruit where fruit != 'orange'
-```
-
-or
-
-```python
-   # find the first value of recorded for the fruit column that is not "orange"
-   first_fruit = FIRST VALUE fruit where fruit != 'orange'
-```
-
--   `where` keyword has been added as an alternative to `if` in row iterators and searches:
-
-```python
-   # the following are identical
-   row_content = get_row(FIRST ROW where fruit == "pear")
-   row_content = get_row(FIRST ROW if fruit == "pear")
-```
-
-> Important - there is currently a limitation with `props` in regards to replication and failover. In build 0.2.13 properties are not replicated. This will be addressed. For now, you can run a query script to recreate the missing props.
+-   new OpenSet Langauge (OSL) introduced to replace PyQL language. It was difficult to ask easy questions with PyQL. OSL was designed to be expressive and make reading and writing queries more natural.
+-   new query optimizer that takes advantage of OSL language constructs to create smarter pre-query indexes.
 
 # Licensing
 
 #### License
 
-Copyright (c) 2015-2019, Seth Hamilton and Crowd Conduct Corp.
+Copyright (c) 2015-2019, Seth Hamilton.
 
 The OpenSet project is licensed under the MIT License.
 

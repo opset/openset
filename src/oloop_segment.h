@@ -12,64 +12,65 @@
 
 namespace openset
 {
-	namespace db
-	{
-		class Table;
-		class TablePartitioned;
-	};
+    namespace db
+    {
+        class Table;
+        class TablePartitioned;
+    };
 
-	namespace async
-	{
-		class OpenLoopSegment : public OpenLoop
-		{
-		public:
-			query::QueryPairs macrosList;
-			ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
-			openset::db::Database::TablePtr table;
-			openset::db::TablePartitioned* parts;
+    namespace async
+    {
+        class OpenLoopSegment : public OpenLoop
+        {
+        public:
+            query::QueryPairs macrosList;
+            ShuttleLambda<openset::result::CellQueryResult_s>* shuttle;
+            openset::db::Database::TablePtr table;
+            openset::db::TablePartitioned* parts;
 
-		    int64_t maxLinearId;
-			int64_t currentLinId;
-			Person person;
-			openset::query::Interpreter* interpreter;
-			int instance;
-			int runCount;
-			int64_t startTime;
+            int64_t maxLinearId;
+            int64_t currentLinId;
+            Person person;
+            openset::query::Interpreter* interpreter;
+            int instance;
+            int runCount;
+            int64_t startTime;
             SegmentPartitioned_s* segmentInfo {nullptr};
 
-			openset::query::Indexing indexing;
-			openset::db::IndexBits* index;
-			openset::result::ResultSet* result;
+            openset::query::Indexing indexing;
+            openset::db::IndexBits* index;
+            openset::db::IndexBits beforeBits;
+            openset::result::ResultSet* result;
 
-			query::QueryPairs::iterator macroIter;
-			//query::Macro_s macros;
+            query::QueryPairs::iterator macroIter;
+            //query::Macro_s macros;
 
-			//openset::query::BitMap resultBits;
+            //openset::query::BitMap resultBits;
 
-			std::string segmentName;
+            std::string segmentName;
             int64_t segmentHash { 0 };
 
-			explicit OpenLoopSegment(
-				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
-				openset::db::Database::TablePtr table,
-				const query::QueryPairs macros,
-				openset::result::ResultSet* result,
-				const int instance);
+            explicit OpenLoopSegment(
+                ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
+                openset::db::Database::TablePtr table,
+                const query::QueryPairs macros,
+                openset::result::ResultSet* result,
+                const int instance);
 
-			~OpenLoopSegment() final;
+            ~OpenLoopSegment() final;
 
-			void storeResult(std::string& name, int64_t count) const;
+            void storeResult(std::string& name, int64_t count) const;
 
-			// store segments that have a TTL
-			void storeSegments();
+            // store segments that have a TTL
+            void storeSegments();
 
             void emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const;
 
-			bool nextMacro();
+            bool nextMacro();
 
-			void prepare() final;
-			bool run() final;
-			void partitionRemoved() final;
-		};
-	}
+            void prepare() final;
+            bool run() final;
+            void partitionRemoved() final;
+        };
+    }
 }

@@ -6,268 +6,243 @@ using namespace openset::query;
 using namespace openset::db;
 
 openset::query::Indexing::Indexing() :
-	table(nullptr),
-	parts(nullptr),
-	partition(-1), 
-	stopBit(0)
+    table(nullptr),
+    parts(nullptr),
+    partition(-1),
+    stopBit(0)
 {}
 
-Indexing::~Indexing()
-{}
+Indexing::~Indexing() = default;
 
 void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber, int stopAtBit)
 {
-	indexes.clear();
-	table = tablePtr;
-	macros = queryMacros;
-	partition = partitionNumber;
-	parts = table->getPartitionObjects(partition, false);
-	stopBit = stopAtBit;
+    indexes.clear();
+    table = tablePtr;
+    macros = queryMacros;
+    partition = partitionNumber;
+    parts = table->getPartitionObjects(partition, false);
+    stopBit = stopAtBit;
 
-	// this will build all the indexes and store them 
-	// in a vector of indexes using an std::pair of name and index
-	bool countable;
-	for (auto &p : queryMacros.indexes)
+    // this will build all the indexes and store them
+    // in a vector of indexes using an std::pair of name and index
+    for (auto &p : queryMacros.indexes)
     {
-        const auto index = buildIndex(p.second, countable);
-		indexes.emplace_back(p.first, index, countable);
+        const auto index = buildIndex(p.second, queryMacros.indexIsCountable);
+        indexes.emplace_back(p.first, index, queryMacros.indexIsCountable);
     }
 }
 
 // returns an index by name
 openset::db::IndexBits* Indexing::getIndex(std::string name, bool &countable)
 {
-	for (auto &idx:indexes)
-	{
-		if (std::get<0>(idx) == name)
-		{
-			countable = std::get<2>(idx);
-			return &std::get<1>(idx);
-		}
-	}
+    for (auto &idx:indexes)
+    {
+        if (std::get<0>(idx) == name)
+        {
+            countable = std::get<2>(idx);
+            return &std::get<1>(idx);
+        }
+    }
 
-	return nullptr;
+    return nullptr;
 }
 
-IndexBits Indexing::buildIndex(HintOpList &index, bool &countable)
+/*
+ Mode is ListMode_e from Attributes class - this enumerates a column
+and returns values that match the condition.
+
+In getBits we take the last item on the stack and apply all matching indexes to
+the bits in the stack entry.
+ */
+openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 {
 
-	countable = true;
+    auto& entry = stack.back();
 
-	auto maxLinId = parts->people.peopleCount();
+    const auto colInfo = table->getColumns()->getColumn(entry.columnName);
 
-	if (!stopBit)
-	{
-        // fix 
+    // if the value side is NONE we go check for presence
+
+    auto negate = false;
+
+    if (mode == Attributes::listMode_e::NEQ)
+    {
+        if (entry.hash == NONE)
+            mode = Attributes::listMode_e::PRESENT; // != NONE -- same as equals anything
+        else
+            negate = true; // != VAL -- anything other than VAL
+    }
+
+    auto attrList = parts->attributes.getColumnValues(colInfo->idx, mode, entry.hash);
+
+    auto& resultBits = entry.bits; // where our bits will all accumulate
+    resultBits.reset();
+    auto initialized = false;
+
+    for (auto attr: attrList)
+    {
+        // get the bits
+        const auto workBits = attr->getBits();
+
+        if (initialized)
+        {
+            resultBits.opOr(*workBits);
+        }
+        else
+        {
+            resultBits.opCopy(*workBits);
+            initialized = true;
+        }
+
+        // clean up them bits
+        delete workBits;
+    }
+
+    if (!initialized)
+        resultBits.makeBits(64, 0);
+
+    if (negate)
+    {
+        resultBits.grow((stopBit / 64) + 1); // grow it to it's fullest size before we flip them all
+        resultBits.opNot();
+    }
+
+    return resultBits;
+};
+
+/*
+PSH_TBL        | @fruit
+PSH_VAL        | banana
+EQ             |
+PSH_TBL        | @fruit
+PSH_VAL        | donkey
+EQ             |
+AND            |
+PSH_TBL        | @fruit
+PSH_VAL        | banana
+EQ             |
+PSH_TBL        | @fruit
+PSH_VAL        | pear
+EQ             |
+AND            |
+PSH_TBL        | @fruit
+PSH_VAL        | banana
+EQ             |
+PSH_TBL        | @fruit
+PSH_VAL        | pear
+NEQ            |
+AND            |
+PSH_TBL        | @fruit
+PSH_VAL        | banana
+EQ             |
+OR             |
+OR             |
+OR             |
+ */
+IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
+{
+
+    struct IndexStack_s
+    {
+        IndexBits bits;
+
+    };
+
+    const auto maxLinId = parts->people.peopleCount();
+
+    if (!stopBit)
+    {
+        // fix
         countable = false;
-		IndexBits bits;
-		bits.makeBits(maxLinId, 1);
-		return bits;
-	}
+        IndexBits bits;
+        bits.makeBits(maxLinId, 1);
+        return bits;
+    }
 
-	/*
-	getBits - this little helper function does a lot.
-		- it looks up the column (by name) in the schema.
-		- gets the actual column number from column info
-		- gets all the attributes that match instruction.intValue considering
-		  mode (EQ, NEQ, GT, LT, GTE, LTE)
-		- OR all those attributes together and return the 
-		  cumulative result
-	*/
-	auto getBits = [&](HintOp_s& instruction, Attributes::listMode_e mode) -> IndexBits
-		{
-			auto colInfo = table->getColumns()->getColumn(instruction.column);
-			auto attrList = parts->attributes.getColumnValues(
-				                     colInfo->idx, mode, instruction.intValue);
+    std::string columnName;
 
-			IndexBits resultBits; // where our bits will all accumulate
-			auto initialized = false;
+    auto count = 0;
 
-			for (auto attr: attrList)
-			{
-				// get the bits
-				auto bits = attr->getBits();			
-				auto pop = bits->population(stopBit);
+    for (auto &op : index)
+    {
+        switch (op.op)
+        {
+        case HintOp_e::UNSUPPORTED: break;
+        case HintOp_e::EQ:
+            compositeBits(Attributes::listMode_e::EQ);
+            ++count;
+            break;
+        case HintOp_e::NEQ:
+            compositeBits(Attributes::listMode_e::NEQ);
+            ++count;
+            break;
+        case HintOp_e::GT:
+            compositeBits(Attributes::listMode_e::GT);
+            ++count;
+            break;
+        case HintOp_e::GTE:
+            compositeBits(Attributes::listMode_e::GTE);
+            ++count;
+            break;
+        case HintOp_e::LT:
+            compositeBits(Attributes::listMode_e::LT);
+            ++count;
+            break;
+        case HintOp_e::LTE:
+            compositeBits(Attributes::listMode_e::LTE);
+            ++count;
+            break;
+        case HintOp_e::PUSH_VAL:
+            if (!columnName.length())
+            {
+                // THROW
+            }
+            stack.emplace_back(columnName, op.value, op.hash);
+            break;
+        case HintOp_e::PUSH_TBL:
+            columnName = op.value.getString();
+            break;
+        case HintOp_e::BIT_OR:
+        {
+            auto left = stack.back().bits;
+            stack.pop_back();
+            auto right = stack.back().bits;
+            stack.pop_back();
 
-				if (initialized)
-				{
-					resultBits.opOr(*bits);
-				}
-				else
-				{
-					resultBits.opCopy(*bits);
-					initialized = true;
-				}
+            left.opOr(right);
+                stack.emplace_back(left);
 
-				// clean up them bits
-				delete bits;
-			}
+            ++count;
+        }
+            break;
+        case HintOp_e::BIT_AND:
+        {
+            auto left = stack.back().bits;
+            stack.pop_back();
+            auto right = stack.back().bits;
+            stack.pop_back();
 
-			if (!initialized)
-				resultBits.makeBits(64, 0);
+            left.opAnd(right);
+                stack.emplace_back(left);
 
-			auto count = resultBits.population(stopBit);
+            ++count;
+        }
+            break;
+        default: ;
+        }
+    }
 
-			return resultBits;
-		};
+    // No Index Hints?
+    if (!stack.size() || !count)
+    {
+        IndexBits bits;
+        bits.makeBits(maxLinId, 1);
+        countable = false;
+        return bits;
+    }
 
+    auto res = stack.back().bits;
+    res.grow((stopBit / 64) + 1);
+    return res;
 
-	// clean up any trailing NOPs
-	while (index.size() && index.back().op == HintOp_e::PUSH_NOP)
-		index.pop_back();
-
-	stack<IndexBits> s;
-	IndexBits left, right;
-
-	auto count = 0;
-
-	for (auto& instruction : index)
-	{
-		if (instruction.op == HintOp_e::PUSH_NOP ||
-			instruction.op == HintOp_e::NST_BIT_AND ||
-			instruction.op == HintOp_e::NST_BIT_OR )
-		{
-			countable = false;
-			break;
-		}
-	}
-
-	for (auto& instruction : index)
-	{
-		Columns::Columns_s* colInfo;
-		Attributes::AttrList attrList;
-
-		switch (instruction.op)
-		{
-			case HintOp_e::UNSUPPORTED:
-				break;
-			case HintOp_e::PUSH_EQ:
-				s.push(getBits(instruction, Attributes::listMode_e::EQ));
-				++count;
-				break;
-			case HintOp_e::PUSH_NEQ:
-				// getBits returns EQ, we doing NOT EQUAL, because all users not
-				// having a value is different than all users who had another
-				// value other than this one (which is what a list would
-				// return) we are going to value that equal NONE
-				if (instruction.numeric && instruction.intValue == NONE)
-				{
-					s.push(getBits(instruction, Attributes::listMode_e::EQ));
-				}
-				else
-				{
-					auto neqBits = getBits(instruction, Attributes::listMode_e::NEQ);
-					neqBits.grow((stopBit / 64) + 1); // grow it to it's fullest size before we flip them all
-					neqBits.opNot();
-					s.push(neqBits);
-				}
-				++count;
-				break;
-			case HintOp_e::PUSH_GT:
-				s.push(getBits(instruction, Attributes::listMode_e::GT));
-				++count;
-				break;
-			case HintOp_e::PUSH_GTE:
-				s.push(getBits(instruction, Attributes::listMode_e::GTE));
-				++count;
-				break;
-			case HintOp_e::PUSH_LT:
-				s.push(getBits(instruction, Attributes::listMode_e::LT));
-				++count;
-				break;
-			case HintOp_e::PUSH_LTE:
-				s.push(getBits(instruction, Attributes::listMode_e::LTE));
-				++count;
-				break;
-			case HintOp_e::PUSH_PRESENT:
-				s.push(getBits(instruction, Attributes::listMode_e::PRESENT));
-				++count;
-				break;
-			case HintOp_e::PUSH_NOP:
-				// these are dummy bits... they simply copy the end of the heap
-				// and push it back onto the heap
-				s.push(IndexBits{});
-				s.top().placeHolder = true;
-				break;
-			case HintOp_e::NST_BIT_OR:
-			case HintOp_e::BIT_OR:
-				// pop two IndexBits objects off the stack
-				right = s.top();
-				s.pop();
-				left = s.top();
-				s.pop();
-
-				if (right.placeHolder && left.placeHolder)
-					s.push(left);
-				else if (right.placeHolder)
-					s.push(left);
-				else if (left.placeHolder)
-					s.push(right);
-				else
-				{
-					// OR the right into the left and push it back onto
-					// the stack
-					left.opOr(right);
-					s.push(left);
-				}
-				break;
-			case HintOp_e::NST_BIT_AND:
-			case HintOp_e::BIT_AND:
-				// pop two IndexBits objects off the stack
-				right = s.top();
-				s.pop();
-				left = s.top();
-				s.pop();
-
-				if (right.placeHolder && left.placeHolder)
-					s.push(left);
-				else if (right.placeHolder)
-					s.push(left);
-				else if (left.placeHolder)
-					s.push(right);
-				else
-				{
-					// AND the right into the left and push it back onto
-					// the stack
-					left.opAnd(right);
-					s.push(left);
-				}
-				break;
-			default:
-				s.push(IndexBits{});
-				s.top().placeHolder = true;
-				// TODO some error handling here
-				break;
-
-		}
-	}
-
-	// *.* query likely (like rows: or all NOPs)
-	if (!s.size() || !count)
-	{
-		IndexBits bits;
-		bits.makeBits(maxLinId, 1);
-		countable = false;
-		return bits;
-	}
-
-	auto res = s.top();
-
-	if (res.placeHolder)
-		cout << "borked" << endl;
-
-	s.pop();
-
-	/*
-	 *
-	stringstream ss;
-	ss << "partition: " << partition << "  stop: " << stopBit << "  max lid: " << maxLinId << "  pop: " << res.population(stopBit);
-	ss << " " << IndexBits::debugBits(res, maxLinId) << endl;
-
-	if (partition == 3) // 9 
-		cout << ss.str() << endl;
-
-	*/
-	res.grow((stopBit / 64) + 1);
-	return res;
 }

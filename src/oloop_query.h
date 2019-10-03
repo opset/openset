@@ -40,7 +40,7 @@ namespace openset
 			explicit OpenLoopQuery(
 				ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
 				openset::db::Database::TablePtr table,
-				openset::query::Macro_s macros, 
+				openset::query::Macro_s macros,
 				openset::result::ResultSet* result,
 				int instance);
 

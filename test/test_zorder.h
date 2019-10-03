@@ -11,17 +11,17 @@
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
-#include "../src/queryparser.h"
 #include "../src/internoderouter.h"
 #include "../src/result.h"
+
 
 #include <unordered_set>
 
 // Our tests
 inline Tests test_zorder()
 {
-	
-	// An array of JSON events to insert, we are going to 
+
+	// An array of JSON events to insert, we are going to
 	// insert these out of order and count on zorder to
 	// sort them.
 	// we will set zorder for action to "alpha", "beta", "cappa", "delta", "echo"
@@ -31,7 +31,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "delta",
-			"attr":{				
+			"attr":{
 				"some_val": 4
 			}
 		},
@@ -39,7 +39,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "cappa",
-			"attr":{				
+			"attr":{
 				"some_val": 3
 			}
 		},
@@ -47,7 +47,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "beta",
-			"attr":{				
+			"attr":{
 				"some_val": 2
 			}
 		},
@@ -55,7 +55,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "alpha",
-			"attr":{				
+			"attr":{
 				"some_val": 1
 			}
 		},
@@ -63,7 +63,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820830,
 			"action": "beta",
-			"attr":{				
+			"attr":{
 				"some_val": 2222
 			}
 		},
@@ -72,7 +72,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820840,
 			"action": "delta",
-			"attr":{				
+			"attr":{
 				"some_val": 4
 			}
 		},
@@ -80,7 +80,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820840,
 			"action": "cappa",
-			"attr":{				
+			"attr":{
 				"some_val": 3
 			}
 		},
@@ -88,7 +88,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820840,
 			"action": "beta",
-			"attr":{				
+			"attr":{
 				"some_val": 2
 			}
 		},
@@ -96,7 +96,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "alpha",
-			"attr":{				
+			"attr":{
 				"some_val": 1
 			}
 		},
@@ -105,7 +105,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "delta",
-			"attr":{				
+			"attr":{
 				"some_val": 4
 			}
 		},
@@ -113,7 +113,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "cappa",
-			"attr":{				
+			"attr":{
 				"some_val": 3
 			}
 		},
@@ -121,7 +121,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "beta",
-			"attr":{				
+			"attr":{
 				"some_val": 2
 			}
 		},
@@ -129,7 +129,7 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "alpha",
-			"attr":{				
+			"attr":{
 				"some_val": 2
 			}
 		},
@@ -137,34 +137,34 @@ inline Tests test_zorder()
 			"uuid": "user1@test.com",
 			"stamp": 1458820820,
 			"action": "echo",
-			"attr":{				
+			"attr":{
 				"some_val": 5
 			}
 		},
 	]
 	)raw_inserts";
-	
 
 
-	/* In order to make the engine start there are a few required objects as 
+
+	/* In order to make the engine start there are a few required objects as
 	 * they will get called in the background during testing:
-	 *   
+	 *
 	 *  - cfg::manager must exist // cfg::initConfig)
 	 *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
 	 *  - Databse must exist // databases contain tabiles
-	 *  
+	 *
 	 *  These objects will be created on the heap, although in practice during
 	 *  the construction phase these are created as local objects to other classes.
 	 */
 
 	// need config objects to run this
 	openset::config::CommandlineArgs args;
-	openset::globals::running = new openset::config::Config(args); 
+	openset::globals::running = new openset::config::Config(args);
 
 	// stop load/save objects from doing anything
-	openset::globals::running->testMode = true; 
+	openset::globals::running->testMode = true;
 
-	// we need an async engine, although we won't really be using it, 
+	// we need an async engine, although we won't really be using it,
 	// it's wired into the into features such as tablePartitioned (shared locks mostly)
 	openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
 
@@ -193,7 +193,7 @@ inline Tests test_zorder()
 
 				auto zOrderStrings = table->getZOrderStrings();
 				auto zOrderInts = table->getZOrderHashes();
-				
+
 				// add zOrdering
 				zOrderStrings->emplace("alpha", 0);
 				zOrderInts->emplace(MakeHash("alpha"), 0);
@@ -203,7 +203,7 @@ inline Tests test_zorder()
 
 				zOrderStrings->emplace("cappa", 2);
 				zOrderInts->emplace(MakeHash("cappa"), 2);
-				
+
 				auto parts = table->getPartitionObjects(0, true); // partition zero for test
 				auto personRaw = parts->people.getMakePerson("user1@test.com");
 

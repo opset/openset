@@ -8,34 +8,58 @@
 
 namespace openset
 {
-	namespace query
-	{
-		class Indexing
-		{
-		public:
-			using IndexPair = std::tuple<std::string, openset::db::IndexBits, bool>;
-			using IndexList = std::vector<IndexPair>;
+    namespace query
+    {
+        class Indexing
+        {
+            struct StackItem_s
+            {
+                std::string columnName;
+                cvar value {NONE};
+                int64_t hash {NONE};
+                db::IndexBits bits;
 
-			Macro_s macros;
-			openset::db::Table* table;
-			openset::db::TablePartitioned* parts;
-			int partition;
-			int stopBit;
-			IndexList indexes;
+                StackItem_s(db::IndexBits bits) :
+                    bits(std::move(bits))
+                {}
 
-			Indexing();
-			~Indexing();
+                StackItem_s(std::string columnName, cvar value, int64_t hash) :
+                    columnName(std::move(columnName)),
+                    value(std::move(value)),
+                    hash(hash)
+                {}
+            };
 
-			void mount(
-				openset::db::Table* tablePtr, 
-				Macro_s& queryMacros, 
-				int partitionNumber, 
-				int stopAtBit);
+            using Stack = std::vector<StackItem_s>;
 
-			openset::db::IndexBits* getIndex(std::string name, bool &countable);
+        public:
+            using IndexPair = std::tuple<std::string, openset::db::IndexBits, bool>;
+            using IndexList = std::vector<IndexPair>;
 
-		private:
-			openset::db::IndexBits buildIndex(HintOpList &index, bool &countable);
-		};
-	};
+            Stack stack;
+
+            Macro_s macros;
+            openset::db::Table* table;
+            openset::db::TablePartitioned* parts;
+            int partition;
+            int stopBit;
+            IndexList indexes;
+
+            Indexing();
+            ~Indexing();
+
+            void mount(
+                openset::db::Table* tablePtr,
+                Macro_s& queryMacros,
+                int partitionNumber,
+                int stopAtBit);
+
+            openset::db::IndexBits compositeBits(const db::Attributes::listMode_e mode);
+
+            openset::db::IndexBits* getIndex(std::string name, bool &countable);
+
+        private:
+            openset::db::IndexBits buildIndex(HintOpList &index, bool countable);
+        };
+    };
 };

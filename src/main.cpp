@@ -19,7 +19,7 @@ using namespace std::string_literals;
 void StartOpenSet(openset::config::CommandlineArgs args)
 {
 #ifdef _MSC_VER
-    // Goofy windows socket subsystem init. 
+    // Goofy windows socket subsystem init.
     // We shouldn't have to call this nowadays Microsoft
     WSADATA wsaData;
     const auto wVersionRequested = MAKEWORD(2, 0);
@@ -39,15 +39,15 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
     const auto banner =
         R"banner(
-  _______  _______  _______  __    _  _______  _______  _______ 
+  _______  _______  _______  __    _  _______  _______  _______
  |       ||       ||       ||  \  | ||       ||       ||       |
  |   _   ||    _  ||    ___||   \ | ||  _____||    ___||_     _|
- |  | |  ||   |_| ||   |___ |    \| || |_____ |   |___   |   |  
- |  | |  ||    ___||    ___||       ||_____  ||    ___|  |   |  
- |  |_|  ||   |    |   |___ | |\    | _____| ||   |___   |   |  
- |       ||   |    |       || | \   ||       ||       |  |   |  
- |_______||___|    |_______||_|  \__||_______||_______|  |___|  
-     
+ |  | |  ||   |_| ||   |___ |    \| || |_____ |   |___   |   |
+ |  | |  ||    ___||    ___||       ||_____  ||    ___|  |   |
+ |  |_|  ||   |    |   |___ | |\    | _____| ||   |___   |   |
+ |       ||   |    |       || | \   ||       ||       |  |   |
+ |_______||___|    |_______||_|  \__||_______||_______|  |___|
+
 )banner";
 
     cout << "\x1b[1;31m\b\b\b\b\b\b\b       " << endl;
@@ -56,7 +56,7 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 #ifdef _MSC_VER
     SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
 #endif
-    cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Crowd Conduct Corp." << endl;
+    cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Seth Hamilton." << endl;
     cout << "\x1b[0m\b\b\b\b        " << endl;
 
 #ifdef _MSC_VER

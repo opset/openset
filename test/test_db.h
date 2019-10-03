@@ -3,154 +3,72 @@
 #include "testing.h"
 
 #include "../lib/cjson/cjson.h"
-#include "../lib/str/strtools.h"
-#include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
 #include "../src/columns.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
-#include "../src/queryparser.h"
 #include "../src/internoderouter.h"
-#include "../src/result.h"
+
+#include "test_helper.h"
 
 #include <unordered_set>
 
 // Our tests
 inline Tests test_db()
 {
-    // An array of JSON events to insert. 
+    // An array of JSON events to insert.
     auto user1_raw_inserts =
         R"raw_inserts(
-	[
-		{
-			"id": "user1@test.com",
-			"stamp": 1458820830,
-			"event": "page_view",
-			"_":{				
-				"page": "blog"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1458820840,
-			"event": "page_view",
-			"_":{				
-				"page": "home page",
-				"referral_source": "google.co.uk",
+    [
+        {
+            "id": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "page_view",
+            "_":{
+                "page": "blog"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1458820840,
+            "event": "page_view",
+            "_":{
+                "page": "home page",
+                "referral_source": "google.co.uk",
 `				"referral_search": ["big", "floppy", "slippers"]
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1458820841,
-			"event": "page_view",
-			"_":{				
-				"page": "home page",
-				"referral_source": "google.co.uk",
-				"referral_search": ["silly", "floppy", "ears"]
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1458820900,
-			"event": "page_view",
-			"_":{				
-				"page": "about"
-			}
-		}
-	]
-	)raw_inserts";
-
-    auto test1_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count page
-		count referral_source
-
-    if 'test' not in props:
-        props['test'] = dict()
-
-    # set some props
-    props['test']['this'] = 'hello'
-    some_var = props['test']['this']
-
-    props['fav_beers'] = set('cold', 'free')
-    props['opposites'] = {
-        'bows': 'arrows',
-        'up': 'down',
-        'inside': 'outside'
-    }
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1458820841,
+            "event": "page_view",
+            "_":{
+                "page": "home page",
+                "referral_source": "google.co.uk",
+                "referral_search": ["silly", "floppy", "ears"]
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1458820900,
+            "event": "page_view",
+            "_":{
+                "page": "about"
+            }
+        }
+    ]
+    )raw_inserts";
 
 
-	for row in rows if page is not None:
-        for ref in referral_search:
-		    tally(row['id'], row['page'], row['referral_source'])
-	)pyql");
-
-    auto test_pluggable_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count {{attr_page}}
-		{{attr_ref}}
-
-	for row in rows:
-		tally(row['id'], row['{{attr_page}}'], row['{{attr_ref}}'])
-	)pyql");
-
-    auto test_within_pyql = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-		count page
-
-    # test props are still set
-    debug(len(props['fav_beers']) == 2)
-    debug('cold' in props['fav_beers'] and 'free' in props['fav_beers'])
-    debug(props['this'] == 'hello')
-  
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(10 seconds, row['stamp']):
-			tally('test1', 'home_page', sub_row['page'])
-		break
-	
-	for row in reverse rows if page == 'home page':		
-		continue for sub_row in reverse rows if row_within(100 seconds, row['stamp']):
-			tally('test2', 'home_page', sub_row['page'])
-		break
-
-	)pyql");
-
-    auto test_continue_from = openset::query::QueryParser::fixIndent(
-        R"pyql(
-	agg:
-		count id
-        count page
-
-	for 1 row in rows if page is 'home page':		
-        tally('should_be_one')
-
-    debug(row == 1)
-    
-    start_from = row + 1
-
-    debug(start_from == 2)
-	
-	continue from start_from for 1 row in rows if page is 'home page':		
-        tally('should_also_be_one')
-
-	)pyql");
-
-    /* In order to make the engine start there are a few required objects as 
+    /* In order to make the engine start there are a few required objects as
      * they will get called in the background during testing:
-     *   
+     *
      *  - cfg::manager must exist // cfg::initConfig)
      *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
      *  - Databse must exist // databases contain tabiles
-     *  
+     *
      *  These objects will be created on the heap, although in practice during
      *  the construction phase these are created as local objects to other classes.
      */
@@ -162,7 +80,7 @@ inline Tests test_db()
     // stop load/save objects from doing anything
     openset::globals::running->testMode = true;
 
-    // we need an async engine, although we won't really be using it, 
+    // we need an async engine, although we won't really be using it,
     // it's wired into the into features such as tablePartitioned (shared locks mostly)
     openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
 
@@ -292,291 +210,162 @@ inline Tests test_db()
             }
         },
         {
-            "db: query a user",
-            [=]()
+            "db: iterate a Set column in row",
+            []
             {
-                auto table = openset::globals::database->getTable("__test001__");
-                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                const auto testScript =
+                R"osl(
+                    select
+                        count id
+                        count session
+                        count page
+                        count referral_source
+                    end
 
-                openset::query::Macro_s queryMacros; // this is our compiled code block
-                openset::query::QueryParser p;
+                    if ('test' in props) == false
+                        props['test'] = {}
+                    end
 
-                // compile this
-                p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
-                ASSERT(!p.error.inError());
-                // cout << openset::query::MacroDbg(queryMacros) << endl;
+                    # set some props
+                    props['test']['this'] = 'hello'
+                    some_var = props['test']['this']
 
-                // mount the compiled query to an interpretor
-                auto interpreter = new openset::query::Interpreter(queryMacros);
+                    props['fav_beers'] = set('cold', 'free')
+                    props['opposites'] = {
+                        'bows': 'arrows',
+                        'up': 'down',
+                        'inside': 'outside'
+                    }
 
-                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-                interpreter->setResultObject(&resultSet);
+                    log(props)
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-                ASSERT(personRaw != nullptr);
-                auto mappedColumns = interpreter->getReferencedColumns();
-                ASSERT(mappedColumns.size() == 6);
+                    counter = 0
 
-                // MappedColumns? Why? Because the basic mapTable function (without a 
-                // columnList) maps all the columns in the table - which is what we want when 
-                // inserting or updating rows but means more processing and less data affinity
-                // when performing queries
+                    # referral_search is nil in two rows, the `for` loop should skip those
+                    # even if we don't put a `&& referral_search.row(!= nil)` in the `each_row`
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                    each_row where page.is(!= nil) #
+                        log(stamp, page, referral_search)
+                        for ref in referral_search
+                            counter = counter + 1
+                            << id, referral_source, ref
+                        end
+                    end
+                    debug(counter == 6)
+                )osl"s;
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare();        // this actually decompresses
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
-                // this mounts the now decompressed data (in the person overlay)
-                // into the interpreter
-                interpreter->mount(&person);
+                auto& debug = interpreter->debugLog();
+                ASSERT(debug.size() == 1);
+                ASSERTDEBUGLOG(debug);
 
-                // run it
-                interpreter->exec();
-                ASSERT(interpreter->error.inError() == false);
+                auto json = ResultToJson(interpreter);
 
-                // just getting a pointer to the results for nicer readability
-                auto result = interpreter->result;
-
-                ASSERT(result->results.size() != 0);
-
-                // we are going to sort the list, this is done for merging, but
-                // being we have one partition in this test we won't actually be merging.
-                result->makeSortedList();
-
-                // the merger was made to merge a fancy result structure, we
-                // are going to manually stuff our result into this
-                std::vector<openset::result::ResultSet*> resultSets;
-
-                // populate or vector of results, so we can merge
-                //responseData.push_back(&res);
-                resultSets.push_back(interpreter->result);
-
-                // this is the merging object, it merges results from multiple 
-                // partitions into a result that can serialized to JSON, or to 
-                // binary for distributed queries
-                openset::result::ResultMuxDemux merger;
-
-                // we are going to populate this
-                cjson resultJSON;
-
-                // make some JSON
-                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
-                /*
-				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
-                merger.mergeMacroLiterals(queryMacros, resultSets);
-				auto text = merger.mergeResultText(resultSets);
-				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
-                */
-
-                // NOTE - uncomment if you want to see the results
-                // cout << cjson::Stringify(&resultJSON, true) << endl;
-
-                auto underScoreNode = resultJSON.xPath("/_");
+                const auto underScoreNode = json.xPath("/_");
                 ASSERT(underScoreNode != nullptr);
 
                 auto dataNodes = underScoreNode->getNodes();
                 ASSERT(dataNodes.size() == 1);
 
-                auto totalsNode = dataNodes[0]->xPath("/c");
-                auto values     = cjson::stringify(totalsNode);
+                const auto totalsNode = dataNodes[0]->xPath("/c");
+                const auto values     = cjson::stringify(totalsNode);
 
-                ASSERT(values == "[1,2,2]");
+                ASSERT(values == "[1,1,2,2]");
 
-                ASSERTDEBUGLOG(interpreter->debugLog);
+                cout << cjson::stringify(&json, true) << endl;
+
+                delete interpreter;
             }
         },
+
         {
-            "db: query another user",
-            [=]()
+            "db: are props still set",
+            []
             {
-                openset::query::ParamVars params;
+                const auto testScript =
+                R"osl(
 
-                params["attr_page"]    = "page";
-                params["attr_ref"]     = "referral_source";
-                params["attr_keyword"] = "referral_search";
-                params["root_name"]    = "root";
+                    if 'test' in props
+                      debug(true)
+                    end
 
-                auto table = openset::globals::database->getTable("__test001__");
-                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                    if 'this' in props['test']
+                      debug(true)
+                    end
 
-                openset::query::Macro_s queryMacros; // this is our compiled code block
-                openset::query::QueryParser p;
+                    if 'cold' in props['fav_beers']
+                      debug(true)
+                    end
 
-                // compile this - passing in the template vars
-                p.compileQuery(test_pluggable_pyql.c_str(), table->getColumns(), queryMacros, &params);
+                    log(props)
 
-                // cout << openset::query::MacroDbg(queryMacros) << endl;
+                )osl"s;
 
-                // mount the compiled query to an interpretor
-                auto interpreter = new openset::query::Interpreter(queryMacros);
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
-                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-                interpreter->setResultObject(&resultSet);
+                auto& debug = interpreter->debugLog();
+                ASSERT(debug.size() == 3);
+                ASSERTDEBUGLOG(debug);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-                ASSERT(personRaw != nullptr);
-                auto mappedColumns = interpreter->getReferencedColumns();
-                ASSERT(mappedColumns.size() == 5);
-
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
-
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare();        // this actually decompresses
-
-                // this mounts the now decompressed data (in the person overlay)
-                // into the interpreter
-                interpreter->mount(&person);
-
-                // run it
-                interpreter->exec();
-                ASSERT(p.error.inError() == false);
-
-                // just getting a pointer to the results for nicer readability
-                auto result = interpreter->result;
-
-                //ASSERT(result->results.size() != 0);
-
-                // we are going to sort the list, this is done for merging, but
-                // being we have one partition in this test we won't actually be merging.
-                result->makeSortedList();
-
-                // the merger was made to merge a fancy result structure, we
-                // are going to manually stuff our result into this
-                std::vector<openset::result::ResultSet*> resultSets;
-                // populate or vector of results, so we can merge
-                //responseData.push_back(&res);
-                resultSets.push_back(interpreter->result);
-
-                // this is the merging object, it merges results from multiple 
-                // partitions into a result that can serialized to JSON, or to 
-                // binary for distributed queries
-                openset::result::ResultMuxDemux merger;
-                cjson resultJSON; // we are going to populate this
-
-                // make some JSON
-                /*
-				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
-                merger.mergeMacroLiterals(queryMacros, resultSets);
-				auto text = merger.mergeResultText(resultSets);
-				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
-                */
-                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
-
-                // NOTE - uncomment if you want to see the results
-                // cout << cjson::Stringify(&resultJSON, true) << endl;
-
-                auto underScoreNode = resultJSON.xPath("/_");
-                ASSERT(underScoreNode != nullptr);
-
-                auto dataNodes = underScoreNode->getNodes();
-                ASSERT(dataNodes.size() == 1);
-
-                auto totalsNode = dataNodes[0]->xPath("/c");
-                auto values     = cjson::stringify(totalsNode);
-
-                ASSERT(values == "[1,4,2]");
+                delete interpreter;
             }
         },
+
         {
-            "db: test within()",
-            [=]()
+            "db: iterate a Set column in row",
+            []
             {
-                openset::query::ParamVars params;
+                const auto testScript =
+                R"osl(
+                    select
+                        count id
+                        count page
+                    end
 
-                params["attr_page"]    = "page";
-                params["attr_ref"]     = "referral_source";
-                params["attr_keyword"] = "referral_search";
-                params["root_name"]    = "root";
+                    each_row.reverse().limit(1) where page == 'home page'
+                        match_stamp = stamp
 
-                auto table = openset::globals::database->getTable("__test001__");
-                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                        each_row.continue().next().reverse().within(10_seconds, match_stamp)
+                            where event == "page_view"
+                          << 'test1', 'home_page', page
+                        end
+                    end
 
-                openset::query::Macro_s queryMacros; // this is our compiled code block
-                openset::query::QueryParser p;
+                    each_row.reverse().limit(1) where page == 'home page'
+                        match_stamp = stamp
 
-                // compile this - passing in the template vars
-                p.compileQuery(test_within_pyql.c_str(), table->getColumns(), queryMacros, &params);
+                        each_row.continue().next().reverse().within(100_seconds, match_stamp)
+                            where event == "page_view"
+                          << 'test2', 'home_page', page
+                        end
+                    end
+                )osl"s;
 
-                //cout << openset::query::MacroDbg(queryMacros) << endl;
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
-                // mount the compiled query to an interpretor
-                auto interpreter = new openset::query::Interpreter(queryMacros);
+                auto& debug = interpreter->debugLog();
 
-                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-                interpreter->setResultObject(&resultSet);
+                auto json = ResultToJson(interpreter);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-                ASSERT(personRaw != nullptr);
-                auto mappedColumns = interpreter->getReferencedColumns();
-                ASSERT(mappedColumns.size() == 4);
-
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
-
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare();        // this actually decompresses
-
-                // this mounts the now decompressed data (in the person overlay)
-                // into the interpreter
-                interpreter->mount(&person);
-
-                // run it
-                interpreter->exec();
-                ASSERT(p.error.inError() == false);
-
-                // just getting a pointer to the results for nicer readability
-                auto result = interpreter->result;
-
-                //ASSERT(result->results.size() != 0);
-
-                // we are going to sort the list, this is done for merging, but
-                // being we have one partition in this test we won't actually be merging.
-                result->makeSortedList();
-
-                // the merger was made to merge a fancy result structure, we
-                // are going to manually stuff our result into this
-                std::vector<openset::result::ResultSet*> resultSets;
-                // populate or vector of results, so we can merge
-                //responseData.push_back(&res);
-                resultSets.push_back(interpreter->result);
-
-                // this is the merging object, it merges results from multiple 
-                // partitions into a result that can serialized to JSON, or to 
-                // binary for distributed queries
-                openset::result::ResultMuxDemux merger;
-                cjson resultJSON; // we are going to populate this
-                // make some JSON
-
-                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
-                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
-                /*
-				auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
-                merger.mergeMacroLiterals(queryMacros, resultSets);
-				auto text = merger.mergeResultText(resultSets);
-				merger.resultSetToJSON(queryMacros, table, &resultJSON, rows, text);
-                */
-
-                // NOTE - uncomment if you want to see the results
-                // cout << cjson::stringify(&resultJSON, true) << endl;
-
-                auto underScoreNode = resultJSON.xPath("/_");
+                const auto underScoreNode = json.xPath("/_");
                 ASSERT(underScoreNode != nullptr);
 
-                /* This test runs two nearly identical matches. 
-                 * 
+                /* This test runs two nearly identical matches.
+                 *
                  * The difference the `iter_within` timing, in "test1" it checks
                  * within 10 seconds, and there can be only one match.
-                 * 
+                 *
                  * In "test2" it checks within 100 seconds and there are two matches.
-                 * 
+                 *
                  * The results are sorted, so the second test shows up first.
-                 * 
+                 *
                  * On the root "_" node the first "c" should be [1,2]
                  * In the second row "c" should be [1,1]
-                 * 
+                 *
                  * Note: you can see it by uncommenting the stringify above)
                  */
 
@@ -591,114 +380,274 @@ inline Tests test_db()
                 values     = cjson::stringify(totalsNode);
                 ASSERT(values == "[1,1]");
 
-                ASSERTDEBUGLOG(interpreter->debugLog);
+
+                cout << cjson::stringify(&json, true) << endl;
+
+                delete interpreter;
             }
         },
         {
-            "db: test continue from",
-            [=]()
+            "db: index compiler basic",
+            []
             {
-                openset::query::ParamVars params;
+                const auto testScript =
+                R"osl(
 
-                params["attr_page"]    = "page";
-                params["attr_ref"]     = "referral_source";
-                params["attr_keyword"] = "referral_search";
-                params["root_name"]    = "root";
+                    select
+                        count id
+                    end
 
-                auto table = openset::globals::database->getTable("__test001__");
-                auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                    each_row where page.is(!= "blog")
+                        << page
+                    end
 
-                openset::query::Macro_s queryMacros; // this is our compiled code block
-                openset::query::QueryParser p;
+                )osl"s;
 
-                // compile this - passing in the template vars
-                p.compileQuery(test_continue_from.c_str(), table->getColumns(), queryMacros, &params);
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
-                //cout << openset::query::MacroDbg(queryMacros) << endl;
+                auto& debug = interpreter->debugLog();
 
-                // mount the compiled query to an interpreter
-                auto interpreter = new openset::query::Interpreter(queryMacros);
+                ASSERT(queryMacros.index.size() == 3);
 
-                openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-                interpreter->setResultObject(&resultSet);
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-                ASSERT(personRaw != nullptr);
-                auto mappedColumns = interpreter->getReferencedColumns();
-                ASSERT(mappedColumns.size() == 4);
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare();        // this actually decompresses
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler cull session",
+            []
+            {
+                const auto testScript =
+                R"osl(
 
-                // this mounts the now decompressed data (in the person overlay)
-                // into the interpreter
-                interpreter->mount(&person);
+                    select
+                        count id
+                    end
 
-                // run it
-                interpreter->exec();
-                ASSERT(p.error.inError() == false);
+                    each_row where page.is(!= "blog") && session.is(== 2)
+                        << page
+                    end
 
-                // just getting a pointer to the results for nicer readability
-                auto result = interpreter->result;
+                )osl"s;
 
-                //ASSERT(result->results.size() != 0);
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
-                // we are going to sort the list, this is done for merging, but
-                // being we have one partition in this test we won't actually be merging.
-                result->makeSortedList();
+                auto& debug = interpreter->debugLog();
 
-                // the merger was made to merge a fancy result structure, we
-                // are going to manually stuff our result into this
-                std::vector<openset::result::ResultSet*> resultSets;
-                // populate or vector of results, so we can merge
-                //responseData.push_back(&res);
-                resultSets.push_back(interpreter->result);
+                ASSERT(queryMacros.index.size() == 3);
 
-                // this is the merging object, it merges results from multiple 
-                // partitions into a result that can serialized to JSON, or to 
-                // binary for distributed queries
-                openset::result::ResultMuxDemux merger;
-                cjson resultJSON; // we are going to populate this
-                // make some JSON
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
 
-                merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
-                merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
 
-                // NOTE - uncomment if you want to see the results
-                //cout << cjson::stringify(&resultJSON, true) << endl;
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
 
-                auto underScoreNode = resultJSON.xPath("/_");
-                ASSERT(underScoreNode != nullptr);
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler cull user variable",
+            []
+            {
+                const auto testScript =
+                R"osl(
 
-                /* This test runs two nearly identical matches. 
-                 * 
-                 * The difference the `iter_within` timing, in "test1" it checks
-                 * within 10 seconds, and there can be only one match.
-                 * 
-                 * In "test2" it checks within 100 seconds and there are two matches.
-                 * 
-                 * The results are sorted, so the second test shows up first.
-                 * 
-                 * On the root "_" node the first "c" should be [1,2]
-                 * In the second row "c" should be [1,1]
-                 * 
-                 * Note: you can see it by uncommenting the stringify above)
-                 */
+                    select
+                        count id
+                    end
 
-                auto dataNodes = underScoreNode->getNodes();
-                ASSERT(dataNodes.size() == 2);
+                    some_var = 4
 
-                auto totalsNode = dataNodes[0]->xPath("/c");
-                auto values     = cjson::stringify(totalsNode);
-                ASSERT(values == "[1,1]");
+                    each_row where page.is(!= "blog") && session.is(== 2) && some_var == 4
+                        << page
+                    end
 
-                totalsNode = dataNodes[1]->xPath("/c");
-                values     = cjson::stringify(totalsNode);
-                ASSERT(values == "[1,1]");
+                )osl"s;
 
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler culling gong show",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    some_var = 4
+                    other_var = 1
+
+                    third_var = "hello"
+
+                    # the following if will be excluded because it doesn't have a table column in it's logic
+                    if (some_var == -1)
+                        third_var = "good-bye"
+                    end
+
+                    each_row where (other_var == 1 || page.is(!= "blog")) && (session.is(== 2) && (some_var == 4 || other_var == 2))
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 3);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                delete interpreter;
+            }
+        },
+
+        {
+            "db: index compiler row, ever, never",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.is(!= "blog") || (page.never(=="blog") && referral_search.ever(contains "red"))
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 11);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "page"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "blog"s);
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[6].value == "referral_search"s);
+
+                ASSERT(queryMacros.index[7].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[7].value == "red"s);
+
+                ASSERT(queryMacros.index[8].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[9].op == openset::query::HintOp_e::BIT_AND);
+
+                ASSERT(queryMacros.index[10].op == openset::query::HintOp_e::BIT_OR);
+
+                delete interpreter;
+            }
+        },
+
+        {
+            "db: index compiler with table vars not using row, ever, never",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page != "blog" || (page == "blog" && referral_search contains "red")
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 11);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "page"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "blog"s);
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[6].value == "referral_search"s);
+
+                ASSERT(queryMacros.index[7].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[7].value == "red"s);
+
+                ASSERT(queryMacros.index[8].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[9].op == openset::query::HintOp_e::BIT_AND);
+
+                ASSERT(queryMacros.index[10].op == openset::query::HintOp_e::BIT_OR);
+
+                delete interpreter;
             }
         }
 

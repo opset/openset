@@ -11,35 +11,35 @@
 
 namespace openset
 {
-	namespace async
-	{
-		class AsyncLoop;
-	};
+    namespace async
+    {
+        class AsyncLoop;
+    };
 
     namespace query
     {
         class Interpreter;
     }
 
-	namespace db
-	{
+    namespace db
+    {
 
         class IndexBits;
 
         struct SegmentPartitioned_s
         {
 
-            enum class SegmentChange_e : int 
+            enum class SegmentChange_e : int
             {
                 enter,
                 exit,
                 noChange
             };
 
-			string segmentName;
+            string segmentName;
             int64_t segmentHash { 0 };
-			int64_t refreshTime{ 86400 };
-			query::Macro_s macros;
+            int64_t refreshTime{ 86400 };
+            query::Macro_s macros;
 
             int zIndex {100};
             int64_t lastModified {0};
@@ -50,15 +50,15 @@ namespace openset
             int changeCount {0};
 
             SegmentPartitioned_s(
-				    const std::string& segmentName,
-				    const query::Macro_s& macros,
-				    const int64_t refreshTime,
+                    const std::string& segmentName,
+                    const query::Macro_s& macros,
+                    const int64_t refreshTime,
                     const int zIndex,
                     const bool onInsert) :
-				segmentName(segmentName),
+                segmentName(segmentName),
                 segmentHash(MakeHash(segmentName)),
-				refreshTime(refreshTime),
-				macros(macros),
+                refreshTime(refreshTime),
+                macros(macros),
                 zIndex(zIndex),
                 onInsert(onInsert)
             {}
@@ -69,10 +69,10 @@ namespace openset
 
             /*
              * These functions maintain an uncompressed cached copy of the index.
-             * 
-             * prepare - called before updating/creating an index. 
+             *
+             * prepare - called before updating/creating an index.
              * commit - called after a batch of updates is made
-             * 
+             *
              * setBit - flips a bit to the desired state and returns the state change that took place
              */
             IndexBits* prepare(Attributes& attributes); // mounts bits, if they are not already
@@ -85,20 +85,20 @@ namespace openset
         };
 
 
-		class TablePartitioned
-		{
-		public:
-			Table* table;
-			int partition;
-			Attributes attributes;
-			AttributeBlob* attributeBlob;
-			People people;
-			openset::async::AsyncLoop* asyncLoop;
-			//openset::revent::ReventManager* triggers;
+        class TablePartitioned
+        {
+        public:
+            Table* table;
+            int partition;
+            Attributes attributes;
+            AttributeBlob* attributeBlob;
+            People people;
+            openset::async::AsyncLoop* asyncLoop;
+            //openset::revent::ReventManager* triggers;
 
-			// map of segment names to expire times
-			std::unordered_map<std::string, int64_t> segmentRefresh;
-			std::unordered_map<std::string, int64_t> segmentTTL;
+            // map of segment names to expire times
+            std::unordered_map<std::string, int64_t> segmentRefresh;
+            std::unordered_map<std::string, int64_t> segmentTTL;
             std::unordered_map<std::string, SegmentPartitioned_s> segments;
 
             using MailBox = std::vector<revent::TriggerMessage_s>;
@@ -107,10 +107,10 @@ namespace openset
 
             using InterpreterList = std::vector<SegmentPartitioned_s*>;
             InterpreterList onInsertSegments;
-            
-			CriticalSection insertCS;
-			atomic<int32_t> insertBacklog;
-			std::vector<char*> insertQueue;
+
+            CriticalSection insertCS;
+            atomic<int32_t> insertBacklog;
+            std::vector<char*> insertQueue;
 
             int64_t markedForDeleteStamp{ 0 };
 
@@ -121,16 +121,16 @@ namespace openset
             // if this is a non-zero value... instead they will be invalidated at the
             // next opportunity
             int segmentUsageCount {0};
-		    
-			explicit TablePartitioned(
-				Table* table,
-				const int partition,
-				AttributeBlob* attributeBlob,
-				Columns* schema);
 
-			TablePartitioned() = default;
+            explicit TablePartitioned(
+                Table* table,
+                const int partition,
+                AttributeBlob* attributeBlob,
+                Columns* schema);
 
-		    ~TablePartitioned();
+            TablePartitioned() = default;
+
+            ~TablePartitioned();
 
             void markForDeletion()
             {
@@ -142,37 +142,37 @@ namespace openset
                 return markedForDeleteStamp;
             }
 
-		    void setSegmentTTL(const std::string& segmentName, int64_t TTL)
-			{
-				if (TTL < 0)
-					return;
+            void setSegmentTTL(const std::string& segmentName, int64_t TTL)
+            {
+                if (TTL < 0)
+                    return;
 
-				// TODO - this should probably be set to a date	in the next century
-				if (TTL == 0) 
-					TTL = 86400000LL * 365LL;
-				
-				segmentTTL[segmentName] = Now() + TTL;
-			}
+                // TODO - this should probably be set to a date	in the next century
+                if (TTL == 0)
+                    TTL = 86400000LL * 365LL;
 
-			void setSegmentRefresh(const std::string& segmentName, int64_t refresh)
-			{
-				//if (refresh > 0)
-					segmentRefresh[segmentName] = Now() + refresh;
-			}
+                segmentTTL[segmentName] = Now() + TTL;
+            }
 
-			bool isRefreshDue(const std::string& segmentName)
-			{
-				if (!segmentRefresh.count(segmentName))
-					return true;
-				return segmentRefresh[segmentName] <= Now();
-			}
+            void setSegmentRefresh(const std::string& segmentName, int64_t refresh)
+            {
+                //if (refresh > 0)
+                    segmentRefresh[segmentName] = Now() + refresh;
+            }
 
-			bool isSegmentExpiredTTL(const std::string& segmentName)
-			{
-				if (!segmentTTL.count(segmentName))
-					return true;
-				return segmentTTL[segmentName] <= Now();
-			}
+            bool isRefreshDue(const std::string& segmentName)
+            {
+                if (!segmentRefresh.count(segmentName))
+                    return true;
+                return segmentRefresh[segmentName] <= Now();
+            }
+
+            bool isSegmentExpiredTTL(const std::string& segmentName)
+            {
+                if (!segmentTTL.count(segmentName))
+                    return true;
+                return segmentTTL[segmentName] <= Now();
+            }
 
             openset::query::Interpreter* getInterpreter(const std::string& segmentName, int64_t maxLinearId);
 
@@ -187,7 +187,7 @@ namespace openset
 
             // delegate that returns a function with a closure containing access to the this class
             // will return a segment from the main index, or a cached copy from the "segments" map, and
-            // set the "deleteAfterUsing" parameter appropriately. 
+            // set the "deleteAfterUsing" parameter appropriately.
             //
             // The Interpreter needs this callback to operate when performing segment math
             std::function<openset::db::IndexBits*(const string&, bool&)> getSegmentCallback();
@@ -200,5 +200,5 @@ namespace openset
 
             void flushMessageMessages();
         };
-	};
+    };
 };

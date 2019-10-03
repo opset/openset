@@ -34,24 +34,24 @@ when converting floats/doubles to integers the numbers are truncated much like w
 using a cast.
 
 note: if you see warnings about ambiguity add a cast, i.e. if calling a
-	  function with multiple overloads use (int)mycvar or (double)mycvar or
-	  (std::string)mycvar etc.
+      function with multiple overloads use (int)mycvar or (double)mycvar or
+      (std::string)mycvar etc.
 
 note: uses std::string in the back-end, which works, but ideally we would
-	  use a static buffer, or a heap buffer (or one that switches to a heap
-	  if the static was to small). I like std::string but it makes small
-	  allocations, which depending on your workload may not be ideal.
+      use a static buffer, or a heap buffer (or one that switches to a heap
+      if the static was to small). I like std::string but it makes small
+      allocations, which depending on your workload may not be ideal.
 
 JavaScript like functions for converting a type
 
 User Defined Literal:
-	append _cvar to any constant needed to ensure it is being treated as cvar.
-	This isn't often necessary but can be when types are ambiguous or when dealing
-	with strings: i.e.
-		cvar somecvar = "1234" + 5; // this will actually compile to
-								  // 5 characters into string "1234" (whoops)
+    append _cvar to any constant needed to ensure it is being treated as cvar.
+    This isn't often necessary but can be when types are ambiguous or when dealing
+    with strings: i.e.
+        cvar somecvar = "1234" + 5; // this will actually compile to
+                                  // 5 characters into string "1234" (whoops)
 
-		cvar somecvar = "1234"_cvar + 5; will compile
+        cvar somecvar = "1234"_cvar + 5; will compile
 
 
 
@@ -99,11 +99,11 @@ const int64_t None = static_cast<int64_t>(LLONG_MIN);
 
 namespace std
 {
-	template <>
-	struct hash<cvar>
-	{
-		size_t operator()(const cvar& v) const;
-	};
+    template <>
+    struct hash<cvar>
+    {
+        size_t operator()(const cvar& v) const;
+    };
 }
 
 using namespace std;
@@ -162,7 +162,7 @@ public:
     using s = Set;
 
     cvar() :
-        type(valueType::INT64) // default type 
+        type(valueType::INT64) // default type
     {
         value.asInt64 = 0; // sets all values to 0
     }
@@ -220,7 +220,7 @@ public:
         }
     }
 
-    // assignment constructors 
+    // assignment constructors
     // so you can go:
     // cvar mycvar = 5;
 
@@ -401,6 +401,8 @@ public:
     // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
     void dict()
     {
+        reference = nullptr;
+
         if (listValue) // do any needed cleanup
         {
             delete listValue;
@@ -422,6 +424,8 @@ public:
     // turns cvar into empty Dict like python/js: some_dict = {} or some_dict = dict()
     void set()
     {
+        reference = nullptr;
+
         if (listValue) // do any needed cleanup
         {
             delete listValue;
@@ -443,6 +447,8 @@ public:
     // turns cvar into empty List like python/js: some_list = [] or some_list = list()
     void list()
     {
+        reference = nullptr;
+
         if (dictValue) // do any needed cleanup
         {
             delete dictValue;
@@ -496,7 +502,7 @@ public:
 
     bool contains(const cvar& key) const
     {
-        if (key.type == valueType::LIST || key.type == valueType::DICT || key.type == valueType::SET)
+        if (key.isContainer())
             throw std::runtime_error("cannot test for list/dict/set in list/dict/set");
 
         if (type == valueType::LIST)
@@ -515,32 +521,101 @@ public:
         throw std::runtime_error("not a dictionary/list/set");
     }
 
+    // see if this object contains ANY of the values from another object
+    bool containsAnyOf(const cvar& values) const
+    {
+        if (!isContainer())
+            throw std::runtime_error("contains any test on non list/dict/set");
+
+        // if right side `values` is not a container
+        // a simple `contains` call will suffice
+        if (!values.isContainer())
+            return contains(values);
+
+        // iterate container values and see if any of them are in this object
+        if (values.type == valueType::LIST)
+        {
+            for (auto &i : *values.getList())
+                if (contains(i))
+                    return true;
+        }
+        else if (values.type == valueType::SET)
+        {
+            for (auto &i : *values.getSet())
+                if (contains(i))
+                    return true;
+        }
+        else
+        {
+            for (auto &i : *values.getDict())
+                if (contains(i.first))
+                    return true;
+        }
+
+        return false;
+    }
+
+    // see if this object contains ALL of the values from another object
+    bool containsAllOf(const cvar& values) const
+    {
+        if (!isContainer())
+            throw std::runtime_error("contains any test on non list/dict/set");
+
+        // if right side `values` is not a container
+        // a simple `contains` call will suffice
+        if (!values.isContainer())
+            return contains(values);
+
+        // iterate container values and see if any of them are NOT in this object
+        if (values.type == valueType::LIST)
+        {
+            for (auto &i : *values.getList())
+                if (!contains(i))
+                    return false;
+        }
+        else if (values.type == valueType::SET)
+        {
+            for (auto &i : *values.getSet())
+                if (!contains(i))
+                    return false;
+        }
+        else
+        {
+            for (auto &i : *values.getDict())
+                if (!contains(i.first))
+                    return false;
+        }
+
+        return true;
+    }
+
+
     cvar* getMemberPtr(cvar& key, const bool throwIfMissing = false) const
     {
-        if (key == None) 
+        if (key == None)
             throw std::runtime_error("invalid key: None");
 
         if (type == valueType::LIST)
         {
-            if (throwIfMissing &&                 
+            if (throwIfMissing &&
                 (!listValue ||
                 key.getInt64() < 0 &&
                 key.getInt64() >= static_cast<int64_t>(listValue->size()
                )))
                throw std::runtime_error("index out of range '" + key.getString() + "' not in dictionary");
 
-            return 
+            return
                 listValue &&
                 key.getInt64() >= 0 &&
                 key.getInt64() < static_cast<int64_t>(listValue->size())
-                    ? &(*listValue)[key.getInt64()] 
+                    ? &(*listValue)[key.getInt64()]
                     : nullptr;
         }
         if (type == valueType::DICT)
         {
             if (throwIfMissing && (!dictValue || (*dictValue).find(key) == dictValue->end()))
                 throw std::runtime_error("key '" + key.getString() + "' not in dictionary");
-            return dictValue ? &(*dictValue)[key] : nullptr;  
+            return dictValue ? &(*dictValue)[key] : nullptr;
         }
         if (throwIfMissing)
             throw std::runtime_error("cannot access member in non dictionary or list type");
@@ -557,196 +632,206 @@ public:
         return value;
     }
 
+    bool isRef() const
+    {
+        return reference != nullptr;
+    }
+
+    bool isContainer() const
+    {
+        return (type == valueType::DICT || type == valueType::LIST || type == valueType::SET);
+    }
+
 private:
 
-	static std::string trimZeros(std::string number)
-	{
-		while (number.length() > 2 && number[number.length() - 1] == '0')
-			number.erase(number.length() - 1);
-		if (number[number.length() - 1] == '.')
-			number += "0";
-		return number;
-	}
+    static std::string trimZeros(std::string number)
+    {
+        while (number.length() > 2 && number[number.length() - 1] == '0')
+            number.erase(number.length() - 1);
+        if (number[number.length() - 1] == '.')
+            number += "0";
+        return number;
+    }
 
-	// remove all occurrences of right from left if any
-	static std::string subStrings(std::string left, const std::string& right)
-	{
-		const auto len = right.length();
-		size_t idx;
-		while ((idx = left.find(right)) != std::string::npos)
-			left.erase(idx, len);
-		return left;
-	}
+    // remove all occurrences of right from left if any
+    static std::string subStrings(std::string left, const std::string& right)
+    {
+        const auto len = right.length();
+        size_t idx;
+        while ((idx = left.find(right)) != std::string::npos)
+            left.erase(idx, len);
+        return left;
+    }
 
 public:
 
-	// subscript operators
-	cvar& operator[](const cvar& idx) const
-	{
-		if (this->type == valueType::LIST && listValue)
-			return (*listValue)[idx.getInt32()];
+    // subscript operators
+    cvar& operator[](const cvar& idx) const
+    {
+        if (this->type == valueType::LIST && listValue)
+            return (*listValue)[idx.getInt32()];
 
-		if (this->type == valueType::DICT && dictValue)
-			return (*dictValue)[idx];
+        if (this->type == valueType::DICT && dictValue)
+            return (*dictValue)[idx];
 
-		throw std::runtime_error("not a list or dictionary");
-	}
+        throw std::runtime_error("not a list or dictionary");
+    }
 
-	cvar& operator[](const int &idx) const
-	{
-		if (this->type == valueType::LIST && listValue)
-			return (*listValue)[idx];
+    cvar& operator[](const int &idx) const
+    {
+        if (this->type == valueType::LIST && listValue)
+            return (*listValue)[idx];
 
-		if (this->type == valueType::DICT && dictValue)
-			return (*dictValue)[cvar{ idx }];
+        if (this->type == valueType::DICT && dictValue)
+            return (*dictValue)[cvar{ idx }];
 
-		throw std::runtime_error("not a list or dictionary");
-	}
+        throw std::runtime_error("not a list or dictionary");
+    }
 
-	cvar& operator[](const int64_t &idx) const
-	{
-		if (this->type == valueType::LIST && listValue)
-			return (*listValue)[idx];
+    cvar& operator[](const int64_t &idx) const
+    {
+        if (this->type == valueType::LIST && listValue)
+            return (*listValue)[idx];
 
-		if (this->type == valueType::DICT && dictValue)
-			return (*dictValue)[cvar{ idx }];
+        if (this->type == valueType::DICT && dictValue)
+            return (*dictValue)[cvar{ idx }];
 
-		throw std::runtime_error("not a list or dictionary");
-	}
+        throw std::runtime_error("not a list or dictionary");
+    }
 
-	cvar& operator[](const std::string &idx) const
-	{
-		if (this->type == valueType::LIST && listValue)
-		{
-			const auto index = std::stoi(idx);
+    cvar& operator[](const std::string &idx) const
+    {
+        if (this->type == valueType::LIST && listValue)
+        {
+            const auto index = std::stoi(idx);
 
-			if (index < 0)
-				throw std::runtime_error("negative index in List");
-			if (index == static_cast<int>((*listValue).size()))
-				listValue->emplace_back(cvar{});
-			if (index > static_cast<int>((*listValue).size()))
-				throw std::runtime_error("List index greater than list size");
+            if (index < 0)
+                throw std::runtime_error("negative index in List");
+            if (index == static_cast<int>((*listValue).size()))
+                listValue->emplace_back(cvar{});
+            if (index > static_cast<int>((*listValue).size()))
+                throw std::runtime_error("List index greater than list size");
 
-			return (*listValue)[std::stoi(idx)]; // may throw
-		}
+            return (*listValue)[std::stoi(idx)]; // may throw
+        }
 
-		if (this->type == valueType::DICT && dictValue)
-			return (*dictValue)[cvar{ idx }];
+        if (this->type == valueType::DICT && dictValue)
+            return (*dictValue)[cvar{ idx }];
 
-		throw std::runtime_error("not a list or dictionary");
-	}
+        throw std::runtime_error("not a list or dictionary");
+    }
 
-	cvar& operator[](const char* idx) const
-	{
-		if (this->type == valueType::LIST && listValue)
-		{
-			const auto index = std::stoi(idx);
+    cvar& operator[](const char* idx) const
+    {
+        if (this->type == valueType::LIST && listValue)
+        {
+            const auto index = std::stoi(idx);
 
-			if (index < 0)
-				throw std::runtime_error("negative index in List");
-			if (index == static_cast<int>((*listValue).size()))
-				listValue->emplace_back(cvar{});
-			if (index > static_cast<int>((*listValue).size()))
-				throw std::runtime_error("List index greater than list size");
+            if (index < 0)
+                throw std::runtime_error("negative index in List");
+            if (index == static_cast<int>((*listValue).size()))
+                listValue->emplace_back(cvar{});
+            if (index > static_cast<int>((*listValue).size()))
+                throw std::runtime_error("List index greater than list size");
 
-			return (*listValue)[std::stoi(idx)]; // may throw
-		}
+            return (*listValue)[std::stoi(idx)]; // may throw
+        }
 
-		if (this->type == valueType::DICT && dictValue)
-			return (*dictValue)[cvar{ idx }];
+        if (this->type == valueType::DICT && dictValue)
+            return (*dictValue)[cvar{ idx }];
 
-		throw std::runtime_error("not a list or dictionary");
-	}
+        throw std::runtime_error("not a list or dictionary");
+    }
 
-	void copy(const cvar &source)
-	{
+    void copy(const cvar &source)
+    {
         clear();
-		this->type = source.type;
-		this->value = source.value;
-		this->valueString = source.valueString;
+        this->type = source.type;
+        this->value = source.value;
+        this->valueString = source.valueString;
 
-		if (source.dictValue && this->type == valueType::DICT)
-		{
-			this->dict();
-			*dictValue = *source.dictValue;
-		}
+        if (source.dictValue && this->type == valueType::DICT)
+        {
+            this->dict();
+            *dictValue = *source.dictValue;
+        }
 
-		if (source.listValue && this->type == valueType::LIST)
-		{
-			this->list();
-			*listValue = *source.listValue;
-		}
+        if (source.listValue && this->type == valueType::LIST)
+        {
+            this->list();
+            *listValue = *source.listValue;
+        }
 
-		if (source.setValue && this->type == valueType::SET)
-		{
-			this->set();
-			*setValue = *source.setValue;
-		}
-	}
+        if (source.setValue && this->type == valueType::SET)
+        {
+            this->set();
+            *setValue = *source.setValue;
+        }
+    }
 
-	cvar* getReference() const
-	{
-			return (type == valueType::REF && reference) ? reference : nullptr;
-	}
+    cvar* getReference() const
+    {
+            return (type == valueType::REF && reference) ? reference : nullptr;
+    }
 
-	void setReference(cvar* ref) 
-	{
-		reference = ref;
-		type = valueType::REF;
-	}
+    void setReference(cvar* ref)
+    {
+        reference = ref;
+        type = valueType::REF;
+    }
 
-	// assignment operators
-	cvar& operator=(const cvar& source)
-	{
-		copy(source);
-		return *this;
-	}
+    // assignment operators
+    cvar& operator=(const cvar& source)
+    {
+        copy(source);
+        return *this;
+    }
 
-	cvar& operator=(cvar&& source) noexcept
-	{
+    cvar& operator=(cvar&& source) noexcept
+    {
         clear();
 
-		this->type = source.type;
-		this->value = source.value;
-		this->valueString = std::move(source.valueString);
+        this->type = source.type;
+        this->value = source.value;
+        this->valueString = std::move(source.valueString);
 
-		if (source.dictValue)
-		{
-			this->dictValue = source.dictValue;
-			source.dictValue = nullptr;
-		}
+        if (source.dictValue)
+        {
+            this->dictValue = source.dictValue;
+            source.dictValue = nullptr;
+        }
 
-		if (source.listValue)
-		{
-			this->listValue = source.listValue;
-			source.listValue = nullptr;
-		}
+        if (source.listValue)
+        {
+            this->listValue = source.listValue;
+            source.listValue = nullptr;
+        }
 
-		if (source.setValue)
-		{
-			this->setValue = source.setValue;
-			source.setValue = nullptr;
-		}
+        if (source.setValue)
+        {
+            this->setValue = source.setValue;
+            source.setValue = nullptr;
+        }
 
-		source.type = valueType::INT64;
-		source.value.asInt64 = 0;
+        source.type = valueType::INT64;
+        source.value.asInt64 = 0;
 
-		return *this;
-	}
+        return *this;
+    }
 
-	cvar& operator=(const int& source)
-	{
-		type = valueType::INT32;
-		value.asInt32 = source;
-		return *this;
-	}
+    cvar& operator=(const int& source)
+    {
+        type = valueType::INT32;
+        value.asInt32 = source;
+        return *this;
+    }
 
-	cvar& operator=(const int64_t& source)
-	{
-		type = valueType::INT64;
-		value.asInt64 = source;
-		return *this;
-	}
+    cvar& operator=(const int64_t& source)
+    {
+        type = valueType::INT64;
+        value.asInt64 = source;
+        return *this;
+    }
 
 #ifndef _MSC_VER
     // gcc seems to see long long as not being the same as int64_t
@@ -758,822 +843,822 @@ public:
     }
 #endif
 
-	cvar& operator=(const double& source)
-	{
-		type = valueType::DBL;
+    cvar& operator=(const double& source)
+    {
+        type = valueType::DBL;
         reference = nullptr;
-		value.asDouble = source;
-		return *this;
-	}
+        value.asDouble = source;
+        return *this;
+    }
 
-	cvar& operator=(const float& source)
-	{
-		type = valueType::FLT;
+    cvar& operator=(const float& source)
+    {
+        type = valueType::FLT;
         reference = nullptr;
-		value.asInt64 = 0;
-		value.asFloat = source;
-		return *this;
-	}
+        value.asInt64 = 0;
+        value.asFloat = source;
+        return *this;
+    }
 
-	// interesting... const char* &source fails,
-	// and std::string isn't built in, so 
-	// the type would convert to bool (which all pointers or
-	// numeric types can be treated as bools). 
-	// using a not reference (just char*) for string works.
-	cvar& operator=(const char* source)
-	{
-		type = valueType::STR;
+    // interesting... const char* &source fails,
+    // and std::string isn't built in, so
+    // the type would convert to bool (which all pointers or
+    // numeric types can be treated as bools).
+    // using a not reference (just char*) for string works.
+    cvar& operator=(const char* source)
+    {
+        type = valueType::STR;
         reference = nullptr;
-		value.asInt64 = 0;
-		valueString = source;
-		return *this;
-	}
+        value.asInt64 = 0;
+        valueString = source;
+        return *this;
+    }
 
-	cvar& operator=(const std::string& source)
-	{
-		type = valueType::STR;
+    cvar& operator=(const std::string& source)
+    {
+        type = valueType::STR;
         reference = nullptr;
-		value.asInt64 = 0;
-		valueString = source;
-		return *this;
-	}
+        value.asInt64 = 0;
+        valueString = source;
+        return *this;
+    }
 
-	cvar& operator=(const bool& source)
-	{
-		type = valueType::BOOL;
+    cvar& operator=(const bool& source)
+    {
+        type = valueType::BOOL;
         reference = nullptr;
-		value.asInt64 = 0;
-		value.asBool = (source) ? true : false;
-		return *this;
-	}
+        value.asInt64 = 0;
+        value.asBool = (source) ? true : false;
+        return *this;
+    }
 
-	cvar& operator=(const std::vector<cvar>& source)
-	{
-		if (dictValue)
-		{
-			delete dictValue;
-			dictValue = nullptr;
-		}
+    cvar& operator=(const std::vector<cvar>& source)
+    {
+        if (dictValue)
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
 
-		if (setValue)
-		{
-			delete setValue;
-			setValue = nullptr;
-		}
-
-        reference = nullptr;
-		list();
-		*listValue = source;
-
-		return *this;
-	}
-
-	/*cvar& operator=(const std::initializer_list<cvar> args)
-	{
-		list();
-		for (auto a : args)
-			listValue->push_back(a);
-		return *this;
-	}*/
-
-	template<typename T>
-	cvar& operator=(const std::unordered_set<T>& source)
-	{
-		if (dictValue)
-		{
-			delete dictValue;
-			dictValue = nullptr;
-		}
-
-		if (listValue)
-		{
-			delete listValue;
-			listValue = nullptr;
-		}
+        if (setValue)
+        {
+            delete setValue;
+            setValue = nullptr;
+        }
 
         reference = nullptr;
-		set();
-		for (auto &item : source)
-			setValue->insert(item);
-		return *this;
-	}
+        list();
+        *listValue = source;
 
-	template<typename K, typename V>
+        return *this;
+    }
+
+    /*cvar& operator=(const std::initializer_list<cvar> args)
+    {
+        list();
+        for (auto a : args)
+            listValue->push_back(a);
+        return *this;
+    }*/
+
+    template<typename T>
+    cvar& operator=(const std::unordered_set<T>& source)
+    {
+        if (dictValue)
+        {
+            delete dictValue;
+            dictValue = nullptr;
+        }
+
+        if (listValue)
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
+
+        reference = nullptr;
+        set();
+        for (auto &item : source)
+            setValue->insert(item);
+        return *this;
+    }
+
+    template<typename K, typename V>
     cvar& operator=(const std::map<K, V>& source);
 
     template<typename K, typename V>
     cvar& operator=(const std::unordered_map<K, V>& source);
 
-	template<typename K, typename V>
-	cvar& operator=(const std::pair<K, V>& source);
+    template<typename K, typename V>
+    cvar& operator=(const std::pair<K, V>& source);
 
-	template<typename T>
-	cvar& operator=(const std::vector<T>& source)
-	{
+    template<typename T>
+    cvar& operator=(const std::vector<T>& source)
+    {
         reference = nullptr;
-		list();
-		for (auto &item : source)
-			listValue->push_back(item);
-		return *this;
-	}
+        list();
+        for (auto &item : source)
+            listValue->push_back(item);
+        return *this;
+    }
 
-	/*
-	cvar& operator=(const std::vector<std::pair<cvar, cvar>>& source)
-	{
-		if (listValue)
-		{
-			delete listValue;
-			listValue = nullptr;
-		}
+    /*
+    cvar& operator=(const std::vector<std::pair<cvar, cvar>>& source)
+    {
+        if (listValue)
+        {
+            delete listValue;
+            listValue = nullptr;
+        }
 
-		dict();
+        dict();
 
-		for (auto i : source)
-			(*dictValue)[i.first] = i.second;
+        for (auto i : source)
+            (*dictValue)[i.first] = i.second;
 
-		return *this;
-	}
-	*/
+        return *this;
+    }
+    */
 
-	int32_t getInt32() const
-	{
-		if (type == valueType::INT32)
-			return value.asInt32;
+    int32_t getInt32() const
+    {
+        if (type == valueType::INT32)
+            return value.asInt32;
 
-		switch (type)
-		{
-		case valueType::INT64:
-			return static_cast<int32_t>(value.asInt64);
-		case valueType::FLT:
-			return static_cast<int32_t>(value.asFloat);
-		case valueType::DBL:
-			return static_cast<int32_t>(value.asDouble);
-		case valueType::BOOL:
-			return (value.asBool) ? 1 : 0;
-		case valueType::STR:
-			return std::strtol(valueString.c_str(), nullptr, 10);
-		default:
-			return 0;
-		}
-	}
+        switch (type)
+        {
+        case valueType::INT64:
+            return static_cast<int32_t>(value.asInt64);
+        case valueType::FLT:
+            return static_cast<int32_t>(value.asFloat);
+        case valueType::DBL:
+            return static_cast<int32_t>(value.asDouble);
+        case valueType::BOOL:
+            return (value.asBool) ? 1 : 0;
+        case valueType::STR:
+            return std::strtol(valueString.c_str(), nullptr, 10);
+        default:
+            return 0;
+        }
+    }
 
-	operator int32_t()
-	{
-		lastValue.asInt32 = getInt32();
-		return lastValue.asInt32;
-	}
+    operator int32_t()
+    {
+        lastValue.asInt32 = getInt32();
+        return lastValue.asInt32;
+    }
 
-	int64_t getInt64() const
-	{
-		if (type == valueType::INT64)
-			return value.asInt64;
+    int64_t getInt64() const
+    {
+        if (type == valueType::INT64)
+            return value.asInt64;
 
-		switch (type)
-		{
-		case valueType::INT32:
-			return static_cast<int64_t>(value.asInt32);
-		case valueType::FLT:
-			return static_cast<int64_t>(value.asFloat);
-		case valueType::DBL:
-			return static_cast<int64_t>(value.asDouble);
-		case valueType::BOOL:
-			return (value.asBool) ? 1 : 0;
-		case valueType::STR:
-			return std::strtoll(valueString.c_str(), nullptr, 10);
-		default:
-			return 0;
-		}
-	}
+        switch (type)
+        {
+        case valueType::INT32:
+            return static_cast<int64_t>(value.asInt32);
+        case valueType::FLT:
+            return static_cast<int64_t>(value.asFloat);
+        case valueType::DBL:
+            return static_cast<int64_t>(value.asDouble);
+        case valueType::BOOL:
+            return (value.asBool) ? 1 : 0;
+        case valueType::STR:
+            return std::strtoll(valueString.c_str(), nullptr, 10);
+        default:
+            return 0;
+        }
+    }
 
-	operator int64_t()
-	{
-		lastValue.asInt64 = getInt64();
-		return lastValue.asInt64;
-	}
+    operator int64_t()
+    {
+        lastValue.asInt64 = getInt64();
+        return lastValue.asInt64;
+    }
 
-	float getFloat() const
-	{
-		if (type == valueType::FLT)
-			return value.asFloat;
+    float getFloat() const
+    {
+        if (type == valueType::FLT)
+            return value.asFloat;
 
-		switch (type)
-		{
-		case valueType::INT32:
-			return static_cast<float>(value.asInt32);
-		case valueType::INT64:
-			return static_cast<float>(value.asInt64);
-		case valueType::FLT:
-			return static_cast<float>(value.asFloat);
-		case valueType::DBL:
-			return static_cast<float>(value.asDouble);
-		case valueType::BOOL:
-			return static_cast<float>((value.asBool) ? 1.0 : 0.0);
-		case valueType::STR:
-			return std::strtof(valueString.c_str(), nullptr);
-		default:
-			return 0.0f;
-		}
-	}
+        switch (type)
+        {
+        case valueType::INT32:
+            return static_cast<float>(value.asInt32);
+        case valueType::INT64:
+            return static_cast<float>(value.asInt64);
+        case valueType::FLT:
+            return static_cast<float>(value.asFloat);
+        case valueType::DBL:
+            return static_cast<float>(value.asDouble);
+        case valueType::BOOL:
+            return static_cast<float>((value.asBool) ? 1.0 : 0.0);
+        case valueType::STR:
+            return std::strtof(valueString.c_str(), nullptr);
+        default:
+            return 0.0f;
+        }
+    }
 
-	operator float()
-	{
-		lastValue.asFloat = getFloat();
-		return lastValue.asFloat;
-	}
+    operator float()
+    {
+        lastValue.asFloat = getFloat();
+        return lastValue.asFloat;
+    }
 
-	double getDouble() const
-	{
-		if (type == valueType::DBL)
-			return value.asDouble;
+    double getDouble() const
+    {
+        if (type == valueType::DBL)
+            return value.asDouble;
 
-		switch (type)
-		{
-		case valueType::INT32:
-			return static_cast<double>(value.asInt32);
-		case valueType::INT64:
-			return static_cast<double>(value.asInt64);
-		case valueType::FLT:
-			return static_cast<double>(value.asFloat);
-		case valueType::DBL:
-			return static_cast<double>(value.asDouble);
-		case valueType::BOOL:
-			return static_cast<double>((value.asBool) ? 1.0 : 0.0);
-		case valueType::STR:
-			return std::strtod(valueString.c_str(), nullptr);
-		default:
-			return 0.0;
-		}
-	}
+        switch (type)
+        {
+        case valueType::INT32:
+            return static_cast<double>(value.asInt32);
+        case valueType::INT64:
+            return static_cast<double>(value.asInt64);
+        case valueType::FLT:
+            return static_cast<double>(value.asFloat);
+        case valueType::DBL:
+            return static_cast<double>(value.asDouble);
+        case valueType::BOOL:
+            return static_cast<double>((value.asBool) ? 1.0 : 0.0);
+        case valueType::STR:
+            return std::strtod(valueString.c_str(), nullptr);
+        default:
+            return 0.0;
+        }
+    }
 
-	operator double()
-	{
-		lastValue.asDouble = getDouble();
-		return lastValue.asDouble;
-	}
+    operator double()
+    {
+        lastValue.asDouble = getDouble();
+        return lastValue.asDouble;
+    }
 
-	bool getBool() const
-	{
-		if (type == valueType::BOOL)
-			return value.asBool;
+    bool getBool() const
+    {
+        if (type == valueType::BOOL)
+            return value.asBool;
 
         // None is false
         if (value.asInt64 == None)
             return false;
 
-		switch (type)
-		{
-		case valueType::INT32:
-			return value.asInt32 != 0 ? true : false;
-		case valueType::INT64:
-			return value.asInt64 != 0 ? true : false;
-		case valueType::FLT:
-			return value.asFloat != 0.0 ? true : false;
-		case valueType::DBL:
-			return value.asDouble != 0.0 ? true : false;
-		case valueType::BOOL:
-			return value.asBool ? true : false;
-		case valueType::STR:
-			// no length, starts with "f/F" or "0" = false, anything else is true
-			return (valueString.length() == 0 ||
-				valueString[0] == 'f' ||
+        switch (type)
+        {
+        case valueType::INT32:
+            return value.asInt32 != 0 ? true : false;
+        case valueType::INT64:
+            return value.asInt64 != 0 ? true : false;
+        case valueType::FLT:
+            return value.asFloat != 0.0 ? true : false;
+        case valueType::DBL:
+            return value.asDouble != 0.0 ? true : false;
+        case valueType::BOOL:
+            return value.asBool ? true : false;
+        case valueType::STR:
+            // no length, starts with "f/F" or "0" = false, anything else is true
+            return (valueString.length() == 0 ||
+                valueString[0] == 'f' ||
                 valueString[0] == 'F' ||
-				valueString == "0") ? false : true;
-		default:
-			return false;
-		}
-	}
+                valueString == "0") ? false : true;
+        default:
+            return false;
+        }
+    }
 
-	operator bool()
-	{
-		lastValue.asBool = getBool();
-		return lastValue.asBool;
-	}
+    operator bool()
+    {
+        lastValue.asBool = getBool();
+        return lastValue.asBool;
+    }
 
-	std::string getString() const
-	{
-		if (type == valueType::STR)
-			return valueString;
+    std::string getString() const
+    {
+        if (type == valueType::STR)
+            return valueString;
 
-		switch (type)
-		{
-		case valueType::INT32:
-			return std::to_string(value.asInt32);
-		case valueType::INT64:
-			return std::to_string(value.asInt64);
-		case valueType::FLT:
-			return trimZeros(std::to_string(value.asFloat));
-		case valueType::DBL:
-			return trimZeros(std::to_string(value.asDouble));
-		case valueType::BOOL:
-			return value.asBool ? "true" : "false";
-		default:
-			return "";
-		}
-	}
+        switch (type)
+        {
+        case valueType::INT32:
+            return std::to_string(value.asInt32);
+        case valueType::INT64:
+            return std::to_string(value.asInt64);
+        case valueType::FLT:
+            return trimZeros(std::to_string(value.asFloat));
+        case valueType::DBL:
+            return trimZeros(std::to_string(value.asDouble));
+        case valueType::BOOL:
+            return value.asBool ? "true" : "false";
+        default:
+            return "";
+        }
+    }
 
     operator std::string() const
-	{
-		return  getString();
-	}
+    {
+        return  getString();
+    }
 
-	std::string* getStringPtr()
-	{
-		if (type != valueType::STR)
-			throw std::runtime_error("getStringPtr can only be called when type is valueType::STR");
-		return &valueString;
-	}
+    std::string* getStringPtr()
+    {
+        if (type != valueType::STR)
+            throw std::runtime_error("getStringPtr can only be called when type is valueType::STR");
+        return &valueString;
+    }
 
-	// overloads... endless overloads
+    // overloads... endless overloads
 
-	bool operator ==(const cvar& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-				return this->getDouble() == right.getDouble();
-			return this->getInt64() == right.getInt64();
-		case valueType::FLT:
-			return this->getFloat() == right.getFloat();
-		case valueType::DBL:
-			return this->getDouble() == right.getDouble();
-		case valueType::BOOL:
-			return this->getBool() == right.getBool();
-		case valueType::STR:
-			if (right.type == valueType::STR)
-				return this->valueString == right.valueString;
-			else if (right.type == valueType::BOOL)
-				return this->getBool() == right.getBool();
-			return *this == right.getString();
-		// TODO - add list/dict/set comparisions 
-		default:
-			return false;
-		}
-	}
+    bool operator ==(const cvar& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+                return this->getDouble() == right.getDouble();
+            return this->getInt64() == right.getInt64();
+        case valueType::FLT:
+            return this->getFloat() == right.getFloat();
+        case valueType::DBL:
+            return this->getDouble() == right.getDouble();
+        case valueType::BOOL:
+            return this->getBool() == right.getBool();
+        case valueType::STR:
+            if (right.type == valueType::STR)
+                return this->valueString == right.valueString;
+            else if (right.type == valueType::BOOL)
+                return this->getBool() == right.getBool();
+            return *this == right.getString();
+        // TODO - add list/dict/set comparisions
+        default:
+            return false;
+        }
+    }
 
-	bool operator <(const cvar& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-				return this->getDouble() < right.getDouble();
-			return this->getInt64() < right.getInt64();
-		case valueType::FLT:
-			return *this < right.getFloat();
-		case valueType::DBL:
-			return *this < right.getDouble();
-		case valueType::BOOL:
-			return *this < right.getBool();
-		case valueType::STR:
-			if (this->type == valueType::STR && right.type == valueType::STR)
-				return this->valueString < right.valueString;
-			return *this < right.getString();
-		default:
-			return false;
-		}
-	}
+    bool operator <(const cvar& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+                return this->getDouble() < right.getDouble();
+            return this->getInt64() < right.getInt64();
+        case valueType::FLT:
+            return *this < right.getFloat();
+        case valueType::DBL:
+            return *this < right.getDouble();
+        case valueType::BOOL:
+            return *this < right.getBool();
+        case valueType::STR:
+            if (this->type == valueType::STR && right.type == valueType::STR)
+                return this->valueString < right.valueString;
+            return *this < right.getString();
+        default:
+            return false;
+        }
+    }
 
-	bool operator >(const cvar& right) const
-	{
-		return (right < *this);
-	}
+    bool operator >(const cvar& right) const
+    {
+        return (right < *this);
+    }
 
-	bool operator !=(const cvar& right) const
-	{
-		return !(*this == right);
-	}
+    bool operator !=(const cvar& right) const
+    {
+        return !(*this == right);
+    }
 
-	bool operator <=(const cvar& right) const
-	{
-		return !(right < *this);
-	}
+    bool operator <=(const cvar& right) const
+    {
+        return !(right < *this);
+    }
 
-	bool operator >=(const cvar& right) const
-	{
-		return !(*this < right);
-	}
+    bool operator >=(const cvar& right) const
+    {
+        return !(*this < right);
+    }
 
-	// unary operator - (negate)
-	cvar operator-() const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-			return cvar{ -1 * this->getInt32() };
-		case valueType::INT64:
-			return cvar{ -1 * this->getInt64() };
-		case valueType::FLT:
-			return cvar{ -1.0 * this->getFloat() };
-		case valueType::DBL:
-			return cvar{ -1.0 * this->getDouble() };
-		case valueType::BOOL:
-			return cvar{ this->getBool() ? false : true };
-		case valueType::STR:
-			return cvar{ "-"s + this->getString() };
-		default:
-			return cvar{ 0 };
-		}
-	}
+    // unary operator - (negate)
+    cvar operator-() const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+            return cvar{ -1 * this->getInt32() };
+        case valueType::INT64:
+            return cvar{ -1 * this->getInt64() };
+        case valueType::FLT:
+            return cvar{ -1.0 * this->getFloat() };
+        case valueType::DBL:
+            return cvar{ -1.0 * this->getDouble() };
+        case valueType::BOOL:
+            return cvar{ this->getBool() ? false : true };
+        case valueType::STR:
+            return cvar{ "-"s + this->getString() };
+        default:
+            return cvar{ 0 };
+        }
+    }
 
-	int len() const
-	{
-		if (type == valueType::LIST)
-			return listValue ? static_cast<int>(listValue->size()) : 0;
-		if (type == valueType::DICT)
-			return dictValue ? static_cast<int>(dictValue->size()) : 0;
-		if (type == valueType::SET)
-			return setValue ? static_cast<int>(setValue->size()) : 0;
-		if (type == valueType::STR)
-			return static_cast<int>(valueString.length());
-		return 0;
-	}
+    int len() const
+    {
+        if (type == valueType::LIST)
+            return listValue ? static_cast<int>(listValue->size()) : 0;
+        if (type == valueType::DICT)
+            return dictValue ? static_cast<int>(dictValue->size()) : 0;
+        if (type == valueType::SET)
+            return setValue ? static_cast<int>(setValue->size()) : 0;
+        if (type == valueType::STR)
+            return static_cast<int>(valueString.length());
+        return 0;
+    }
 
-	static int len(const cvar& value)
-	{
-		return value.len();
-	}
+    static int len(const cvar& value)
+    {
+        return value.len();
+    }
 
 private:
-	void add(const cvar& right) const
-	{
-		if (type != valueType::SET) // throw
-			throw std::runtime_error("left value must of type Set");
+    void add(const cvar& right) const
+    {
+        if (type != valueType::SET) // throw
+            throw std::runtime_error("left value must of type Set");
 
-		setValue->insert(right);
-	}
+        setValue->insert(right);
+    }
 
-	void append(const cvar& other) const
-	{
-		if (other.type == valueType::LIST &&
-			type == valueType::LIST) // glue to lists together, return product
-		{
-			appendList(other);
-			return;
-		}
-		else if (other.type == valueType::DICT &&
-			type == valueType::DICT) // throw
-		{
-			appendDict(other);
-			return;
-		}
-		else if (other.type == valueType::SET &&
-			type == valueType::SET) // throw
-		{
-			appendSet(other);
-			return;
-		}
+    void append(const cvar& other) const
+    {
+        if (other.type == valueType::LIST &&
+            type == valueType::LIST) // glue to lists together, return product
+        {
+            appendList(other);
+            return;
+        }
+        else if (other.type == valueType::DICT &&
+            type == valueType::DICT) // throw
+        {
+            appendDict(other);
+            return;
+        }
+        else if (other.type == valueType::SET &&
+            type == valueType::SET) // throw
+        {
+            appendSet(other);
+            return;
+        }
 
-		if (type == valueType::LIST)
-			listValue->push_back(other);
-		else if (type == valueType::SET)
-			setValue->insert(other);
-		else
-			std::runtime_error("left and right types must be the same, or left must be list or set");
-	}
+        if (type == valueType::LIST)
+            listValue->push_back(other);
+        else if (type == valueType::SET)
+            setValue->insert(other);
+        else
+            std::runtime_error("left and right types must be the same, or left must be list or set");
+    }
 
-	static cvar append(const cvar& left, const cvar& right)
-	{
-		auto result = left;
-		result.append(right);
-		return result;
-	}
+    static cvar append(const cvar& left, const cvar& right)
+    {
+        auto result = left;
+        result.append(right);
+        return result;
+    }
 
-	void appendList(const cvar& other) const
-	{	
-		if (type != valueType::LIST ||
-			other.type != valueType::LIST) // glue to lists together, return product
-			throw std::runtime_error("only List containers can be merged with List containers");
+    void appendList(const cvar& other) const
+    {
+        if (type != valueType::LIST ||
+            other.type != valueType::LIST) // glue to lists together, return product
+            throw std::runtime_error("only List containers can be merged with List containers");
 
-		for (auto &item : *other.getList())
-			(*this->listValue).push_back(item);
-	}
+        for (auto &item : *other.getList())
+            (*this->listValue).push_back(item);
+    }
 
-	void appendDict(const cvar& other) const
-	{
-		if (type != valueType::DICT ||
-			other.type != valueType::DICT) // glue to lists together, return product
-			throw std::runtime_error("only Dict containers can be merged with Dict containers");
+    void appendDict(const cvar& other) const
+    {
+        if (type != valueType::DICT ||
+            other.type != valueType::DICT) // glue to lists together, return product
+            throw std::runtime_error("only Dict containers can be merged with Dict containers");
 
-		for (auto &pair : *other.getDict())
-			(*this->dictValue)[pair.first] = pair.second;
+        for (auto &pair : *other.getDict())
+            (*this->dictValue)[pair.first] = pair.second;
 
-	}
+    }
 
-	void appendSet(const cvar& other) const
-	{
-		if (type != valueType::SET ||
-			other.type != valueType::SET) // glue to lists together, return product
-			throw std::runtime_error("only Set types can be merged with Set types");
+    void appendSet(const cvar& other) const
+    {
+        if (type != valueType::SET ||
+            other.type != valueType::SET) // glue to lists together, return product
+            throw std::runtime_error("only Set types can be merged with Set types");
 
-		for (auto &item : *other.getSet())
-			add(item);
-	}
+        for (auto &item : *other.getSet())
+            add(item);
+    }
 
-	void remove(const cvar& other) const
-	{
-		if (type == valueType::LIST) // glue to lists together, return product
-		{
-			removeList(other);
-			return;
-		}
-		else if (type == valueType::DICT)
-		{
-			removeDict(other);
-			return;
-		}
-		else if (type == valueType::SET) 
-		{
-			removeSet(other);
-			return;
-		}
+    void remove(const cvar& other) const
+    {
+        if (type == valueType::LIST) // glue to lists together, return product
+        {
+            removeList(other);
+            return;
+        }
+        else if (type == valueType::DICT)
+        {
+            removeDict(other);
+            return;
+        }
+        else if (type == valueType::SET)
+        {
+            removeSet(other);
+            return;
+        }
 
-		throw std::runtime_error("left must be a list, dict or set");
-	}
+        throw std::runtime_error("left must be a list, dict or set");
+    }
 
-	static cvar remove(const cvar& left, const cvar& right)
-	{
-		auto result = left;
-		result.remove(right);
-		return result;
-	}
-	
-	void removeSet(const cvar& other) const
-	{
-		if (type != valueType::SET)
-			throw std::runtime_error("set subtraction can only be called on sets");
+    static cvar remove(const cvar& left, const cvar& right)
+    {
+        auto result = left;
+        result.remove(right);
+        return result;
+    }
 
-		if (other.typeOf() == valueType::DICT)
-			throw std::runtime_error("dictionaries cannot be subtracted from sets");
+    void removeSet(const cvar& other) const
+    {
+        if (type != valueType::SET)
+            throw std::runtime_error("set subtraction can only be called on sets");
 
-		if (other.typeOf() == valueType::LIST)
-		{
-			for (auto &i : *(other.getList()))
-				if (setValue->count(i))
-					setValue->erase(i);				
-		}
-		else if (other.typeOf() == valueType::SET)
-		{
-			for (auto &i : *(other.getSet()))
-				if (setValue->count(i))
-					setValue->erase(i);
-		}
-		else
-		{
-			if (setValue->count(other))
-				setValue->erase(other);
-		}
-	}
+        if (other.typeOf() == valueType::DICT)
+            throw std::runtime_error("dictionaries cannot be subtracted from sets");
 
-	void removeDict(const cvar& other) const
-	{
-		if (type != valueType::DICT)
-			throw std::runtime_error("dict subtraction can only be called on dicts");
+        if (other.typeOf() == valueType::LIST)
+        {
+            for (auto &i : *(other.getList()))
+                if (setValue->count(i))
+                    setValue->erase(i);
+        }
+        else if (other.typeOf() == valueType::SET)
+        {
+            for (auto &i : *(other.getSet()))
+                if (setValue->count(i))
+                    setValue->erase(i);
+        }
+        else
+        {
+            if (setValue->count(other))
+                setValue->erase(other);
+        }
+    }
 
-		if (other.typeOf() == valueType::DICT)
-		{
-			for (auto &i : *(other.getDict()))
-				if (dictValue->count(i))
-					dictValue->erase(i);
-		}
-		if (other.typeOf() == valueType::LIST)
-		{
-			for (auto &i : *(other.getList()))
-				if (dictValue->count(i))
-					dictValue->erase(i);
-		}
-		else if (other.typeOf() == valueType::SET)
-		{
-			for (auto &i : *(other.getSet()))
-				if (dictValue->count(i))
-					dictValue->erase(i);
-		}
-		else
-		{
-			if (dictValue->count(other))
-				dictValue->erase(other);
-		}
-	}
+    void removeDict(const cvar& other) const
+    {
+        if (type != valueType::DICT)
+            throw std::runtime_error("dict subtraction can only be called on dicts");
 
-	void removeList(const cvar& other) const
-	{
-		if (type != valueType::LIST)
-			throw std::runtime_error("list subtraction can only be called on lists");
+        if (other.typeOf() == valueType::DICT)
+        {
+            for (auto &i : *(other.getDict()))
+                if (dictValue->count(i))
+                    dictValue->erase(i);
+        }
+        if (other.typeOf() == valueType::LIST)
+        {
+            for (auto &i : *(other.getList()))
+                if (dictValue->count(i))
+                    dictValue->erase(i);
+        }
+        else if (other.typeOf() == valueType::SET)
+        {
+            for (auto &i : *(other.getSet()))
+                if (dictValue->count(i))
+                    dictValue->erase(i);
+        }
+        else
+        {
+            if (dictValue->count(other))
+                dictValue->erase(other);
+        }
+    }
 
-		// the approach here is to make an unordered set
-		// of items, or the keys for items, for the `other` variable
-		// we will iterate the list, and if the other items are not in
-		// the list we will append them
+    void removeList(const cvar& other) const
+    {
+        if (type != valueType::LIST)
+            throw std::runtime_error("list subtraction can only be called on lists");
 
-		std::vector<cvar> result;
-		std::unordered_set<cvar> otherItems;
+        // the approach here is to make an unordered set
+        // of items, or the keys for items, for the `other` variable
+        // we will iterate the list, and if the other items are not in
+        // the list we will append them
 
-		if (other.typeOf() == valueType::DICT)
-		{
-			for (auto &i : *(other.getDict()))
-				otherItems.insert(i.first);
-			for (auto &i : *listValue)
-				if (!otherItems.count(i))
-					result.push_back(i);
-			*listValue = result;
-		}
-		if (other.typeOf() == valueType::LIST)
-		{
-			for (auto &i : *(other.getList()))
-				otherItems.insert(i);
-			for (auto &i : *listValue)
-				if (!otherItems.count(i))
-					result.push_back(i);
-			*listValue = result;
-		}
-		else if (other.typeOf() == valueType::SET)
-		{
-			for (auto &i : *(other.getSet()))
-				otherItems.insert(i);
-			for (auto &i : *listValue)
-				if (!otherItems.count(i))
-					result.push_back(i);
-			*listValue = result;
-		}
-		else
-		{
-			for (auto &i : *listValue)
-				if (i != other)
-					result.push_back(i);
-			*listValue = result;
-		}
-	}
+        std::vector<cvar> result;
+        std::unordered_set<cvar> otherItems;
+
+        if (other.typeOf() == valueType::DICT)
+        {
+            for (auto &i : *(other.getDict()))
+                otherItems.insert(i.first);
+            for (auto &i : *listValue)
+                if (!otherItems.count(i))
+                    result.push_back(i);
+            *listValue = result;
+        }
+        if (other.typeOf() == valueType::LIST)
+        {
+            for (auto &i : *(other.getList()))
+                otherItems.insert(i);
+            for (auto &i : *listValue)
+                if (!otherItems.count(i))
+                    result.push_back(i);
+            *listValue = result;
+        }
+        else if (other.typeOf() == valueType::SET)
+        {
+            for (auto &i : *(other.getSet()))
+                otherItems.insert(i);
+            for (auto &i : *listValue)
+                if (!otherItems.count(i))
+                    result.push_back(i);
+            *listValue = result;
+        }
+        else
+        {
+            for (auto &i : *listValue)
+                if (i != other)
+                    result.push_back(i);
+            *listValue = result;
+        }
+    }
 
 public:
 
-	cvar operator+(const cvar& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-				return cvar{ this->getDouble() + right.getDouble() };
-			return { *this + right.getInt64() };
-		case valueType::FLT:
-			return cvar{ *this + right.getFloat() };
-		case valueType::DBL:
-			return cvar{ *this + right.getDouble() };
-		case valueType::BOOL:
-			return cvar{ this->getInt64() + right.getInt64() };
-		case valueType::STR:
-			if (right.type == valueType::STR)
-				return cvar{ this->valueString + right.valueString };
-			else
-				return cvar{ this->getString() + right.getString() };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return append(*this, right);
-		default:
-			return cvar{ 0 };
-		}
-	}
+    cvar operator+(const cvar& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+                return cvar{ this->getDouble() + right.getDouble() };
+            return { *this + right.getInt64() };
+        case valueType::FLT:
+            return cvar{ *this + right.getFloat() };
+        case valueType::DBL:
+            return cvar{ *this + right.getDouble() };
+        case valueType::BOOL:
+            return cvar{ this->getInt64() + right.getInt64() };
+        case valueType::STR:
+            if (right.type == valueType::STR)
+                return cvar{ this->valueString + right.valueString };
+            else
+                return cvar{ this->getString() + right.getString() };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return append(*this, right);
+        default:
+            return cvar{ 0 };
+        }
+    }
 
-	cvar operator+(const int& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() + right };
-		case valueType::BOOL:
-			return cvar{ this->getBool() && (right != 0) };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() + right };
-		case valueType::STR:
-			return cvar{ this->getString() + std::to_string(right) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return append(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator+(const int& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() + right };
+        case valueType::BOOL:
+            return cvar{ this->getBool() && (right != 0) };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() + right };
+        case valueType::STR:
+            return cvar{ this->getString() + std::to_string(right) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return append(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator+(const int64_t& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() + right };
-		case valueType::BOOL:
-			return cvar{ this->getBool() && (right != 0) };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() + right };
-		case valueType::STR:
-			return cvar{ this->getString() + std::to_string(right) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return append(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator+(const int64_t& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() + right };
+        case valueType::BOOL:
+            return cvar{ this->getBool() && (right != 0) };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() + right };
+        case valueType::STR:
+            return cvar{ this->getString() + std::to_string(right) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return append(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator+(const double& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() + right };
-		case valueType::BOOL:
-			return cvar{ this->getBool() && (right != 0) };
-		case valueType::STR:
-			return cvar{ this->getString() + std::to_string(right) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return append(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator+(const double& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() + right };
+        case valueType::BOOL:
+            return cvar{ this->getBool() && (right != 0) };
+        case valueType::STR:
+            return cvar{ this->getString() + std::to_string(right) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return append(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator+(const float& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() + static_cast<double>(right) };
-		case valueType::BOOL:
-			return cvar{ this->getBool() && (right != 0) };
-		case valueType::STR:
-			return cvar{ this->getString() + std::to_string(right) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return append(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator+(const float& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() + static_cast<double>(right) };
+        case valueType::BOOL:
+            return cvar{ this->getBool() && (right != 0) };
+        case valueType::STR:
+            return cvar{ this->getString() + std::to_string(right) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return append(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator+(std::string& right) const
-	{
-		if (type == valueType::LIST || type == valueType::SET)
-			return append(*this, cvar{ right });
-		if (type == valueType::DICT)
-			throw std::runtime_error("Dict types and string types cannot be concatinated");
+    cvar operator+(std::string& right) const
+    {
+        if (type == valueType::LIST || type == valueType::SET)
+            return append(*this, cvar{ right });
+        if (type == valueType::DICT)
+            throw std::runtime_error("Dict types and string types cannot be concatinated");
 
-		return cvar{ this->getString() + right };
-	}
+        return cvar{ this->getString() + right };
+    }
 
-	cvar operator+(const std::string& right) const
-	{
-		if (type == valueType::LIST || type == valueType::SET)
-			return append(*this, cvar{ right });
-		if (type == valueType::DICT)
-			throw std::runtime_error("Dict types and string types cannot be concatinated");
+    cvar operator+(const std::string& right) const
+    {
+        if (type == valueType::LIST || type == valueType::SET)
+            return append(*this, cvar{ right });
+        if (type == valueType::DICT)
+            throw std::runtime_error("Dict types and string types cannot be concatinated");
 
-		return cvar{ this->getString() + right };
-	}
+        return cvar{ this->getString() + right };
+    }
 
-	cvar operator+(const char* right) const
-	{
-		if (type == valueType::LIST || type == valueType::SET)
-			return append(*this, cvar{ right });
-		if (type == valueType::DICT)
-			throw std::runtime_error("Dict types and string types cannot be concatinated");
+    cvar operator+(const char* right) const
+    {
+        if (type == valueType::LIST || type == valueType::SET)
+            return append(*this, cvar{ right });
+        if (type == valueType::DICT)
+            throw std::runtime_error("Dict types and string types cannot be concatinated");
 
-		return cvar{ this->getString() + std::string{right} };
-	}
+        return cvar{ this->getString() + std::string{right} };
+    }
 
-	cvar& operator+=(const cvar& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const cvar& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar& operator+=(const int& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const int& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar& operator+=(const int64_t& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const int64_t& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
 #ifndef _MSC_VER
     // gcc seems to see long long as not being the same as int64_t
@@ -1584,878 +1669,878 @@ public:
     }
 #endif
 
-	cvar& operator+=(const float& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const float& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar& operator+=(const double& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const double& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar& operator+=(const std::string& right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const std::string& right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar& operator+=(const char* right)
-	{
-		*this = *this + right;
-		return *this;
-	}
+    cvar& operator+=(const char* right)
+    {
+        *this = *this + right;
+        return *this;
+    }
 
-	cvar operator*(const cvar& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-				return cvar{ this->getDouble() * right.getDouble() };
-			return cvar{ *this * right.getInt64() };
-		case valueType::FLT:
-			return cvar{ *this * right.getFloat() };
-		case valueType::DBL:
-			return cvar{ *this * right.getDouble() };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types cannot be multiplied");
-		default:
-			return cvar{ 0 };
-		}
-	}
+    cvar operator*(const cvar& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+                return cvar{ this->getDouble() * right.getDouble() };
+            return cvar{ *this * right.getInt64() };
+        case valueType::FLT:
+            return cvar{ *this * right.getFloat() };
+        case valueType::DBL:
+            return cvar{ *this * right.getDouble() };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types cannot be multiplied");
+        default:
+            return cvar{ 0 };
+        }
+    }
 
-	cvar operator*(const int& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() * right };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() * right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types cannot be multiplied");
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator*(const int& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() * right };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() * right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types cannot be multiplied");
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator*(const int64_t& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() * right };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() * right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-			throw std::runtime_error("Container types cannot be multiplied");
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator*(const int64_t& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() * right };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() * right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+            throw std::runtime_error("Container types cannot be multiplied");
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator*(const double& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() * right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types cannot be multiplied");
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator*(const double& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() * right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types cannot be multiplied");
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator*(const float& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() * static_cast<double>(right) };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-			throw std::runtime_error("Container types cannot be multiplied");
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar operator*(const float& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() * static_cast<double>(right) };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+            throw std::runtime_error("Container types cannot be multiplied");
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar operator*(std::string& right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
+    cvar operator*(std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
 
-		return cvar{ right }; // not right
-	}
+        return cvar{ right }; // not right
+    }
 
-	cvar operator*(const std::string& right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
+    cvar operator*(const std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
 
-		return cvar{ right }; // not right
-	}
+        return cvar{ right }; // not right
+    }
 
-	cvar operator*(const char* right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
+    cvar operator*(const char* right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
 
-		return cvar{ std::string{right} }; // not right
-	}
-
-
-	cvar& operator*=(const cvar& right)
-	{
-		*this = *this * right;
-		return *this;
-	}
-
-	cvar& operator*=(const int& right)
-	{
-		*this = *this * right;
-		return *this;
-	}
-
-	cvar& operator*=(const int64_t& right)
-	{
-		*this = *this * right;
-		return *this;
-	}
-
-	cvar& operator*=(const float& right)
-	{
-		*this = *this * right;
-		return *this;
-	}
-
-	cvar& operator*=(const double& right)
-	{
-		*this = *this * right;
-		return *this;
-	}
-
-	cvar& operator*=(const std::string& right)
-	{
-		// TODO smarter
-		return *this;
-	}
-
-	cvar& operator*=(const char* right)
-	{
-		// TODO smarter
-		return *this;
-	}
-
-	cvar operator/(const cvar& right) const
-	{
-		// divide by zero returns zero
-		if (right == 0)	return cvar{ 0 };
-
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-			{
-				const auto tmp = right.getDouble();
-				if (tmp == 0)
-					throw std::runtime_error("divide by zero");
-				return cvar{ this->getDouble() / tmp };
-			}
-			{
-				const auto tmp = right.getInt64();
-				if (tmp == 0)
-					throw std::runtime_error("divide by zero");
-				return cvar{ *this / tmp };
-			}
-		case valueType::FLT:
-			{
-				const auto tmp = right.getFloat();
-				if (tmp == 0)
-					throw std::runtime_error("divide by zero");
-				return cvar{ *this / tmp };
-			}
-		case valueType::DBL:
-			{
-				const auto tmp = right.getDouble();
-				if (tmp == 0)
-					throw std::runtime_error("divide by zero");
-				return cvar{ *this / tmp };
-			}
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types are not divisable");
-		default:
-			return cvar{ 0 };
-		}
-	}
-
-	cvar operator/(const int& right) const
-	{
-		// divide by zero returns zero
-		if (right == 0)	return cvar{ 0 };
-
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() / right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() / right };
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types are not divisable");
-
-		default:
-			return cvar{ right };
-		}
-	}
-
-	cvar operator/(const int64_t& right) const
-	{
-		// divide by zero returns zero
-		if (right == 0)	return cvar{ 0 };
-
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			return cvar{ this->getInt64() / right };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() / right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types are not divisable");
-		default:
-			return cvar{ right };
-		}
-	}
-
-	cvar operator/(const double& right) const
-	{
-		// divide by zero returns zero
-		if (right == 0)	return cvar{ 0 };
-
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() / right };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types are not divisable");
-		default:
-			return cvar{ right };
-		}
-	}
-
-	cvar operator/(const float& right) const
-	{
-		// divide by zero returns zero
-		if (right == 0)	return cvar{ 0 };
-
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() / static_cast<double>(right) };
-		case valueType::BOOL:
-			return cvar{ right }; // todo - make smarter
-		case valueType::STR:
-			return cvar{ right }; // todo - make smarter
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			throw std::runtime_error("Container types are not divisable");
-		default:
-			return cvar{ right };
-		}
-	}
-
-	cvar operator/(std::string& right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
-		return cvar{ right }; // not right
-	}
-
-	cvar operator/(const std::string& right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
-		return cvar{ right }; // not right
-	}
-
-	cvar operator/(const char* right) const
-	{
-		if (type == valueType::LIST ||
-			type == valueType::DICT ||
-			type == valueType::SET)
-			throw std::runtime_error("Container types cannot be multiplied");
-		return cvar{ std::string{ right } }; // not right
-	}
+        return cvar{ std::string{right} }; // not right
+    }
 
 
-	cvar& operator/=(const cvar& right)
-	{
-		*this = *this / right;
-		return *this;
-	}
+    cvar& operator*=(const cvar& right)
+    {
+        *this = *this * right;
+        return *this;
+    }
 
-	cvar& operator/=(const int& right)
-	{
-		*this = *this / right;
-		return *this;
-	}
+    cvar& operator*=(const int& right)
+    {
+        *this = *this * right;
+        return *this;
+    }
 
-	cvar& operator/=(const int64_t& right)
-	{
-		*this = *this / right;
-		return *this;
-	}
+    cvar& operator*=(const int64_t& right)
+    {
+        *this = *this * right;
+        return *this;
+    }
 
-	cvar& operator/=(const float& right)
-	{
-		*this = *this / right;
-		return *this;
-	}
+    cvar& operator*=(const float& right)
+    {
+        *this = *this * right;
+        return *this;
+    }
 
-	cvar& operator/=(const double& right)
-	{
-		*this = *this / right;
-		return *this;
-	}
+    cvar& operator*=(const double& right)
+    {
+        *this = *this * right;
+        return *this;
+    }
 
-	cvar& operator/=(const std::string& right)
-	{
-		// TODO smarter
-		return *this;
-	}
+    cvar& operator*=(const std::string& right)
+    {
+        // TODO smarter
+        return *this;
+    }
 
-	cvar& operator/=(const char* right)
-	{
-		// TODO smarter
-		return *this;
-	}
+    cvar& operator*=(const char* right)
+    {
+        // TODO smarter
+        return *this;
+    }
+
+    cvar operator/(const cvar& right) const
+    {
+        // divide by zero returns zero
+        if (right == 0)	return cvar{ 0 };
+
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+            {
+                const auto tmp = right.getDouble();
+                if (tmp == 0)
+                    throw std::runtime_error("divide by zero");
+                return cvar{ this->getDouble() / tmp };
+            }
+            {
+                const auto tmp = right.getInt64();
+                if (tmp == 0)
+                    throw std::runtime_error("divide by zero");
+                return cvar{ *this / tmp };
+            }
+        case valueType::FLT:
+            {
+                const auto tmp = right.getFloat();
+                if (tmp == 0)
+                    throw std::runtime_error("divide by zero");
+                return cvar{ *this / tmp };
+            }
+        case valueType::DBL:
+            {
+                const auto tmp = right.getDouble();
+                if (tmp == 0)
+                    throw std::runtime_error("divide by zero");
+                return cvar{ *this / tmp };
+            }
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types are not divisable");
+        default:
+            return cvar{ 0 };
+        }
+    }
+
+    cvar operator/(const int& right) const
+    {
+        // divide by zero returns zero
+        if (right == 0)	return cvar{ 0 };
+
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() / right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() / right };
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types are not divisable");
+
+        default:
+            return cvar{ right };
+        }
+    }
+
+    cvar operator/(const int64_t& right) const
+    {
+        // divide by zero returns zero
+        if (right == 0)	return cvar{ 0 };
+
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            return cvar{ this->getInt64() / right };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() / right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types are not divisable");
+        default:
+            return cvar{ right };
+        }
+    }
+
+    cvar operator/(const double& right) const
+    {
+        // divide by zero returns zero
+        if (right == 0)	return cvar{ 0 };
+
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() / right };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types are not divisable");
+        default:
+            return cvar{ right };
+        }
+    }
+
+    cvar operator/(const float& right) const
+    {
+        // divide by zero returns zero
+        if (right == 0)	return cvar{ 0 };
+
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() / static_cast<double>(right) };
+        case valueType::BOOL:
+            return cvar{ right }; // todo - make smarter
+        case valueType::STR:
+            return cvar{ right }; // todo - make smarter
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            throw std::runtime_error("Container types are not divisable");
+        default:
+            return cvar{ right };
+        }
+    }
+
+    cvar operator/(std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
+        return cvar{ right }; // not right
+    }
+
+    cvar operator/(const std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
+        return cvar{ right }; // not right
+    }
+
+    cvar operator/(const char* right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            throw std::runtime_error("Container types cannot be multiplied");
+        return cvar{ std::string{ right } }; // not right
+    }
 
 
-	cvar operator-(const cvar& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-			if (right.type == valueType::DBL || right.type == valueType::FLT)
-				return cvar{ this->getDouble() - right.getDouble() };
-			return cvar{ *this - right.getInt64() };
-		case valueType::FLT:
-			return cvar{ *this - right.getFloat() };
-		case valueType::DBL:
-			return cvar{ *this - right.getDouble() };
-		case valueType::BOOL:
-			return cvar{ this->getInt64() + right.getInt64() };
-		case valueType::STR:
-			if (this->type == valueType::STR && right.type == valueType::STR)
-				return cvar{ subStrings(this->valueString, right.valueString) };
-			else
-				return cvar{ subStrings(this->getString(), right.getString()) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return remove(*this, cvar{ right });
+    cvar& operator/=(const cvar& right)
+    {
+        *this = *this / right;
+        return *this;
+    }
 
-		default:
-			return cvar{ 0 };
-		}
-	}
+    cvar& operator/=(const int& right)
+    {
+        *this = *this / right;
+        return *this;
+    }
 
-	cvar operator-(const int& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::BOOL:
-			return cvar{ this->getInt64() - right };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() - right };
-		case valueType::STR:
-			return cvar{ subStrings(this->getString(), std::to_string(right)) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return remove(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar& operator/=(const int64_t& right)
+    {
+        *this = *this / right;
+        return *this;
+    }
 
-	cvar operator-(const int64_t& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::BOOL:
-			return cvar{ this->getInt64() - right };
-		case valueType::FLT:
-		case valueType::DBL:
-			return cvar{ this->getDouble() - right };
-		case valueType::STR:
-			return cvar{ subStrings(this->getString(), std::to_string(right)) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return remove(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar& operator/=(const float& right)
+    {
+        *this = *this / right;
+        return *this;
+    }
 
-	cvar operator-(const double& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-		case valueType::BOOL:
-			return cvar{ this->getDouble() - right };
-		case valueType::STR:
-			return cvar{ subStrings(this->getString(), std::to_string(right)) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return remove(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar& operator/=(const double& right)
+    {
+        *this = *this / right;
+        return *this;
+    }
 
-	cvar operator-(const float& right) const
-	{
-		switch (type)
-		{
-		case valueType::INT32:
-		case valueType::INT64:
-		case valueType::FLT:
-		case valueType::DBL:
-		case valueType::BOOL:
-			return cvar{ this->getDouble() - static_cast<double>(right) };
-		case valueType::STR:
-			return cvar{ subStrings(this->getString(), std::to_string(right)) };
-		case valueType::LIST:
-		case valueType::DICT:
-		case valueType::SET:
-			return remove(*this, cvar{ right });
-		default:
-			return cvar{ right };
-		}
-	}
+    cvar& operator/=(const std::string& right)
+    {
+        // TODO smarter
+        return *this;
+    }
 
-	cvar operator-(std::string& right) const
-	{
-		if (type == valueType::LIST || 
-			type == valueType::DICT ||
-			type == valueType::SET)
-			return remove(*this, cvar{ right });
-		return cvar{ subStrings(this->getString(), right) };
-	}
+    cvar& operator/=(const char* right)
+    {
+        // TODO smarter
+        return *this;
+    }
 
-	cvar operator-(const std::string& right) const
-	{
-		if (type == valueType::LIST || 
-			type == valueType::DICT ||
-			type == valueType::SET)
-			return remove(*this, cvar{ right });
-		return cvar{ subStrings(this->getString(), right) };
-	}
 
-	cvar operator-(const char* right) const
-	{
-		if (type == valueType::LIST || 
-			type == valueType::DICT ||
-			type == valueType::SET)
-			return remove(*this, cvar{ right });
-		return cvar{ subStrings(this->getString(), std::string{right}) };
-	}
+    cvar operator-(const cvar& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+            if (right.type == valueType::DBL || right.type == valueType::FLT)
+                return cvar{ this->getDouble() - right.getDouble() };
+            return cvar{ *this - right.getInt64() };
+        case valueType::FLT:
+            return cvar{ *this - right.getFloat() };
+        case valueType::DBL:
+            return cvar{ *this - right.getDouble() };
+        case valueType::BOOL:
+            return cvar{ this->getInt64() + right.getInt64() };
+        case valueType::STR:
+            if (this->type == valueType::STR && right.type == valueType::STR)
+                return cvar{ subStrings(this->valueString, right.valueString) };
+            else
+                return cvar{ subStrings(this->getString(), right.getString()) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return remove(*this, cvar{ right });
 
-	cvar& operator-=(const cvar& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+        default:
+            return cvar{ 0 };
+        }
+    }
 
-	cvar& operator-=(const int& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(const int& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::BOOL:
+            return cvar{ this->getInt64() - right };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() - right };
+        case valueType::STR:
+            return cvar{ subStrings(this->getString(), std::to_string(right)) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return remove(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar& operator-=(const int64_t& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(const int64_t& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::BOOL:
+            return cvar{ this->getInt64() - right };
+        case valueType::FLT:
+        case valueType::DBL:
+            return cvar{ this->getDouble() - right };
+        case valueType::STR:
+            return cvar{ subStrings(this->getString(), std::to_string(right)) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return remove(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar& operator-=(const float& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(const double& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+        case valueType::BOOL:
+            return cvar{ this->getDouble() - right };
+        case valueType::STR:
+            return cvar{ subStrings(this->getString(), std::to_string(right)) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return remove(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar& operator-=(const double& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(const float& right) const
+    {
+        switch (type)
+        {
+        case valueType::INT32:
+        case valueType::INT64:
+        case valueType::FLT:
+        case valueType::DBL:
+        case valueType::BOOL:
+            return cvar{ this->getDouble() - static_cast<double>(right) };
+        case valueType::STR:
+            return cvar{ subStrings(this->getString(), std::to_string(right)) };
+        case valueType::LIST:
+        case valueType::DICT:
+        case valueType::SET:
+            return remove(*this, cvar{ right });
+        default:
+            return cvar{ right };
+        }
+    }
 
-	cvar& operator-=(const std::string& right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            return remove(*this, cvar{ right });
+        return cvar{ subStrings(this->getString(), right) };
+    }
 
-	cvar& operator-=(const char* right)
-	{
-		*this = *this - right;
-		return *this;
-	}
+    cvar operator-(const std::string& right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            return remove(*this, cvar{ right });
+        return cvar{ subStrings(this->getString(), right) };
+    }
 
-	// << overload for std::ostream 
-	friend std::ostream& operator<<(std::ostream& os, const cvar& source)
-	{
-		const auto result = source.getString();
-		os << result;
-		return os;
-	}
+    cvar operator-(const char* right) const
+    {
+        if (type == valueType::LIST ||
+            type == valueType::DICT ||
+            type == valueType::SET)
+            return remove(*this, cvar{ right });
+        return cvar{ subStrings(this->getString(), std::string{right}) };
+    }
 
-	// == operator overloads for all the POD types
-	friend bool operator ==(const int& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const int& right);
-	friend bool operator ==(const int64_t& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const int64_t& right);
+    cvar& operator-=(const cvar& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const int& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const int64_t& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const float& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const double& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const std::string& right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    cvar& operator-=(const char* right)
+    {
+        *this = *this - right;
+        return *this;
+    }
+
+    // << overload for std::ostream
+    friend std::ostream& operator<<(std::ostream& os, const cvar& source)
+    {
+        const auto result = source.getString();
+        os << result;
+        return os;
+    }
+
+    // == operator overloads for all the POD types
+    friend bool operator ==(const int& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const int& right);
+    friend bool operator ==(const int64_t& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const int64_t& right);
 #ifndef _MSC_VER
     friend bool operator ==(const long long int& left, const cvar& right);
     friend bool operator ==(const cvar& left, const long long int& right);
 #endif
-	friend bool operator ==(const float& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const float& right);
-	friend bool operator ==(const double& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const double& right);
-	friend bool operator ==(const bool& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const bool& right);
-	friend bool operator ==(const std::string& left, const cvar& right);
-	friend bool operator ==(const cvar& left, const std::string& right);
-	friend bool operator ==(const char* left, const cvar& right);
-	friend bool operator ==(const cvar& left, const char* right);
+    friend bool operator ==(const float& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const float& right);
+    friend bool operator ==(const double& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const double& right);
+    friend bool operator ==(const bool& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const bool& right);
+    friend bool operator ==(const std::string& left, const cvar& right);
+    friend bool operator ==(const cvar& left, const std::string& right);
+    friend bool operator ==(const char* left, const cvar& right);
+    friend bool operator ==(const cvar& left, const char* right);
 
-	// != operator overloads for all the POD types (uses the == overload)
-	friend bool operator !=(const int& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const int& right);
-	friend bool operator !=(const int64_t& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const int64_t& right);
+    // != operator overloads for all the POD types (uses the == overload)
+    friend bool operator !=(const int& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const int& right);
+    friend bool operator !=(const int64_t& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const int64_t& right);
 #ifndef _MSC_VER
     friend bool operator !=(const long long int& left, const cvar& right);
     friend bool operator !=(const cvar& left, const long long int& right);
 #endif
-	friend bool operator !=(const float& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const float& right);
-	friend bool operator !=(const double& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const double& right);
-	friend bool operator !=(const bool& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const bool& right);
-	friend bool operator !=(const std::string& left, const cvar& right);
-	friend bool operator !=(const cvar& left, const std::string& right);
-	friend bool operator !=(const char* left, const cvar& right);
-	friend bool operator !=(const cvar& left, const char* right);
+    friend bool operator !=(const float& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const float& right);
+    friend bool operator !=(const double& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const double& right);
+    friend bool operator !=(const bool& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const bool& right);
+    friend bool operator !=(const std::string& left, const cvar& right);
+    friend bool operator !=(const cvar& left, const std::string& right);
+    friend bool operator !=(const char* left, const cvar& right);
+    friend bool operator !=(const cvar& left, const char* right);
 
-	// < operator overloads for all the POD types
-	friend bool operator <(const int& left, const cvar& right);
-	friend bool operator <(const cvar& left, const int& right);
-	friend bool operator <(const int64_t& left, const cvar& right);
-	friend bool operator <(const cvar& left, const int64_t& right);
-	friend bool operator <(const float& left, const cvar& right);
-	friend bool operator <(const cvar& left, const float& right);
-	friend bool operator <(const double& left, const cvar& right);
-	friend bool operator <(const cvar& left, const double& right);
-	friend bool operator <(const bool& left, const cvar& right);
-	friend bool operator <(const cvar& left, const bool& right);
-	friend bool operator <(const std::string& left, const cvar& right);
-	friend bool operator <(const cvar& left, const std::string& right);
+    // < operator overloads for all the POD types
+    friend bool operator <(const int& left, const cvar& right);
+    friend bool operator <(const cvar& left, const int& right);
+    friend bool operator <(const int64_t& left, const cvar& right);
+    friend bool operator <(const cvar& left, const int64_t& right);
+    friend bool operator <(const float& left, const cvar& right);
+    friend bool operator <(const cvar& left, const float& right);
+    friend bool operator <(const double& left, const cvar& right);
+    friend bool operator <(const cvar& left, const double& right);
+    friend bool operator <(const bool& left, const cvar& right);
+    friend bool operator <(const cvar& left, const bool& right);
+    friend bool operator <(const std::string& left, const cvar& right);
+    friend bool operator <(const cvar& left, const std::string& right);
 
-	// <= operator overloads for all the POD types
-	friend bool operator <=(const int& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const int& right);
-	friend bool operator <=(const int64_t& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const int64_t& right);
-	friend bool operator <=(const float& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const float& right);
-	friend bool operator <=(const double& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const double& right);
-	friend bool operator <=(const bool& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const bool& right);
-	friend bool operator <=(const std::string& left, const cvar& right);
-	friend bool operator <=(const cvar& left, const std::string& right);
+    // <= operator overloads for all the POD types
+    friend bool operator <=(const int& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const int& right);
+    friend bool operator <=(const int64_t& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const int64_t& right);
+    friend bool operator <=(const float& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const float& right);
+    friend bool operator <=(const double& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const double& right);
+    friend bool operator <=(const bool& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const bool& right);
+    friend bool operator <=(const std::string& left, const cvar& right);
+    friend bool operator <=(const cvar& left, const std::string& right);
 
-	// > operator overloads for all the POD types
-	friend bool operator >(const int& left, const cvar& right);
-	friend bool operator >(const cvar& left, const int& right);
-	friend bool operator >(const int64_t& left, const cvar& right);
-	friend bool operator >(const cvar& left, const int64_t& right);
-	friend bool operator >(const float& left, const cvar& right);
-	friend bool operator >(const cvar& left, const float& right);
-	friend bool operator >(const double& left, const cvar& right);
-	friend bool operator >(const cvar& left, const double& right);
-	friend bool operator >(const bool& left, const cvar& right);
-	friend bool operator >(const cvar& left, const bool& right);
-	friend bool operator >(const std::string& left, const cvar& right);
-	friend bool operator >(const cvar& left, const std::string& right);
+    // > operator overloads for all the POD types
+    friend bool operator >(const int& left, const cvar& right);
+    friend bool operator >(const cvar& left, const int& right);
+    friend bool operator >(const int64_t& left, const cvar& right);
+    friend bool operator >(const cvar& left, const int64_t& right);
+    friend bool operator >(const float& left, const cvar& right);
+    friend bool operator >(const cvar& left, const float& right);
+    friend bool operator >(const double& left, const cvar& right);
+    friend bool operator >(const cvar& left, const double& right);
+    friend bool operator >(const bool& left, const cvar& right);
+    friend bool operator >(const cvar& left, const bool& right);
+    friend bool operator >(const std::string& left, const cvar& right);
+    friend bool operator >(const cvar& left, const std::string& right);
 
-	// >= operator overloads for all the POD types
-	friend bool operator >=(const int& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const int& right);
-	friend bool operator >=(const int64_t& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const int64_t& right);
-	friend bool operator >=(const float& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const float& right);
-	friend bool operator >=(const double& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const double& right);
-	friend bool operator >=(const bool& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const bool& right);
-	friend bool operator >=(const std::string& left, const cvar& right);
-	friend bool operator >=(const cvar& left, const std::string& right);
+    // >= operator overloads for all the POD types
+    friend bool operator >=(const int& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const int& right);
+    friend bool operator >=(const int64_t& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const int64_t& right);
+    friend bool operator >=(const float& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const float& right);
+    friend bool operator >=(const double& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const double& right);
+    friend bool operator >=(const bool& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const bool& right);
+    friend bool operator >=(const std::string& left, const cvar& right);
+    friend bool operator >=(const cvar& left, const std::string& right);
 
-	// + operator overloads for all the POD types
-	friend cvar operator+(const int& left, const cvar& right);
-	friend cvar operator+(const int64_t& left, const cvar& right);
-	friend cvar operator+(const float& left, const cvar& right);
-	friend cvar operator+(const double& left, const cvar& right);
-	friend cvar operator+(const bool& left, const cvar& right);
-	friend cvar operator+(const std::string& left, const cvar& right);
-	friend cvar operator+(const char* left, const cvar& right);
+    // + operator overloads for all the POD types
+    friend cvar operator+(const int& left, const cvar& right);
+    friend cvar operator+(const int64_t& left, const cvar& right);
+    friend cvar operator+(const float& left, const cvar& right);
+    friend cvar operator+(const double& left, const cvar& right);
+    friend cvar operator+(const bool& left, const cvar& right);
+    friend cvar operator+(const std::string& left, const cvar& right);
+    friend cvar operator+(const char* left, const cvar& right);
 
-	// - operator overloads for all the POD types
-	friend cvar operator-(const int& left, const cvar& right);
-	friend cvar operator-(const int64_t& left, const cvar& right);
-	friend cvar operator-(const float& left, const cvar& right);
-	friend cvar operator-(const double& left, const cvar& right);
-	friend cvar operator-(const bool& left, const cvar& right);
-	friend cvar operator-(const std::string& left, const cvar& right);
-	friend cvar operator-(const char* left, const cvar& right);
+    // - operator overloads for all the POD types
+    friend cvar operator-(const int& left, const cvar& right);
+    friend cvar operator-(const int64_t& left, const cvar& right);
+    friend cvar operator-(const float& left, const cvar& right);
+    friend cvar operator-(const double& left, const cvar& right);
+    friend cvar operator-(const bool& left, const cvar& right);
+    friend cvar operator-(const std::string& left, const cvar& right);
+    friend cvar operator-(const char* left, const cvar& right);
 };
 
 template <typename K, typename V>
 cvar& cvar::operator=(const std::map<K, V>& source)
 {
-	if (setValue)
-	{
-		delete setValue;
-		setValue = nullptr;
-	}
+    if (setValue)
+    {
+        delete setValue;
+        setValue = nullptr;
+    }
 
-	if (listValue)
-	{
-		delete listValue;
-		listValue = nullptr;
-	}
+    if (listValue)
+    {
+        delete listValue;
+        listValue = nullptr;
+    }
 
-	dict();
-	for (const auto& item : source)
-		(*dictValue)[cvar{ item.first }] = cvar{ item.second };
-	return *this;
+    dict();
+    for (const auto& item : source)
+        (*dictValue)[cvar{ item.first }] = cvar{ item.second };
+    return *this;
 }
 
 template <typename K, typename V>
 cvar& cvar::operator=(const std::unordered_map<K, V>& source)
 {
-	if (setValue)
-	{
-		delete setValue;
-		setValue = nullptr;
-	}
+    if (setValue)
+    {
+        delete setValue;
+        setValue = nullptr;
+    }
 
-	if (listValue)
-	{
-		delete listValue;
-		listValue = nullptr;
-	}
+    if (listValue)
+    {
+        delete listValue;
+        listValue = nullptr;
+    }
 
-	dict();
-	for (const auto& item : source)
-		(*dictValue)[cvar{ item.first }] = cvar{ item.second };
-	return *this;
+    dict();
+    for (const auto& item : source)
+        (*dictValue)[cvar{ item.first }] = cvar{ item.second };
+    return *this;
 }
 
 template <typename K, typename V>
 cvar& cvar::operator=(const std::pair<K, V>& source)
 {
-	dict();
-	(*dictValue)[cvar{ source.first }] = cvar{ source.second };
-	return *this;
+    dict();
+    (*dictValue)[cvar{ source.first }] = cvar{ source.second };
+    return *this;
 }
 
 inline bool operator ==(const int& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-		return left == right.getInt32();
-	case cvar::valueType::INT64:
-		return left == right.getInt64();
-	case cvar::valueType::FLT:
-		return static_cast<float>(left) == right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) == right.getDouble();
-	case cvar::valueType::BOOL:
-		return (left != 0) == right.getBool();
-	case cvar::valueType::STR:
-		return std::to_string(left) == right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+        return left == right.getInt32();
+    case cvar::valueType::INT64:
+        return left == right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) == right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return std::to_string(left) == right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const cvar& left, const int& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-		return left.getInt32() == right;
-	case cvar::valueType::INT64:
-		return left.getInt64() == right;
-	case cvar::valueType::FLT:
-		return left.getFloat() == static_cast<float>(right);
-	case cvar::valueType::DBL:
-		return left.getDouble() == static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		return left == (right != 0);
-	case cvar::valueType::STR:
-		return left.valueString == std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+        return left.getInt32() == right;
+    case cvar::valueType::INT64:
+        return left.getInt64() == right;
+    case cvar::valueType::FLT:
+        return left.getFloat() == static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() == static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.valueString == std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const int64_t& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		return left == right.getInt64();
-	case cvar::valueType::FLT:
-		return static_cast<float>(left) == right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) == right.getDouble();
-	case cvar::valueType::BOOL:
-		return (left != 0) == right.getBool();
-	case cvar::valueType::STR:
-		return std::to_string(left) == right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left == right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) == right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return std::to_string(left) == right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const cvar& left, const int64_t& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		return left.getInt64() == right;
-	case cvar::valueType::FLT:
-		return left.getFloat() == static_cast<float>(right);
-	case cvar::valueType::DBL:
-		return left.getDouble() == static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		return left == (right != 0);
-	case cvar::valueType::STR:
-		return left.valueString == std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left.getInt64() == right;
+    case cvar::valueType::FLT:
+        return left.getFloat() == static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() == static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.valueString == std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 #ifndef _MSC_VER
@@ -2503,134 +2588,134 @@ inline bool operator ==(const cvar& left, const long long int& right)
 
 inline bool operator ==(const float& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-		return left == right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) == right.getDouble();
-	case cvar::valueType::BOOL:
-		return (left != 0) == right.getBool();
-	case cvar::valueType::STR:
-		return left == right.getFloat();
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+        return left == right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return left == right.getFloat();
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const cvar& left, const float& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-		return left.getFloat() == right;
-	case cvar::valueType::DBL:
-		return left.getDouble() == static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		return left == (right != 0);
-	case cvar::valueType::STR:
-		return left.getFloat() == right;
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+        return left.getFloat() == right;
+    case cvar::valueType::DBL:
+        return left.getDouble() == static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.getFloat() == right;
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const double& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return left == right.getDouble();
-	case cvar::valueType::BOOL:
-		return (left != 0) == right.getBool();
-	case cvar::valueType::STR:
-		return left == right.getDouble();
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return left == right.getDouble();
+    case cvar::valueType::BOOL:
+        return (left != 0) == right.getBool();
+    case cvar::valueType::STR:
+        return left == right.getDouble();
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const cvar& left, const double& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return left.getDouble() == right;
-	case cvar::valueType::BOOL:
-		return left == (right != 0);
-	case cvar::valueType::STR:
-		return left.getDouble() == right;
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return left.getDouble() == right;
+    case cvar::valueType::BOOL:
+        return left == (right != 0);
+    case cvar::valueType::STR:
+        return left.getDouble() == right;
+    default:
+        return false;
+    }
 }
 
 inline bool operator ==(const bool& left, const cvar& right)
 {
-	return left == right.getBool();
+    return left == right.getBool();
 }
 
 inline bool operator ==(const cvar& left, const bool& right)
 {
-	return left.getBool() == right;
+    return left.getBool() == right;
 }
 
 inline bool operator ==(const std::string& left, const cvar& right)
 {
-	return left == right.getString();
+    return left == right.getString();
 }
 
 inline bool operator ==(const cvar& left, const std::string& right)
 {
-	return left.getString() == right;
+    return left.getString() == right;
 }
 
 inline bool operator ==(const cvar& left, const char* right)
 {
-	const auto state =
-		(strcmp(right, "0") == 0 ||
-			strcmp(right, "false") == 0 ||
-			strlen(right) == 0) ? false : true;
-	return left.getBool() == state;
+    const auto state =
+        (strcmp(right, "0") == 0 ||
+            strcmp(right, "false") == 0 ||
+            strlen(right) == 0) ? false : true;
+    return left.getBool() == state;
 }
 
 inline bool operator ==(const char* left, const cvar& right)
 {
-	const auto state =
-		(strcmp(left, "0") == 0 ||
-			strcmp(left, "false") == 0 ||
-			strlen(left) == 0) ? false : true;
-	return state == right.getBool();
+    const auto state =
+        (strcmp(left, "0") == 0 ||
+            strcmp(left, "false") == 0 ||
+            strlen(left) == 0) ? false : true;
+    return state == right.getBool();
 }
 
 inline bool operator !=(const int& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const int& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const int64_t& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const int64_t& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 #ifndef _MSC_VER
@@ -2647,607 +2732,607 @@ inline bool operator !=(const cvar& left, const long long int& right)
 
 inline bool operator !=(const float& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const float& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const double& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const double& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const bool& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const bool& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const std::string& left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const std::string& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const char* left, const cvar& right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator !=(const cvar& left, const char* right)
 {
-	return !(left == right);
+    return !(left == right);
 }
 
 inline bool operator <(const int& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-		return left < right.getInt32();
-	case cvar::valueType::INT64:
-		return left < right.getInt64();
-	case cvar::valueType::FLT:
-		return static_cast<float>(left) < right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) < right.getDouble();
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return std::to_string(left) < right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+        return left < right.getInt32();
+    case cvar::valueType::INT64:
+        return left < right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) < right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) < right.getDouble();
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return std::to_string(left) < right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const cvar& left, const int& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-		return left.getInt32() < right;
-	case cvar::valueType::INT64:
-		return left.getInt64() < right;
-	case cvar::valueType::FLT:
-		return left.getFloat() < static_cast<float>(right);
-	case cvar::valueType::DBL:
-		return left.getDouble() < static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return left.valueString < std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+        return left.getInt32() < right;
+    case cvar::valueType::INT64:
+        return left.getInt64() < right;
+    case cvar::valueType::FLT:
+        return left.getFloat() < static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() < static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return left.valueString < std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const int64_t& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		return left < right.getInt64();
-	case cvar::valueType::FLT:
-		return static_cast<float>(left) < right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) < right.getDouble();
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return std::to_string(left) < right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left < right.getInt64();
+    case cvar::valueType::FLT:
+        return static_cast<float>(left) < right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) < right.getDouble();
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return std::to_string(left) < right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const cvar& left, const int64_t& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		return left.getInt64() < right;
-	case cvar::valueType::FLT:
-		return left.getFloat() < static_cast<float>(right);
-	case cvar::valueType::DBL:
-		return left.getDouble() < static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return left.valueString < std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        return left.getInt64() < right;
+    case cvar::valueType::FLT:
+        return left.getFloat() < static_cast<float>(right);
+    case cvar::valueType::DBL:
+        return left.getDouble() < static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return left.valueString < std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const float& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-		return left < right.getFloat();
-	case cvar::valueType::DBL:
-		return static_cast<double>(left) < right.getDouble();
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return std::to_string(left) < right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+        return left < right.getFloat();
+    case cvar::valueType::DBL:
+        return static_cast<double>(left) < right.getDouble();
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return std::to_string(left) < right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const cvar& left, const float& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-		return left.getFloat() < right;
-	case cvar::valueType::DBL:
-		return left.getDouble() < static_cast<double>(right);
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return left.valueString < std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+        return left.getFloat() < right;
+    case cvar::valueType::DBL:
+        return left.getDouble() < static_cast<double>(right);
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return left.valueString < std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const double& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return left < right.getDouble();
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return std::to_string(left) < right.valueString;
-	default:
-		return false;
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return left < right.getDouble();
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return std::to_string(left) < right.valueString;
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const cvar& left, const double& right)
 {
-	switch (left.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return left.getDouble() < right;
-	case cvar::valueType::BOOL:
-		throw std::runtime_error("< operator used boolean value");
-	case cvar::valueType::STR:
-		return left.valueString < std::to_string(right);
-	default:
-		return false;
-	}
+    switch (left.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return left.getDouble() < right;
+    case cvar::valueType::BOOL:
+        throw std::runtime_error("< operator used boolean value");
+    case cvar::valueType::STR:
+        return left.valueString < std::to_string(right);
+    default:
+        return false;
+    }
 }
 
 inline bool operator <(const bool& left, const cvar& right)
 {
-	return left < right.getBool();
+    return left < right.getBool();
 }
 
 inline bool operator <(const cvar& left, const bool& right)
 {
-	return left.getInt64() < static_cast<int64_t>(right);
+    return left.getInt64() < static_cast<int64_t>(right);
 }
 
 inline bool operator <(const std::string& left, const cvar& right)
 {
-	return left < right.getString();
+    return left < right.getString();
 }
 
 inline bool operator <(const cvar& left, const std::string& right)
 {
-	return left.getString() < right;
+    return left.getString() < right;
 }
 
 inline bool operator <=(const int& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const int& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const int64_t& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const int64_t& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const float& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const float& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const double& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const double& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const bool& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const bool& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const std::string& left, const cvar& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator <=(const cvar& left, const std::string& right)
 {
-	return !(right < left);
+    return !(right < left);
 }
 
 inline bool operator >(const int& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const int& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const int64_t& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const int64_t& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const float& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const float& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const double& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const double& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const bool& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const bool& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const std::string& left, const cvar& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >(const cvar& left, const std::string& right)
 {
-	return (right < left);
+    return (right < left);
 }
 
 inline bool operator >=(const int& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const int& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const int64_t& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const int64_t& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const float& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const float& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const double& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const double& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const bool& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const bool& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const std::string& left, const cvar& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline bool operator >=(const cvar& left, const std::string& right)
 {
-	return !(left < right);
+    return !(left < right);
 }
 
 inline cvar operator+(const int& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
-			return cvar{ static_cast<double>(left) + right.getDouble() };
-		return cvar{ left + right.getInt64() };
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ std::to_string(left) + right.valueString };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
+            return cvar{ static_cast<double>(left) + right.getDouble() };
+        return cvar{ left + right.getInt64() };
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ std::to_string(left) + right.valueString };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator+(const int64_t& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
-			return cvar{ static_cast<double>(left) + right.getDouble() };
-		return cvar{ left + right.getInt64() };
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ std::to_string(left) + right.valueString };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
+            return cvar{ static_cast<double>(left) + right.getDouble() };
+        return cvar{ left + right.getInt64() };
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ std::to_string(left) + right.valueString };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator+(const float& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ static_cast<double>(left) + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ std::to_string(left) + right.valueString };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ static_cast<double>(left) + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ std::to_string(left) + right.valueString };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator+(const double& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ std::to_string(left) + right.valueString };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ std::to_string(left) + right.valueString };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator+(const bool& left, const cvar& right)
 {
-	return cvar{ left && right.getBool() };
+    return cvar{ left && right.getBool() };
 }
 
 inline cvar operator+(const std::string& left, const cvar& right)
 {
-	return cvar{ left + right.getString() };
+    return cvar{ left + right.getString() };
 }
 
 inline cvar operator+(const char* left, const cvar& right)
 {
-	return cvar{ std::string{left} + right.getString() };
+    return cvar{ std::string{left} + right.getString() };
 }
 
 inline cvar operator-(const int& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
-			return cvar{ static_cast<double>(left) - right.getDouble() };
-		return cvar{ left - right.getInt64() };
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left - right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left || right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ right.subStrings(std::to_string(left), right.valueString) };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
+            return cvar{ static_cast<double>(left) - right.getDouble() };
+        return cvar{ left - right.getInt64() };
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left - right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left || right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ right.subStrings(std::to_string(left), right.valueString) };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator-(const int64_t& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-		if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
-			return cvar{ static_cast<double>(left) + right.getDouble() };
-		return cvar{ left + right.getInt64() };
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ right.subStrings(std::to_string(left), right.valueString) };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+        if (right.type == cvar::valueType::DBL || right.type == cvar::valueType::FLT)
+            return cvar{ static_cast<double>(left) + right.getDouble() };
+        return cvar{ left + right.getInt64() };
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ right.subStrings(std::to_string(left), right.valueString) };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator-(const float& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ static_cast<double>(left) + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ right.subStrings(std::to_string(left), right.valueString) };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ static_cast<double>(left) + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ right.subStrings(std::to_string(left), right.valueString) };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator-(const double& left, const cvar& right)
 {
-	switch (right.type)
-	{
-	case cvar::valueType::INT32:
-	case cvar::valueType::INT64:
-	case cvar::valueType::FLT:
-	case cvar::valueType::DBL:
-		return cvar{ left + right.getDouble() };
-	case cvar::valueType::BOOL:
-		return cvar{ left && right.getBool() };
-	case cvar::valueType::STR:
-		return cvar{ right.subStrings(std::to_string(left), right.valueString) };
-	default:
-		return cvar{ right };
-	}
+    switch (right.type)
+    {
+    case cvar::valueType::INT32:
+    case cvar::valueType::INT64:
+    case cvar::valueType::FLT:
+    case cvar::valueType::DBL:
+        return cvar{ left + right.getDouble() };
+    case cvar::valueType::BOOL:
+        return cvar{ left && right.getBool() };
+    case cvar::valueType::STR:
+        return cvar{ right.subStrings(std::to_string(left), right.valueString) };
+    default:
+        return cvar{ right };
+    }
 }
 
 inline cvar operator-(const bool& left, const cvar& right)
 {
-	return cvar{ left || right.getBool() };
+    return cvar{ left || right.getBool() };
 }
 
 inline cvar operator-(const std::string& left, const cvar& right)
 {
-	return cvar{ right.subStrings(left, right.getString()) };
+    return cvar{ right.subStrings(left, right.getString()) };
 }
 
 inline cvar operator-(const char* left, const cvar& right)
 {
-	return cvar{ right.subStrings(std::string{left}, right.getString()) };
+    return cvar{ right.subStrings(std::string{left}, right.getString()) };
 }
 
 inline cvar operator""_cvar(const unsigned long long val)
 {
-	return cvar{ static_cast<int64_t>(val) };
+    return cvar{ static_cast<int64_t>(val) };
 }
 
 inline cvar operator""_cvar(const long double val)
 {
-	return cvar{ static_cast<double>(val) };
+    return cvar{ static_cast<double>(val) };
 }
 
 inline cvar operator""_cvar(const char* text, std::size_t size)
 {
-	return cvar{ std::string{text} };
+    return cvar{ std::string{text} };
 }

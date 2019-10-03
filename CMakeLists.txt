@@ -10,41 +10,41 @@ endif()
 SET (USE_STANDALONE_ASIO ON)
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-	if (MSVC)
-		add_compile_options(/std:c++17 /Oi)
-		add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
-	else()
-		add_compile_options(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -pthread)
-		add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
-		set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-		find_package(Threads REQUIRED)
-	endif()
+    if (MSVC)
+        add_compile_options(/std:c++17 /Oi)
+        add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+    else()
+        add_compile_options(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -pthread)
+        add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+        set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+        set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+        find_package(Threads REQUIRED)
+    endif()
 
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
-	set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-	if (MSVC)
-		add_compile_options(/std:c++17 /Ox)
-		add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
-	else()
-		add_compile_options(-m64 -std=c++17 -static -static-libstdc++ -static-libgcc -msse2 -o3 -flto -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -pthread)
-		add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
-		set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-		find_package(Threads REQUIRED)
-	endif()
+    set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    if (MSVC)
+        add_compile_options(/std:c++17 /Ox)
+        add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+    else()
+        add_compile_options(-m64 -std=c++17 -static -static-libstdc++ -static-libgcc -msse2 -o3 -flto -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -pthread)
+        add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+        set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+        set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+        find_package(Threads REQUIRED)
+    endif()
 
 elseif(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
-	if (MSVC)
-		add_compile_options(/std:c++17 /Ox /Debug /Zi )
-		add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
-	else()
-		add_compile_options(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -flto -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -pthread)
-		add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
-		set(THREADS_PREFER_PTHREAD_FLAG TRUE)	
-		set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-		find_package(Threads REQUIRED)
-	endif()
+    if (MSVC)
+        add_compile_options(/std:c++17 /Ox /Debug /Zi )
+        add_definitions(/DASIO_STANDALONE /DUSE_STANDALONE_ASIO /D_CRT_SECURE_NO_WARNINGS)
+    else()
+        add_compile_options(-m64 -std=c++17 -g -static -static-libstdc++ -static-libgcc -msse2 -o3 -flto -fexpensive-optimizations -ftree-vectorize -fprefetch-loop-arrays -funroll-loops -pthread)
+        add_definitions(-DASIO_STANDALONE -DUSE_STANDALONE_ASIO -pthread)
+        set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+        set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+        find_package(Threads REQUIRED)
+    endif()
 
 endif()
 
@@ -57,10 +57,10 @@ set(SOURCE_FILES
         vendor/lz4/lib/lz4.h
         vendor/lz4/lib/xxhash.c
         vendor/lz4/lib/xxhash.h
-		vendor/asio/asio/include/asio.hpp
-		vendor/simple-web-server/server_http.hpp
-		vendor/simple-web-server/client_http.hpp
-		vendor/simple-web-server/utility.hpp
+        vendor/asio/asio/include/asio.hpp
+        vendor/simple-web-server/server_http.hpp
+        vendor/simple-web-server/client_http.hpp
+        vendor/simple-web-server/utility.hpp
         src/common.cpp
         src/common.h
         lib/cjson/cjson.cpp
@@ -82,7 +82,7 @@ set(SOURCE_FILES
         lib/mem/prequeues.cpp
         lib/mem/prequeues.h
         lib/mem/ssdict.h
-		lib/mem/blhash.h
+        lib/mem/blhash.h
         lib/str/strtools.cpp
         lib/str/strtools.h
         lib/threads/spinlock.h
@@ -92,8 +92,8 @@ set(SOURCE_FILES
         lib/time/epoch.h
         lib/var/var.cpp
         lib/var/var.h
-		lib/var/varblob.h
-		src/ver.h
+        lib/var/varblob.h
+        src/ver.h
         src/asyncloop.cpp
         src/asyncloop.h
         src/asyncpool.cpp
@@ -104,8 +104,8 @@ set(SOURCE_FILES
         src/attributes.h
         src/columns.cpp
         src/columns.h
-		src/columnmapping.cpp
-		src/columnmapping.h
+        src/columnmapping.cpp
+        src/columnmapping.h
         src/config.cpp
         src/config.h
         src/database.cpp
@@ -115,10 +115,10 @@ set(SOURCE_FILES
         src/errors.h
         src/grid.cpp
         src/grid.h
-		src/http_serve.cpp
-		src/http_serve.h
-		src/http_cli.cpp
-		src/http_cli.h
+        src/http_serve.cpp
+        src/http_serve.h
+        src/http_cli.cpp
+        src/http_cli.h
         src/indexbits.cpp
         src/indexbits.h
         src/internodecommon.h
@@ -132,16 +132,16 @@ set(SOURCE_FILES
         src/message_broker.h
         src/oloop.cpp
         src/oloop.h
-		src/oloop_cleaner.cpp
-		src/oloop_cleaner.h
-		src/oloop_column.cpp
-		src/oloop_column.h
-		src/oloop_histogram.cpp
+        src/oloop_cleaner.cpp
+        src/oloop_cleaner.h
+        src/oloop_column.cpp
+        src/oloop_column.h
+        src/oloop_histogram.cpp
         src/oloop_histogram.h
-		src/oloop_insert.cpp
+        src/oloop_insert.cpp
         src/oloop_insert.h
-		src/oloop_person.cpp
-		src/oloop_person.h
+        src/oloop_person.cpp
+        src/oloop_person.h
         src/oloop_query.cpp
         src/oloop_query.h
         src/oloop_segment.cpp
@@ -157,14 +157,14 @@ set(SOURCE_FILES
         src/queryindexing.h
         src/queryinterpreter.cpp
         src/queryinterpreter.h
-        src/queryparser.cpp
-        src/queryparser.h
+        src/queryparserosl.cpp
+        src/queryparserosl.h
         src/result.cpp
         src/result.h
         src/rpc_global.cpp
         src/rpc_global.h
-		src/rpc_insert.cpp
-		src/rpc_insert.h
+        src/rpc_insert.cpp
+        src/rpc_insert.h
         src/rpc_internode.cpp
         src/rpc_internode.h
         src/rpc_cluster.cpp
@@ -173,28 +173,30 @@ set(SOURCE_FILES
         src/rpc_trigger.h
         src/rpc_table.cpp
         src/rpc_table.h
-		src/rpc_status.cpp
-		src/rpc_status.h
-		src/rpc_query.cpp
-		src/rpc_query.h
+        src/rpc_status.cpp
+        src/rpc_status.h
+        src/rpc_query.cpp
+        src/rpc_query.h
         src/rpc.cpp
         src/rpc.h
-		src/sentinel.h
+        src/sentinel.h
         src/sentinel.cpp
         src/service.cpp
         src/service.h
         src/shuttle.h
-		src/sidelog.h
+        src/sidelog.h
         src/table.cpp
         src/table.h
         src/tablepartitioned.cpp
         src/tablepartitioned.h
         test/test_db.h
         test/test_lib_var.h
-        test/test_pyql_language.h
-		test/test_sessions.h
-		test/test_count_methods.h
+        test/test_osl_language.h
+        test/test_sessions.h
+        test/test_count_methods.h
         test/testing.h
+        test/test_helper.h
+        test/test_helper.cpp
         test/unittests.h
 )
 
@@ -204,9 +206,9 @@ enable_testing()
 add_test(NAME openset-unit-test COMMAND $<TARGET_FILE:openset> --test)
 
 if (MSVC)
-	target_link_libraries(openset ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(openset ${CMAKE_THREAD_LIBS_INIT})
 else()
-	target_link_libraries(openset pthread ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(openset pthread ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
 

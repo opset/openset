@@ -23,9 +23,9 @@ openset::db::IndexBits* openset::db::SegmentPartitioned_s::prepare(Attributes& a
         return bits;
 
     changeCount = 0;
-	const auto attr = attributes.getMake(COL_SEGMENT, segmentName);
-	bits = new IndexBits();
-	bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
+    const auto attr = attributes.getMake(COL_SEGMENT, segmentName);
+    bits = new IndexBits();
+    bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
     return bits;
 }
@@ -40,19 +40,19 @@ void openset::db::SegmentPartitioned_s::commit(Attributes& attributes)
 openset::db::SegmentPartitioned_s::SegmentChange_e openset::db::SegmentPartitioned_s::setBit(int64_t linearId, bool state)
 {
     const auto currentState = bits->bitState(linearId);
-    if (state && !currentState) 
+    if (state && !currentState)
     {
         ++changeCount;
         bits->bitSet(linearId);
         return SegmentChange_e::enter;
-    } 
+    }
 
-    if (!state && currentState) 
+    if (!state && currentState)
     {
         ++changeCount;
         bits->bitClear(linearId);
         return SegmentChange_e::exit;
-    } 
+    }
 
     return SegmentChange_e::noChange;
 }
@@ -71,37 +71,37 @@ openset::query::Interpreter * openset::db::SegmentPartitioned_s::getInterpreter(
 }
 
 TablePartitioned::TablePartitioned(
-	Table* table,
-	const int partition, 
-	AttributeBlob* attributeBlob, 
-	Columns* schema) :
-		table(table),
-		partition(partition),
-		attributes(partition, table, attributeBlob, schema),
-		attributeBlob(attributeBlob),
-		people(partition),
-		asyncLoop(openset::globals::async->getPartition(partition)),
-		//triggers(new openset::revent::ReventManager(this)),
-		insertBacklog(0)
-{	
-    // this will stop any translog purging until the insertCell (below) 
+    Table* table,
+    const int partition,
+    AttributeBlob* attributeBlob,
+    Columns* schema) :
+        table(table),
+        partition(partition),
+        attributes(partition, table, attributeBlob, schema),
+        attributeBlob(attributeBlob),
+        people(partition),
+        asyncLoop(openset::globals::async->getPartition(partition)),
+        //triggers(new openset::revent::ReventManager(this)),
+        insertBacklog(0)
+{
+    // this will stop any translog purging until the insertCell (below)
     // gets to work.
     SideLog::getSideLog().resetReadHead(table, partition);
 
     const auto sharedTablePtr = table->getSharedPtr();
 
-	async::OpenLoop* insertCell = new async::OpenLoopInsert(sharedTablePtr);
-	insertCell->scheduleFuture(1000); // run this in 1 second
-	asyncLoop->queueCell(insertCell);
-        
-	async::OpenLoop* segmentRefreshCell = new async::OpenLoopSegmentRefresh(sharedTablePtr);
-	segmentRefreshCell->scheduleFuture(table->segmentInterval); 
-	asyncLoop->queueCell(segmentRefreshCell);
-        
-	async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(sharedTablePtr);
-	cleanerCell->scheduleFuture(table->maintInterval); 
-	asyncLoop->queueCell(cleanerCell);
-    
+    async::OpenLoop* insertCell = new async::OpenLoopInsert(sharedTablePtr);
+    insertCell->scheduleFuture(1000); // run this in 1 second
+    asyncLoop->queueCell(insertCell);
+
+    async::OpenLoop* segmentRefreshCell = new async::OpenLoopSegmentRefresh(sharedTablePtr);
+    segmentRefreshCell->scheduleFuture(table->segmentInterval);
+    asyncLoop->queueCell(segmentRefreshCell);
+
+    async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(sharedTablePtr);
+    cleanerCell->scheduleFuture(table->maintInterval);
+    asyncLoop->queueCell(cleanerCell);
+
 }
 
 TablePartitioned::~TablePartitioned()
@@ -141,38 +141,39 @@ void TablePartitioned::checkForSegmentChanges()
     InterpreterList onInsertList;
 
     { // scope a lock
-	    csLock lock(*table->getSegmentLock());
+        csLock lock(*table->getSegmentLock());
 
-	    // sync the refresh map in the table object with our local refresh timer
-	    // first, lets grab the master list
-	    const auto masterRefreshList = table->getSegmentRefresh();
+        // sync the refresh map in the table object with our local refresh timer
+        // first, lets grab the master list
+        const auto masterRefreshList = table->getSegmentRefresh();
 
         bool changed = false;
 
-	    // add new or changed segments from master to partition
-	    for (auto& seg : *masterRefreshList)
+        // add new or changed segments from master to partition
+        for (auto& seg : *masterRefreshList)
         {
             // add or replace segments that are new or different
-		    if (!segments.count(seg.first) || seg.second.lastModified != segments[seg.first].lastModified)
+            if (!segments.count(seg.first) || seg.second.lastModified != segments[seg.first].lastModified)
             {
                 const auto segmentName = seg.first;
 
-                auto newSegment = SegmentPartitioned_s(                                           
+                auto newSegment = SegmentPartitioned_s(
                     seg.second.segmentName,
-			        seg.second.macros,
-                    seg.second.lastModified, 
-			        seg.second.zIndex, 
+                    seg.second.macros,
+                    seg.second.lastModified,
+                    seg.second.zIndex,
                     seg.second.onInsert);
 
                 newSegment.lastModified = seg.second.lastModified;
 
+                segments.erase(segmentName);
                 segments.emplace(segmentName, newSegment);
-                
+
                 segmentTTL[segmentName] = table->getSegmentTTL()->count(segmentName) ?
                     (*table->getSegmentTTL())[segmentName].TTL : 0;
 
                 // force immediate refresh
-                segmentRefresh[segmentName] = Now() + -1;
+                segmentRefresh.erase(segmentName);
 
                 changed = true;
             }
@@ -184,22 +185,22 @@ void TablePartitioned::checkForSegmentChanges()
             if (!masterRefreshList->count(seg.first))
                 orphanedSegments.push_back(seg.first);
             else if (seg.second.onInsert)
-                onInsertList.push_back(&seg.second);            
+                onInsertList.push_back(&seg.second);
         }
     }
 
     // delete any segments in the cleanup list
-	for (auto &segName : orphanedSegments)
-		segments.erase(segName);
+    for (auto &segName : orphanedSegments)
+        segments.erase(segName);
 
-	std::sort(
-		onInsertList.begin(),
-		onInsertList.end(),
-		[](const SegmentPartitioned_s* left, const SegmentPartitioned_s* right ) -> bool
-		{
+    std::sort(
+        onInsertList.begin(),
+        onInsertList.end(),
+        [](const SegmentPartitioned_s* left, const SegmentPartitioned_s* right ) -> bool
+        {
             return left->zIndex > right->zIndex;
-		});
-    
+        });
+
     onInsertSegments = std::move(onInsertList);
 }
 
@@ -214,21 +215,21 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
             return this->segments[segmentName].prepare(this->attributes);
         }
 
-	    // if there are no bits with this name created in this query
-	    // then look in the index
-	    auto attr = this->attributes.get(COL_SEGMENT, segmentName);
-	    
-	    if (!attr)
-		    return nullptr;
+        // if there are no bits with this name created in this query
+        // then look in the index
+        auto attr = this->attributes.get(COL_SEGMENT, segmentName);
 
-	    deleteAfterUsing = true;
-	    return attr->getBits();
+        if (!attr)
+            return nullptr;
+
+        deleteAfterUsing = true;
+        return attr->getBits();
     };
 
 }
 
 void TablePartitioned::storeAllChangedSegments()
-{  
+{
     for (auto& seg: segments)
         seg.second.commit(attributes);
 }
@@ -247,14 +248,14 @@ void TablePartitioned::pushMessage(const int64_t segmentHash, const SegmentParti
     messages[segmentHash].emplace_back(
        revent::TriggerMessage_s {
             segmentHash,
-            state == SegmentPartitioned_s::SegmentChange_e::enter 
-                ? openset::revent::TriggerMessage_s::State_e::entered 
+            state == SegmentPartitioned_s::SegmentChange_e::enter
+                ? openset::revent::TriggerMessage_s::State_e::entered
                 : openset::revent::TriggerMessage_s::State_e::exited,
             uuid
         }
     );
 
-    //cout << "hash: " << segmentHash << "  state: " << (state == SegmentPartitioned_s::SegmentChange_e::enter ? "in" : "out") << "  uuid: " << uuid << endl; 
+    //cout << "hash: " << segmentHash << "  state: " << (state == SegmentPartitioned_s::SegmentChange_e::enter ? "in" : "out") << "  uuid: " << uuid << endl;
 
 /*        messages.emplace(
             segmentHash,
@@ -265,7 +266,7 @@ void TablePartitioned::pushMessage(const int64_t segmentHash, const SegmentParti
             });*/
 }
 
-void TablePartitioned::flushMessageMessages() 
+void TablePartitioned::flushMessageMessages()
 {
     if (!messages.size())
         return;

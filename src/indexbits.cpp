@@ -91,7 +91,7 @@ void IndexBits::makeBits(const int64_t index, const int state)
     memset(bits, (state) ? 0xff : 0x00, ints * 8);
 
     // if we are 1 filling these bits, we must
-    // set every bit after index to zero 
+    // set every bit after index to zero
     if (state)
     {
         // zero the rest of the bits in the last int64
@@ -280,7 +280,7 @@ bool IndexBits::bitState(const int64_t index) const
 /*
    population(int stopBit);
 
-   stopBit - bit buffers unpack to lengths longer than 
+   stopBit - bit buffers unpack to lengths longer than
    the desired amount of bits, this is because the
    buffers used for bits grow in chunks, and the number
    of bits does not typically round to the end of the
@@ -321,7 +321,7 @@ int64_t IndexBits::population(int stopBit) const
 #ifdef _MSC_VER
         count += __popcnt64(*pSource);
 #else
-		count += __builtin_popcountll(*pSource);
+        count += __builtin_popcountll(*pSource);
 #endif
         ++pSource;
     }
@@ -478,7 +478,7 @@ will be returned in this reference.
 
 stopBit - Because bit buffers are typically larger than the last
 bit we must provide a stopBit for accurate iteration, especially
-if NOT operations were run on the buffer. 
+if NOT operations were run on the buffer.
 
 return true if a new linear id is found.
 

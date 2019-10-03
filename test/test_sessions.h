@@ -3,301 +3,256 @@
 #include "testing.h"
 
 #include "../lib/cjson/cjson.h"
-#include "../lib/str/strtools.h"
-#include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
 #include "../src/columns.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
-#include "../src/queryinterpreter.h"
-#include "../src/queryparser.h"
 #include "../src/internoderouter.h"
-#include "../src/result.h"
-
-#include <unordered_set>
+#include "test_helper.h"
 
 // Our tests
 inline Tests test_sessions()
 {
-	
-	// An array of JSON events to insert, we are going to 
-	// insert these out of order and count on zorder to
-	// sort them.
-	// we will set zorder for action to "alpha", "beta", "cappa", "delta", "echo"
-	auto user1_raw_inserts = R"raw_inserts(
-	[
-		{
-			"id": "user1@test.com",
-			"stamp": 1458800000,
-			"event": "some event",
-			"_":{				
-				"some_val": 100,
-	            "some_str": "rabbit"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1458800100,
-			"event": "some event",
-			"_":{				
-				"some_val": 101,
-	            "some_str": "train"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1458800200,
-			"event": "some event",
-			"_":{				
-				"some_val": 102,
-	            "some_str": "cat"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1545220000,
-			"event": "some event",
-			"_":{				
-				"some_val": 103,
-	            "some_str": "dog"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1545220100,
-			"event": "some event",
-			"_":{				
-				"some_val": 104,
-	            "some_str": "cat"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1545220900,
-			"event": "some event",
-			"_":{				
-				"some_val": 105,
-	            "some_str": "rabbit"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631600000,
-			"event": "some event",
-			"_":{				
-				"some_val": 106,
-	            "some_str": "train"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631600400,
-			"event": "some event",
-			"_":{				
-				"some_val": 107,
-	            "some_str": "plane"
-			}
-		},
-		{
-			"id": "user1@test.com",
-			"stamp": 1631601200,
-			"event": "some event",
-			"_":{				
-				"some_val": 108,
-	            "some_str": "automobile"
-			}
-		},
-	]
-	)raw_inserts";
-	
-	auto test1_pyql = openset::query::QueryParser::fixIndent(R"pyql(
-	agg:
-		count id
-		count session
+
+    // An array of JSON events to insert, we are going to
+    // insert these out of order and count on zorder to
+    // sort them.
+    // we will set zorder for action to "alpha", "beta", "cappa", "delta", "echo"
+    auto user1_raw_inserts = R"raw_inserts(
+    [
+        {
+            "id": "user1@test.com",
+            "stamp": 1458800000,
+            "event": "some event",
+            "_":{
+                "some_val": 100,
+                "some_str": "rabbit"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1458800100,
+            "event": "some event",
+            "_":{
+                "some_val": 101,
+                "some_str": "train"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1458800200,
+            "event": "some event",
+            "_":{
+                "some_val": 102,
+                "some_str": "cat"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1545220000,
+            "event": "some event",
+            "_":{
+                "some_val": 103,
+                "some_str": "dog"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1545220100,
+            "event": "some event",
+            "_":{
+                "some_val": 104,
+                "some_str": "cat"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1545220900,
+            "event": "some event",
+            "_":{
+                "some_val": 105,
+                "some_str": "rabbit"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1631600000,
+            "event": "some event",
+            "_":{
+                "some_val": 106,
+                "some_str": "train"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1631600400,
+            "event": "some event",
+            "_":{
+                "some_val": 107,
+                "some_str": "plane"
+            }
+        },
+        {
+            "id": "user1@test.com",
+            "stamp": 1631601200,
+            "event": "some event",
+            "_":{
+                "some_val": 108,
+                "some_str": "automobile"
+            }
+        },
+    ]
+    )raw_inserts";
+
+    const auto test1_osl = R"osl(
+    agg:
+        count id
+        count session
         count some_val
 
-	for row in rows:
-		tally("all", row['some_str'])
-		if session == 2:
-			debug(True)
+    for row in rows:
+        tally("all", row['some_str'])
+        if session == 2:
+            debug(True)
 
-	debug(session_count == 3)
+    debug(session_count == 3)
 
-	)pyql");
-
-
-	/* In order to make the engine start there are a few required objects as 
-	 * they will get called in the background during testing:
-	 *   
-	 *  - cfg::manager must exist // cfg::initConfig)
-	 *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
-	 *  - Databse must exist // databases contain tabiles
-	 *  
-	 *  These objects will be created on the heap, although in practice during
-	 *  the construction phase these are created as local objects to other classes.
-	 */
-
-	// need config objects to run this
-	openset::config::CommandlineArgs args;
-	openset::globals::running = new openset::config::Config(args); 
-
-	// stop load/save objects from doing anything
-	openset::globals::running->testMode = true; 
-
-	// we need an async engine, although we won't really be using it, 
-	// it's wired into the into features such as tablePartitioned (shared locks mostly)
-	openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
-
-	openset::mapping::PartitionMap partitionMap;
-	// this must be on heap to keep it in scope
-	openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
-	mapper->startRouter();
+    )osl";
 
 
-	// put engine in a wait state otherwise we will throw an exception
-	async->suspendAsync();
+    /* In order to make the engine start there are a few required objects as
+     * they will get called in the background during testing:
+     *
+     *  - cfg::manager must exist // cfg::initConfig)
+     *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
+     *  - Databse must exist // databases contain tabiles
+     *
+     *  These objects will be created on the heap, although in practice during
+     *  the construction phase these are created as local objects to other classes.
+     */
 
-	//auto database = new Database();
+    // need config objects to run this
+    openset::config::CommandlineArgs args;
+    openset::globals::running = new openset::config::Config(args);
 
-	return {
-		{
-			"test_sessions: create and prepare a table", [=] {
+    // stop load/save objects from doing anything
+    openset::globals::running->testMode = true;
 
-				// prepare our table
-				auto table = openset::globals::database->newTable("__testsessions__");
+    // we need an async engine, although we won't really be using it,
+    // it's wired into the into features such as tablePartitioned (shared locks mostly)
+    openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
 
-				// add some columns
-				auto columns = table->getColumns();
-				ASSERT(columns != nullptr);
+    openset::mapping::PartitionMap partitionMap;
+    // this must be on heap to keep it in scope
+    openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
+    mapper->startRouter();
 
-				// content (adding to 2000 range, these typically auto enumerated on create)
-				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
-				columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
-			
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				auto personRaw = parts->people.getMakePerson("user1@test.com");
 
-				Person person; // Person overlay for personRaw;
+    // put engine in a wait state otherwise we will throw an exception
+    async->suspendAsync();
 
-				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-				person.mount(personRaw);
+    //auto database = new Database();
 
-				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
+    return {
+        {
+            "test_sessions: create and prepare a table", [=] {
 
-				// get vector of cjson nodes for each element in root array
-				auto events = insertJSON.getNodes();
+                // prepare our table
+                auto table = openset::globals::database->newTable("__testsessions__");
 
-				for (auto e : events)
-				{
-					ASSERT(e->xPathInt("/stamp", 0) != 0);
-					ASSERT(e->xPath("/_") != nullptr);
+                // add some columns
+                auto columns = table->getColumns();
+                ASSERT(columns != nullptr);
 
-					person.insert(e);
-				}
+                // content (adding to 2000 range, these typically auto enumerated on create)
+                columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
+                columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
 
-				auto grid = person.getGrid();
-				auto json = grid->toJSON(); // non-condensed
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test
+                auto personRaw = parts->people.getMakePerson("user1@test.com");
 
-				person.commit();
+                Person person; // Person overlay for personRaw;
 
-			}
-		},
-		{
-			"test_sessions: loop", [=]
-			{
-				auto database = openset::globals::database;
+                person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
+                person.mount(personRaw);
 
-				auto table = openset::globals::database->getTable("__testsessions__");
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test				
+                // parse the user1_raw_inserts raw JSON text block
+                cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
-				openset::query::Macro_s queryMacros; // this is our compiled code block
-				openset::query::QueryParser p;
+                // get vector of cjson nodes for each element in root array
+                auto events = insertJSON.getNodes();
 
-				// compile this
-				p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
-				ASSERT(p.error.inError() == false);
+                for (auto e : events)
+                {
+                    ASSERT(e->xPathInt("/stamp", 0) != 0);
+                    ASSERT(e->xPath("/_") != nullptr);
 
-				// mount the compiled query to an interpretor
-				auto interpreter = new openset::query::Interpreter(queryMacros);
+                    person.insert(e);
+                }
 
-				openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
-				interpreter->setResultObject(&resultSet);
+                auto grid = person.getGrid();
+                auto json = grid->toJSON(); // non-condensed
 
-				auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user			
-				ASSERT(personRaw != nullptr);
-				auto mappedColumns = interpreter->getReferencedColumns();
+                person.commit();
 
-				// MappedColumns? Why? Because the basic mapTable function (without a 
-				// columnList) maps all the columns in the table - which is what we want when 
-				// inserting or updating rows but means more processing and less data affinity
-				// when performing queries
+            }
+        },
+        {
+            "test OSL each_row .from",
+            []
+            {
+                // date ranges are inclusive
+                const auto testScript =
+                R"osl(
 
-				Person person; // Person overlay for personRaw;
-				person.mapTable(table.get(), 0, mappedColumns);
+                    select
+                      count id
+                      count session
+                      count some_val
+                    end
 
-				person.mount(personRaw); // this tells the person object where the raw compressed data is
-				person.prepare(); // this actually decompresses
+                    log(cursor)
 
-								  // this mounts the now decompressed data (in the person overlay)
-								  // into the interpreter
-				interpreter->mount(&person);
+                    each_row where event.is(== "some event")
 
-				// run it
-				interpreter->exec();
-				ASSERT(interpreter->error.inError() == false);
+                      << "all", some_str
 
-				// just getting a pointer to the results for nicer readability
-				auto result = interpreter->result;
+                      log(stamp, session)
 
-				ASSERT(result->results.size() != 0);
+                      if session == 2
+                        debug(true)
+                      end
 
-				// we are going to sort the list, this is done for merging, but
-				// being we have one partition in this test we won't actually be merging.
-				result->makeSortedList();
+                    end
 
-				// the merger was made to merge a fancy result structure, we
-				// are going to manually stuff our result into this
-				std::vector<openset::result::ResultSet*> resultSets;
+                    debug(session_count == 3)
 
-				// populate or vector of results, so we can merge
-				//responseData.push_back(&res);
-				resultSets.push_back(interpreter->result);
+                )osl"s;
 
-				// this is the merging object, it merges results from multiple 
-				// partitions into a result that can serialized to JSON, or to 
-				// binary for distributed queries
-				openset::result::ResultMuxDemux merger;
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__testsessions__", testScript, queryMacros, true);
 
-				// we are going to populate this
-				cjson resultJSON;
+                auto& debug = interpreter->debugLog();
+                ASSERT(debug.size() == 4);
+                ASSERTDEBUGLOG(debug);
 
-				// make some JSON
-				//auto rows = merger.mergeResultSets(queryMacros.vars.columnVars.size(), 1, resultSets);
-                //merger.mergeMacroLiterals(queryMacros, resultSets);
-				//auto text = merger.mergeResultText(resultSets);
-				merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
+                auto json = ResultToJson(interpreter);
+                cout << cjson::stringify(&json, true) << endl;
 
-				// NOTE - uncomment if you want to see the results
-				//cout << cjson::Stringify(&resultJSON, true) << endl;
+                auto underScoreNode = json.xPath("/_");
+                ASSERT(underScoreNode != nullptr);
 
-				ASSERTDEBUGLOG(interpreter->debugLog);
+                auto dataNodes = underScoreNode->getNodes();
+                ASSERT(dataNodes.size() == 1);
 
-				auto underScoreNode = resultJSON.xPath("/_");
-				ASSERT(underScoreNode != nullptr);
+                auto totalsNode = dataNodes[0]->xPath("/c");
+                auto values = cjson::stringify(totalsNode);
 
-				auto dataNodes = underScoreNode->getNodes();
-				ASSERT(dataNodes.size() == 1);
+                ASSERT(values == "[1,3,9]");
 
-				auto totalsNode = dataNodes[0]->xPath("/c");
-				auto values = cjson::stringify(totalsNode);
-
-				ASSERT(values == "[1,3,9]");
-
-			}
-		},
-
-	};
-
+                delete interpreter;
+            }
+        },
+    };
 }
