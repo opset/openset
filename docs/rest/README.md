@@ -194,7 +194,7 @@ This will perform an event scanning query by executing the provided `OSL` script
 | ----------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------|
 | `debug=`          | `true/false`      | will return the assembly for the query rather than the results                                                                         |
 | `segments=`       | `segment,segment` | comma separted segment list. Segment must be created with a `/segment` query (see next section). The segment `*` represents all people.|
-| `sort=`           | `column_name`     | sort by column name.                                                                                                                   |
+| `sort=`           | `column_name`     | sort by `select` column name or `as name` if specified. specifying `sort=group`, will sort the result set by using grouping names.     |
 | `order=`          | `asc/desc`        | default is descending order.                                                                                                           |
 | `trim=`           | `# limit`         | clip long branches at a certain count. Root nodes will still include totals for the entire branch.                                     |
 | `str_{var_name}`  | `text`            | populates variable of the same name in the params block with a string value                                                            |
