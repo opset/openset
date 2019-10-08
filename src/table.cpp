@@ -44,8 +44,6 @@ void openset::db::Table::initialize()
     columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
     columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
     columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
     columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
     columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
 
@@ -300,8 +298,6 @@ void Table::deserializeTable(const cjson* doc)
     columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
     columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
     columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
     columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
     columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
 

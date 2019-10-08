@@ -88,6 +88,9 @@ bool OpenLoopInsert::run()
         Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
         this->scheduleFuture(1000);
         sleepCounter = 0;
+
+        tablePartitioned->attributes.clearDirty();
+
         return false;
     }
 
@@ -99,6 +102,9 @@ bool OpenLoopInsert::run()
         SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
         scheduleFuture((sleepCounter > 10 ? 10 : sleepCounter) * 100); // lazy back-off function
         ++sleepCounter; // inc after, this will make it run one more time before sleeping
+
+        tablePartitioned->attributes.clearDirty();
+
         return false;
     }
 
@@ -175,10 +181,6 @@ bool OpenLoopInsert::run()
 
             OnInsert(uuid.first, segment);
         }
-
-        // check status after insert
-        //for (auto trigger : triggers)
-            //trigger.second->postInsertTest();
 
     }
 

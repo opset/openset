@@ -305,6 +305,8 @@ namespace openset::query
         Tracking selects;
         std::vector<Variable_s> selectColumnInfo;
 
+        bool writesProps { false };
+
         std::unordered_map<std::string, int> userVarAssignments;
         std::vector<std::string> currentBlockType;
 
@@ -441,12 +443,14 @@ namespace openset::query
             return result;
         }
 
-        bool isTableColumn(std::string name) const
+        bool isTableColumn(const std::string& name) const
         {
-            if (name.find("column.") == 0)
-                name = name.substr(name.find('.') + 1);
+            return tableColumns->isColumn(name);
+        }
 
-            return (tableColumns->getColumn(name) != nullptr);
+        bool isProperty(const std::string& name) const
+        {
+            return tableColumns->isProp(name);
         }
 
         static bool isMarshal(const std::string& name)
@@ -464,6 +468,7 @@ namespace openset::query
             if (const auto idx = getTrackingIndex(userVars, name); idx != -1)
                 return idx;
             userVars.emplace_back(name);
+
             return static_cast<int>(userVars.size()-1);
         }
 
@@ -488,6 +493,7 @@ namespace openset::query
             if (const auto idx = getTrackingIndex(selects, name); idx != -1)
                 return idx;
             selects.emplace_back(name);
+
             return static_cast<int>(selects.size()-1);
         }
 
@@ -500,7 +506,7 @@ namespace openset::query
 
         bool isAssignedUserVar(const std::string& name)
         {
-            if (name == "props" || name == "each_value")
+            if (name == "each_value")
                 return true;
             return userVarAssignments.find(name) != userVarAssignments.end();
         }
@@ -1844,13 +1850,16 @@ namespace openset::query
             const auto variable = words[idx];
             ++idx;
 
+            if (assignment && isProperty(variable))
+                writesProps = true;
+
+            if (assignment)
+                incUserVarAssignmentCount(variable);
+
             // no subscript, just a variable (checked for function/table var by parseItem)
             if (idx >= static_cast<int>(words.size()) || words[idx] != "[")
             {
                 auto variableIndex = userVarIndex(variable);
-
-                if (assignment)
-                    incUserVarAssignmentCount(variable);
 
                 MiddleOp_e op;
 
@@ -1903,9 +1912,6 @@ namespace openset::query
                 };
             }
 
-            if (assignment)
-                incUserVarAssignmentCount(variable);
-
             MiddleOp_e op;
 
             if (asRef)
@@ -1920,16 +1926,6 @@ namespace openset::query
                 static_cast<int>(subScripts.size()),
                 lastDebug.line,
                 start);
-
-            /*
-            // convert subscript into function
-            middle.emplace_back(
-                MiddleOp_e::marshal,
-                assignment ? static_cast<int>(Marshals_e::marshal_pop_subscript) : static_cast<int>(Marshals_e::marshal_push_subscript),
-                static_cast<int>(subScripts.size() + 1),
-                lastDebug.line,
-                start);
-            */
 
             return end + 1;
         }
@@ -2747,7 +2743,7 @@ namespace openset::query
                 switch (midOp.op)
                 {
                 case MiddleOp_e::push_user:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -2764,7 +2760,7 @@ namespace openset::query
                     break;
 
                 case MiddleOp_e::push_user_ref:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -2782,7 +2778,7 @@ namespace openset::query
 
                 case MiddleOp_e::pop_user_ref:
                 case MiddleOp_e::pop_user_obj_ref:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -3126,11 +3122,18 @@ namespace openset::query
                 if (v == "globals")
                     inMacros.useGlobals = true;
 
-                if (v == "props")
-                  inMacros.useProps = true;
+                if (isProperty(v))
+                {
+                    inMacros.vars.userVars.back().isProp = true;
+                    inMacros.useProps = true;
+                    inMacros.props.push_back(index);
+                }
 
                 ++index;
             }
+
+            // lets us know if we are read-only
+            inMacros.writesProps = writesProps;
 
             index = 0;
             for (auto& v : stringLiterals)

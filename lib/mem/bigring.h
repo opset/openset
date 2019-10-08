@@ -8,729 +8,729 @@
 
 namespace bigConf
 {
-	struct big_info_s
-	{
-		std::vector<int> powers;
-		int steps() const
-		{
-			return static_cast<int>(powers.size());
-		}
-	};
+    struct big_info_s
+    {
+        std::vector<int> powers;
+        int steps() const
+        {
+            return static_cast<int>(powers.size());
+        }
+    };
 
-	const std::vector<big_info_s> big_info =
-	{
-		{ // lt_compact
-			{ 16, 64, 128, 512 },
-		},
-		{ // lt_1_million
-			{ 256, 1024, 2048, 4096, 8192 },
-		},
-		{ // lt_5_million
-			{ 1024, 4096, 8192, 65536, 131072 },
-		},
-		{ // lt_25_million
-			{ 2048, 8192, 65536, 262144, 1048576, 4194304 },
-		},
-		{ // gt_25_million
-			{ 2048, 8192, 65536, 262144, 1048576, 4194304, 8388608 },
-		},
-		{ // gt_50_million
-			{ 8192, 65536, 262144, 1048576, 4194304, 8388608, 16777216 },
-		},
-		{ // gt_150_million
-			{ 65536, 262144, 1048576, 4194304, 8388608, 16777216, 33554432 },
-		},
-		{ // gt_250_million
-			{ 1'048'576, 4'194'304, 8'388'608, 16'777'216, 33'554'432, 67'108'864 },
-		},
-		{ // gt_1_billion
-			{ 8'388'608, 16'777'216, 33'554'432, 67'108'864, 134'217'728 },
-		}
-	};
+    const std::vector<big_info_s> big_info =
+    {
+        { // lt_compact
+            { 16, 64, 128, 512 },
+        },
+        { // lt_1_million
+            { 256, 1024, 2048, 4096, 8192 },
+        },
+        { // lt_5_million
+            { 1024, 4096, 8192, 65536, 131072 },
+        },
+        { // lt_25_million
+            { 2048, 8192, 65536, 262144, 1048576, 4194304 },
+        },
+        { // gt_25_million
+            { 2048, 8192, 65536, 262144, 1048576, 4194304, 8388608 },
+        },
+        { // gt_50_million
+            { 8192, 65536, 262144, 1048576, 4194304, 8388608, 16777216 },
+        },
+        { // gt_150_million
+            { 65536, 262144, 1048576, 4194304, 8388608, 16777216, 33554432 },
+        },
+        { // gt_250_million
+            { 1'048'576, 4'194'304, 8'388'608, 16'777'216, 33'554'432, 67'108'864 },
+        },
+        { // gt_1_billion
+            { 8'388'608, 16'777'216, 33'554'432, 67'108'864, 134'217'728 },
+        }
+    };
 }
 
 enum class ringHint_e : int
 {
-	lt_compact = 0,
-	lt_1_million = 1,
-	lt_5_million = 2,
-	lt_25_million = 3,
-	gt_25_million = 4,
-	gt_50_million = 5,
-	gt_150_million = 6,
-	gt_250_million = 7,
-	gt_1_billion = 8
+    lt_compact = 0,
+    lt_1_million = 1,
+    lt_5_million = 2,
+    lt_25_million = 3,
+    gt_25_million = 4,
+    gt_50_million = 5,
+    gt_150_million = 6,
+    gt_250_million = 7,
+    gt_1_billion = 8
 };
 
 template <typename K, typename V>
 struct bigRingPage
 {
 #pragma pack(push,1)
-	using item_s = std::pair<K, V>;
+    using item_s = std::pair<K, V>;
 #pragma pack(pop)
 
-	int64_t overflow;
-	int64_t size;
-	bigRingPage* nextRing;
-	item_s items[1];
+    int64_t overflow;
+    int64_t size;
+    bigRingPage* nextRing;
+    item_s items[1];
 
-	bigRingPage(const int64_t size, const int64_t overflow) :
-		overflow(overflow),
-		size(size),
-		nextRing(nullptr)
-	{
-		clear();
-	}
-    
-	void clear()
-	{
-		memset(items, 0xff, (size + overflow) * sizeof(item_s));
-		nextRing = nullptr;
-	}
+    bigRingPage(const int64_t size, const int64_t overflow) :
+        overflow(overflow),
+        size(size),
+        nextRing(nullptr)
+    {
+        clear();
+    }
+
+    void clear()
+    {
+        memset(items, 0xff, (size + overflow) * sizeof(item_s));
+        nextRing = nullptr;
+    }
 };
 
 template <typename K, typename V>
 class bigRing
 {
-private:	
+private:
 
-	using Item = typename bigRingPage<K, V>::item_s;
-	using RingPage = bigRingPage<K, V>;
+    using Item = typename bigRingPage<K, V>::item_s;
+    using RingPage = bigRingPage<K, V>;
 
-	bigConf::big_info_s conf;
+    bigConf::big_info_s conf;
 
-	std::hash<K> hasher;
-	char voidItem[sizeof(Item)]{0};
+    std::hash<K> hasher;
+    char voidItem[sizeof(Item)]{0};
 
-	RingPage* root{nullptr};
+    RingPage* root{nullptr};
 
 public:
-	int branchCount;
-	int64_t totalBytes;
-	int64_t distinct;
+    int branchCount;
+    int64_t totalBytes;
+    int64_t distinct;
 
-	explicit bigRing(ringHint_e sizeHint = ringHint_e::gt_25_million) :
-		branchCount(0),
-		totalBytes(0),
-		distinct(0)
-	{
-		conf = bigConf::big_info[static_cast<int>(sizeHint)];
-		root = newbig();
-		memset(&voidItem, 0xFF, sizeof(voidItem));
-	}
+    explicit bigRing(ringHint_e sizeHint = ringHint_e::gt_25_million) :
+        branchCount(0),
+        totalBytes(0),
+        distinct(0)
+    {
+        conf = bigConf::big_info[static_cast<int>(sizeHint)];
+        root = newbig();
+        memset(&voidItem, 0xFF, sizeof(voidItem));
+    }
 
-	bigRing(bigRing<K,V> &&other) noexcept
-	{
-		root = other.root;
-		conf = other.conf;
-		branchCount = other.branchCount;
-		totalBytes = other.totalBytes;
-		distinct = other.distinct;
+    bigRing(bigRing<K,V> &&other) noexcept
+    {
+        root = other.root;
+        conf = other.conf;
+        branchCount = other.branchCount;
+        totalBytes = other.totalBytes;
+        distinct = other.distinct;
 
-		other.branchCount = 0;
-		other.totalBytes = 0;
-		other.distinct = 0;
-		other.root = nullptr;
+        other.branchCount = 0;
+        other.totalBytes = 0;
+        other.distinct = 0;
+        other.root = nullptr;
 
-		memset(&voidItem, 0xFF, sizeof(voidItem));
-	}
+        memset(&voidItem, 0xFF, sizeof(voidItem));
+    }
 
-	// delete copy operators
-	bigRing(const bigRing &other) = delete;
-	bigRing& operator=(bigRing const&) = delete;
+    // delete copy operators
+    bigRing(const bigRing &other) = delete;
+    bigRing& operator=(bigRing const&) = delete;
 
     bigRing& operator=(bigRing&& other) noexcept
     {
-		root = other.root;
-		conf = other.conf;
-		branchCount = other.branchCount;
-		totalBytes = other.totalBytes;
-		distinct = other.distinct;
+        root = other.root;
+        conf = other.conf;
+        branchCount = other.branchCount;
+        totalBytes = other.totalBytes;
+        distinct = other.distinct;
 
-		other.branchCount = 0;
-		other.totalBytes = 0;
-		other.distinct = 0;
-		other.root = nullptr;
+        other.branchCount = 0;
+        other.totalBytes = 0;
+        other.distinct = 0;
+        other.root = nullptr;
 
-		memset(&voidItem, 0xFF, sizeof(voidItem));    
+        memset(&voidItem, 0xFF, sizeof(voidItem));
 
         return *this;
     }
 
-	RingPage* newbig()
-	{
-		const auto elements = (branchCount >= conf.steps()) ? conf.powers[conf.steps() - 1] : conf.powers[branchCount];
-		const auto overflow = (elements <= 64) ? 2 : 4;
+    RingPage* newbig()
+    {
+        const auto elements = (branchCount >= conf.steps()) ? conf.powers[conf.steps() - 1] : conf.powers[branchCount];
+        const auto overflow = (elements <= 64) ? 2 : 4;
 
-		auto sizeBytes = 
-			((elements + overflow) * sizeof(Item)) + sizeof(RingPage);
+        auto sizeBytes =
+            ((elements + overflow) * sizeof(Item)) + sizeof(RingPage);
 
-		// placement new
-		auto branch = new (new char[sizeBytes])RingPage(elements, overflow);
+        // placement new
+        auto branch = new (new char[sizeBytes])RingPage(elements, overflow);
 
-		++branchCount;
-		totalBytes += sizeBytes;
+        ++branchCount;
+        totalBytes += sizeBytes;
 
-		return branch;
-	}
-			
-	inline bool isEmpty(const Item* item) const
-	{
-		return (memcmp(item, &voidItem, sizeof(Item)) == 0);
-	}
+        return branch;
+    }
 
-	Item* set(const K key, const V& value)
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+    inline bool isEmpty(const Item* item) const
+    {
+        return (memcmp(item, &voidItem, sizeof(Item)) == 0);
+    }
 
-		while (true)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+    Item* set(const K key, const V& value)
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-				{
-					item->~Item();
+        while (true)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-					item->first = key;
-					item->second = value;
-					return item;
-				}
-					
-				if (isEmpty(item))
-				{
-					++distinct;					
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                {
+                    item->~Item();
 
-					item->first = key;
-					item->second = value;
-					return item;
-				}
-			}
+                    item->first = key;
+                    item->second = value;
+                    return item;
+                }
 
-			if (!current->nextRing)
-			{
-				current->nextRing = newbig();
-				++branchCount;
-			}
+                if (isEmpty(item))
+                {
+                    ++distinct;
 
-			current = current->nextRing;
+                    item->first = key;
+                    item->second = value;
+                    return item;
+                }
+            }
 
-		}
-	}
+            if (!current->nextRing)
+            {
+                current->nextRing = newbig();
+                ++branchCount;
+            }
 
-	template <class... Args>
-	Item* emplace(const K& key, Args&&... params)
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+            current = current->nextRing;
 
-		while (true)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+        }
+    }
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-				{
-					item->~Item();
+    template <class... Args>
+    Item* emplace(const K& key, Args&&... params)
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-					item->first = key;
-					new (&item->second) V(std::forward<Args>(params)...);
-					return item;
-				}
-					
-				if (isEmpty(item))
-				{
-					++distinct;
+        while (true)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-					item->first = key;
-					new (&item->second) V(std::forward<Args>(params)...);
-					return item;
-				}
-			}
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                {
+                    item->~Item();
 
-			if (!current->nextRing)
-			{
-				current->nextRing = newbig();
-				++branchCount;
-			}
+                    item->first = key;
+                    new (&item->second) V(std::forward<Args>(params)...);
+                    return item;
+                }
 
-			current = current->nextRing;
-		}
-	}
+                if (isEmpty(item))
+                {
+                    ++distinct;
 
-	Item* emplace(std::pair<K,V>&& p)
-	{
-		K key = p.first;
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+                    item->first = key;
+                    new (&item->second) V(std::forward<Args>(params)...);
+                    return item;
+                }
+            }
 
-		while (true)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+            if (!current->nextRing)
+            {
+                current->nextRing = newbig();
+                ++branchCount;
+            }
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-				{
-					item->~Item();
-					new (item) std::pair<K, V>(p);
-					return item;
-				}
-					
-				if (isEmpty(item))
-				{
-					++distinct;
-					new (item) std::pair<K, V>(p);
-					return item;
-				}
-			}
+            current = current->nextRing;
+        }
+    }
 
-			if (!current->nextRing)
-			{
-				current->nextRing = newbig();
-				++branchCount;
-			}
+    Item* emplace(std::pair<K,V>&& p)
+    {
+        K key = p.first;
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-			current = current->nextRing;
-		}
-	}
+        while (true)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-	template <class... Args>
-	bool emplaceTry(const K& key, Args&&... params)
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                {
+                    item->~Item();
+                    new (item) std::pair<K, V>(p);
+                    return item;
+                }
 
-		while (true)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+                if (isEmpty(item))
+                {
+                    ++distinct;
+                    new (item) std::pair<K, V>(p);
+                    return item;
+                }
+            }
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-					return false;
+            if (!current->nextRing)
+            {
+                current->nextRing = newbig();
+                ++branchCount;
+            }
 
-				if (isEmpty(item))
-				{
-					++distinct;
+            current = current->nextRing;
+        }
+    }
 
-					item->first = key;
-					new (&item->second) V(std::forward<Args>(params)...);
-					return true;
-				}
-			}
+    template <class... Args>
+    bool emplaceTry(const K& key, Args&&... params)
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-			if (!current->nextRing)
-			{
-				current->nextRing = newbig();
-				++branchCount;
-			}
+        while (true)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-			current = current->nextRing;
-		}
-	}
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                    return false;
 
-	bool get(const K& key, V &value) const
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+                if (isEmpty(item))
+                {
+                    ++distinct;
 
-		while (current)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+                    item->first = key;
+                    new (&item->second) V(std::forward<Args>(params)...);
+                    return true;
+                }
+            }
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-				{
-					value = item->second;
-					return true;
-				}
-			}
+            if (!current->nextRing)
+            {
+                current->nextRing = newbig();
+                ++branchCount;
+            }
 
-			current = current->nextRing;
-		}
-		return false;
-	}
+            current = current->nextRing;
+        }
+    }
+
+    bool get(const K& key, V &value) const
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
+
+        while (current)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
+
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                {
+                    value = item->second;
+                    return true;
+                }
+            }
+
+            current = current->nextRing;
+        }
+        return false;
+    }
 
     bool hasKey(const K& key) const
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-		while (current)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+        while (current)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-					return true;
-			}
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                    return true;
+            }
 
-			current = current->nextRing;
-		}
-		return false;
-	}
+            current = current->nextRing;
+        }
+        return false;
+    }
 
-	Item* get(const K key) const
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+    Item* get(const K key) const
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-		while (current)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+        while (current)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-					return item;
-			}
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                    return item;
+            }
 
-			current = current->nextRing;
-		}
-		return nullptr;
-	}
+            current = current->nextRing;
+        }
+        return nullptr;
+    }
 
-	/**
-	 * [] will return a reference to the Value if key is found,
-	 * otherwise it will insert key and return a reference to
-	 * a new value.
-	 */
-	V& operator[](const K &key)
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
+    /**
+     * [] will return a reference to the Value if key is found,
+     * otherwise it will insert key and return a reference to
+     * a new value.
+     */
+    V& operator[](const K &key)
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
 
-		while (true)
-		{
-			auto item = current->items +
-				(keyHash % current->size);
-			auto last = item + current->overflow;
+        while (true)
+        {
+            auto item = current->items +
+                (keyHash % current->size);
+            auto last = item + current->overflow;
 
-			for (; item < last; ++item)
-			{
-				if (item->first == key)
-				{
-					return item->second;
-				}
-					
-				if (isEmpty(item))
-				{
-					++distinct;
-					item->first = std::move(key);
-					return item->second;
-				}
-			}
+            for (; item < last; ++item)
+            {
+                if (item->first == key)
+                {
+                    return item->second;
+                }
 
-			if (!current->nextRing)
-			{
-				current->nextRing = newbig();
-				++branchCount;
-			}
+                if (isEmpty(item))
+                {
+                    ++distinct;
+                    item->first = std::move(key);
+                    return item->second;
+                }
+            }
 
-			current = current->nextRing;
-		}
-	}
+            if (!current->nextRing)
+            {
+                current->nextRing = newbig();
+                ++branchCount;
+            }
 
-	class iterator
-	{
-	private:
+            current = current->nextRing;
+        }
+    }
 
-		const bigRing<K, V>* dict;
-		RingPage* current{ nullptr };
+    class iterator
+    {
+    private:
 
-		int64_t bigIter{ -1 };
-		int64_t totalIter{ 0 };
-		int64_t totalSize{ 0 };
+        const bigRing<K, V>* dict;
+        RingPage* current{ nullptr };
 
-	public:
+        int64_t bigIter{ -1 };
+        int64_t totalIter{ 0 };
+        int64_t totalSize{ 0 };
 
-		typedef iterator				   self_type;
-		typedef V                          value_type;
-		typedef int                        difference_type;
-		typedef std::forward_iterator_tag  iterator_category;
-		typedef iterator*                  pointer;
-		typedef iterator&                  reference;
+    public:
+
+        typedef iterator				   self_type;
+        typedef V                          value_type;
+        typedef int                        difference_type;
+        typedef std::forward_iterator_tag  iterator_category;
+        typedef iterator*                  pointer;
+        typedef iterator&                  reference;
 
 
-		explicit iterator(const bigRing* dict) :
-			dict(dict)
-		{
-			current = dict->root;
-			auto t = dict->root;
+        explicit iterator(const bigRing* dict) :
+            dict(dict)
+        {
+            current = dict->root;
+            auto t = dict->root;
 
-			// gather all the bigs
-			while (t)
-			{
-				totalSize += t->size + t->overflow;
-				t = t->nextRing;
-			}
+            // gather all the bigs
+            while (t)
+            {
+                totalSize += t->size + t->overflow;
+                t = t->nextRing;
+            }
 
-			// move to first data (or end)
-			__incr();
-		};
+            // move to first data (or end)
+            __incr();
+        };
 
-		void moveToEnd()
-		{
-			totalIter = totalSize;
-		}
+        void moveToEnd()
+        {
+            totalIter = totalSize;
+        }
 
-		void moveToLocation(const int64_t totalOffset, const int64_t ringOffset, const int depth)
-		{
-			current = dict->root;
+        void moveToLocation(const int64_t totalOffset, const int64_t ringOffset, const int depth)
+        {
+            current = dict->root;
 
-			// move to the specified ring
-			for (auto i = 0; i < depth; i++)
-				current = current->nextRing;
+            // move to the specified ring
+            for (auto i = 0; i < depth; i++)
+                current = current->nextRing;
 
-			totalIter = totalOffset;
-			bigIter = ringOffset;
-		}
+            totalIter = totalOffset;
+            bigIter = ringOffset;
+        }
 
-		void __incr()
-		{
+        void __incr()
+        {
 
-			if (totalIter == totalSize || !current)
-				return;
+            if (totalIter == totalSize || !current)
+                return;
 
-			while (true)
-			{
-				++bigIter;
+            while (true)
+            {
+                ++bigIter;
 
-				if (!current) break;
+                if (!current) break;
 
-				if (bigIter == current->size + current->overflow)
-				{
-					bigIter = -1;
-					current = current->nextRing;
-					continue;
-				}
+                if (bigIter == current->size + current->overflow)
+                {
+                    bigIter = -1;
+                    current = current->nextRing;
+                    continue;
+                }
 
-				++totalIter;
+                ++totalIter;
 
-				if (!dict->isEmpty(current->items + bigIter))
-					break;
-			}
-		}
+                if (!dict->isEmpty(current->items + bigIter))
+                    break;
+            }
+        }
 
-		self_type operator++()
-		{
-			self_type i = *this;
-			__incr();
-			return i;
-		}
+        self_type operator++()
+        {
+            self_type i = *this;
+            __incr();
+            return i;
+        }
 
-		reference operator++(int junk)
-		{
-			__incr();
-			return *this;
-		}
+        reference operator++(int junk)
+        {
+            __incr();
+            return *this;
+        }
 
-		typename RingPage::item_s& operator*() const {
-			return current->items[bigIter];
-		}
+        typename RingPage::item_s& operator*() const {
+            return current->items[bigIter];
+        }
 
-		typename RingPage::item_s& operator*() {
-			return current->items[bigIter];
-		}
+        typename RingPage::item_s& operator*() {
+            return current->items[bigIter];
+        }
 
-		typename RingPage::item_s* operator->() const {
-			return &current->items[bigIter];
-		}
+        typename RingPage::item_s* operator->() const {
+            return &current->items[bigIter];
+        }
 
-		typename RingPage::item_s* operator->() {
-			return &current->items[bigIter];
-		}
+        typename RingPage::item_s* operator->() {
+            return &current->items[bigIter];
+        }
 
-		typename RingPage::item_s* obj() const {
-			return &current->items[bigIter];
-		}
+        typename RingPage::item_s* obj() const {
+            return &current->items[bigIter];
+        }
 
-		bool operator==(const self_type& rhs) const
-		{
-			return totalIter == rhs.totalIter;
-		}
+        bool operator==(const self_type& rhs) const
+        {
+            return totalIter == rhs.totalIter;
+        }
 
-		bool operator!=(const self_type& rhs) const
-		{
-			return totalIter != rhs.totalIter;
-		}
+        bool operator!=(const self_type& rhs) const
+        {
+            return totalIter != rhs.totalIter;
+        }
 
-		typename std::iterator_traits<iterator>::difference_type
-			// Note the return type here, truly generic
-			distance(iterator first_position, const iterator second_position,
-				std::input_iterator_tag)
-		{
-			// note the type of the temp variable here, truly generic 
-			typename std::iterator_traits<iterator>::difference_type diff;
-			for (diff = 0; first_position != second_position; ++first_position, ++diff) 
-			{
-			}
-			return diff;
-		}
+        typename std::iterator_traits<iterator>::difference_type
+            // Note the return type here, truly generic
+            distance(iterator first_position, const iterator second_position,
+                std::input_iterator_tag)
+        {
+            // note the type of the temp variable here, truly generic
+            typename std::iterator_traits<iterator>::difference_type diff;
+            for (diff = 0; first_position != second_position; ++first_position, ++diff)
+            {
+            }
+            return diff;
+        }
 
-	};
+    };
 
-	iterator begin() const
-	{
-		return iterator(this);
-	}
+    iterator begin() const
+    {
+        return iterator(this);
+    }
 
-	iterator end() const
-	{
-		auto i = iterator(this);
-		i.moveToEnd();
-		return i;
-	}
+    iterator end() const
+    {
+        auto i = iterator(this);
+        i.moveToEnd();
+        return i;
+    }
 
-	iterator find(const K& key) const
-	{
-		RingPage* current = root;
-		const uint64_t keyHash = hasher(key);
-		int64_t totalOffset = 0;
-		auto depth = 0;
+    iterator find(const K& key) const
+    {
+        RingPage* current = root;
+        const uint64_t keyHash = hasher(key);
+        int64_t totalOffset = 0;
+        auto depth = 0;
 
-		while (current)
-		{
-			auto ringOffset = static_cast<int64_t>(keyHash % current->size);
-			auto item = current->items + ringOffset;
-			auto last = item + current->overflow;
+        while (current)
+        {
+            auto ringOffset = static_cast<int64_t>(keyHash % current->size);
+            auto item = current->items + ringOffset;
+            auto last = item + current->overflow;
 
-			for (; item < last; ++item, ++ringOffset)
-			{
-				if (item->first == key)
-				{
-					totalOffset += ringOffset;
-					auto it = begin();
-					it.moveToLocation(totalOffset, ringOffset, depth);
-					return it;
-				}
-			}
+            for (; item < last; ++item, ++ringOffset)
+            {
+                if (item->first == key)
+                {
+                    totalOffset += ringOffset;
+                    auto it = begin();
+                    it.moveToLocation(totalOffset, ringOffset, depth);
+                    return it;
+                }
+            }
 
-			depth++;
-			totalOffset += current->size + current->overflow;
-			current = current->nextRing;
-		}
+            depth++;
+            totalOffset += current->size + current->overflow;
+            current = current->nextRing;
+        }
 
-		return end();
-	}
+        return end();
+    }
 
-	iterator erase(const iterator position)
-	{
-		if (position != end() &&
-			!isEmpty(position.obj()))
-		{
-			auto item = position.obj();
-			item->first.~K();
-			item->second.~V();
-			
-			// set memory to voided value
-			//memset(item, 0xff, sizeof(item));
+    iterator erase(const iterator position)
+    {
+        if (position != end() &&
+            !isEmpty(position.obj()))
+        {
+            auto item = position.obj();
+            item->first.~K();
+            item->second.~V();
+
+            // set memory to voided value
+            //memset(item, 0xff, sizeof(item));
             memset(&item->first, 0xff, sizeof(K));
             memset(&item->second, 0xff, sizeof(V));
 
-			--distinct;
-		}
+            --distinct;
+        }
 
-		iterator i = position;
-		++i; // move iterator to next item
-		return i;
-	}
+        iterator i = position;
+        ++i; // move iterator to next item
+        return i;
+    }
 
-	size_t erase(const K& key)
-	{
-		const iterator it = find(key);
+    size_t erase(const K& key)
+    {
+        const iterator it = find(key);
 
-		if (it != end())
-		{
-			erase(it);
-			return 1;
-		}
+        if (it != end())
+        {
+            erase(it);
+            return 1;
+        }
 
-		return 0;
-	}
+        return 0;
+    }
 
-	bool empty() const
-	{
-		return (distinct == 0);
-	}
+    bool empty() const
+    {
+        return (distinct == 0);
+    }
 
-	size_t size() const
-	{
-		return distinct;
-	}
+    size_t size() const
+    {
+        return distinct;
+    }
 
-	size_t count(const K& key) const
-	{
-		auto it = find(key);
-		return (it == end()) ? 0 : 1;
-	}
+    size_t count(const K& key) const
+    {
+        auto it = find(key);
+        return (it == end()) ? 0 : 1;
+    }
 
-	void clear(const bool deleteAll = false)
-	{
-		if (!deleteAll && (!root || !distinct))
-			return;
+    void clear(const bool deleteAll = false)
+    {
+        if (!deleteAll && (!root || !distinct))
+            return;
 
-		auto ring = root;
-		auto index = 0;
+        auto ring = root;
+        auto index = 0;
 
-		while (ring)
-		{
-			if (index == ring->size + ring->overflow)
-			{
-				auto t = ring;
-				ring = ring->nextRing;
-				if (deleteAll || t != root)
-					delete t;
-				index = 0;
-				continue;
-			}
+        while (ring)
+        {
+            if (index == ring->size + ring->overflow)
+            {
+                auto t = ring;
+                ring = ring->nextRing;
+                if (deleteAll || t != root)
+                    delete t;
+                index = 0;
+                continue;
+            }
 
-			if (!isEmpty(ring->items + index))
-			{
-				ring->items[index].first.~K();
-				ring->items[index].second.~V();
-				if (ring == root)
+            if (!isEmpty(ring->items + index))
+            {
+                ring->items[index].first.~K();
+                ring->items[index].second.~V();
+                if (ring == root)
                 {
                     memset(&ring->items[index].first, 0xff, sizeof(K));
                     memset(&ring->items[index].second, 0xff, sizeof(V));
                 }
-			}
-			++index;
-		}
+            }
+            ++index;
+        }
 
-		branchCount = 0;
-		totalBytes = 0;
-		distinct = 0;
-		if (!deleteAll)
-			root->nextRing = nullptr;
-			//root->clear();
-	}
+        branchCount = 0;
+        totalBytes = 0;
+        distinct = 0;
+        if (!deleteAll)
+            root->nextRing = nullptr;
+            //root->clear();
+    }
 
-	~bigRing()
-	{
-		clear(true);
-		root = nullptr;
-	}
+    ~bigRing()
+    {
+        clear(true);
+        root = nullptr;
+    }
 };
 
 

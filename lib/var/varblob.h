@@ -112,7 +112,7 @@ private:
             break;
         }
     };
-    
+
     // this was prettier before it got faster, but this recursive function
     // unpacks serialized cvar objects recursively using move semantics to
     // help minimize the number of objects created and copied.
@@ -176,7 +176,7 @@ private:
             while (members)
             {
                 key = deserializeRecursive(read);
-                // can't pass deserializeRecursive to both because evaluation order is not guaranteed. 
+                // can't pass deserializeRecursive to both because evaluation order is not guaranteed.
                 result.dictValue->emplace(std::make_pair(key, deserializeRecursive(read)));
                 --members;
             }
@@ -187,12 +187,6 @@ private:
         }
     }
 
-    /*
-     
-    return XXH64(buffer, len, HASH_SEED);
-	return XXH64(buffer, strlen(buffer), HASH_SEED);
-
-     */
     static void hashRecursive(const cvar& var, int64_t& hash)
     {
         // hash in the type
@@ -208,7 +202,8 @@ private:
         case cvar::valueType::BOOL:
         {
             // value is a 64bit union (8 bytes)
-            hash = XXH64(reinterpret_cast<const void*>(&var.value), 8, hash);
+            if (var.getInt64() != NONE)
+                hash = XXH64(reinterpret_cast<const void*>(&var.value), 8, hash);
         }
             break;
         case cvar::valueType::STR:
@@ -228,6 +223,8 @@ private:
             // go recursive for the members of the list
             for (auto& pair : *var.dictValue)
             {
+                if (!pair.second.isContainer() && pair.second.getInt64() == NONE)
+                    continue;
                 hashRecursive(pair.first, hash);  // serialize the key
                 hashRecursive(pair.second, hash); // serialize the value
             }

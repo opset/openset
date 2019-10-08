@@ -11,9 +11,9 @@
 
 TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std::string& script, openset::query::Macro_s& queryMacros, const bool debug)
 {
-    auto database = openset::globals::database;
-    auto table    = database->getTable(tableName);
-    auto parts    = table->getPartitionObjects(0, true); // partition zero for test
+    const auto database = openset::globals::database;
+    const auto table    = database->getTable(tableName);
+    const auto parts    = table->getPartitionObjects(0, true); // partition zero for test
 
     openset::query::QueryParser p;
 

@@ -80,29 +80,6 @@ void OpenLoopQuery::prepare()
             }
             else
             {
-                /*
-                auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
-                if (attr)
-                {
-                    segments.push_back(attr->getBits());
-                }
-                else
-                {
-                    shuttle->reply(
-                        0,
-                        result::CellQueryResult_s {
-                            instance,
-                            {},
-                            openset::errors::Error {
-                                openset::errors::errorClass_e::run_time,
-                                openset::errors::errorCode_e::item_not_found,
-                                "missing segment '" + segmentName + "'"
-                            }
-                        }
-                    );
-                    suicide();
-                    return;
-                }*/
                 if (!parts->segments.count(segmentName))
                 {
                     shuttle->reply(
@@ -163,6 +140,8 @@ bool OpenLoopQuery::run()
                     {},
                     interpreter->error,
                 });
+
+            parts->attributes.clearDirty();
 
             suicide();
             return false;

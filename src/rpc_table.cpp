@@ -194,7 +194,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     if (sourceSettings)
     {
-        table->deserializeSettings(sourceSettings); 
+        table->deserializeSettings(sourceSettings);
     }
 
     globals::async->resumeAsync();
@@ -323,7 +323,7 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
         }
 
     auto zOrder = response.setArray("z_order");
-    const auto zOrderMap = table->getZOrderStrings(); 
+    const auto zOrderMap = table->getZOrderStrings();
     std::vector<std::string> zOrderList(zOrderMap->size());
 
     for (auto m: *zOrderMap)
@@ -568,7 +568,7 @@ void RpcTable::table_settings(const openset::web::MessagePtr& message, const Rpc
     csLock lock(*table->getLock());
 
     table->deserializeSettings(&request);
-    
+
     cjson response;
     table->serializeSettings(&response);
     message->reply(http::StatusCode::success_ok, response);

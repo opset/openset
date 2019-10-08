@@ -19,7 +19,9 @@ namespace openset
             code,
             lambda,
             function
-        }; // Result Column Modifiers
+        };
+
+        // Result Column Modifiers
         enum class Modifiers_e : int32_t
         {
             sum,
@@ -882,11 +884,13 @@ namespace openset
         using ParamVars = unordered_map<string, cvar>;
         using SegmentList = vector<std::string>; // struct containing compiled macro
         using LambdaLookAside = vector<int>;
+        using PropLookAside = vector<int>;
 
         struct Macro_s
         {
             Variables_S vars;
             LambdaLookAside lambdas;
+            PropLookAside props;
             FilterList filters;
             InstructionList code;
             HintPairs indexes;
@@ -905,6 +909,7 @@ namespace openset
             std::string rawScript;
             bool isSegment { false };
             bool useProps { false };      // uses person props
+            bool writesProps { true };    // script can change props
             bool useGlobals { false };    // uses global for table
             bool useCached { false };     // for segments allow use of cached values within TTL
             bool isSegmentMath { false }; // for segments, the index has the value, script execution not required

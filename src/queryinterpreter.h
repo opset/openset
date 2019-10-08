@@ -135,7 +135,7 @@ namespace openset
             int64_t linid{ 0 };
 
             // database objects
-            const Grid* grid{ nullptr };
+            Grid* grid{ nullptr };
             const Rows* rows{ nullptr };
             const Row* propRow{ nullptr };
             int rowCount{ 0 };
@@ -149,7 +149,9 @@ namespace openset
             IndexBits* bits{ nullptr };
             int maxBitPop{ 0 }; // largest linear user_id in table/partition
 
+            cvar props;
             int propsIndex{ -1 };
+            bool propsChanged{ false };
 
             // counters
             int loopCount{ 0 };
@@ -166,7 +168,6 @@ namespace openset
             InterpretMode_e interpretMode{ InterpretMode_e::query };
             LoopState_e loopState{ LoopState_e::run }; // run, continue, break, exit
             bool isConfigured{ false };
-            bool jobState{ false };
 
             // debug - log entries are entered in order by calling debug
             DebugLog debugLog;
@@ -283,6 +284,9 @@ namespace openset
             void exec();
             void exec(const string &functionName);
             void exec(const int64_t functionHash);
+
+            void setGridProps();
+            void getGridProps();
 
             // if you need the result of exec+function this will get it or return value NONE
             Returns& getLastReturn();
