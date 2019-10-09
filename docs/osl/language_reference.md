@@ -54,6 +54,66 @@ some_text = "hello"
 
 OSL will maintain and convert types as needed internally.
 
+#### Columns (accessing row level data)
+
+Columns are referenced by name in OSL scripts. 
+
+Depending on the context a column variable may have different meanings.
+
+For example:
+
+```ruby
+
+if some_column == "dog"
+  # some_column will be the value of whatever row the row cursor is on
+  # useful for ifs in the code blocks of `each_row` iterators.
+end
+
+if some_column.ever(== "dog")
+  # does some_column ever have a value of "dog"?
+end
+
+if some_column.within(3_months, now).never(== "dog")
+  # does some_column NEVER have a value of "dog" within the last 3 months?
+end
+
+```
+
+Modifiers make column logic `columns` more powerful.
+
+Modifiers allow you to scan an entire column, match the cursor row, or test for ever/never scenarios within timeframes. 
+
+:bulb: if using date constraints, you must use the `.is`, `.ever` or `.never` pattern.
+
+-   `.ever( comparator )` - does comparator ever match
+-   `.never( comparator )`- does comparator never match
+-   `.is( comparator )`  -  does comparator match @ row in `each_row` iteration.
+-   `.is_not` - does comparator not-match @ row in `each_row` iteration.
+-   `.range( start_stamp, end_stamp )` - between to dates
+-   `.within( time_span, relative_stamp )` - within a time frame of
+-   `.look_ahead( #, # )` - same as within, but only looks forward
+-   `.look_back( #, # )` - same as within, but only looks back
+-   `.next()` - used by `.ever`, `.never` when used with `.look_ahead` or `.look_back` to move the cursor past the current row.
+
+:bulb: the `.is` and `.is_not` modifier can only be used the `where` component of a `each_row` query, or within the code block or a `each_row` iterator. This is because the row cursor must be set.
+
+:bulb: the `.is` and `.is_not` modifier may not be used with date  modifiers. See `each_row` modifiers to constrain a row search.
+
+#### property columns (is_props)
+
+Columns defined with `is_prop` can be used like normal variables within an OSL script.
+
+Generally properties would be used for non-event based customer facts.
+
+Reading and writing a property is as easy of using the column by name. Say you have property columns named `total_purchase_value` and an `on_insert` script that runs when a customers data changes:
+
+```ruby
+
+total_purchase_value = sum(product_price).within(1_year, now) where event.is(== "purchase")
+
+```
+
+The OSL interpreter will detect that a prop has been modified, write it back to the customer record and update indexes. Reading and writing props are not as efficient as non-prop columns, so if you don't need a property in an OSL script, don't reference one.
 
 #### dict
 

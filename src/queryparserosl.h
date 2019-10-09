@@ -3673,7 +3673,7 @@ namespace openset::query
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
         {
 
-            //try
+            try
             {
 
                 tableColumns = columnsPtr;
@@ -3706,7 +3706,7 @@ namespace openset::query
 
                 return true;
             }
-            /*catch (const QueryParse2Error_s& ex)
+            catch (const QueryParse2Error_s& ex)
             {
                 error.set(
                     errors::errorClass_e::parse,
@@ -3755,7 +3755,7 @@ namespace openset::query
                     "unknown exception in parser (3)",
                     additional);
                 return false;
-            }*/
+            }
         }
 
         static SectionDefinitionList extractSections(const char* query, const Debugger_s lastDebug = {})
