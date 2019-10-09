@@ -1,4 +1,4 @@
-# PyQL Language Reference
+# OSL Language Reference
 
 ## Query Layout
 
@@ -561,7 +561,7 @@ The `<<` function has defines groupings (pivots) for the result set.
 
 Aggregators specified in the the `select` section will be executed using the columns for the current row `cursor`.
 
-The following PyQL will generate a tree:
+The following OSL script will generate a tree:
 
 ```ruby
 << "root", "branch1", "leaf1"
@@ -634,7 +634,7 @@ end
 ```
 
 
-## PyQL built-in functions and variables
+## OSL built-in functions and variables
 
 These are functions and variables not covered in the above sections.
 
@@ -700,7 +700,7 @@ log(some_column, some_var, some_dict, 'hello')
 
 #### function: debug
 
-Pushes a value into a debug log maintained by the PyQL interpreter. This function is primarily used when writing tests for the OpenSet engine.
+Pushes a value into a debug log maintained by the OSL interpreter. This function is primarily used when writing tests for the OpenSet engine.
 
 ```python
 debug(row_count == 0)
