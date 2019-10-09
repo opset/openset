@@ -16,12 +16,12 @@ openset::errors::Error::Error(
 		additional(errorAdditional)
 {}
 
-openset::errors::Error::~Error() 
+openset::errors::Error::~Error()
 {}
 
 void openset::errors::Error::set(
-	const errorClass_e errorClass, 
-	const errorCode_e errorCode, 
+	const errorClass_e errorClass,
+	const errorCode_e errorCode,
 	const std::string errorDetail,
 	const std::string errorAdditional)
 {

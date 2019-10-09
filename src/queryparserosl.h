@@ -3178,7 +3178,7 @@ namespace openset::query
                         {
                             tokensUnchained.emplace_back("VOID");
                         }
-                        else if (isTableColumn(token))
+                        else if (isTableColumn(token) || isProperty(token))
                         {
                             tokensUnchained.emplace_back(token);
 
@@ -3406,7 +3406,10 @@ namespace openset::query
                             tokens[idx]   = "";
                             tokens[idx+1] = "";
                         }
-                        else if (isTableColumn(nextToken) && (isNumeric(prevToken) || isString(prevToken)))
+                        else if (
+                            (isTableColumn(nextToken) || isProperty(nextToken)) &&
+                            (isNumeric(prevToken) || isString(prevToken))
+                            )
                         {
                             tokens[idx-1] = nextToken;
                             tokens[idx+1] = prevToken;
@@ -3489,13 +3492,13 @@ namespace openset::query
                             stripped = true;
                         }
                         // look for stranded values
-                        else if (!isTableColumn(token) && prevToken == "(" && nextToken == ")")
+                        else if (!isTableColumn(token) && !isProperty(token) && prevToken == "(" && nextToken == ")")
                         {
                             stripped = true;
                         }
                         // look for columns with no condition
                         else if (
-                            isTableColumn(token) &&
+                            (isTableColumn(token) || isProperty(token)) &&
                             (
                                 (LogicalOperators.count(prevToken) || prevToken == "(") &&
                                 (LogicalOperators.count(nextToken) || nextToken == ")")
@@ -3509,7 +3512,7 @@ namespace openset::query
                             output.emplace_back("!=");
                             output.emplace_back("nil");
                         }
-                        else if (isTableColumn(token) && nextToken == "!=")
+                        else if ((isTableColumn(token) || isProperty(token)) && nextToken == "!=")
                         {
                             // if it isn't a not_equal from an ever/never (which was changed to `[!=]`)
                             // change this for presence checking (ever != nil)
@@ -3557,7 +3560,7 @@ namespace openset::query
 
             const auto pushValue = [&](const std::string& value)
             {
-                if (isTableColumn(value))
+                if (isTableColumn(value) || isProperty(value))
                     index.emplace_back(HintOp_e::PUSH_TBL, value);
                 else if (isNil(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, NONE);
@@ -3670,7 +3673,7 @@ namespace openset::query
         bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
         {
 
-            try
+            //try
             {
 
                 tableColumns = columnsPtr;
@@ -3703,7 +3706,7 @@ namespace openset::query
 
                 return true;
             }
-            catch (const QueryParse2Error_s& ex)
+            /*catch (const QueryParse2Error_s& ex)
             {
                 error.set(
                     errors::errorClass_e::parse,
@@ -3752,7 +3755,7 @@ namespace openset::query
                     "unknown exception in parser (3)",
                     additional);
                 return false;
-            }
+            }*/
         }
 
         static SectionDefinitionList extractSections(const char* query, const Debugger_s lastDebug = {})

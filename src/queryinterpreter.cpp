@@ -3251,7 +3251,7 @@ void openset::query::Interpreter::getGridProps()
     for (auto varIndex : macros.props)
         macros.vars.userVars[varIndex].value = props.contains(macros.vars.userVars[varIndex].actual)
                                                    ? props[macros.vars.userVars[varIndex].actual]
-                                                   : NONE;
+                                                   : cvar(NONE);
 }
 
 openset::query::Interpreter::Returns& openset::query::Interpreter::getLastReturn()
