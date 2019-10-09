@@ -3272,6 +3272,10 @@ namespace openset::query
                     if (token == "in" || token == "contains" || token == "any")
                         token = "==";
 
+                    // clean up any residual user variables
+                    if (isUserVar(token))
+                        token = "VOID";
+
                     // convert lists into ORs if left or right side is not a void
                     if (token == "[")
                     {
