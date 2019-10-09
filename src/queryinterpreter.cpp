@@ -117,12 +117,6 @@ void openset::query::Interpreter::mount(Person* person)
                     if (!s.value.contains("segment"))
                         s.value["segment"] = cvar(cvar::valueType::DICT);
                 }
-
-                if (macros.useProps && s.actual == "props")
-                {
-                    s.value    = cvar(cvar::valueType::DICT);
-                    propsIndex = s.index;
-                }
             }
         }
         firstRun = false;

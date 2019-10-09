@@ -3273,7 +3273,7 @@ namespace openset::query
                         token = "==";
 
                     // clean up any residual user variables
-                    if (isUserVar(token))
+                    if (isUserVar(token) && !isProperty(token))
                         token = "VOID";
 
                     // convert lists into ORs if left or right side is not a void
