@@ -14,6 +14,7 @@
 #include "test_helper.h"
 
 #include <unordered_set>
+#include "../src/queryindexing.h"
 
 // Our tests
 inline Tests test_db()
@@ -37,7 +38,12 @@ inline Tests test_db()
             "_":{
                 "page": "home page",
                 "referral_source": "google.co.uk",
-`				"referral_search": ["big", "floppy", "slippers"]
+`				"referral_search": ["big", "floppy", "slippers"],
+                "prop_set": ["orange", "huge"],
+                "prop_txt": "rabbit",
+                "prop_int": 543,
+                "prop_float": 543.21
+                "prop_bool": false,
             }
         },
         {
@@ -110,13 +116,18 @@ inline Tests test_db()
                 columns->setColumn(3000, "referral_source", columnTypes_e::textColumn, false);
                 columns->setColumn(3001, "referral_search", columnTypes_e::textColumn, true);
 
+
+                columns->setColumn(4000, "prop_set", columnTypes_e::textColumn, true, true);
+                columns->setColumn(4001, "prop_txt", columnTypes_e::textColumn, false, true);
+                columns->setColumn(4002, "prop_bool", columnTypes_e::boolColumn, false, true);
+                columns->setColumn(4003, "prop_int", columnTypes_e::intColumn, false, true);
+                columns->setColumn(4004, "prop_float", columnTypes_e::doubleColumn, false, true);
+
                 // do we have 10 columns (7 built ins plus 3 we added)
-                ASSERT(table->getColumns()->columnCount == 10);
+                ASSERT(table->getColumns()->columnCount == 13);
 
                 // built-ins
-                ASSERT(table->getColumns()->nameMap.count("__triggers"));
                 ASSERT(table->getColumns()->nameMap.count("id"));
-                ASSERT(table->getColumns()->nameMap.count("__emit"));
 
                 // columns we've added
                 ASSERT(table->getColumns()->nameMap.count("page"));
@@ -160,6 +171,9 @@ inline Tests test_db()
 
                     person.insert(e);
                 }
+
+                // write back any dirty change bits from the insert
+                parts->attributes.clearDirty();
 
                 auto grid = person.getGrid();
 
@@ -207,6 +221,14 @@ inline Tests test_db()
 
                 // store this person
                 person.commit();
+
+                const auto attr = parts->attributes.get(4000, "huge");
+                ASSERT(attr != nullptr);
+                const auto bits = attr->getBits();
+                ASSERT(bits != nullptr);
+                const auto pop = bits->population(parts->people.peopleCount());
+                ASSERT(pop == 1);
+
             }
         },
         {
@@ -222,22 +244,16 @@ inline Tests test_db()
                         count referral_source
                     end
 
-                    if ('test' in props) == false
-                        props['test'] = {}
-                    end
+                    prop_set = set()
 
                     # set some props
-                    props['test']['this'] = 'hello'
-                    some_var = props['test']['this']
+                    prop_set = prop_set + 'hello'
+                    prop_set = prop_set + 'goodbye'
 
-                    props['fav_beers'] = set('cold', 'free')
-                    props['opposites'] = {
-                        'bows': 'arrows',
-                        'up': 'down',
-                        'inside': 'outside'
-                    }
-
-                    log(props)
+                    prop_txt = 'poodle'
+                    prop_bool = true
+                    prop_int = 123
+                    prop_float = 123.456
 
                     counter = 0
 
@@ -256,6 +272,9 @@ inline Tests test_db()
 
                 openset::query::Macro_s queryMacros;
                 const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                // clear dirty bits (set by props)
+                interpreter->interpreter->attrs->clearDirty();
 
                 auto& debug = interpreter->debugLog();
                 ASSERT(debug.size() == 1);
@@ -287,27 +306,50 @@ inline Tests test_db()
                 const auto testScript =
                 R"osl(
 
-                    if 'test' in props
+                    if 'hello' in prop_set
                       debug(true)
                     end
 
-                    if 'this' in props['test']
+                    if prop_txt == 'poodle'
                       debug(true)
                     end
 
-                    if 'cold' in props['fav_beers']
+                    if prop_bool == true
                       debug(true)
                     end
 
-                    log(props)
+                    if prop_int == 123
+                      debug(true)
+                    end
+
+                    if prop_float == 123.456
+                      debug(true)
+                    end
 
                 )osl"s;
 
                 openset::query::Macro_s queryMacros;
                 const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
 
+                // clear dirty bits (set by props)
+                interpreter->interpreter->attrs->clearDirty();
+
+                const auto database = openset::globals::database;
+                const auto table    = database->getTable("__test001__");
+                const auto parts = table->getPartitionObjects(0, true); // partition zero for test
+
+                auto attr = interpreter->interpreter->attrs->get(4000, "hello");
+                ASSERT(attr != nullptr);
+                auto bits = attr->getBits();
+                ASSERT(bits != nullptr);
+                auto pop = bits->population(parts->people.peopleCount());
+                ASSERT(pop == 1);
+
+                attr = interpreter->interpreter->attrs->get(4000, "huge");
+                ASSERT(attr == nullptr);
+
                 auto& debug = interpreter->debugLog();
-                ASSERT(debug.size() == 3);
+                ASSERT(debug.size() == 5);
                 ASSERTDEBUGLOG(debug);
 
                 delete interpreter;
@@ -649,7 +691,190 @@ inline Tests test_db()
 
                 delete interpreter;
             }
-        }
+        },
+
+        {
+            "db: index compiler basic with prop (index count of 1)",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.is(!= "blog") && prop_set contains 'hello'
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 7);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "prop_set"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "hello");
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::BIT_AND);
+
+                const auto database = openset::globals::database;
+                const auto table    = database->getTable("__test001__");
+                const auto parts = table->getPartitionObjects(0, true); // partition zero for test
+
+                const auto maxLinearId = parts->people.peopleCount();
+
+                openset::query::Indexing indexing;
+                indexing.mount(table.get(), queryMacros, 0, maxLinearId);
+
+                bool countable;
+                const auto index      = indexing.getIndex("_", countable);
+                const auto population = index->population(maxLinearId);
+
+                ASSERT(population == 1);
+
+                delete interpreter;
+            }
+        },
+        {
+            "db: index compiler basic with prop (index count of 0 - deleted item)",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page.is(!= "blog") && prop_set contains 'orange'
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 7);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "prop_set"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == "orange"); // should be replaced and de-indexed
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::EQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::BIT_AND);
+
+                const auto database = openset::globals::database;
+                const auto table    = database->getTable("__test001__");
+                const auto parts = table->getPartitionObjects(0, true); // partition zero for test
+
+                const auto maxLinearId = parts->people.peopleCount();
+
+                openset::query::Indexing indexing;
+                indexing.mount(table.get(), queryMacros, 0, maxLinearId);
+
+                bool countable;
+                const auto index      = indexing.getIndex("_", countable);
+                const auto population = index->population(maxLinearId);
+
+                ASSERT(population == 0);
+
+                delete interpreter;
+            }
+        },
+
+        {
+            "db: index compiler basic with prop (not equal and not equal)",
+            []
+            {
+                const auto testScript =
+                R"osl(
+
+                    select
+                        count id
+                    end
+
+                    each_row where page != "blog" && prop_txt != 'rabbit'
+                        << page
+                    end
+
+                )osl"s;
+
+                openset::query::Macro_s queryMacros;
+                const auto interpreter = TestScriptRunner("__test001__", testScript, queryMacros, true);
+
+                auto& debug = interpreter->debugLog();
+
+                ASSERT(queryMacros.index.size() == 7);
+
+                ASSERT(queryMacros.index[0].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[0].value == "page"s);
+
+                ASSERT(queryMacros.index[1].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[1].value == NONE);
+
+                ASSERT(queryMacros.index[2].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[3].op == openset::query::HintOp_e::PUSH_TBL);
+                ASSERT(queryMacros.index[3].value == "prop_txt"s);
+
+                ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
+                ASSERT(queryMacros.index[4].value == NONE); // should be replaced and de-indexed
+
+                ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::NEQ);
+
+                ASSERT(queryMacros.index[6].op == openset::query::HintOp_e::BIT_AND);
+
+                const auto database = openset::globals::database;
+                const auto table    = database->getTable("__test001__");
+                const auto parts = table->getPartitionObjects(0, true); // partition zero for test
+
+                const auto maxLinearId = parts->people.peopleCount();
+
+                openset::query::Indexing indexing;
+                indexing.mount(table.get(), queryMacros, 0, maxLinearId);
+
+                bool countable;
+                const auto index      = indexing.getIndex("_", countable);
+                const auto population = index->population(maxLinearId);
+
+                // index is super broad because it contains `not equals` conditions (against columns/props)
+                ASSERT(population == 1);
+
+                delete interpreter;
+            }
+        },
 
     };
 }

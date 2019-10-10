@@ -55,16 +55,15 @@ string openset::query::MacroDbg(Macro_s& macro)
     ss << endl << endl;
     ss << "User variables:" << endl;
     outSpacer();
-    ss << "IDX | NAME                   | INIT" << endl;
+    ss << "IDX | NAME                   | PROP" << endl;
     outSpacer();
     if (macro.vars.userVars.size())
     {
         for (auto& v : macro.vars.userVars)
         {
             ss << padding(v.index, 3, true) << " | ";
-            ss << padding("'" + v.actual + "'", 20, false, ' ') << " | " << (v.startingValue == NONE
-                                                                     ? "null"
-                                                                     : v.startingValue);
+            ss << padding("'" + v.actual + "'", 20, false, ' ') << " | " <<
+                (v.isProp ? "is property" : "");
             ss << endl;
         }
     }

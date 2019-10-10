@@ -109,8 +109,8 @@ namespace openset
 
             zMapStr zOrderStrings;
             zMapHash zOrderInts;
-            //std::unordered_map<std::string, openset::revent::reventSettings_s*> triggerConf;
             AttributeBlob attributeBlob;
+
             // partition specific objects
             PartitionMap partitions;
             ZombiePartitions zombies;

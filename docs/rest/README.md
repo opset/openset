@@ -27,18 +27,29 @@ Returns a 200 or 400 status code.
 
 ## POST /v1/table/{table} (create table)
 
+Create a table by passing a JSON array of desired table columns.
+
+A columns requires a name and type.
+
+- `name` - columns can have lowercase alphanumeric names as long as they don't start with a number or contain spaces (`_` is valid, other symbols are not).
+- `type` - valid types are `text`, `int`, `double`,  and `bool`.
+- `is_set` - if provided and `true`, this column will be a collection of values, rather than single value (think product tags i.e. 'red', 'big', 'kitchen')
+- `is_prop` - If provided and `true` this is column is a customer property.  Properties are are non-time sequenced facts about a customer. These might be values like `age` or `country` or created by an ML model.
+
 ```
 {
     "columns": [
         {
             "name": "{column_name}",
             "type": "{text|int|double|bool}",
-            "is_set": {optional: true|false}
+            "is_set": {optional: true|false},
+            "is_prop": {optional: true|false},            
         },
         {
             "name": "{column_name}",
             "type": "{text|int|double|bool}",
-            "is_set": {optional: true|false}
+            "is_set": {optional: true|false},
+            "is_prop": {optional: true|false},                       
         },
         //etc
     ],
@@ -55,6 +66,8 @@ Returns a 200 or 400 status code.
 ## GET /v1/table/{table} (describe table)
 
 Returns JSON describing the table.
+
+> :bulb: columns marked as `is_set` and/or `is_prop` will as such in the column list.
 
 ```json
 {
@@ -96,6 +109,11 @@ Returns JSON describing the table.
         {
             "name": "cart_size",
             "type": "int"
+        },
+        {
+            "name": "age",
+            "type": "int",
+            "is_prop": true
         }
     ]
 }

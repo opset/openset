@@ -49,13 +49,13 @@ void Attributes::addChange(const int32_t column, const int64_t value, const int3
     const auto changeTail = changeRecord ? changeRecord->second : nullptr;
 
     // using placement new here into a POOL buffer
+    // Note we are adding the pointer to the last change to every new change
     const auto change =
         new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
         Attr_changes_s(
             linearId, (state) ? 1 : 0, changeTail);
 
     changeIndex.set({ column, value }, change);
-    //changeTail = change;
 }
 
 
@@ -120,7 +120,6 @@ void Attributes::clearDirty()
 {
     IndexBits bits;
 
-
     for (auto& change : changeIndex)
     {
         const auto attrPair = columnIndex.get({ change.first.column, change.first.value });
@@ -147,7 +146,6 @@ void Attributes::clearDirty()
 
         if (!bits.population(bits.ints * 64)) //pop count zero? remove this
         {
-            //cout << "dropped index item" << endl;
             drop(change.first.column, change.first.value );
             PoolMem::getPool().freePtr(attr);
         }

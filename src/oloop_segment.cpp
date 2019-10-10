@@ -143,6 +143,8 @@ bool OpenLoopSegment::nextMacro()
                 }
             );
 
+            parts->attributes.clearDirty();
+
             suicide();
 
             return false;
@@ -291,6 +293,8 @@ bool OpenLoopSegment::run()
                 }
             );
 
+            parts->attributes.clearDirty();
+
             suicide();
             return false;
         }
@@ -340,6 +344,8 @@ bool OpenLoopSegment::run()
                     }
                 );
                 suicide();
+
+                parts->attributes.clearDirty();
                 return false;
             }
 

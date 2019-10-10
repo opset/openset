@@ -12,8 +12,8 @@ using namespace std;
 
 namespace openset
 {
-	namespace db
-	{
+    namespace db
+    {
         static const unordered_set<std::string> ColumnTypes = {
             { "int" },
             { "double" },
@@ -21,52 +21,60 @@ namespace openset
             { "bool" }
         };
 
-		class Columns
-		{
-		public:
+        class Columns
+        {
+        public:
 
-			struct Columns_s
-			{
-				string name;
-				int32_t idx{0};
-				columnTypes_e type{ columnTypes_e::freeColumn };
-				bool isSet{ false };
+            struct Columns_s
+            {
+                string name;
+                int32_t idx{0};
+                columnTypes_e type{ columnTypes_e::freeColumn };
+                bool isSet{ false };
                 bool isProp{ false };
-				bool deleted{ false };
-			};
+                bool deleted{ false };
+            };
 
-			// shared lock (uses spin locks)
-			CriticalSection lock;
+            using PropsMap = unordered_map<string, Columns_s*>;
 
-			Columns_s columns[MAX_COLUMNS];
-			unordered_map<string, Columns_s*> nameMap;
-			int columnCount{ 0 };
+            // shared lock (uses spin locks)
+            CriticalSection lock;
 
-			Columns();
-			~Columns();
+            Columns_s columns[MAX_COLUMNS];
+            unordered_map<string, Columns_s*> nameMap;
+            PropsMap propMap;
+            int columnCount{ 0 };
 
-			// get a column record, this will always 
-			// return something
-			Columns_s* getColumn(int column);
+            Columns();
+            ~Columns();
 
-			// get a column by name, this will return a nullptr
-			// if none match
-			Columns_s* getColumn(string name);
+            // get a column record, this will always
+            // return something
+            Columns_s* getColumn(const int column);
 
-			void deleteColumn(Columns_s* columnInfo);
+            // helpers - don't use in tight loops
+            bool isColumn(const string& name);
+            bool isProp(const string& name);
+            bool isSet(const string& name);
 
-			int getColumnCount() const;
+            // get a column by name, this will return a nullptr
+            // if none match (will return props or columns)
+            Columns_s* getColumn(const string& name);
 
-			void setColumn(
-                const int index, 
-                const string name, 
-                const columnTypes_e type, 
-                const bool isSet, 
+            void deleteColumn(Columns_s* columnInfo);
+
+            int getColumnCount() const;
+
+            void setColumn(
+                const int index,
+                const string& name,
+                const columnTypes_e type,
+                const bool isSet,
                 const bool isProp = false,
                 const bool deleted = false);
 
-            static bool validColumnName(std::string name);
+            static bool validColumnName(const std::string& name);
 
-		};
-	};
+        };
+    };
 };

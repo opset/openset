@@ -39,7 +39,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     const auto tableName = matches.find("table"s)->second;
     const auto isFork = message->getParamBool("fork");
 
-    /*     
+    /*
     const auto relayString = message->getParamString("relay");
     const auto relayParts = split(relayString, ':');
 
@@ -47,10 +47,10 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     alreadyRelayed.insert(openset::globals::running->nodeId);
 
     for (const auto &relay : relayParts)
-    {        
+    {
         alreadyRelayed.insert(stoll(relay));
     }
-      
+
     if (!partitions->getPartitionMax())
     {
         RpcError(
@@ -102,7 +102,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     for (auto row : rows)
     {
         const auto personNode = row->xPath("/id");
-        if (!personNode || 
+        if (!personNode ||
             (personNode->type() != cjson::Types_e::INT && personNode->type() != cjson::Types_e::STR))
             continue;
 
@@ -130,7 +130,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     SideLog::getSideLog().unlock();
 
     const auto localEndTime = Now();
-    
+
     if (!isFork && openset::globals::mapper->countActiveRoutes() > 1)
     {
         if (openset::globals::sentinel->wasDuringMapChange(startTime, localEndTime))
@@ -142,7 +142,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         newParams.emplace("fork", "true");
         const auto payloadLength = message->getPayloadLength();
         const auto payload = static_cast<char*>(PoolMem::getPool().getPtr(payloadLength));
-        memcpy(payload, message->getPayload(), payloadLength);       
+        memcpy(payload, message->getPayload(), payloadLength);
 
         std::thread t([=](){
 
@@ -186,7 +186,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         }
     }
 
-    message->reply(http::StatusCode::success_ok, response);      
+    message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)

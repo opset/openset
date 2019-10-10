@@ -4,7 +4,7 @@
 #include "threads/locks.h"
 
 openset::db::ColumnMap_s* openset::db::ColumnMapping::mapSchema(
-    Table* table, 
+    Table* table,
     Attributes* attributes,
     const vector<string>& columnNames)
 {
@@ -123,7 +123,7 @@ void openset::db::ColumnMapping::releaseMap(ColumnMap_s* cm)
         return;
 
     csLock lock(cs);
-    
+
     --cm->refCount;
 
     if (cm->refCount == 0)

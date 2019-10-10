@@ -87,16 +87,25 @@ inline Tests test_osl_language()
                 auto database = openset::globals::database;        // prepare our table
                 auto table    = database->newTable("__test003__"); // add some columns
                 auto columns  = table->getColumns();
+
                 ASSERT(columns != nullptr);
+
                 int col = 1000;
                 columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, false);
                 columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, false);
+
                 auto parts     = table->getPartitionObjects(0, true); // partition zero for test
                 auto personRaw = parts->people.getMakePerson("user1@test.com");
-                Person person;                   // Person overlay for personRaw;
+                Person person;
+
+                // Person overlay for personRaw;
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-                person.mount(personRaw);         // parse the user1_raw_inserts raw JSON text block
+
+                                person.mount(personRaw);
+
+                // parse the user1_raw_inserts raw JSON text block
                 cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
+
                 // get vector of cjson nodes for each element in root array
                 auto events = insertJSON.getNodes();
                 for (auto e : events)
@@ -105,8 +114,10 @@ inline Tests test_osl_language()
                     ASSERT(e->xPath("/_") != nullptr);
                     person.insert(e);
                 }
+
                 auto grid = person.getGrid();
                 auto json = grid->toJSON(); // non-condensed
+
                 // NOTE - uncomment if you want to see the results
                 // cout << cjson::Stringify(&json, true) << endl;
                 // store this person

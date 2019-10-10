@@ -6,12 +6,12 @@
 
 ###
 
-| Platform    | Version | Info                            | Status                                                                                                                                                                     |
-| :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   |  0.4.0  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 |  0.4.0  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Platform    |  Version | Info                            | Status                                                                                                                                                                     |
+| :---------- | :------: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux x64   |  0.4.1   | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.4.1   | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.4.0 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.4.1 release notes below.
 
 # What's it do?
 
@@ -62,7 +62,7 @@ git clone https://github.com/opset/openset_samples.git
 **2. Install [Docker](https://www.docker.com/) and start OpenSet (in interactive mode).**
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.0
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.1
 ```
 
 > **Note** The OpenSet images can always be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -676,6 +676,11 @@ The "40 reports" model seemed please most everyone. That was until one day Anheu
 The problem wasn't mining the data, the problem was doing so in a timely fashion. Computers weren't fast, and SQL would take hours or days to compute some of the results if was able to complete the task.
 
 Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
+
+# OpenSet 0.4.1 release notes
+
+- indexed customer properties that can be used by the query optimizer
+- props read/written anytime in any OSL script like regular user variables. The OSL Interpreter will determine whether a property has changed.
 
 # OpenSet 0.4.0 release notes
 

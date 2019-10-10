@@ -305,6 +305,8 @@ namespace openset::query
         Tracking selects;
         std::vector<Variable_s> selectColumnInfo;
 
+        bool writesProps { false };
+
         std::unordered_map<std::string, int> userVarAssignments;
         std::vector<std::string> currentBlockType;
 
@@ -441,12 +443,14 @@ namespace openset::query
             return result;
         }
 
-        bool isTableColumn(std::string name) const
+        bool isTableColumn(const std::string& name) const
         {
-            if (name.find("column.") == 0)
-                name = name.substr(name.find('.') + 1);
+            return tableColumns->isColumn(name);
+        }
 
-            return (tableColumns->getColumn(name) != nullptr);
+        bool isProperty(const std::string& name) const
+        {
+            return tableColumns->isProp(name);
         }
 
         static bool isMarshal(const std::string& name)
@@ -464,6 +468,7 @@ namespace openset::query
             if (const auto idx = getTrackingIndex(userVars, name); idx != -1)
                 return idx;
             userVars.emplace_back(name);
+
             return static_cast<int>(userVars.size()-1);
         }
 
@@ -488,6 +493,7 @@ namespace openset::query
             if (const auto idx = getTrackingIndex(selects, name); idx != -1)
                 return idx;
             selects.emplace_back(name);
+
             return static_cast<int>(selects.size()-1);
         }
 
@@ -500,7 +506,7 @@ namespace openset::query
 
         bool isAssignedUserVar(const std::string& name)
         {
-            if (name == "props" || name == "each_value")
+            if (name == "each_value")
                 return true;
             return userVarAssignments.find(name) != userVarAssignments.end();
         }
@@ -1844,13 +1850,16 @@ namespace openset::query
             const auto variable = words[idx];
             ++idx;
 
+            if (assignment && isProperty(variable))
+                writesProps = true;
+
+            if (assignment)
+                incUserVarAssignmentCount(variable);
+
             // no subscript, just a variable (checked for function/table var by parseItem)
             if (idx >= static_cast<int>(words.size()) || words[idx] != "[")
             {
                 auto variableIndex = userVarIndex(variable);
-
-                if (assignment)
-                    incUserVarAssignmentCount(variable);
 
                 MiddleOp_e op;
 
@@ -1903,9 +1912,6 @@ namespace openset::query
                 };
             }
 
-            if (assignment)
-                incUserVarAssignmentCount(variable);
-
             MiddleOp_e op;
 
             if (asRef)
@@ -1920,16 +1926,6 @@ namespace openset::query
                 static_cast<int>(subScripts.size()),
                 lastDebug.line,
                 start);
-
-            /*
-            // convert subscript into function
-            middle.emplace_back(
-                MiddleOp_e::marshal,
-                assignment ? static_cast<int>(Marshals_e::marshal_pop_subscript) : static_cast<int>(Marshals_e::marshal_push_subscript),
-                static_cast<int>(subScripts.size() + 1),
-                lastDebug.line,
-                start);
-            */
 
             return end + 1;
         }
@@ -2747,7 +2743,7 @@ namespace openset::query
                 switch (midOp.op)
                 {
                 case MiddleOp_e::push_user:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -2764,7 +2760,7 @@ namespace openset::query
                     break;
 
                 case MiddleOp_e::push_user_ref:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -2782,7 +2778,7 @@ namespace openset::query
 
                 case MiddleOp_e::pop_user_ref:
                 case MiddleOp_e::pop_user_obj_ref:
-                    if (!isAssignedUserVar(userVars[midOp.value1.getInt64()]))
+                    if (!isProperty(userVars[midOp.value1.getInt64()]) && !isAssignedUserVar(userVars[midOp.value1.getInt64()]))
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -3126,11 +3122,18 @@ namespace openset::query
                 if (v == "globals")
                     inMacros.useGlobals = true;
 
-                if (v == "props")
-                  inMacros.useProps = true;
+                if (isProperty(v))
+                {
+                    inMacros.vars.userVars.back().isProp = true;
+                    inMacros.useProps = true;
+                    inMacros.props.push_back(index);
+                }
 
                 ++index;
             }
+
+            // lets us know if we are read-only
+            inMacros.writesProps = writesProps;
 
             index = 0;
             for (auto& v : stringLiterals)
@@ -3175,7 +3178,7 @@ namespace openset::query
                         {
                             tokensUnchained.emplace_back("VOID");
                         }
-                        else if (isTableColumn(token))
+                        else if (isTableColumn(token) || isProperty(token))
                         {
                             tokensUnchained.emplace_back(token);
 
@@ -3268,6 +3271,10 @@ namespace openset::query
 
                     if (token == "in" || token == "contains" || token == "any")
                         token = "==";
+
+                    // clean up any residual user variables
+                    if (isUserVar(token) && !isProperty(token))
+                        token = "VOID";
 
                     // convert lists into ORs if left or right side is not a void
                     if (token == "[")
@@ -3403,7 +3410,10 @@ namespace openset::query
                             tokens[idx]   = "";
                             tokens[idx+1] = "";
                         }
-                        else if (isTableColumn(nextToken) && (isNumeric(prevToken) || isString(prevToken)))
+                        else if (
+                            (isTableColumn(nextToken) || isProperty(nextToken)) &&
+                            (isNumeric(prevToken) || isString(prevToken))
+                            )
                         {
                             tokens[idx-1] = nextToken;
                             tokens[idx+1] = prevToken;
@@ -3486,13 +3496,13 @@ namespace openset::query
                             stripped = true;
                         }
                         // look for stranded values
-                        else if (!isTableColumn(token) && prevToken == "(" && nextToken == ")")
+                        else if (!isTableColumn(token) && !isProperty(token) && prevToken == "(" && nextToken == ")")
                         {
                             stripped = true;
                         }
                         // look for columns with no condition
                         else if (
-                            isTableColumn(token) &&
+                            (isTableColumn(token) || isProperty(token)) &&
                             (
                                 (LogicalOperators.count(prevToken) || prevToken == "(") &&
                                 (LogicalOperators.count(nextToken) || nextToken == ")")
@@ -3506,7 +3516,7 @@ namespace openset::query
                             output.emplace_back("!=");
                             output.emplace_back("nil");
                         }
-                        else if (isTableColumn(token) && nextToken == "!=")
+                        else if ((isTableColumn(token) || isProperty(token)) && nextToken == "!=")
                         {
                             // if it isn't a not_equal from an ever/never (which was changed to `[!=]`)
                             // change this for presence checking (ever != nil)
@@ -3554,7 +3564,7 @@ namespace openset::query
 
             const auto pushValue = [&](const std::string& value)
             {
-                if (isTableColumn(value))
+                if (isTableColumn(value) || isProperty(value))
                     index.emplace_back(HintOp_e::PUSH_TBL, value);
                 else if (isNil(value))
                     index.emplace_back(HintOp_e::PUSH_VAL, NONE);
