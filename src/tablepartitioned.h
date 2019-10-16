@@ -126,7 +126,7 @@ namespace openset
                 Table* table,
                 const int partition,
                 AttributeBlob* attributeBlob,
-                Columns* schema);
+                Properties* schema);
 
             TablePartitioned() = default;
 

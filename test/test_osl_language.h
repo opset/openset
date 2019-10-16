@@ -4,7 +4,7 @@
 #include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/internoderouter.h"
@@ -85,14 +85,14 @@ inline Tests test_osl_language()
             [user1_raw_inserts]
             {
                 auto database = openset::globals::database;        // prepare our table
-                auto table    = database->newTable("__test003__"); // add some columns
-                auto columns  = table->getColumns();
+                auto table    = database->newTable("__test003__"); // add some properties
+                auto columns  = table->getProperties();
 
                 ASSERT(columns != nullptr);
 
                 int col = 1000;
-                columns->setColumn(++col, "fruit", columnTypes_e::textColumn, false, false);
-                columns->setColumn(++col, "price", columnTypes_e::doubleColumn, false, false);
+                columns->setProperty(++col, "fruit", PropertyTypes_e::textProp, false, false);
+                columns->setProperty(++col, "price", PropertyTypes_e::doubleProp, false, false);
 
                 auto parts     = table->getPartitionObjects(0, true); // partition zero for test
                 auto personRaw = parts->people.getMakePerson("user1@test.com");

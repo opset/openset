@@ -19,21 +19,21 @@ namespace openset
 		/*! \class Person
 		 *
 		 *  Reusable Container for managing personData_s structures
-		 *  
+		 *
 		 *  The idea is that for an insert job or query job
 		 *  a person object would be created, mapped to the
-		 *  correct table (and as such, the schema and 
+		 *  correct table (and as such, the schema and
 		 *  partition) then re-used by calling mount with
 		 *  different raw personData_s pointers. This allows
 		 *  for the expensive configuration to be done once
 		 *  per job.
-		 *  
+		 *
 		 *  The usage is as follows:
-		 *  
-		 *  1. call mapTable 
-		 *  2. call either mapSchema 
-		 *     - without params to map all columns to the grid
-		 *     - with a column list to map specific columns (for query)
+		 *
+		 *  1. call mapTable
+		 *  2. call either mapSchema
+		 *     - without params to map all properties to the grid
+		 *     - with a property list to map specific properties (for query)
 		 *  3. call prepare to map customer data to Grid object
 		 *  4. do work. This could be insert, and commit, or just reading
 		 */
@@ -65,7 +65,7 @@ namespace openset
 
 			/**
 			 * \brief maps a personData_s object to the Person object
-			 * \param[in] personData 
+			 * \param[in] personData
 			 */
 			void mount(PersonData_s* personData);
 
@@ -83,7 +83,7 @@ namespace openset
 			 * \brief return reference to grid object
 			 * \return Grid const pointer (read only)
 			 */
-			inline Grid* getGrid() 
+			inline Grid* getGrid()
 			{
 				return &grid;
 			}
@@ -106,10 +106,10 @@ namespace openset
 
 			/**
 			 * \brief commit (re-compress) the data in Person.grid
-			 * 
+			 *
 			 * \remarks this will rebuild a new personData_s structure and update
 			 *          the Table.people.linearIndex to reflect the change.
-			 *          
+			 *
 			 * \note The personData_s pointer passed to mount
 			 *       from the caller will be invalid, so this commit
 			 *       returns the new pointer if this is important.
@@ -127,8 +127,8 @@ namespace openset
 			/**
 			* map a portion of the schema to the Person.grid object, this is
 			* used during a query, and is called by mapTable
-			* 
-			* \param[in] columnNames list of columns we want to extract
+			*
+			* \param[in] columnNames list of properties we want to extract
 			* \return success
 			*/
 			bool mapSchemaList(const vector<string>& columnNames);

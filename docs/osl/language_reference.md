@@ -22,23 +22,23 @@ The `select` and `sort` sections are optional. By default OpenSet will aggregate
 
 ```python
 agg:
-  count {{table column}} [as {{alias}}] [with {{other key}}] [all]
-  sum {{table column}} [as {{alias}}] [with {{other key}}] [all]
-  min {{table column}} [as {{alias}}] [with {{other key}}] [all]
-  max {{table column}} [as {{alias}}] [with {{other key}}] [all]
-  avg {{table column}} [as {{alias}}] [with {{other key}}] [all]
+  count {{property}} [as {{alias}}] [with {{other key}}] [all]
+  sum {{property}} [as {{alias}}] [with {{other key}}] [all]
+  min {{property}} [as {{alias}}] [with {{other key}}] [all]
+  max {{property}} [as {{alias}}] [with {{other key}}] [all]
+  avg {{property}} [as {{alias}}] [with {{other key}}] [all]
 ```
 
-## Built-in columns
+## Built-in properties
 
-OpenSet automatically provides columns for your convenience within each row in a dataset:
+OpenSet automatically provides properties for your convenience within each row in a dataset:
 
-| Column      | Type  | Note                                                                                                                                                                                                                                          |
+| Property      | Type  | Note                                                                                                                                                                                                                                          |
 | ----------- | :---: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **stamp**   | int64 | Time in milliseconds. Either provided with event on insert, or added upon insert                                                                                                                                                              |
 | **event**   | text  | A name used to indicate what the event row represents                                                                                                                                                                                         |
-| **id**      | text  | Customer or User ID. This is a synthetic column added to an event row at time of query. For efficiency it is only provided if referenced in a script.                                                                                         |
-| **session** | int64 | This is a synthetic column generated based on inactivity period. Default is 30 minutes, but can be overridden using the `session_time` parameter on a query URL. For efficiency it is only calculated and provided if referenced in a script. |
+| **id**      | text  | Customer or User ID. This is a synthetic property added to an event row at time of query. For efficiency it is only provided if referenced in a script.                                                                                         |
+| **session** | int64 | This is a synthetic property generated based on inactivity period. Default is 30 minutes, but can be overridden using the `session_time` parameter on a query URL. For efficiency it is only calculated and provided if referenced in a script. |
 
 ## Types: variables, dicts, sets and lists
 
@@ -54,34 +54,34 @@ some_text = "hello"
 
 OSL will maintain and convert types as needed internally.
 
-#### Columns (accessing row level data)
+#### Properties (accessing row level data)
 
-Columns are referenced by name in OSL scripts. 
+Properties are referenced by name in OSL scripts. 
 
-Depending on the context a column variable may have different meanings.
+Depending on the context a property variable may have different meanings.
 
 For example:
 
 ```ruby
 
-if some_column == "dog"
-  # some_column will be the value of whatever row the row cursor is on
+if some_property == "dog"
+  # some_property will be the value of whatever row the row cursor is on
   # useful for ifs in the code blocks of `each_row` iterators.
 end
 
-if some_column.ever(== "dog")
-  # does some_column ever have a value of "dog"?
+if some_property.ever(== "dog")
+  # does some_property ever have a value of "dog"?
 end
 
-if some_column.within(3_months, now).never(== "dog")
-  # does some_column NEVER have a value of "dog" within the last 3 months?
+if some_property.within(3_months, now).never(== "dog")
+  # does some_property NEVER have a value of "dog" within the last 3 months?
 end
 
 ```
 
-Modifiers make column logic `columns` more powerful.
+Modifiers make property logic more powerful.
 
-Modifiers allow you to scan an entire column, match the cursor row, or test for ever/never scenarios within timeframes. 
+Modifiers allow you to scan an entire property, match the cursor row, or test for ever/never scenarios within timeframes. 
 
 :bulb: if using date constraints, you must use the `.is`, `.ever` or `.never` pattern.
 
@@ -99,13 +99,13 @@ Modifiers allow you to scan an entire column, match the cursor row, or test for 
 
 :bulb: the `.is` and `.is_not` modifier may not be used with date  modifiers. See `each_row` modifiers to constrain a row search.
 
-#### property columns (is_props)
+#### customer properties (properties marked with `is_customer`)
 
-Columns defined with `is_prop` can be used like normal variables within an OSL script.
+Properties defined with `is_customer` can be used like normal variables within an OSL script.
 
-Generally properties would be used for non-event based customer facts.
+Generally Customer Properties would be used for non-event based customer facts.
 
-Reading and writing a property is as easy of using the column by name. Say you have property columns named `total_purchase_value` and an `on_insert` script that runs when a customers data changes:
+Reading and writing a Customer Property is as easy of using the property by name. If you had a Customer Property named `total_purchase_value` and an `on_insert` script that runs when a customers data changes:
 
 ```ruby
 
@@ -113,7 +113,7 @@ total_purchase_value = sum(product_price).within(1_year, now) where event.is(== 
 
 ```
 
-The OSL interpreter will detect that a prop has been modified, write it back to the customer record and update indexes. Reading and writing props are not as efficient as non-prop columns, so if you don't need a property in an OSL script, don't reference one.
+The OSL interpreter will detect that a Customer Property has been modified, write it back to the customer record and update indexes. Reading and writing Customer Properties is not as efficient as a regular row property, so if you don't need a Customer Pproperty in an OSL script, don't reference one.
 
 #### dict
 
@@ -128,7 +128,7 @@ my_dict = dict()
 # create a dict with values
 my_dict = {
     "hello": "goodbye",
-	"many": [1,2,3,4]
+    "many": [1,2,3,4]
 }
 ```
 
@@ -231,9 +231,9 @@ You can remove items from containers using '-' operator.
 my_dict = {}
 
 my_dict['cheeses'] = {
-	"orange": ["chedder"],
-	"hard": "parmesan",
-	"soft": ["mozza", "cream"]
+    "orange": ["chedder"],
+    "hard": "parmesan",
+    "soft": ["mozza", "cream"]
 }
 
 # removes 'orange' from my_dict['cheeses']
@@ -440,7 +440,7 @@ how_long_ago = now - first_match_time
 
 #### event time
 
-The event time can be accessed using the built in column variable `stamp`. The `stamp` will always be the stamp for the current `cursor` in the row set. 
+The event time can be accessed using the built in property variable `stamp`. The `stamp` will always be the stamp for the current `cursor` in the row set. 
 
 ```ruby
 first_match_time = nil
@@ -559,7 +559,7 @@ ten_years = 10_years # 365 day years
 
 The `<<` function has defines groupings (pivots) for the result set.
 
-Aggregators specified in the the `select` section will be executed using the columns for the current row `cursor`.
+Aggregators specified in the the `select` section will be executed using the properties found on current row `cursor`.
 
 The following OSL script will generate a tree:
 
@@ -695,7 +695,7 @@ returns the length or number of elements in a string, dictionary, list, or set.
 logs parameters to console
 
 ```python
-log(some_column, some_var, some_dict, 'hello')
+log(some_property, some_var, some_dict, 'hello')
 ```
 
 #### function: debug
@@ -740,7 +740,7 @@ data_in_row = get_row(cursor)
 
 If you are storing raw URLs in your dataset, this function will return a dictionary containing all the parts of the URL.
 
-> :bulb: this function is expensive. If you are constantly using this function it might be worth storing the URL elements you need as a column in the dataset.
+> :bulb: this function is expensive. If you are constantly using this function it might be worth storing the URL elements you need as a property in the dataset.
 
 ```ruby
 some_url = "http://somehost.com/this/is/the/path?param1=one&param2=two&param3"
@@ -779,7 +779,7 @@ Aggregations and Searches are one line iterators to perform filtered aggregation
 | max        | return the max value for the expression passed to `min` where rows passed the `where` conditions         |
 | avg        | return the average value for the expression passed to `avg` where rows passed the `where` conditions     |
 
-> :bulb: aggregations that take expressions are expecting the expression to result in a value. The most common expression would be a table column. If the expression has a `nil` value, it will not be counted.
+> :bulb: aggregations that take expressions are expecting the expression to result in a value. The most common expression would be a table property. If the expression has a `nil` value, it will not be counted.
 
 ```ruby
 matching_row = row.reverse().within(1_year, now) where

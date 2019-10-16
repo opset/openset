@@ -1,4 +1,4 @@
-#include "oloop_column.h"
+#include "oloop_property.h"
 
 #include "table.h"
 #include "tablepartitioned.h"
@@ -11,7 +11,7 @@ using namespace openset::async;
 using namespace openset::result;
 
 
-OpenLoopColumn::OpenLoopColumn(
+OpenLoopProperty::OpenLoopProperty(
     ShuttleLambda<CellQueryResult_s>* shuttle,
     openset::db::Database::TablePtr table,
     ColumnQueryConfig_s config,
@@ -25,14 +25,14 @@ OpenLoopColumn::OpenLoopColumn(
         instance(instance)
 {}
 
-OpenLoopColumn::~OpenLoopColumn()
+OpenLoopProperty::~OpenLoopProperty()
 {
     //for (auto s: segments)
       //  delete s;
 }
 
-void OpenLoopColumn::prepare()
-{  
+void OpenLoopProperty::prepare()
+{
     parts = table->getPartitionObjects(loop->partition, false);
 
     if (!parts)
@@ -107,21 +107,21 @@ void OpenLoopColumn::prepare()
     // assign the type for the value to the key
     switch (config.columnType)
     {
-        case db::columnTypes_e::intColumn: 
+        case db::PropertyTypes_e::intProp:
             rowKey.types[1] = ResultTypes_e::Int;
         break;
-        case db::columnTypes_e::doubleColumn: 
+        case db::PropertyTypes_e::doubleProp:
             rowKey.types[1] = ResultTypes_e::Double;
         break;
-        case db::columnTypes_e::boolColumn: 
+        case db::PropertyTypes_e::boolProp:
             rowKey.types[1] = ResultTypes_e::Bool;
         break;
-        case db::columnTypes_e::textColumn: 
+        case db::PropertyTypes_e::textProp:
             rowKey.types[1] = ResultTypes_e::Text;
         break;
         default: ;
     }
-  
+
     const auto aggs = result->getMakeAccumulator(rowKey);
 
     auto idx = 0;
@@ -146,18 +146,18 @@ void OpenLoopColumn::prepare()
     };
 
     /*
-     *  Here we convert a list of values (for the column) into 
-     *  a group of buckets. 
-     *  
+     *  Here we convert a list of values (for the property) into
+     *  a group of buckets.
+     *
      *  Buckets are groups created by grouping numeric values by nearest value.
-     *  
-     *  Each bucket contains a list of the column `values` that match the bucket.
-     *  
+     *
+     *  Each bucket contains a list of the property `values` that match the bucket.
+     *
      *  Later the index bits for each `value` in the bucket are `OR`ed together
      *  then `AND`ed to the index.
      */
 
-    for (auto &v : parts->attributes.getColumnValues(config.columnIndex))
+    for (auto &v : parts->attributes.getPropertyValues(config.columnIndex))
     {
 
         auto groupKey = toBucket(v.first); // we only call that lambda once... hmmm...
@@ -166,7 +166,7 @@ void OpenLoopColumn::prepare()
             groups.emplace(groupKey, Ids{});
 
         auto& bucketList = groups[groupKey];
-        
+
         switch (config.mode)
         {
         case ColumnQueryMode_e::all:
@@ -220,12 +220,12 @@ void OpenLoopColumn::prepare()
     groupsIter = groups.begin();
 }
 
-bool OpenLoopColumn::run()
+bool OpenLoopProperty::run()
 {
 
     while (true)
     {
-        // are we done? This will return the index of the 
+        // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
 
         while (groupsIter != groups.end())
@@ -247,7 +247,7 @@ bool OpenLoopColumn::run()
             {
 
                 // here we are setting the key for the bucket,
-                // this is under our root which is the column name
+                // this is under our root which is the property name
                 rowKey.key[1] = bucket; // value hash (or value)
 
 
@@ -275,9 +275,9 @@ bool OpenLoopColumn::run()
                 delete sumBits;
 
                 // we are going to handle text a little different here
-                // text isn't bucketed (at the moment, rx capture may allow us to 
+                // text isn't bucketed (at the moment, rx capture may allow us to
                 // do this in the future), so, bucket will always be value
-                if (config.columnType == db::columnTypes_e::textColumn)
+                if (config.columnType == db::PropertyTypes_e::textProp)
                 {
                     const auto attr = parts->attributes.get(config.columnIndex, bucket);
                     if (attr && attr->text)
@@ -307,7 +307,7 @@ bool OpenLoopColumn::run()
     }
 }
 
-void OpenLoopColumn::partitionRemoved()
+void OpenLoopProperty::partitionRemoved()
 {
     shuttle->reply(
         0,

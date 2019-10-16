@@ -5,7 +5,7 @@
 #include "../lib/cjson/cjson.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
@@ -106,34 +106,34 @@ inline Tests test_db()
                 // prepare our table
                 auto table = openset::globals::database->newTable("__test001__");
 
-                // add some columns
-                auto columns = table->getColumns();
+                // add some properties
+                auto columns = table->getProperties();
                 ASSERT(columns != nullptr);
 
                 // content (adding to 2000 range, these typically auto enumerated on create)
-                columns->setColumn(2000, "page", columnTypes_e::textColumn, false);
+                columns->setProperty(2000, "page", PropertyTypes_e::textProp, false);
                 // referral (adding to 3000 range)
-                columns->setColumn(3000, "referral_source", columnTypes_e::textColumn, false);
-                columns->setColumn(3001, "referral_search", columnTypes_e::textColumn, true);
+                columns->setProperty(3000, "referral_source", PropertyTypes_e::textProp, false);
+                columns->setProperty(3001, "referral_search", PropertyTypes_e::textProp, true);
 
 
-                columns->setColumn(4000, "prop_set", columnTypes_e::textColumn, true, true);
-                columns->setColumn(4001, "prop_txt", columnTypes_e::textColumn, false, true);
-                columns->setColumn(4002, "prop_bool", columnTypes_e::boolColumn, false, true);
-                columns->setColumn(4003, "prop_int", columnTypes_e::intColumn, false, true);
-                columns->setColumn(4004, "prop_float", columnTypes_e::doubleColumn, false, true);
+                columns->setProperty(4000, "prop_set", PropertyTypes_e::textProp, true, true);
+                columns->setProperty(4001, "prop_txt", PropertyTypes_e::textProp, false, true);
+                columns->setProperty(4002, "prop_bool", PropertyTypes_e::boolProp, false, true);
+                columns->setProperty(4003, "prop_int", PropertyTypes_e::intProp, false, true);
+                columns->setProperty(4004, "prop_float", PropertyTypes_e::doubleProp, false, true);
 
-                // do we have 10 columns (7 built ins plus 3 we added)
-                ASSERT(table->getColumns()->columnCount == 13);
+                // do we have 10 properties (7 built ins plus 3 we added)
+                ASSERT(table->getProperties()->propertyCount == 13);
 
                 // built-ins
-                ASSERT(table->getColumns()->nameMap.count("id"));
+                ASSERT(table->getProperties()->nameMap.count("id"));
 
-                // columns we've added
-                ASSERT(table->getColumns()->nameMap.count("page"));
-                ASSERT(table->getColumns()->nameMap.count("referral_source"));
-                ASSERT(table->getColumns()->nameMap.count("referral_search"));
-                //auto names = table.getColumns()->nameMap();
+                // properties we've added
+                ASSERT(table->getProperties()->nameMap.count("page"));
+                ASSERT(table->getProperties()->nameMap.count("referral_source"));
+                ASSERT(table->getProperties()->nameMap.count("referral_search"));
+                //auto names = table.getProperties()->nameMap();
             }
         },
         {
@@ -869,7 +869,7 @@ inline Tests test_db()
                 const auto index      = indexing.getIndex("_", countable);
                 const auto population = index->population(maxLinearId);
 
-                // index is super broad because it contains `not equals` conditions (against columns/props)
+                // index is super broad because it contains `not equals` conditions (against properties/props)
                 ASSERT(population == 1);
 
                 delete interpreter;

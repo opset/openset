@@ -5,7 +5,7 @@
 #include "../lib/cjson/cjson.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/internoderouter.h"
@@ -161,13 +161,13 @@ inline Tests test_sessions()
                 // prepare our table
                 auto table = openset::globals::database->newTable("__testsessions__");
 
-                // add some columns
-                auto columns = table->getColumns();
+                // add some properties
+                auto columns = table->getProperties();
                 ASSERT(columns != nullptr);
 
                 // content (adding to 2000 range, these typically auto enumerated on create)
-                columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
-                columns->setColumn(2001, "some_str", openset::db::columnTypes_e::textColumn, false);
+                columns->setProperty(2000, "some_val", openset::db::PropertyTypes_e::intProp, false);
+                columns->setProperty(2001, "some_str", openset::db::PropertyTypes_e::textProp, false);
 
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
                 auto personRaw = parts->people.getMakePerson("user1@test.com");

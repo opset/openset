@@ -7,7 +7,7 @@
 #include "rpc_global.h"
 #include "rpc_internode.h"
 #include "cjson/cjson.h"
-#include "oloop_column.h"
+#include "oloop_property.h"
 #include "asyncpool.h"
 #include "config.h"
 #include "sentinel.h"

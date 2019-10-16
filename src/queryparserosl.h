@@ -6,7 +6,7 @@
 
 #include "queryparserosl.h"
 #include "querycommon.h"
-#include "columns.h"
+#include "properties.h"
 #include "errors.h"
 #include "var/var.h"
 #include <queue>
@@ -291,7 +291,7 @@ namespace openset::query
         MidOps middle;
         FilterList filters;
 
-        db::Columns* tableColumns { nullptr };
+        db::Properties* tableColumns { nullptr };
         bool usesSessions { false };
         std::string rawScript;
 
@@ -445,12 +445,12 @@ namespace openset::query
 
         bool isTableColumn(const std::string& name) const
         {
-            return tableColumns->isColumn(name);
+            return tableColumns->isEventProperty(name);
         }
 
         bool isProperty(const std::string& name) const
         {
-            return tableColumns->isProp(name);
+            return tableColumns->isCustomerProperty(name);
         }
 
         static bool isMarshal(const std::string& name)
@@ -1003,7 +1003,7 @@ namespace openset::query
 
 
                 auto modifier = ColumnModifiers.find(token)->second;
-                const auto columnName = nextToken; // actual column name in table
+                const auto columnName = nextToken; // actual property name in table
                 auto keyColumn = columnName; // distinct to itself
                 auto asName = columnName; // aliased as itself
 
@@ -1011,7 +1011,7 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "expecting a table column",
+                        "expecting a table property",
                         lastDebug
                     };
 
@@ -1035,7 +1035,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "`as` portion of `select` statement cannot be a table column",
+                            "`as` portion of `select` statement cannot be a table property",
                             lastDebug
                         };
 
@@ -1061,7 +1061,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "`key` portion of `select` must be a table column",
+                            "`key` portion of `select` must be a table property",
                             lastDebug
                         };
 
@@ -1079,7 +1079,7 @@ namespace openset::query
                         lastDebug
                     };
 
-                // register this column as having been referenced
+                // register this property as having been referenced
                 const auto columnIdx = columnIndex(columnName);
 
                 const auto selectIdx = selectsIndex(asName);
@@ -1094,19 +1094,19 @@ namespace openset::query
                     columnIndex("session");
                 }
 
-                const auto colInfo = tableColumns->getColumn(columnName);
+                const auto propInfo = tableColumns->getProperty(columnName);
 
-                Variable_s var(columnName, asName, "column", modifier);
+                Variable_s var(columnName, asName, "property", modifier);
                 var.distinctColumnName = keyColumn;
 
                 var.index = selectIdx; // index in variable array
                 var.column = columnIdx; // index in grid
-                var.schemaColumn = colInfo->idx;
-                var.schemaType = colInfo->type;
+                var.schemaColumn = propInfo->idx;
+                var.schemaType = propInfo->type;
 
-                // if this is selection is keyed to another column lets reference it as well
+                // if this is selection is keyed to another property lets reference it as well
                 const auto keyIdx = columnIndex(keyColumn);
-                var.distinctColumn = keyIdx; // index of key column in grid
+                var.distinctColumn = keyIdx; // index of key property in grid
 
                 selectColumnInfo.push_back(var);
             }
@@ -1232,6 +1232,10 @@ namespace openset::query
 
                 if (startWord == "select")
                     continue;
+
+                for (auto &l : line)
+                    cout << l << " ";
+                cout << endl;
 
                 auto blockId = -1;
 
@@ -1587,7 +1591,7 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "filter applied to: '" + token + "' (filters can only be applied to columns)",
+                        "filter applied to: '" + token + "' (filters can only be applied to properties)",
                         lastDebug
                     };
 
@@ -1767,7 +1771,7 @@ namespace openset::query
 
             while (idx < end)
             {
-                const auto commaPosition = seek(",", words, idx);
+                const auto commaPosition = seek(",", words, idx, end);
                 if (commaPosition == -1)
                 {
                     auto param = extract(words, idx, end);
@@ -1907,7 +1911,7 @@ namespace openset::query
                 throw QueryParse2Error_s {
                     errors::errorClass_e::parse,
                     errors::errorCode_e::syntax_error,
-                    "subscript is not possible on table columns",
+                    "subscript is not possible on table properties",
                     lastDebug
                 };
             }
@@ -2338,8 +2342,7 @@ namespace openset::query
 
                     // convert our params into code blocks to be called as lambdas
                     filter.withinWindowBlock = addLinesAsBlock(params[1].first);
-                    if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
+                    filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isWithin = true;
 
                     ++count;
@@ -2359,8 +2362,7 @@ namespace openset::query
 
                     // convert our params into code blocks to be called as lambdas
                     filter.withinWindowBlock = addLinesAsBlock(params[1].first);
-                    if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
+                    filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isLookAhead = true;
                     ++count;
                 }
@@ -2379,8 +2381,7 @@ namespace openset::query
 
                     // convert our params into code blocks to be called as lambdas
                     filter.withinWindowBlock = addLinesAsBlock(params[1].first);
-                    if (params.size() == 2)
-                        filter.withinStartBlock = addLinesAsBlock(params[0].first);
+                    filter.withinStartBlock = addLinesAsBlock(params[0].first);
                     filter.isLookBack = true;
                     ++count;
                 }
@@ -2446,7 +2447,7 @@ namespace openset::query
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
                         isColumn ?
-                            "invalid column filter: '" + token.substr(token.find("__chain_")) + "'" :
+                            "invalid property filter: '" + token.substr(token.find("__chain_")) + "'" :
                             "invalid logical filter: '" + token.substr(token.find("__chain_")) + "'",
                         lastDebug
                     };
@@ -2463,7 +2464,7 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "filter must be either '.row' or '.ever'",
+                        "filter must be either '.is', '.ever' or '.never'",
                         lastDebug
                     };
 
@@ -2480,6 +2481,14 @@ namespace openset::query
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
                         "use '.within' instead of both '.look_ahead' and '.look_back'",
+                        lastDebug
+                    };
+
+                if (filter.isRow && (filter.isWithin || filter.isLookAhead || filter.isLookBack || filter.isRange))
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "'.is()' cannot be combined with date scopes. You may apply a scope to 'each_row' to constrain a row set.",
                         lastDebug
                     };
 
@@ -2715,7 +2724,7 @@ namespace openset::query
             // default block type - we want `if` rules
             currentBlockType.push_back("if");
 
-            // these columns are always selected, so we add them by default
+            // these properties are always selected, so we add them by default
             columnIndex("stamp");
             columnIndex("event");
 
@@ -3091,13 +3100,13 @@ namespace openset::query
 
             // add user vars
             //Tracking stringLiterals;
-            //Tracking columns;
+            //Tracking properties;
             //Tracking aggregates;
 
             auto index = 0;
             for (auto& v : columns)
             {
-                const auto schemaInfo = tableColumns->getColumn(v);
+                const auto schemaInfo = tableColumns->getProperty(v);
 
                 if (v == "session"s)
                     inMacros.sessionColumn = index;
@@ -3388,7 +3397,7 @@ namespace openset::query
                 }
             }
 
-            // swap logic so table columns are on the left and values are on the right
+            // swap logic so table properties are on the left and values are on the right
             // and strip out VOID == VOID type occurrences.
             {
                 auto& tokens = tokensWithoutMath;
@@ -3500,7 +3509,7 @@ namespace openset::query
                         {
                             stripped = true;
                         }
-                        // look for columns with no condition
+                        // look for properties with no condition
                         else if (
                             (isTableColumn(token) || isProperty(token)) &&
                             (
@@ -3509,8 +3518,8 @@ namespace openset::query
                             )
                         )
                         {
-                            // once a column has been stripped to down to a standalone column
-                            // with no conditions we simply test for presence of the column (!= nil)
+                            // once a property has been stripped to down to a standalone property
+                            // with no conditions we simply test for presence of the property (!= nil)
                             stripped = true;
                             output.emplace_back(token);
                             output.emplace_back("!=");
@@ -3674,7 +3683,7 @@ namespace openset::query
                 inMacros.rawIndex += word + " ";
         }
 
-        bool compileQuery(const std::string& query, openset::db::Columns* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
+        bool compileQuery(const std::string& query, openset::db::Properties* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
         {
 
             try
@@ -3696,11 +3705,11 @@ namespace openset::query
                     const auto columnIdx = columnIndex(columnName);
                     const auto selectIdx = selectsIndex(columnName);
 
-                    Variable_s var(columnName, columnName, "column", Modifiers_e::count);
+                    Variable_s var(columnName, columnName, "property", Modifiers_e::count);
                     var.distinctColumnName = columnName;
                     var.index = selectIdx; // index in variable array
                     var.column = columnIdx; // index in grid
-                    var.schemaColumn = tableColumns->getColumn(columnName)->idx;
+                    var.schemaColumn = tableColumns->getProperty(columnName)->idx;
 
                     selectColumnInfo.push_back(var);
                 }
@@ -3811,7 +3820,6 @@ namespace openset::query
                     // store it
                     if (current.length() && current[0] != '#')
                     {
-                        // add the tabs back in
                         if (current[0] == '@')
                         {
                             if (sectionName.length())

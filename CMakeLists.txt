@@ -102,10 +102,6 @@ set(SOURCE_FILES
         src/attributeblob.h
         src/attributes.cpp
         src/attributes.h
-        src/columns.cpp
-        src/columns.h
-        src/columnmapping.cpp
-        src/columnmapping.h
         src/config.cpp
         src/config.h
         src/database.cpp
@@ -134,14 +130,14 @@ set(SOURCE_FILES
         src/oloop.h
         src/oloop_cleaner.cpp
         src/oloop_cleaner.h
-        src/oloop_column.cpp
-        src/oloop_column.h
         src/oloop_histogram.cpp
         src/oloop_histogram.h
         src/oloop_insert.cpp
         src/oloop_insert.h
         src/oloop_person.cpp
         src/oloop_person.h
+        src/oloop_property.cpp
+        src/oloop_property.h
         src/oloop_query.cpp
         src/oloop_query.h
         src/oloop_segment.cpp
@@ -152,6 +148,10 @@ set(SOURCE_FILES
         src/people.h
         src/person.cpp
         src/person.h
+        src/properties.cpp
+        src/properties.h
+        src/property_mapping.cpp
+        src/property_mapping.h
         src/querycommon.h
         src/queryindexing.cpp
         src/queryindexing.h

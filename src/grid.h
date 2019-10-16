@@ -5,7 +5,7 @@
 #include <cstring>
 
 #include "common.h"
-#include "columnmapping.h"
+#include "property_mapping.h"
 
 #include "var/var.h"
 #include "cjson/cjson.h"
@@ -15,13 +15,13 @@ namespace openset
 {
     namespace db
     {
-        class Columns;
+        class Properties;
         class Table;
         class Attributes;
         class AttributeBlob;
-        class ColumnMapping;
+        class PropertyMapping;
         class Grid;
-        struct ColumnMap_s;
+        struct PropertyMap_s;
         const int64_t int16_min = numeric_limits<int16_t>::min();
         const int64_t int16_max = numeric_limits<int16_t>::max();
         const int64_t int32_min = numeric_limits<int32_t>::min();
@@ -43,7 +43,7 @@ namespace openset
 
             void reset();
 
-            void add(int32_t column, int64_t value, Mode_e mode);
+            void add(int32_t propIndex, int64_t value, Mode_e mode);
             void add(const Grid* grid, Mode_e mode);
             void add(const Grid* grid, const cvar& props, Mode_e mode);
 
@@ -102,7 +102,7 @@ namespace openset
 
         struct Col_s
         {
-            int64_t cols[MAX_COLUMNS];
+            int64_t cols[MAX_PROPERTIES];
         };
 
         using Row = Col_s;
@@ -127,14 +127,14 @@ namespace openset
 #pragma pack(push,1)
             struct Cast_s
             {
-                int16_t columnNum;
+                int16_t propIndex;
                 int64_t val64;
             };
 #pragma pack(pop)
 
-            const static int sizeOfCastHeader = sizeof(Cast_s::columnNum);
+            const static int sizeOfCastHeader = sizeof(Cast_s::propIndex);
             const static int sizeOfCast = sizeof(Cast_s);
-            ColumnMap_s* colMap { nullptr }; // we will get our memory via stack
+            PropertyMap_s* propertyMap { nullptr }; // we will get our memory via stack
             // so rows have tight cache affinity
             HeapStack mem;
             Rows rows;
@@ -158,15 +158,15 @@ namespace openset
             ~Grid();
 
             /**
-            * Why? The schema can have up to 4096 columns. These columns have
-            * numeric indexes that allow allocated columns to be distributed
+            * Why? The schema can have up to 4096 properties. These properties have
+            * numeric indexes that allow allocated properties to be distributed
             * throughout that range. The Column map is a sequential list of
             * indexes into the actual schema, allowing us to create compact
-            * grids that do not contain 4096 columns (which would be bulky
+            * grids that do not contain 4096 properties (which would be bulky
             * and slow)
             */
             bool mapSchema(Table* tablePtr, Attributes* attributesPtr);
-            bool mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& columnNames);
+            bool mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& propertyNames);
             void setSessionTime(const int64_t sessionTime) { this->sessionTime = sessionTime; }
             cvar getProps(const bool propsMayChange);
             void setProps(cvar& var);
@@ -181,7 +181,7 @@ namespace openset
                 junk
             };
 
-            RowType_e insertParse(const std::string& event, Columns* columns, cjson* doc, Col_s* insertRow);
+            RowType_e insertParse(Properties* properties, cjson* doc, Col_s* insertRow);
         public:
             void insertEvent(cjson* rowData);
             // re-encodes and compresses the row data after inserts
@@ -191,9 +191,9 @@ namespace openset
             // returns true if culling occured - de-index unreferenced items
             bool cull();
 
-            // given an actual schema column, what is the
-            // column in the grid (which is compact)
-            int getGridColumn(int schemaColumn) const;
+            // given an actual schema property, what is the
+            // property in the grid (which is compact)
+            int getGridProperty(int propIndex) const;
 
             string getUUIDString() const
             {
@@ -210,7 +210,7 @@ namespace openset
             const SetVector& getSetData() const { return setData; }
             Attributes* getAttributes() const { return attributes; }
             PersonData_s* getMeta() const { return rawData; }
-            ColumnMap_s* getColumnMap() const { return colMap; }
+            PropertyMap_s* getPropertyMap() const { return propertyMap; }
             AttributeBlob* getAttributeBlob() const;
 
             cjson toJSON() const; // brings object back to zero state

@@ -1,6 +1,6 @@
 #include "oloop_segment.h"
 #include "indexbits.h"
-#include "columns.h"
+#include "properties.h"
 #include "tablepartitioned.h"
 #include "queryparserosl.h"
 #include "internoderouter.h"
@@ -54,7 +54,7 @@ void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
             resultColumns->columns[0].value = count;
         else
             resultColumns->columns[0].value += count;
-        //resultColumns->columns[0].distinctId = 0;
+        //resultColumns->properties[0].distinctId = 0;
     };
 
     RowKey rowKey;
@@ -203,7 +203,7 @@ bool OpenLoopSegment::nextMacro()
 
         // clean the person object
         person.reinit();
-        // map table, partition and select schema columns to the Person object
+        // map table, partition and select schema properties to the Person object
         if (!person.mapTable(table.get(), loop->partition, mappedColumns))
         {
             partitionRemoved();

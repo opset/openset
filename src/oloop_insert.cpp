@@ -140,10 +140,8 @@ bool OpenLoopInsert::run()
         auto uuidString = row.xPathString("/id", "");
         toLower(uuidString);
 
-        const auto attr = row.xPath("/_");
-
         // do we have what we need to insert?
-        if (attr && uuidString.length())
+        if (uuidString.length())
             evtByPerson[uuidString].emplace_back(std::move(row));
     }
 

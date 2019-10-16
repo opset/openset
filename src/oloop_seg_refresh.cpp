@@ -1,6 +1,6 @@
 #include "oloop_seg_refresh.h"
 #include "indexbits.h"
-#include "columns.h"
+#include "properties.h"
 #include "tablepartitioned.h"
 #include "queryparserosl.h"
 
@@ -135,7 +135,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 
         // clean the person object
         person.reinit();
-        // map table, partition and select schema columns to the Person object
+        // map table, partition and select schema properties to the Person object
         if (!person.mapTable(table.get(), loop->partition, mappedColumns))
         {
             suicide();

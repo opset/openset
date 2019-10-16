@@ -96,7 +96,7 @@ curl \
 -X POST  http://127.0.0.1:8080/v1/table/highstreet \
 -d @- << EOF | json_pp
 {
-    "columns": [
+    "properties": [
         {"name": "order_id", "type": "int"},
         {"name": "product_name", "type": "text"},
         {"name": "product_price", "type": "double"},
@@ -108,7 +108,7 @@ curl \
         {"name": "product_group", "type": "text", "is_set": true},
         {"name": "cart_size", "type": "int"}
     ],
-    "z_order": [
+    "event_order": [
       "purchase",
       "cart_item"
     ]
@@ -133,7 +133,7 @@ curl \
 --data-binary @openset_samples/data/highstreet_events.json | json_pp
 ```
 
-> :bulb: please take a look at `highstreet_events.json`, this is the format used to insert data into OpenSet. You will see that the object keys match the columns created in step #5.
+> :bulb: please take a look at `highstreet_events.json`, this is the format used to insert data into OpenSet. You will see that the object keys match the properties defined in step #5.
 
 response:
 
@@ -158,7 +158,7 @@ curl \
 -X POST http://127.0.0.1:8080/v1/query/highstreet/event \
 --data-binary @- << EOF | json_pp
 
-# define which columns we want to aggregate
+# define which properties we want to aggregate
 select
     count id
     count product_name as purchased
@@ -172,7 +172,7 @@ each_row where
         product_name.is(in ['fly rod', 'gilded spoon'])
 
     # push the current row into the aggregater so
-    # the columns defined in the `select` block are
+    # the properties selected in the `select` block are
     # updated. Group aggregations by `day_of_week` and
     # `product_name`
     << get_day_of_week(stamp), product_name
@@ -260,7 +260,7 @@ end
 
 @segment grommet_then_panini use_cached=true refresh=5_minutes on_insert=true
 
-# iterate rows where the columns match the conditions
+# iterate rows where the properties match the conditions
 each_row where
     event.is(== 'cart_item') &&
     product_name.is(== 'grommet')
@@ -307,13 +307,13 @@ response (counts are people):
 }
 ```
 
-**9. Let's query a column**
+**9. Let's query a property**
 
-This will return customer counts for all the values in a column.
+This will return customer counts for all the values for a property.
 
 ```bash
 curl \
--X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name' | json_pp
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/property/product_name' | json_pp
 ```
 
 response (counts are people):
@@ -367,13 +367,13 @@ response (counts are people):
 }
 ```
 
-**10. Let's query a column in segment compare mode**
+**10. Let's query a property in segment compare mode**
 
 Same query as above, but now we are comparing a all customers `*` vs customers in the segment `products_outdoor`:
 
 ```bash
 curl \
--X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_name?segments=*,products_outdoor' | json_pp
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/property/product_name?segments=*,products_outdoor' | json_pp
 ```
 
 response (counts are people for each segment):
@@ -437,13 +437,13 @@ response (counts are people for each segment):
 }
 ```
 
-**11.** Let's query a numeric column and `bucket` the results by `50` dollar increments
+**11.** Let's query a numeric property and `bucket` the results by `50` dollar increments
 
-> :bulb: note that the distinct user counts are properly counted per bucket. This is useful for making a column histogram.
+> :bulb: note that the distinct user counts are properly counted per bucket. This is useful for making a histogram of all the value in a property.
 
 ```bash
 curl \
--X GET 'http://127.0.0.1:8080/v1/query/highstreet/column/product_price?bucket=50' | json_pp
+-X GET 'http://127.0.0.1:8080/v1/query/highstreet/property/product_price?bucket=50' | json_pp
 ```
 
 response (counts are people):
@@ -530,7 +530,7 @@ curl \
 --data-binary @- << EOF | json_pp
 # our osl script
 
-select # define our output columns
+select # define the properties we want to count
     count id
     count product_name as purchased
     sum product_price as total_revenue

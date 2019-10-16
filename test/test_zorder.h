@@ -7,7 +7,7 @@
 #include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
@@ -184,15 +184,15 @@ inline Tests test_zorder()
 				// prepare our table
 				auto table = openset::globals::database->newTable("__testzorder__");
 
-				// add some columns
-				auto columns = table->getColumns();
+				// add some properties
+				auto columns = table->getProperties();
 				ASSERT(columns != nullptr);
 
 				// content (adding to 2000 range, these typically auto enumerated on create)
-				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false, 0);
+				columns->setProperty(2000, "some_val", openset::db::PropertyTypes_e::intProp, false, 0);
 
-				auto zOrderStrings = table->getZOrderStrings();
-				auto zOrderInts = table->getZOrderHashes();
+				auto zOrderStrings = table->getEventOrderStrings();
+				auto zOrderInts = table->getEventOrderHashes();
 
 				// add zOrdering
 				zOrderStrings->emplace("alpha", 0);

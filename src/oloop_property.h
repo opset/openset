@@ -22,7 +22,7 @@ namespace openset
 
     namespace async
     {
-        class OpenLoopColumn : public OpenLoop
+        class OpenLoopProperty : public OpenLoop
         {
         public:
             enum class ColumnQueryMode_e : int
@@ -44,7 +44,7 @@ namespace openset
             struct ColumnQueryConfig_s
             {
                 std::string columnName;
-                db::columnTypes_e columnType;
+                db::PropertyTypes_e columnType;
                 int columnIndex;
 
                 ColumnQueryMode_e mode { ColumnQueryMode_e::all };
@@ -52,7 +52,7 @@ namespace openset
                 std::vector<std::string> segments{ "*" }; // efault is all
 
                 // using cvars because I can put strings, bools, doubles and ints int them and
-                // don't need to break out separate filter and bucket vars for 
+                // don't need to break out separate filter and bucket vars for
                 // each in this structure.
                 cvar bucket{ 0 }; // histogramming
                 cvar filterLow{ 0 };
@@ -86,14 +86,14 @@ namespace openset
 
         public:
 
-            explicit OpenLoopColumn(
+            explicit OpenLoopProperty(
                 ShuttleLambda<result::CellQueryResult_s>* shuttle,
                 openset::db::Database::TablePtr table,
                 ColumnQueryConfig_s config,
                 openset::result::ResultSet* result,
                 const int64_t instance);
 
-            ~OpenLoopColumn() final;
+            ~OpenLoopProperty() final;
 
             void prepare() final;
             bool run() final;

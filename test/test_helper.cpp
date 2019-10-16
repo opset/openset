@@ -18,7 +18,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     openset::query::QueryParser p;
 
     // compile test script
-    p.compileQuery(script, table->getColumns(), queryMacros, nullptr);
+    p.compileQuery(script, table->getProperties(), queryMacros, nullptr);
 
     if (debug)
         cout << openset::query::MacroDbg(queryMacros) << endl;
@@ -32,7 +32,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     auto mappedColumns = engine->interpreter->getReferencedColumns();
 
     // MappedColumns? Why? Because the basic mapTable function (without a
-    // columnList) maps all the columns in the table - which is what we want when
+    // columnList) maps all the properties in the table - which is what we want when
     // inserting or updating rows but means more processing and less data affinity
     // when performing queries
     Person person; // Person overlay for personRaw;

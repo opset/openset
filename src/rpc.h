@@ -25,14 +25,14 @@ namespace openset::comms
         // RpcTable
         {
             "PUT",
-            std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            std::regex(R"(^/v1/table/([a-z0-9_]+)/property/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcTable::column_add,
             { { 1, "table" }, { 2, "name" } }
         },
         { "DELETE", std::regex(R"(^/v1/table/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcTable::table_drop, { { 1, "table" } } },
         {
             "DELETE",
-            std::regex(R"(^/v1/table/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            std::regex(R"(^/v1/table/([a-z0-9_]+)/property/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
             RpcTable::column_drop,
             { { 1, "table" }, { 2, "name" } }
         },
@@ -44,14 +44,15 @@ namespace openset::comms
             RpcTable::table_settings,
             { { 1, "table" } }
         },
+        { "GET", std::regex(R"(^/v1/tables(\/|\?|\#|)$)"), RpcTable::table_list, {} },
         // RpcQuery
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/event(\/|\?|\#|)$)"), RpcQuery::event, { { 1, "table" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/segment(\/|\?|\#|)$)"), RpcQuery::segment, { { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person, { { 1, "table" } } },
         {
             "GET",
-            std::regex(R"(^/v1/query/([a-z0-9_]+)/column/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcQuery::column,
+            std::regex(R"(^/v1/query/([a-z0-9_]+)/property/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            RpcQuery::property,
             { { 1, "table" }, { 2, "name" } }
         },
         {

@@ -106,7 +106,7 @@ void OpenLoopQuery::prepare()
         interpreter->setCompareSegments(index, segments);
     }
 
-    // map table, partition and select schema columns to the Person object
+    // map table, partition and select schema properties to the Person object
     auto mappedColumns = interpreter->getReferencedColumns();
     if (!person.mapTable(table.get(), loop->partition, mappedColumns))
     {

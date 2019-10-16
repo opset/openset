@@ -1,6 +1,6 @@
 #include "queryparserosl.h"
 
-#include "columns.h"
+#include "properties.h"
 #include <iterator>
 #include <sstream>
 #include <iomanip>
@@ -71,9 +71,9 @@ string openset::query::MacroDbg(Macro_s& macro)
         ss << "NONE" << endl;
     outSpacer();
     ss << endl << endl;
-    ss << "Table Column Map (in script or aggregates):" << endl;
+    ss << "Table Properties Map (in script or aggregates):" << endl;
     outSpacer();
-    ss << "IDX | COLIDX | NAME                 | TYPE      | NOTE" << endl;
+    ss << "IDX | PRPIDX | NAME                 | TYPE      | NOTE" << endl;
     outSpacer();
     if (macro.vars.tableVars.size())
     {
@@ -85,19 +85,19 @@ string openset::query::MacroDbg(Macro_s& macro)
             std::string type;
             switch (v.schemaType)
             {
-            case db::columnTypes_e::freeColumn:
+            case db::PropertyTypes_e::freeProp:
                 type = "err(1)";
                 break;
-            case db::columnTypes_e::intColumn:
+            case db::PropertyTypes_e::intProp:
                 type = "int";
                 break;
-            case db::columnTypes_e::doubleColumn:
+            case db::PropertyTypes_e::doubleProp:
                 type = "double";
                 break;
-            case db::columnTypes_e::boolColumn:
+            case db::PropertyTypes_e::boolProp:
                 type = "bool";
                 break;
-            case db::columnTypes_e::textColumn:
+            case db::PropertyTypes_e::textProp:
                 type = "text";
                 break;
             default:

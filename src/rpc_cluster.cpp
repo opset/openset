@@ -186,7 +186,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
         configBlock.set("node_id", newNodeId);
         configBlock.set("partition_max", cast<int64_t>(openset::globals::async->partitionMax));
 
-        // make am array node called tables, push the tables, triggers, columns into the array
+        // make am array node called tables, push the tables, triggers, properties into the array
         auto tables = configBlock.setArray("tables");
 
         for (auto n : openset::globals::database->tables)

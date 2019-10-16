@@ -1,50 +1,50 @@
 #include "attributeblob.h"
 #include "sba/sba.h"
 
-bool openset::db::AttributeBlob::isAttribute(const int32_t column, const int64_t valueHash)
+bool openset::db::AttributeBlob::isAttribute(const int32_t propIndex, const int64_t valueHash)
 {
-	csLock lock(cs);
-	return attributesBlob.count(attr_key_s::makeKey(column, valueHash));
+    csLock lock(cs);
+    return attributesBlob.count(attr_key_s::makeKey(propIndex, valueHash));
 }
 
-bool openset::db::AttributeBlob::isAttribute(const int32_t column, const string& value)
+bool openset::db::AttributeBlob::isAttribute(const int32_t propIndex, const string& value)
 {
-	// TODO iterate for collisions
-	const auto valueHash = MakeHash(value);
+    // TODO iterate for collisions
+    const auto valueHash = MakeHash(value);
 
-	csLock lock(cs);
-	return attributesBlob.count(attr_key_s::makeKey(column, valueHash));
+    csLock lock(cs);
+    return attributesBlob.count(attr_key_s::makeKey(propIndex, valueHash));
 }
 
-char* openset::db::AttributeBlob::storeValue(const int32_t column, const string& value)
+char* openset::db::AttributeBlob::storeValue(const int32_t propIndex, const string& value)
 {
-	const auto valueHash = MakeHash(value);
-	char* blob = nullptr;
+    const auto valueHash = MakeHash(value);
+    char* blob = nullptr;
 
-	const auto key = attr_key_s::makeKey(column, valueHash);
+    const auto key = attr_key_s::makeKey(propIndex, valueHash);
 
-	csLock lock(cs);
+    csLock lock(cs);
 
-	if (!attributesBlob.get(key, blob))
-	{
-		// not found let's make it!
-		const auto len = value.length();
-		blob = mem.newPtr(len + 1);//cast<char*>(PoolMem::getPool().getPtr(len + 1));
-		strcpy(blob, value.c_str());
-		attributesBlob.set(key, blob);
-	}
+    if (!attributesBlob.get(key, blob))
+    {
+        // not found let's make it!
+        const auto len = value.length();
+        blob = mem.newPtr(len + 1);//cast<char*>(PoolMem::getPool().getPtr(len + 1));
+        strcpy(blob, value.c_str());
+        attributesBlob.set(key, blob);
+    }
 
-	return blob;
+    return blob;
 }
 
-char* openset::db::AttributeBlob::getValue(const int32_t column, const int64_t valueHash)
+char* openset::db::AttributeBlob::getValue(const int32_t propIndex, const int64_t valueHash)
 {
-	char* blob = nullptr;
-	const auto key = attr_key_s::makeKey(column, valueHash);
+    char* blob = nullptr;
+    const auto key = attr_key_s::makeKey(propIndex, valueHash);
 
-	csLock lock(cs);
-	if (attributesBlob.get(key, blob))
-	    return blob;
+    csLock lock(cs);
+    if (attributesBlob.get(key, blob))
+        return blob;
     else
         return nullptr;
 }

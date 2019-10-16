@@ -23,11 +23,11 @@ namespace openset
 			AttributeBlob() = default;
 			~AttributeBlob() = default;
 
-			bool isAttribute(const int32_t column, const int64_t valueHash);
-			bool isAttribute(const int32_t column, const string& value);
-			char* storeValue(const int32_t column, const string& value);
+			bool isAttribute(const int32_t propIndex, const int64_t valueHash);
+			bool isAttribute(const int32_t propIndex, const string& value);
+			char* storeValue(const int32_t propIndex, const string& value);
 
-			char* getValue(const int32_t column, const int64_t valueHash);
+			char* getValue(const int32_t propIndex, const int64_t valueHash);
 		};
 	};
 };

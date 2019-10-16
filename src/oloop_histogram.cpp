@@ -73,9 +73,9 @@ void OpenLoopHistogram::prepare()
 
     if (eachColumn.length())
     {
-        colInfo = table->getColumns()->getColumn(eachColumn);
+        propInfo = table->getProperties()->getProperty(eachColumn);
 
-        if (!colInfo)
+        if (!propInfo)
         {
             shuttle->reply(
                 0,
@@ -93,7 +93,7 @@ void OpenLoopHistogram::prepare()
             return;
         }
 
-        valueList = parts->attributes.getColumnValues(colInfo->idx);
+        valueList = parts->attributes.getPropertyValues(propInfo->idx);
 
         for (auto v : macros.vars.userVars)
             if (v.actual == "each_value")
@@ -133,7 +133,7 @@ void OpenLoopHistogram::prepare()
             }
             else
             {
-                /*auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
+                /*auto attr = parts->attributes.get(PROP_SEGMENT, MakeHash(segmentName));
                 if (attr)
                 {
                     segments.push_back(attr->getBits());
@@ -183,7 +183,7 @@ void OpenLoopHistogram::prepare()
 
     auto mappedColumns = interpreter->getReferencedColumns();
 
-    // map table, partition and select schema columns to the Person object
+    // map table, partition and select schema properties to the Person object
     if (!person.mapTable(table.get(), loop->partition, mappedColumns))
     {
         partitionRemoved();
@@ -201,21 +201,21 @@ void OpenLoopHistogram::prepare()
 
     if (valueList.size()) // if we are foreach mode
     {
-        switch (colInfo->type)
+        switch (propInfo->type)
         {
-        case columnTypes_e::intColumn:
+        case PropertyTypes_e::intProp:
             rowKey.types[1] = ResultTypes_e::Int;
             break;
-        case columnTypes_e::doubleColumn:
+        case PropertyTypes_e::doubleProp:
             rowKey.types[1] = ResultTypes_e::Double;
             break;
-        case columnTypes_e::boolColumn:
+        case PropertyTypes_e::boolProp:
             rowKey.types[1] = ResultTypes_e::Bool;
             break;
-        case columnTypes_e::textColumn:
+        case PropertyTypes_e::textProp:
             rowKey.types[1] = ResultTypes_e::Text;
             break;
-        case columnTypes_e::freeColumn:
+        case PropertyTypes_e::freeProp:
         default: ;
         }
 
@@ -266,22 +266,22 @@ bool OpenLoopHistogram::run()
 
                 for (auto& itemValue : valueList)
                 {
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
+                    case PropertyTypes_e::intProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value = itemValue.first;
                         break;
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::doubleProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value =
                             static_cast<double>(itemValue.first) / 10000.0;
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value = (itemValue.first != 0);
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         if (itemValue.second->text)
                         {
                             result->addLocalText(itemValue.first, itemValue.second->text);
@@ -291,7 +291,7 @@ bool OpenLoopHistogram::run()
                         else
                             continue;
                         break;
-                    case columnTypes_e::freeColumn:
+                    case PropertyTypes_e::freeProp:
                     default:
                         continue;
                     }

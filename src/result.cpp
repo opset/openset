@@ -108,19 +108,19 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
             {
                 switch (g.schemaType)
                 {
-                case db::columnTypes_e::intColumn:
+                case db::PropertyTypes_e::intProp:
                     accTypes[dataIndex] = ResultTypes_e::Int;
                     break;
-                case db::columnTypes_e::doubleColumn:
+                case db::PropertyTypes_e::doubleProp:
                     accTypes[dataIndex] = ResultTypes_e::Double;
                     break;
-                case db::columnTypes_e::boolColumn:
+                case db::PropertyTypes_e::boolProp:
                     accTypes[dataIndex] = ResultTypes_e::Bool;
                     break;
-                case db::columnTypes_e::textColumn:
+                case db::PropertyTypes_e::textProp:
                     accTypes[dataIndex] = ResultTypes_e::Text;
                     break;
-                case db::columnTypes_e::freeColumn:
+                case db::PropertyTypes_e::freeProp:
                 default:
                     accTypes[dataIndex] = ResultTypes_e::None;
                 }
@@ -129,19 +129,19 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
             {
                 switch (g.schemaType)
                 {
-                case db::columnTypes_e::intColumn:
+                case db::PropertyTypes_e::intProp:
                     accTypes[dataIndex] = ResultTypes_e::Int;
                     break;
-                case db::columnTypes_e::doubleColumn:
+                case db::PropertyTypes_e::doubleProp:
                     accTypes[dataIndex] = ResultTypes_e::Double;
                     break;
-                case db::columnTypes_e::boolColumn:
+                case db::PropertyTypes_e::boolProp:
                     accTypes[dataIndex] = ResultTypes_e::Int;
                     break;
-                case db::columnTypes_e::textColumn:
+                case db::PropertyTypes_e::textProp:
                     accTypes[dataIndex] = ResultTypes_e::Int;
                     break;
-                case db::columnTypes_e::freeColumn:
+                case db::PropertyTypes_e::freeProp:
                 default:
                     accTypes[dataIndex] = ResultTypes_e::Int;
                 }
@@ -326,7 +326,7 @@ ResultSet::RowVector mergeResultSets(
                                 }
                                 else
                                 {
-                                    // we are updating columns here, accumulator rules apply here
+                                    // we are updating properties here, accumulator rules apply here
                                     switch (modifiers[columnIndex]) // WAS TABLEVAR
                                     {
                                     case openset::query::Modifiers_e::min:
@@ -444,7 +444,7 @@ char* ResultMuxDemux::multiSetToInternode(
     {
         // make space for a key
         const auto keyPtr = recast<openset::result::RowKey*>(mem.newPtr(sizeof(openset::result::RowKey)));
-        // make space for the columns
+        // make space for the properties
         const auto accumulatorPtr = recast<openset::result::Accumulator*>(mem.newPtr(accumulatorSize));
 
         // copy the values
@@ -661,12 +661,12 @@ void ResultMuxDemux::resultSetToJson(
             entry->set("g", "n/a");
         }
 
-        // set columns
+        // set properties
 
         for (auto shiftCount = 0, shiftOffset = 0; shiftCount < shiftIterations; ++shiftCount, shiftOffset += shiftSize)
         {
             auto array = entry->pushArray();
-            // one result columns branch will be "c", if multiple it will be "c", "c2", "c3", "c4"
+            // one result properties branch will be "c", if multiple it will be "c", "c2", "c3", "c4"
             array->setName(!shiftCount ? "c" : "c" + to_string(shiftCount + 1));
 
             for (auto dataIndex = shiftOffset, colIndex = 0; dataIndex < shiftOffset + shiftSize; ++dataIndex, ++
@@ -771,9 +771,9 @@ void ResultMuxDemux::resultSetToJson(
             for (auto n : resultNodes->getNodes()) // _ is an array
             {
                 auto segmentName = n->xPathString("/g", "");
-                const auto columns = n->xPath("/c");
-                if (columns && segmentName.length())
-                    (*tableGlobals)["segment"][segmentName] = columns->at(0)->getInt();
+                const auto properties = n->xPath("/c");
+                if (properties && segmentName.length())
+                    (*tableGlobals)["segment"][segmentName] = properties->at(0)->getInt();
             }
     }
     */

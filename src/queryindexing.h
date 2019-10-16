@@ -1,7 +1,7 @@
 #pragma once
 
 #include "querycommon.h"
-#include "columns.h"
+#include "properties.h"
 #include "indexbits.h"
 #include "table.h"
 #include <stack>
