@@ -14,7 +14,7 @@ OpenLoopHistogram::OpenLoopHistogram(
     openset::db::Database::TablePtr table,
     Macro_s macros,
     std::string groupName,
-    std::string eachColumn,
+    std::string eachProperty,
     const int64_t bucket,
     openset::result::ResultSet* result,
     const int instance)
@@ -23,7 +23,7 @@ OpenLoopHistogram::OpenLoopHistogram(
       macros(std::move(macros)),
       shuttle(shuttle),
       groupName(std::move(groupName)),
-      eachColumn(std::move(eachColumn)),
+      eachColumn(std::move(eachProperty)),
       table(table),
       bucket(bucket),
       parts(nullptr),
@@ -60,9 +60,9 @@ void OpenLoopHistogram::prepare()
         return;
     }
 
-    maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.customerCount();
 
-    // generate the index for this query	
+    // generate the index for this query
     indexing.mount(table.get(), macros, loop->partition, maxLinearId);
     bool countable;
     index      = indexing.getIndex("_", countable);
@@ -183,7 +183,7 @@ void OpenLoopHistogram::prepare()
 
     auto mappedColumns = interpreter->getReferencedColumns();
 
-    // map table, partition and select schema properties to the Person object
+    // map table, partition and select schema properties to the Customer object
     if (!person.mapTable(table.get(), loop->partition, mappedColumns))
     {
         partitionRemoved();
@@ -236,7 +236,7 @@ bool OpenLoopHistogram::run()
         if (sliceComplete())
             return true;
 
-        // are we done? This will return the index of the 
+        // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
         if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
         {
@@ -252,7 +252,7 @@ bool OpenLoopHistogram::run()
             return false;
         }
 
-        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
+        if (const auto personData = parts->people.getCustomerByLIN(currentLinId); personData != nullptr)
         {
             ++runCount;
 
@@ -296,7 +296,7 @@ bool OpenLoopHistogram::run()
                         continue;
                     }
 
-                    interpreter->exec(); // run the script on this person - do some magic
+                    interpreter->exec(); // run the script on this customer - do some magic
                     auto returns = interpreter->getLastReturn();
 
                     auto idx = -1;
@@ -347,7 +347,7 @@ bool OpenLoopHistogram::run()
             }
             else
             {
-                interpreter->exec(); // run the script on this person - do some magic
+                interpreter->exec(); // run the script on this customer - do some magic
                 auto returns = interpreter->getLastReturn();
 
                 auto idx = -1;

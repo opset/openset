@@ -36,7 +36,7 @@ namespace openset::db
 
     struct Attr_changes_s
     {
-        int32_t linId{ 0 }; // linear ID of Person
+        int32_t linId{ 0 }; // linear ID of Customer
         int32_t state{ 0 }; // 1 or 0
         Attr_changes_s* prev{ nullptr }; // tail linked.
 

@@ -1,7 +1,7 @@
 #include "oloop_cleaner.h"
 
-#include "people.h"
-#include "person.h"
+#include "customers.h"
+#include "customer.h"
 #include "database.h"
 #include "table.h"
 #include "tablepartitioned.h"
@@ -11,15 +11,15 @@ using namespace openset::async;
 using namespace openset::db;
 
 OpenLoopCleaner::OpenLoopCleaner(const openset::db::Database::TablePtr table) :
-	OpenLoop(table->getName()),
-	table(table),
-	linearId(0)
+    OpenLoop(table->getName()),
+    table(table),
+    linearId(0)
 {}
 
 void OpenLoopCleaner::prepare()
 {
-	linearId = 0;
-	person.mapTable(table.get(), loop->partition);
+    linearId = 0;
+    person.mapTable(table.get(), loop->partition);
 
     parts = table->getPartitionObjects(loop->partition, false);
 
@@ -35,43 +35,43 @@ void OpenLoopCleaner::prepare()
 void OpenLoopCleaner::respawn()
 {
     OpenLoop* newCell = new OpenLoopCleaner(table);
-    
+
     // schedule and add some random shuffle to stagger start-times accross workers
-    newCell->scheduleFuture(table->maintInterval); 
-    
+    newCell->scheduleFuture(table->maintInterval);
+
     spawn(newCell); // add replacement to scheduler
-    suicide(); // kill this cell.    
+    suicide(); // kill this cell.
 }
 
 bool OpenLoopCleaner::run()
 {
-    const auto maxLinearId = parts->people.peopleCount();
+    const auto maxLinearId = parts->people.customerCount();
 
     auto dirty = false;
 
     Logger::get().info("+ cleaner running for " + table->getName() + ".");
-    
-	while (true)
-	{
-		if (sliceComplete())
+
+    while (true)
+    {
+        if (sliceComplete())
         {
             if (dirty)
                 parts->attributes.clearDirty();
-			return true; // let some other open loops run
+            return true; // let some other open loops run
         }
 
-		if (linearId > maxLinearId)
-		{
+        if (linearId > maxLinearId)
+        {
             if (dirty)
-                parts->attributes.clearDirty();					
+                parts->attributes.clearDirty();
             respawn();
-			return false;
-		}
+            return false;
+        }
 
-        if (const auto personData = parts->people.getPersonByLIN(linearId); personData)
-		{
-			person.mount(personData);
-			person.prepare();
+        if (const auto personData = parts->people.getCustomerByLIN(linearId); personData)
+        {
+            person.mount(personData);
+            person.prepare();
             if (person.getGrid()->cull())
             {
                 if (person.getGrid()->getRows()->empty())
@@ -80,12 +80,12 @@ bool OpenLoopCleaner::run()
                 }
                 else
                 {
-                    person.commit();                    
+                    person.commit();
                 }
                 dirty = true;
             }
         }
 
         ++linearId;
-	}
+    }
 }

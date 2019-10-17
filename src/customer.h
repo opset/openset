@@ -14,14 +14,14 @@ namespace openset
 		class Table;
 		class Attributes;
 		class AttributeBlob;
-		class People;
+		class Customers;
 
-		/*! \class Person
+		/*! \class Customer
 		 *
 		 *  Reusable Container for managing personData_s structures
 		 *
 		 *  The idea is that for an insert job or query job
-		 *  a person object would be created, mapped to the
+		 *  a customer object would be created, mapped to the
 		 *  correct table (and as such, the schema and
 		 *  partition) then re-used by calling mount with
 		 *  different raw personData_s pointers. This allows
@@ -37,7 +37,7 @@ namespace openset
 		 *  3. call prepare to map customer data to Grid object
 		 *  4. do work. This could be insert, and commit, or just reading
 		 */
-		class Person
+		class Customer
 		{
 
 		private:
@@ -45,18 +45,18 @@ namespace openset
 			Table* table;
 			Attributes* attributes;
 			AttributeBlob* blob;
-			People* people;
+			Customers* people;
 			int partition;
 
 		public:
-			Person();
-			~Person() = default;
+			Customer();
+			~Customer() = default;
 
-			// totally reset the person object back to square one
+			// totally reset the customer object back to square one
 			void reinit();
 
 			/**
-			 * \brief map a table and partition to this Person object
+			 * \brief map a table and partition to this Customer object
 			 * \param[in] tablePtr pointer to a Table object
 			 * \param[in] Partition number this object lives in
 			 */
@@ -64,7 +64,7 @@ namespace openset
 			bool mapTable(Table* tablePTr, int Partition, vector<string>& columnNames);
 
 			/**
-			 * \brief maps a personData_s object to the Person object
+			 * \brief maps a personData_s object to the Customer object
 			 * \param[in] personData
 			 */
 			void mount(PersonData_s* personData);
@@ -99,13 +99,13 @@ namespace openset
 			}
 
 			/**
-			 * \brief insert a single JSON row into the Person.grid object
+			 * \brief insert a single JSON row into the Customer.grid object
 			 * \param rowData single row JSON document object.
 			 */
 			void insert(cjson* rowData);
 
 			/**
-			 * \brief commit (re-compress) the data in Person.grid
+			 * \brief commit (re-compress) the data in Customer.grid
 			 *
 			 * \remarks this will rebuild a new personData_s structure and update
 			 *          the Table.people.linearIndex to reflect the change.
@@ -118,14 +118,14 @@ namespace openset
 
 		private:
 			/**
-			* map the entire schema to the Person.grid object, called by
+			* map the entire schema to the Customer.grid object, called by
 			* map table
 			* \return
 			*/
 			bool mapSchemaAll();
 
 			/**
-			* map a portion of the schema to the Person.grid object, this is
+			* map a portion of the schema to the Customer.grid object, this is
 			* used during a query, and is called by mapTable
 			*
 			* \param[in] columnNames list of properties we want to extract

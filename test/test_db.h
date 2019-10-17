@@ -27,42 +27,34 @@ inline Tests test_db()
             "id": "user1@test.com",
             "stamp": 1458820830,
             "event": "page_view",
-            "_":{
-                "page": "blog"
-            }
+            "page": "blog"
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820840,
             "event": "page_view",
-            "_":{
-                "page": "home page",
-                "referral_source": "google.co.uk",
-`				"referral_search": ["big", "floppy", "slippers"],
-                "prop_set": ["orange", "huge"],
-                "prop_txt": "rabbit",
-                "prop_int": 543,
-                "prop_float": 543.21
-                "prop_bool": false,
-            }
+            "page": "home page",
+            "referral_source": "google.co.uk",
+            "referral_search": ["big", "floppy", "slippers"],
+            "prop_set": ["orange", "huge"],
+            "prop_txt": "rabbit",
+            "prop_int": 543,
+            "prop_float": 543.21
+            "prop_bool": false,
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820841,
             "event": "page_view",
-            "_":{
-                "page": "home page",
-                "referral_source": "google.co.uk",
-                "referral_search": ["silly", "floppy", "ears"]
-            }
+            "page": "home page",
+            "referral_source": "google.co.uk",
+            "referral_search": ["silly", "floppy", "ears"]
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820900,
             "event": "page_view",
-            "_":{
-                "page": "about"
-            }
+            "page": "about"
         }
     ]
     )raw_inserts";
@@ -146,14 +138,14 @@ inline Tests test_db()
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
                 ASSERT(parts != nullptr);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto personRaw = parts->people.createCustomer("user1@test.com");
                 ASSERT(personRaw != nullptr);
                 ASSERT(personRaw->getIdStr() == "user1@test.com");
                 ASSERT(personRaw->id == MakeHash("user1@test.com"));
                 ASSERT(personRaw->bytes == 0);
                 ASSERT(personRaw->linId == 0); // first user in this partition should be zero
 
-                Person person; // Person overlay for personRaw;
+                Customer person; // Customer overlay for personRaw;
 
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
                 person.mount(personRaw);
@@ -167,8 +159,6 @@ inline Tests test_db()
                 for (auto e : events)
                 {
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
-                    ASSERT(e->xPath("/_") != nullptr);
-
                     person.insert(e);
                 }
 
@@ -219,14 +209,14 @@ inline Tests test_db()
                 ASSERT(referral_searches.size() == 5);
                 ASSERT(pages.size() == 3);
 
-                // store this person
+                // store this customer
                 person.commit();
 
                 const auto attr = parts->attributes.get(4000, "huge");
                 ASSERT(attr != nullptr);
                 const auto bits = attr->getBits();
                 ASSERT(bits != nullptr);
-                const auto pop = bits->population(parts->people.peopleCount());
+                const auto pop = bits->population(parts->people.customerCount());
                 ASSERT(pop == 1);
 
             }
@@ -342,7 +332,7 @@ inline Tests test_db()
                 ASSERT(attr != nullptr);
                 auto bits = attr->getBits();
                 ASSERT(bits != nullptr);
-                auto pop = bits->population(parts->people.peopleCount());
+                auto pop = bits->population(parts->people.customerCount());
                 ASSERT(pop == 1);
 
                 attr = interpreter->interpreter->attrs->get(4000, "huge");
@@ -739,7 +729,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);
@@ -799,7 +789,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);
@@ -860,7 +850,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);

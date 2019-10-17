@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "people.h"
+#include "customers.h"
 #include "database.h"
 #include "threads/locks.h"
 #include "properties.h"

@@ -105,7 +105,7 @@ string openset::query::MacroDbg(Macro_s& macro)
             }
             ss << padding(type, 9, false) << " | "; /*
             if (v.actual == "__uuid")
-                ss << "actual for 'person' or 'people'";
+                ss << "actual for 'customer' or 'people'";
             else if (v.actual == "__action")
                 ss << "actual for 'action'";
             else if (v.actual == "__stamp")
@@ -137,7 +137,7 @@ string openset::query::MacroDbg(Macro_s& macro)
                 ss << padding(v.actual, 20, false) << " | ";
             ss << padding(v.alias, 20, false) << " | "; /*
             if (v.actual == "__uuid")
-                ss << "from 'person' or 'people'  ";
+                ss << "from 'customer' or 'people'  ";
             else if (v.actual == "__action")
                 ss << "from 'action'  ";
             else if (v.actual == "__stamp")

@@ -62,7 +62,7 @@ void OpenLoopSegmentRefresh::emitSegmentDifferences(openset::db::IndexBits* befo
         const auto beforeBit = before->bitState(i);
         const auto afterBit = after->bitState(i);
 
-        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+        if ((personData = parts->people.getCustomerByLIN(i)) == nullptr)
             continue;
 
         if (afterBit && !beforeBit)
@@ -133,9 +133,9 @@ bool OpenLoopSegmentRefresh::nextExpired()
 
         auto mappedColumns = interpreter->getReferencedColumns();
 
-        // clean the person object
+        // clean the customer object
         person.reinit();
-        // map table, partition and select schema properties to the Person object
+        // map table, partition and select schema properties to the Customer object
         if (!person.mapTable(table.get(), loop->partition, mappedColumns))
         {
             suicide();
@@ -152,7 +152,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
 
             interpreter->interpretMode = InterpretMode_e::count;
 
-            // mount empty person record (required but not used in segment math queries).
+            // mount empty customer record (required but not used in segment math queries).
             interpreter->mount(&person);
             interpreter->exec();
 
@@ -193,7 +193,7 @@ void OpenLoopSegmentRefresh::prepare()
     ++parts->segmentUsageCount;
 
     segmentsIter = parts->segments.begin();
-    maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.customerCount();
 
     nextExpired();
 }
@@ -246,7 +246,7 @@ bool OpenLoopSegmentRefresh::run()
         }
 
         if (currentLinId < maxLinearId &&
-            (personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+            (personData = parts->people.getCustomerByLIN(currentLinId)) != nullptr)
         {
             ++runCount;
             person.mount(personData);

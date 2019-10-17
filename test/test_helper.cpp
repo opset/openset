@@ -27,7 +27,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
 
     auto engine = new TestEngineContainer_s(queryMacros);
 
-    const auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
+    const auto personRaw = parts->people.createCustomer("user1@test.com"); // get a user
     ASSERT(personRaw != nullptr);
     auto mappedColumns = engine->interpreter->getReferencedColumns();
 
@@ -35,12 +35,12 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
     // columnList) maps all the properties in the table - which is what we want when
     // inserting or updating rows but means more processing and less data affinity
     // when performing queries
-    Person person; // Person overlay for personRaw;
+    Customer person; // Customer overlay for personRaw;
     person.mapTable(table.get(), 0, mappedColumns);
-    person.mount(personRaw); // this tells the person object where the raw compressed data is
+    person.mount(personRaw); // this tells the customer object where the raw compressed data is
     person.prepare();        // this actually decompresses
 
-    // this mounts the now decompressed data (in the person overlay)
+    // this mounts the now decompressed data (in the customer overlay)
     // into the interpreter
     engine->interpreter->mount(&person); // run it
     engine->interpreter->exec();

@@ -2,8 +2,8 @@
 #include "cjson/cjson.h"
 #include "str/strtools.h"
 
-#include "people.h"
-#include "person.h"
+#include "customers.h"
+#include "customer.h"
 #include "database.h"
 #include "table.h"
 #include "asyncpool.h"
@@ -47,15 +47,15 @@ void OpenLoopInsert::prepare()
 
 void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* segment)
 {
-    Person person;
+    Customer person;
 
-    // map a table, partition and entire schema to the Person object
+    // map a table, partition and entire schema to the Customer object
     auto mappedColumns = segment->interpreter->getReferencedColumns();
     if (!person.mapTable(tablePartitioned->table, loop->partition, mappedColumns))
         return;
 
-    // mount the person
-    const auto personData = tablePartitioned->people.getMakePerson(uuid);
+    // mount the customer
+    const auto personData = tablePartitioned->people.createCustomer(uuid);
     person.mount(personData);
     person.prepare();
 
@@ -110,12 +110,12 @@ bool OpenLoopInsert::run()
 
     sleepCounter = 0;
 
-    // reusable object representing a person
-    Person person;
+    // reusable object representing a customer
+    Customer person;
 
     ++runCount;
 
-    // map a table, partition and entire schema to the Person object
+    // map a table, partition and entire schema to the Customer object
     if (!person.mapTable(tablePartitioned->table, loop->partition))
     {
         // deleted partition - remove worker loop
@@ -125,7 +125,7 @@ bool OpenLoopInsert::run()
 
     // we are going to convert the events into JSON, and in the process
     // we are going to group the events by their user_ids.
-    // We will then insert all the events for a given person in one
+    // We will then insert all the events for a given customer in one
     // pass. This can greatly reduce redundant calls to Mount and Commit
     // which can be expensive as they both call LZ4 (which is fast, but still
     // has it's overhead)
@@ -151,7 +151,7 @@ bool OpenLoopInsert::run()
     // now insert without locks
     for (auto& uuid : evtByPerson)
     {
-        const auto personData = tablePartitioned->people.getMakePerson(uuid.first);
+        const auto personData = tablePartitioned->people.createCustomer(uuid.first);
         person.mount(personData);
         person.prepare();
 
@@ -168,7 +168,7 @@ bool OpenLoopInsert::run()
             // ensure we have bits mounted for this segment
             segment->prepare(tablePartitioned->attributes);
             // get a cached interpreter (or make one) and set the bits
-            const auto interpreter = segment->getInterpreter(tablePartitioned->people.peopleCount());
+            const auto interpreter = segment->getInterpreter(tablePartitioned->people.customerCount());
 
             // we can't crunch segment math on refresh, but we can expire it, so it crunches the next time it's used
             if (interpreter->macros.isSegmentMath)

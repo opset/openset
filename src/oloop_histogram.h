@@ -31,7 +31,7 @@ namespace openset
             openset::db::TablePartitioned* parts;
             int64_t maxLinearId;
             int64_t currentLinId;
-            Person person;
+            Customer person;
             openset::query::Interpreter* interpreter;
             int instance;
             int runCount;
@@ -52,7 +52,7 @@ namespace openset
                 openset::db::Database::TablePtr table,
                 openset::query::Macro_s macros,
                 std::string groupName,
-                std::string eachColumn,
+                std::string eachProperty,
                 const int64_t bucket,
                 openset::result::ResultSet* result,
                 const int instance);

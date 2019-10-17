@@ -144,12 +144,12 @@ inline Tests test_count_methods()
                 properties->setProperty(2002, "some_color", openset::db::PropertyTypes_e::textProp, false);
 
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto personRaw = parts->people.createCustomer("user1@test.com");
 
-                Person person; // Person overlay for personRaw;
+                Customer customer; // Customer overlay for personRaw;
 
-                person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-                person.mount(personRaw);
+                customer.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
+                customer.mount(personRaw);
 
                 // parse the user1_raw_inserts raw JSON text block
                 cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
@@ -162,10 +162,10 @@ inline Tests test_count_methods()
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
                     ASSERT(e->xPath("/_") != nullptr);
 
-                    person.insert(e);
+                    customer.insert(e);
                 }
 
-                person.commit();
+                customer.commit();
 
             }
         },
@@ -190,7 +190,7 @@ inline Tests test_count_methods()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.createCustomer("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -199,15 +199,15 @@ inline Tests test_count_methods()
                 // inserting or updating rows but means more processing and less data affinity
                 // when performing queries
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                Customer customer; // Customer overlay for personRaw;
+                customer.mapTable(table.get(), 0, mappedColumns);
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare(); // this actually decompresses
+                customer.mount(personRaw); // this tells the customer object where the raw compressed data is
+                customer.prepare(); // this actually decompresses
 
-                                  // this mounts the now decompressed data (in the person overlay)
+                                  // this mounts the now decompressed data (in the customer overlay)
                                   // into the interpreter
-                interpreter->mount(&person);
+                interpreter->mount(&customer);
 
                 // run it
                 interpreter->exec();
@@ -291,7 +291,7 @@ inline Tests test_count_methods()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.createCustomer("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -300,15 +300,15 @@ inline Tests test_count_methods()
                 // inserting or updating rows but means more processing and less data affinity
                 // when performing queries
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                Customer customer; // Customer overlay for personRaw;
+                customer.mapTable(table.get(), 0, mappedColumns);
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare(); // this actually decompresses
+                customer.mount(personRaw); // this tells the customer object where the raw compressed data is
+                customer.prepare(); // this actually decompresses
 
-                                  // this mounts the now decompressed data (in the person overlay)
+                                  // this mounts the now decompressed data (in the customer overlay)
                                   // into the interpreter
-                interpreter->mount(&person);
+                interpreter->mount(&customer);
 
                 // run it
                 interpreter->exec();

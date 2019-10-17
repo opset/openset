@@ -1,37 +1,37 @@
-#include "people.h"
+#include "customers.h"
 #include "heapstack/heapstack.h"
 #include "sba/sba.h"
 
 using namespace openset::db;
 
-People::People(const int partition) :
-    //peopleMap(ringHint_e::lt_5_million),
+Customers::Customers(const int partition) :
+    //customerMap(ringHint_e::lt_5_million),
     partition(partition)
 {}
 
-People::~People()
+Customers::~Customers()
 {
-    for (const auto &person: peopleLinear)
+    for (const auto &person: customerLinear)
         PoolMem::getPool().freePtr(person);
 }
 
-PersonData_s* People::getPersonByID(int64_t userId)
+PersonData_s* Customers::getCustomerByID(int64_t userId)
 {
     int32_t linId;
 
-    if (peopleMap.get(userId, linId))
-        return getPersonByLIN(linId);
+    if (customerMap.get(userId, linId))
+        return getCustomerByLIN(linId);
 
     return nullptr;
 }
 
-PersonData_s* People::getPersonByID(string userIdString)
+PersonData_s* Customers::getCustomerByID(string userIdString)
 {
     auto hashId = MakeHash(userIdString);
 
     while (true)
     {
-        const auto person = getPersonByID(hashId);
+        const auto person = getCustomerByID(hashId);
 
         if (!person)
             return nullptr;
@@ -44,16 +44,16 @@ PersonData_s* People::getPersonByID(string userIdString)
     }
 }
 
-PersonData_s* People::getPersonByLIN(const int64_t linId)
+PersonData_s* Customers::getCustomerByLIN(const int64_t linId)
 {
     // check ranges
-    if (linId < 0 || linId >= peopleLinear.size())
+    if (linId < 0 || linId >= customerLinear.size())
         return nullptr;
 
-    return peopleLinear[linId];
+    return customerLinear[linId];
 }
 
-PersonData_s* People::getMakePerson(string userIdString)
+PersonData_s* Customers::createCustomer(string userIdString)
 {
     auto idLen = userIdString.length();
     if (idLen > 64)
@@ -65,10 +65,10 @@ PersonData_s* People::getMakePerson(string userIdString)
 
     while (true)
     {
-        const auto person = getPersonByID(hashId);
+        const auto person = getCustomerByID(hashId);
 
         auto isReuse = false;
-        auto linId = static_cast<int32_t>(peopleLinear.size());
+        auto linId = static_cast<int32_t>(customerLinear.size());
 
         if (!person && !reuse.empty())
         {
@@ -90,9 +90,9 @@ PersonData_s* People::getMakePerson(string userIdString)
             newUser->setIdStr(userIdString);
 
             if (!isReuse)
-                peopleLinear.push_back(newUser);
+                customerLinear.push_back(newUser);
 
-            peopleMap.set(hashId, newUser->linId);
+            customerMap.set(hashId, newUser->linId);
 
             return newUser;
         }
@@ -106,34 +106,34 @@ PersonData_s* People::getMakePerson(string userIdString)
     }
 }
 
-void People::replacePersonRecord(PersonData_s* newRecord)
+void Customers::replaceCustomerRecord(PersonData_s* newRecord)
 {
-    if (newRecord && peopleLinear[newRecord->linId] != newRecord)
-        peopleLinear[newRecord->linId] = newRecord;
+    if (newRecord && customerLinear[newRecord->linId] != newRecord)
+        customerLinear[newRecord->linId] = newRecord;
 }
 
-int64_t People::peopleCount() const
+int64_t Customers::customerCount() const
 {
-    return static_cast<int64_t>(peopleLinear.size());
+    return static_cast<int64_t>(customerLinear.size());
 }
 
-void People::drop(const int64_t userId)
+void Customers::drop(const int64_t userId)
 {
-    const auto info = getPersonByID(userId);
+    const auto info = getCustomerByID(userId);
 
     if (!info)
         return;
 
-    //peopleMap.erase(userId);
+    //customerMap.erase(userId);
 
-    peopleLinear[info->linId] = nullptr;
+    customerLinear[info->linId] = nullptr;
 
     reuse.push_back(info->linId);
 
     PoolMem::getPool().freePtr(info);
 }
 
-void People::serialize(HeapStack* mem)
+void Customers::serialize(HeapStack* mem)
 {
     // grab 8 bytes, and set the block type at that address
     *recast<serializedBlockType_e*>(mem->newPtr(sizeof(int64_t))) = serializedBlockType_e::people;
@@ -142,7 +142,7 @@ void People::serialize(HeapStack* mem)
     const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
     (*sectionLength) = 0;
 
-    for (auto person : peopleLinear)
+    for (auto person : customerLinear)
     {
         if (!person)
             continue;
@@ -155,7 +155,7 @@ void People::serialize(HeapStack* mem)
     }
 }
 
-int64_t People::deserialize(char* mem)
+int64_t Customers::deserialize(char* mem)
 {
     auto read = mem;
 
@@ -173,9 +173,9 @@ int64_t People::deserialize(char* mem)
         return 16;
     }
 
-    peopleMap.clear();
-    peopleLinear.clear();
-    peopleLinear.reserve(sectionLength);
+    customerMap.clear();
+    customerLinear.clear();
+    customerLinear.reserve(sectionLength);
     reuse.clear();
 
     // end is the length of the block after the 16 bytes of header
@@ -186,24 +186,24 @@ int64_t People::deserialize(char* mem)
         const auto streamPerson = recast<PersonData_s*>(read);
         const auto size = streamPerson->size();
 
-        const auto person = recast<PersonData_s*>(PoolMem::getPool().getPtr(size));
-        memcpy(person, streamPerson, size);
+        const auto customer = recast<PersonData_s*>(PoolMem::getPool().getPtr(size));
+        memcpy(customer, streamPerson, size);
 
         // grow if a record was excluded during serialization
-        while (static_cast<int>(peopleLinear.size()) <= person->linId)
-            peopleLinear.push_back(nullptr);
+        while (static_cast<int>(customerLinear.size()) <= customer->linId)
+            customerLinear.push_back(nullptr);
 
-        // index this person
-        peopleLinear[person->linId] = person;
-        peopleMap.set(person->id, person->linId);
+        // index this customer
+        customerLinear[customer->linId] = customer;
+        customerMap.set(customer->id, customer->linId);
 
         // next block please
         read += size;
     }
 
-    for (auto i = 0; i < static_cast<int>(peopleLinear.size()); ++i)
+    for (auto i = 0; i < static_cast<int>(customerLinear.size()); ++i)
     {
-        if (!peopleLinear[i])
+        if (!customerLinear[i])
             reuse.push_back(i);
     }
 

@@ -54,7 +54,7 @@ void OpenLoopQuery::prepare()
         return;
     }
 
-    maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.customerCount();
 
     // generate the index for this query
     indexing.mount(table.get(), macros, loop->partition, maxLinearId);
@@ -106,7 +106,7 @@ void OpenLoopQuery::prepare()
         interpreter->setCompareSegments(index, segments);
     }
 
-    // map table, partition and select schema properties to the Person object
+    // map table, partition and select schema properties to the Customer object
     auto mappedColumns = interpreter->getReferencedColumns();
     if (!person.mapTable(table.get(), loop->partition, mappedColumns))
     {
@@ -147,13 +147,13 @@ bool OpenLoopQuery::run()
             return false;
         }
 
-        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
+        if (const auto personData = parts->people.getCustomerByLIN(currentLinId); personData != nullptr)
         {
             ++runCount;
             person.mount(personData);
             person.prepare();
             interpreter->mount(&person);
-            interpreter->exec(); // run the script on this person - do some magic
+            interpreter->exec(); // run the script on this customer - do some magic
         }
     }
 }

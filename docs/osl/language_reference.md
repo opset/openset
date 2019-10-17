@@ -625,7 +625,7 @@ end
 
 #### session_count
 
-returns the number of sessions in a persons row set.
+returns the number of sessions in a customers row set.
 
 ```ruby
 if session_count > 5:

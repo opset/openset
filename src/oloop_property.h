@@ -25,7 +25,7 @@ namespace openset
         class OpenLoopProperty : public OpenLoop
         {
         public:
-            enum class ColumnQueryMode_e : int
+            enum class PropertyQueryMode_e : int
             {
                 all,
                 rx,
@@ -43,13 +43,13 @@ namespace openset
 
             struct ColumnQueryConfig_s
             {
-                std::string columnName;
-                db::PropertyTypes_e columnType;
-                int columnIndex;
+                std::string propName;
+                db::PropertyTypes_e propType;
+                int propIndex;
 
-                ColumnQueryMode_e mode { ColumnQueryMode_e::all };
+                PropertyQueryMode_e mode { PropertyQueryMode_e::all };
 
-                std::vector<std::string> segments{ "*" }; // efault is all
+                std::vector<std::string> segments{ "*" }; // default to all
 
                 // using cvars because I can put strings, bools, doubles and ints int them and
                 // don't need to break out separate filter and bucket vars for

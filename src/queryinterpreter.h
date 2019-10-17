@@ -16,7 +16,7 @@ namespace openset
 {
     namespace db
     {
-        class Person;
+        class Customer;
         class Grid;
         class AttributeBlob;
         class IndexBits;
@@ -218,7 +218,7 @@ namespace openset
             void configure();
 
             vector<string> getReferencedColumns() const;
-            void mount(Person* person);
+            void mount(Customer* person);
 
             static constexpr bool within(
                 const int64_t compStamp,

@@ -3672,7 +3672,7 @@ namespace openset::query
             for (const auto &word: indexLogic)
                 inMacros.capturedIndex += word + " ";
 
-            // would the count from the segment rules result in the same person count if you actually
+            // would the count from the segment rules result in the same customer count if you actually
             // ran the query (used in segmentation)
             inMacros.indexIsCountable = processLogic();
             parseIndex(inMacros.index, indexLogic, 0);

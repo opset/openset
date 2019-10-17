@@ -30,7 +30,7 @@ namespace openset
 
             int64_t maxLinearId;
             int64_t currentLinId;
-            Person person;
+            Customer person;
             openset::query::Interpreter* interpreter;
             int instance;
             int runCount;

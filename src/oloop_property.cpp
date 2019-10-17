@@ -41,7 +41,7 @@ void OpenLoopProperty::prepare()
         return;
     }
 
-    stopBit = parts->people.peopleCount();
+    stopBit = parts->people.customerCount();
 
     // if we are in segment compare mode:
     if (config.segments.size())
@@ -80,7 +80,7 @@ void OpenLoopProperty::prepare()
     }
 
     // get the root value
-    const auto all = parts->attributes.get(config.columnIndex, NONE);
+    const auto all = parts->attributes.get(config.propIndex, NONE);
 
     if (!all)
     {
@@ -98,14 +98,14 @@ void OpenLoopProperty::prepare()
 
     rowKey.clear();
 
-    const auto hash = MakeHash(config.columnName);
-    result->addLocalText(MakeHash(config.columnName), config.columnName);
+    const auto hash = MakeHash(config.propName);
+    result->addLocalText(MakeHash(config.propName), config.propName);
 
     rowKey.key[0] = hash;
     rowKey.types[0] = ResultTypes_e::Text;
 
     // assign the type for the value to the key
-    switch (config.columnType)
+    switch (config.propType)
     {
         case db::PropertyTypes_e::intProp:
             rowKey.types[1] = ResultTypes_e::Int;
@@ -157,7 +157,7 @@ void OpenLoopProperty::prepare()
      *  then `AND`ed to the index.
      */
 
-    for (auto &v : parts->attributes.getPropertyValues(config.columnIndex))
+    for (auto &v : parts->attributes.getPropertyValues(config.propIndex))
     {
 
         auto groupKey = toBucket(v.first); // we only call that lambda once... hmmm...
@@ -169,10 +169,10 @@ void OpenLoopProperty::prepare()
 
         switch (config.mode)
         {
-        case ColumnQueryMode_e::all:
+        case PropertyQueryMode_e::all:
             bucketList.push_back(v.first); // value hash (or value)
             break;
-        case ColumnQueryMode_e::rx:
+        case PropertyQueryMode_e::rx:
         {
             if (v.second->text)
             {
@@ -183,32 +183,32 @@ void OpenLoopProperty::prepare()
             }
         }
             break;
-        case ColumnQueryMode_e::sub:
+        case PropertyQueryMode_e::sub:
             if (v.second->text &&
                 string(v.second->text).find(config.filterLow.getString()) != string::npos)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::gt:
+        case PropertyQueryMode_e::gt:
             if (v.first > config.filterLow)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::gte:
+        case PropertyQueryMode_e::gte:
             if (v.first >= config.filterLow)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::lt:
+        case PropertyQueryMode_e::lt:
             if (v.first < config.filterLow)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::lte:
+        case PropertyQueryMode_e::lte:
             if (v.first <= config.filterLow)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::eq:
+        case PropertyQueryMode_e::eq:
             if (v.first == config.filterLow)
                 bucketList.push_back(v.first);
             break;
-        case ColumnQueryMode_e::between:
+        case PropertyQueryMode_e::between:
             if (v.first >= config.filterLow &&
                 v.first < config.filterHigh)
                 bucketList.push_back(v.first);
@@ -258,7 +258,7 @@ bool OpenLoopProperty::run()
                 for (auto value : groupsIter->second)
                 {
 
-                    auto attr = parts->attributes.get(config.columnIndex, value);
+                    auto attr = parts->attributes.get(config.propIndex, value);
 
                     if (!attr)
                         continue;
@@ -277,9 +277,9 @@ bool OpenLoopProperty::run()
                 // we are going to handle text a little different here
                 // text isn't bucketed (at the moment, rx capture may allow us to
                 // do this in the future), so, bucket will always be value
-                if (config.columnType == db::PropertyTypes_e::textProp)
+                if (config.propType == db::PropertyTypes_e::textProp)
                 {
-                    const auto attr = parts->attributes.get(config.columnIndex, bucket);
+                    const auto attr = parts->attributes.get(config.propIndex, bucket);
                     if (attr && attr->text)
                         result->addLocalText(bucket, attr->text);
                 }

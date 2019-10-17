@@ -303,9 +303,9 @@ The property query allows you to query all the values within a named property in
 
 200 or 400 status with JSON data or error.
 
-## GET /v1/query/{table}/person
+## GET /v1/query/{table}/customer
 
-Returns the event sequence for an individual.
+Returns the event sequence for an individual customer.
 
 > :pushpin: If events contain complex data (i.e. sub values), OpenSet will re-condense the data by folding up data permeations generated on insert. The folded row may be grouped differently than the one provided to `/insert` but will be logically identical.
 

@@ -54,7 +54,7 @@ void openset::query::Interpreter::configure()
                 {
                     error.set(
                         errors::errorClass_e::run_time,
-                        errors::errorCode_e::column_not_in_table,
+                        errors::errorCode_e::property_not_in_table,
                         "column_name: " + cvar.actual);
                     return;
                 }
@@ -64,7 +64,7 @@ void openset::query::Interpreter::configure()
         {
             error.set(
                 errors::errorClass_e::run_time,
-                errors::errorCode_e::column_not_in_table,
+                errors::errorCode_e::property_not_in_table,
                 "column_name: " + cvar.actual);
             return;
         }
@@ -81,11 +81,11 @@ vector<string> openset::query::Interpreter::getReferencedColumns() const
     return mappedColumns;
 }
 
-void openset::query::Interpreter::mount(Person* person)
+void openset::query::Interpreter::mount(Customer* person)
 {
-    /** \brief Mount a person object.
+    /** \brief Mount a customer object.
      *
-     * When the first person object is mounted we
+     * When the first customer object is mounted we
      * will have access to the table and schema which
      * are referenced in the grid object. At this point
      * we can call configure which will map the
@@ -219,7 +219,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                 /*
                  * This is where we make the "counting key" for our aggregator. If we have already seen
                  * a key we will never aggregate again using that key (the keys cache/hash "eventDistinct" is reset
-                 * upon when we switch to another person record before we re-execute the query script on that person.
+                 * upon when we switch to another customer record before we re-execute the query script on that customer.
                  *
                  * The key is a compound key made by taking in the following parameters:
                  *
@@ -227,7 +227,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  *   - distinct: usually the value of the property in an event row, or an alternate property to count distinctly
                  *               in the event row... or when it is a variable (rather than an event property) the
                  *               value of that variable.
-                 *   - countKey: when counting people, stamp is zero (because we don't want to count a person more than once),
+                 *   - countKey: when counting people, stamp is zero (because we don't want to count a customer more than once),
                  *               otherwise it is set to the row-number so we don't count a value for a row twice... or
                  *               when we are counting with the special flag "useStampedRowIds" we use the timestamp of the row
                  *               allowing multiple rows with the same stamp to be counted as if they were part of one larger
@@ -1644,7 +1644,7 @@ cvar* openset::query::Interpreter::lambda(int lambdaId, int currentRow)
 
 void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentRow)
 {
-    // count allows for now row pointer, and no mounted person
+    // count allows for now row pointer, and no mounted customer
     if ((!rows || rows->empty()) && interpretMode != InterpretMode_e::count)
     {
         loopState = LoopState_e::in_exit;
@@ -2970,7 +2970,7 @@ void openset::query::Interpreter::exec()
             segmentColumnShift = 0;
             for (auto seg : segmentIndexes)
             {
-                if (seg->bitState(linid)) // if the person is in this segment run the ops
+                if (seg->bitState(linid)) // if the customer is in this segment run the ops
                 {
                     execReset();
                     opRunner(inst, 0);
@@ -3042,7 +3042,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                     segmentColumnShift = 0;
                     for (auto seg : segmentIndexes)
                     {
-                        if (seg->bitState(linid)) // if the person is in this segment run the ops
+                        if (seg->bitState(linid)) // if the customer is in this segment run the ops
                         {
                             execReset();
                             opRunner(inst, 0);

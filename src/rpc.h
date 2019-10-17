@@ -48,7 +48,7 @@ namespace openset::comms
         // RpcQuery
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/event(\/|\?|\#|)$)"), RpcQuery::event, { { 1, "table" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/segment(\/|\?|\#|)$)"), RpcQuery::segment, { { 1, "table" } } },
-        { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/person(\/|\?|\#|)$)"), RpcQuery::person, { { 1, "table" } } },
+        { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/customer(\/|\?|\#|)$)"), RpcQuery::customer, { { 1, "table" } } },
         {
             "GET",
             std::regex(R"(^/v1/query/([a-z0-9_]+)/property/([a-z0-9_\.]+)(\/|\?|\#|)$)"),

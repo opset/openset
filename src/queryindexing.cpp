@@ -148,7 +148,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
 
     };
 
-    const auto maxLinId = parts->people.peopleCount();
+    const auto maxLinId = parts->people.customerCount();
 
     if (!stopBit)
     {

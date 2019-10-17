@@ -23,46 +23,36 @@ inline Tests test_osl_language()
             "id": "user1_@test.com",
             "stamp": 1458820830,
             "event" : "purchase",
-            "_":{
-                "fruit": "orange",
-                "price": 5.55
-            }
+            "fruit": "orange",
+            "price": 5.55
         },
         {
             "id": "user1_@test.com",
             "stamp": 1458820831,
             "event" : "purchase",
-            "_":{
-                "fruit": "apple",
-                "price": 9.95
-            }
+            "fruit": "apple",
+            "price": 9.95
         },
         {
             "id": "user1_@test.com",
             "stamp": 1458820832,
             "event" : "purchase",
-            "_":{
-                "fruit": "pear",
-                "price": 12.49
-            }
+            "fruit": "pear",
+            "price": 12.49
         },
         {
             "id": "user1_@test.com",
             "stamp": 1458820833,
             "event" : "purchase",
-            "_":{
-                "fruit": "banana",
-                "price": 2.49
-            }
+            "fruit": "banana",
+            "price": 2.49
         },
         {
             "id": "user1_@test.com",
             "stamp": 1458820834,
             "event" : "purchase",
-            "_":{
-                "fruit": "orange",
-                "price": 5.55
-            }
+            "fruit": "orange",
+            "price": 5.55
         }
     ]
     )raw_inserts";
@@ -95,10 +85,10 @@ inline Tests test_osl_language()
                 columns->setProperty(++col, "price", PropertyTypes_e::doubleProp, false, false);
 
                 auto parts     = table->getPartitionObjects(0, true); // partition zero for test
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
-                Person person;
+                auto personRaw = parts->people.createCustomer("user1@test.com");
+                Customer person;
 
-                // Person overlay for personRaw;
+                // Customer overlay for personRaw;
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
 
                                 person.mount(personRaw);
@@ -111,7 +101,6 @@ inline Tests test_osl_language()
                 for (auto e : events)
                 {
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
-                    ASSERT(e->xPath("/_") != nullptr);
                     person.insert(e);
                 }
 
@@ -120,7 +109,7 @@ inline Tests test_osl_language()
 
                 // NOTE - uncomment if you want to see the results
                 // cout << cjson::Stringify(&json, true) << endl;
-                // store this person
+                // store this customer
                 person.commit();
             }
         },

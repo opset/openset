@@ -908,7 +908,7 @@ namespace openset
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
             bool isSegment { false };
-            bool useProps { false };      // uses person props
+            bool useProps { false };      // uses customer props
             bool writesProps { true };    // script can change props
             bool useGlobals { false };    // uses global for table
             bool useCached { false };     // for segments allow use of cached values within TTL

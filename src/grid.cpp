@@ -681,15 +681,16 @@ bool Grid::isFullSchema() const
 
 Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* insertRow)
 {
-    auto hasEventAttributes = false;
-    auto hasPropAttributes = false;
+    auto hasEventProps = false;
+    auto hasCustomerProps = false;
 
     const auto inboundProperties = doc->getNodes();
 
     for (auto c : inboundProperties)
     {
+        const auto propName = c->name();
         // look for the name (by hash) in the insertMap
-        if (const auto iter = propertyMap->insertMap.find(MakeHash(c->name())); iter != propertyMap->insertMap.end())
+        if (const auto iter = propertyMap->insertMap.find(MakeHash(propName)); iter != propertyMap->insertMap.end())
         {
             const auto schemaCol = propertyMap->propertyMap[iter->second];
             const auto propInfo = properties->getProperty(schemaCol);
@@ -697,11 +698,12 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
 
             if (propInfo->isCustomerProperty)
             {
-                hasPropAttributes = true;
+                hasCustomerProps = true;
                 continue;
             }
 
-            hasEventAttributes = true;
+            if (propName == "event")
+                hasEventProps = true;
 
             attributes->getMake(schemaCol, NONE);
             attributes->setDirty(this->rawData->linId, schemaCol, NONE);
@@ -918,7 +920,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
         }
     }
 
-    if (hasPropAttributes)
+    if (hasCustomerProps)
     {
         auto insertProps = getProps(true);
 
@@ -1077,11 +1079,11 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
         setProps(insertProps);
     }
 
-    if (hasPropAttributes && hasEventAttributes)
+    if (hasCustomerProps && hasEventProps)
         return RowType_e::event_and_prop;
-    if (hasPropAttributes)
+    if (hasCustomerProps)
         return RowType_e::prop;
-    if (hasEventAttributes)
+    if (hasEventProps)
         return RowType_e::event;
 
     return RowType_e::junk;
@@ -1095,7 +1097,7 @@ void Grid::insertEvent(cjson* rowData)
         return;
 
     const auto stampNode = rowData->xPath("/stamp");
-    const auto event = rowData->xPathString("/event", "");
+    const auto eventName = rowData->xPathString("/event", "");
 
     const auto insertRow = newRow();
     const auto properties = table->getProperties();
@@ -1154,16 +1156,16 @@ void Grid::insertEvent(cjson* rowData)
     };
     auto insertBefore = -1; // where a new row will be inserted if needed
 
-    const auto hashedAction = MakeHash(event);
-    const auto zOrderInts = table->getEventOrderHashes();
-    const auto getZOrder = [&](int64_t value) -> int
+    const auto hashedEvent = MakeHash(eventName);
+    const auto eventOrderInts = table->getEventOrderHashes();
+    const auto getEventOrder = [&](int64_t value) -> int
     {
-        const auto iter = zOrderInts->find(value);
-        if (iter != zOrderInts->end())
+        const auto iter = eventOrderInts->find(value);
+        if (iter != eventOrderInts->end())
             return (*iter).second;
         return 99;
     };
-    const auto insertZOrder = getZOrder(hashedAction);
+    const auto insertZOrder = getEventOrder(hashedEvent);
 
     // lambda using binary search to find insert index
     const auto findInsert = [&]() -> int
@@ -1185,7 +1187,9 @@ void Grid::insertEvent(cjson* rowData)
     };
 
     auto i = rowCount ? findInsert() : 0;
-    if (i < 0) // negative value (made positive - 1) is the insert position
+
+    // negative value (made positive - 1) is the insert position
+    if (i < 0)
         i = -i - 1;
 
     if (i != static_cast<int>(rowCount)) // if they are equal skip all this, we are appending
@@ -1202,7 +1206,7 @@ void Grid::insertEvent(cjson* rowData)
             // we have found rows with same stamp
             if (rows[i]->cols[0] == stamp)
             {
-                auto zOrder = getZOrder(rows[i]->cols[PROP_EVENT]);
+                auto zOrder = getEventOrder(rows[i]->cols[PROP_EVENT]);
                 // we have found rows in this stamp with the same zOrder
                 if (zOrder == insertZOrder)
                 {
@@ -1210,7 +1214,7 @@ void Grid::insertEvent(cjson* rowData)
                     // match (as in, we are replacing a row)
                     for (; i < static_cast<int>(rowCount); i++)
                     {
-                        zOrder = getZOrder(rows[i]->cols[PROP_EVENT]);
+                        zOrder = getEventOrder(rows[i]->cols[PROP_EVENT]);
 
                         // we have moved passed replaceable rows, so insert here
                         if (rows[i]->cols[PROP_STAMP] > stamp || zOrder > insertZOrder)

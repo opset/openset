@@ -25,82 +25,64 @@ inline Tests test_sessions()
             "id": "user1@test.com",
             "stamp": 1458800000,
             "event": "some event",
-            "_":{
-                "some_val": 100,
-                "some_str": "rabbit"
-            }
+            "some_val": 100,
+            "some_str": "rabbit"
         },
         {
             "id": "user1@test.com",
             "stamp": 1458800100,
             "event": "some event",
-            "_":{
-                "some_val": 101,
-                "some_str": "train"
-            }
+            "some_val": 101,
+            "some_str": "train"
         },
         {
             "id": "user1@test.com",
             "stamp": 1458800200,
             "event": "some event",
-            "_":{
-                "some_val": 102,
-                "some_str": "cat"
-            }
+            "some_val": 102,
+            "some_str": "cat"
         },
         {
             "id": "user1@test.com",
             "stamp": 1545220000,
             "event": "some event",
-            "_":{
-                "some_val": 103,
-                "some_str": "dog"
-            }
+            "some_val": 103,
+            "some_str": "dog"
         },
         {
             "id": "user1@test.com",
             "stamp": 1545220100,
             "event": "some event",
-            "_":{
-                "some_val": 104,
-                "some_str": "cat"
-            }
+            "some_val": 104,
+            "some_str": "cat"
         },
         {
             "id": "user1@test.com",
             "stamp": 1545220900,
             "event": "some event",
-            "_":{
-                "some_val": 105,
-                "some_str": "rabbit"
-            }
+            "some_val": 105,
+            "some_str": "rabbit"
         },
         {
             "id": "user1@test.com",
             "stamp": 1631600000,
             "event": "some event",
-            "_":{
-                "some_val": 106,
-                "some_str": "train"
-            }
+            "some_val": 106,
+            "some_str": "train"
         },
         {
             "id": "user1@test.com",
             "stamp": 1631600400,
             "event": "some event",
-            "_":{
-                "some_val": 107,
-                "some_str": "plane"
-            }
+            "some_val": 107,
+            "some_str": "plane"
         },
         {
             "id": "user1@test.com",
             "stamp": 1631601200,
             "event": "some event",
-            "_":{
-                "some_val": 108,
-                "some_str": "automobile"
-            }
+            "some_val": 108,
+            "some_str": "automobile"
         },
     ]
     )raw_inserts";
@@ -170,9 +152,9 @@ inline Tests test_sessions()
                 columns->setProperty(2001, "some_str", openset::db::PropertyTypes_e::textProp, false);
 
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto personRaw = parts->people.createCustomer("user1@test.com");
 
-                Person person; // Person overlay for personRaw;
+                Customer person; // Customer overlay for personRaw;
 
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
                 person.mount(personRaw);
@@ -186,7 +168,6 @@ inline Tests test_sessions()
                 for (auto e : events)
                 {
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
-                    ASSERT(e->xPath("/_") != nullptr);
 
                     person.insert(e);
                 }

@@ -10,7 +10,7 @@
 #include "oloop_insert.h"
 #include "oloop_query.h"
 #include "oloop_segment.h"
-#include "oloop_person.h"
+#include "oloop_customer.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
 #include "asyncpool.h"
@@ -427,7 +427,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             return;
         }
     } // set the sessionTime (timeout) value, this will get relayed
-    // through the to oloop_query, the person object and finally the grid
+    // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
     {
@@ -924,44 +924,44 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
 
     // We are a Fork!
     OpenLoopProperty::ColumnQueryConfig_s queryInfo;
-    queryInfo.columnName  = columnName;
-    queryInfo.columnType  = column->type;
-    queryInfo.columnIndex = column->idx;
+    queryInfo.propName  = columnName;
+    queryInfo.propType  = column->type;
+    queryInfo.propIndex = column->idx;
 
     if (message->isParam("gt"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::gt;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::gt;
         queryInfo.filterLow = message->getParamString("gt");
     }
     else if (message->isParam("gte"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::gte;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::gte;
         queryInfo.filterLow = message->getParamString("gte");
     }
     else if (message->isParam("lt"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::lt;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::lt;
         queryInfo.filterLow = message->getParamString("lt");
     }
     else if (message->isParam("lte"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::lte;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::lte;
         queryInfo.filterLow = message->getParamString("lte");
     }
     else if (message->isParam("eq"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::eq;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::eq;
         queryInfo.filterLow = message->getParamString("eq");
     }
     else if (message->isParam("between"))
     {
-        queryInfo.mode       = OpenLoopProperty::ColumnQueryMode_e::between;
+        queryInfo.mode       = OpenLoopProperty::PropertyQueryMode_e::between;
         queryInfo.filterLow  = message->getParamString("between");
         queryInfo.filterHigh = message->getParamString("and");
     }
     else if (message->isParam("rx"))
     {
-        queryInfo.mode = OpenLoopProperty::ColumnQueryMode_e::rx;
+        queryInfo.mode = OpenLoopProperty::PropertyQueryMode_e::rx;
         // bad regex blows this thing up... so lets catch any errors
         auto isError = false;
 
@@ -992,14 +992,14 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
     }
     else if (message->isParam("sub"))
     {
-        queryInfo.mode      = OpenLoopProperty::ColumnQueryMode_e::sub;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::sub;
         queryInfo.filterLow = message->getParamString("sub");
     }
     else
     {
-        queryInfo.mode = OpenLoopProperty::ColumnQueryMode_e::all;
+        queryInfo.mode = OpenLoopProperty::PropertyQueryMode_e::all;
     }
-    if (queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::all)
+    if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::all)
     {
         if (queryInfo.filterLow.getString().length() == 0)
         {
@@ -1013,7 +1013,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             return;
         }
     }
-    if (queryInfo.mode == OpenLoopProperty::ColumnQueryMode_e::between)
+    if (queryInfo.mode == OpenLoopProperty::PropertyQueryMode_e::between)
     {
         if (queryInfo.filterHigh.getString().length() == 0)
         {
@@ -1056,7 +1056,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
 
     // here we are going to force typing depending on the property type
     // note: prior to conversion these will all be strings
-    switch (queryInfo.columnType)
+    switch (queryInfo.propType)
     {
     case PropertyTypes_e::intProp:
         queryInfo.bucket = queryInfo.bucket.getInt64();
@@ -1078,17 +1078,17 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
     default: ;
     }
 
-    // now lets make sure the `columnType` and the `mode` make sense together and
+    // now lets make sure the `propType` and the `mode` make sense together and
     // return an error if they do not.
-    if (queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::all &&
-        queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::eq)
+    if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::all &&
+        queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::eq)
     {
-        switch (queryInfo.columnType)
+        switch (queryInfo.propType)
         {
         case PropertyTypes_e::intProp: case PropertyTypes_e::doubleProp:
-            if (queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::between && queryInfo.mode != OpenLoopProperty::
-                ColumnQueryMode_e::gt && queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::gte && queryInfo.mode !=
-                OpenLoopProperty::ColumnQueryMode_e::lt && queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::lte)
+            if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::between && queryInfo.mode != OpenLoopProperty::
+                PropertyQueryMode_e::gt && queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::gte && queryInfo.mode !=
+                OpenLoopProperty::PropertyQueryMode_e::lt && queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::lte)
             {
                 RpcError(
                     errors::Error {
@@ -1101,8 +1101,8 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             }
             break;
         case PropertyTypes_e::textProp:
-            if (queryInfo.mode != OpenLoopProperty::ColumnQueryMode_e::rx && queryInfo.mode != OpenLoopProperty::
-                ColumnQueryMode_e::sub)
+            if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::rx && queryInfo.mode != OpenLoopProperty::
+                PropertyQueryMode_e::sub)
             {
                 RpcError(
                     errors::Error {
@@ -1250,7 +1250,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
         });
 }
 
-void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto uuString = message->getParamString("sid");
     auto uuid     = message->getParamInt("id");
@@ -1265,7 +1265,7 @@ void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& match
             errors::Error {
                 errors::errorClass_e::query,
                 errors::errorCode_e::general_error,
-                "person query must have an id={number} or idstring={text} parameter"
+                "customer query must have an id={number} or idstring={text} parameter"
             },
             message);
         return;
@@ -1332,7 +1332,7 @@ void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& match
                 message);
             return;
         }
-        loop->queueCell(new OpenLoopPerson(shuttle, table, uuid));
+        loop->queueCell(new OpenLoopCustomer(shuttle, table, uuid));
     }
     else // remote - we will route to the correct destination node
     {
@@ -1459,7 +1459,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             return;
         }
     } // set the sessionTime (timeout) value, this will get relayed
-    // through the to oloop_query, the person object and finally the grid
+    // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
     {
