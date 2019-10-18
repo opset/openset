@@ -65,7 +65,7 @@ void OpenLoopHistogram::prepare()
     // generate the index for this query
     indexing.mount(table.get(), macros, loop->partition, maxLinearId);
     bool countable;
-    index      = indexing.getIndex("_", countable);
+    index = indexing.getIndex("_", countable);
     population = index->population(maxLinearId);
 
     interpreter = new Interpreter(macros);
@@ -95,7 +95,7 @@ void OpenLoopHistogram::prepare()
 
         valueList = parts->attributes.getPropertyValues(propInfo->idx);
 
-        for (auto v : macros.vars.userVars)
+        for (auto &v : macros.vars.userVars)
             if (v.actual == "each_value")
                 eachVarIdx = v.index;
 
@@ -109,7 +109,7 @@ void OpenLoopHistogram::prepare()
                     openset::errors::Error {
                         openset::errors::errorClass_e::run_time,
                         openset::errors::errorCode_e::item_not_found,
-                        "the 'each_value' variable was not found."
+                        "'foreach' specified in query, but the 'each_value' variable was not found in the script."
                     }
                 }
             );
@@ -285,7 +285,7 @@ bool OpenLoopHistogram::run()
                         if (itemValue.second->text)
                         {
                             result->addLocalText(itemValue.first, itemValue.second->text);
-                            key1Value                                           = itemValue.first;
+                            key1Value = itemValue.first;
                             interpreter->macros.vars.userVars[eachVarIdx].value = itemValue.second->text;
                         }
                         else

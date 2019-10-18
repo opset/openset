@@ -13,14 +13,14 @@ Customer::Customer():
     partition(0)
 {}
 
-void Customer::reinit()
+void Customer::reinitialize()
 {
     table = nullptr;
     attributes = nullptr;
     blob = nullptr;
     people = nullptr;
     partition = 0;
-    grid.reinit();
+    grid.reinitialize();
 }
 
 bool Customer::mapTable(Table* tablePtr, int Partition)

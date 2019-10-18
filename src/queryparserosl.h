@@ -1233,9 +1233,9 @@ namespace openset::query
                 if (startWord == "select")
                     continue;
 
-                for (auto &l : line)
-                    cout << l << " ";
-                cout << endl;
+                //for (auto &l : line)
+                //    cout << l << " ";
+                //cout << endl;
 
                 auto blockId = -1;
 

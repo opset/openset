@@ -134,7 +134,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
         auto mappedColumns = interpreter->getReferencedColumns();
 
         // clean the customer object
-        person.reinit();
+        person.reinitialize();
         // map table, partition and select schema properties to the Customer object
         if (!person.mapTable(table.get(), loop->partition, mappedColumns))
         {

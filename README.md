@@ -284,8 +284,8 @@ response (counts are people):
 {
     "_": [
         {
-            "g": "products_yard_and_outdoor",
-            "c": [3]
+            "g": "products_outdoor",
+            "c": [2]
         },
         {
             "g": "products_commercial",
@@ -296,11 +296,11 @@ response (counts are people):
             "c": [2]
         },
         {
-            "g": "products_outdoor",
-            "c": [2]
+            "g": "products_yard",
+            "c": [1]
         },
         {
-            "g": "products_yard",
+            "g": "grommet_then_panini",
             "c": [1]
         }
     ]

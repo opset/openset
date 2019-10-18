@@ -1108,6 +1108,12 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
     if (*(stackPtr - 1) == NONE) // leave None on the stack
         return;
 
+    if (rows->size() == 0)
+    {
+        *(stackPtr - 1) = NONE;
+        return;
+    }
+
     const auto currentRow = (stackPtr - 1)->getInt32();
 
     cvar result(cvar::valueType::DICT);
@@ -1221,6 +1227,10 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     // extra maps to the param count (items on stack)
     // note: param order is reversed, last item on the stack
     // is also last param in function call
+
+    // sometimes we have no rows (customer props only), the empty row is full of NONE values
+    const auto rowData =  currentRow >= rowCount || currentRow < 0 ? grid->getEmptyRow() : (*rows)[currentRow];
+
     switch (cast<Marshals_e>(inst->index))
     {
     case Marshals_e::marshal_tally:
@@ -1235,7 +1245,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
             ++stackPtr;
             return true;
         }*/
-        marshal_tally(inst->extra, (*rows)[currentRow], currentRow);
+        marshal_tally(inst->extra, rowData, currentRow);
     }
     break;
     case Marshals_e::marshal_now:
@@ -1247,11 +1257,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         ++stackPtr;
         break;
     case Marshals_e::marshal_last_stamp:
-        *stackPtr = rows->back()->cols[PROP_STAMP];
+        *stackPtr = rowCount ? rows->back()->cols[PROP_STAMP] : NONE;
         ++stackPtr;
         break;
     case Marshals_e::marshal_first_stamp:
-        *stackPtr = rows->front()->cols[PROP_STAMP];
+        *stackPtr = rowCount ? rows->front()->cols[PROP_STAMP] : NONE;
         ++stackPtr;
         break;
     case Marshals_e::marshal_bucket:
@@ -1333,22 +1343,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         *(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
         break;
     case Marshals_e::marshal_row_count:
-        if (eventCount == -1)
-        {
-            int64_t currentGrp = 0;
-            auto countIter     = rows->begin();
-            eventCount         = 0;
-            while (countIter != rows->end())
-            {
-                if (currentGrp != HashPair((*countIter)->cols[PROP_STAMP], (*countIter)->cols[PROP_EVENT]))
-                {
-                    currentGrp = HashPair((*countIter)->cols[PROP_STAMP], (*countIter)->cols[PROP_EVENT]);
-                    ++eventCount;
-                }
-                ++countIter;
-            }
-        }
-        *stackPtr = eventCount;
+        *stackPtr = rowCount;
         ++stackPtr;
         break;
     case Marshals_e::marshal_population:
@@ -1644,6 +1639,11 @@ cvar* openset::query::Interpreter::lambda(int lambdaId, int currentRow)
 
 void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentRow)
 {
+    /*
+
+    Note - with the advent of properties, we can no longer exit if there are no rows
+           as it's valid for a customer to have no event rows, but have customer props
+
     // count allows for now row pointer, and no mounted customer
     if ((!rows || rows->empty()) && interpretMode != InterpretMode_e::count)
     {
@@ -1651,7 +1651,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } //auto rowIter = rows->begin() + currentRow;
+    }
+    */
+
     if (++recursion > MAX_RECURSE_COUNT)
     {
         error.set(
@@ -2753,7 +2755,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             filterRangeStack.pop_back();
 
             // failed to find a matching row
-            if (inst->op == OpCode_e::CALL_TST)
+            if (!count) // no runs?
+            {
+                *stackPtr = NONE;
+                ++stackPtr;
+            }
+            else if (inst->op == OpCode_e::CALL_TST)
             {
                 *stackPtr = lastMatchingRow != -1;
                 ++stackPtr;

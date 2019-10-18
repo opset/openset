@@ -201,7 +201,7 @@ void Grid::reset()
     propHash = 0;
 }
 
-void Grid::reinit()
+void Grid::reinitialize()
 {
     reset();
     if (propertyMap && table)
@@ -223,6 +223,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr)
     attributes = attributesPtr;
     blob = attributes->getBlob();
     propertyMap = table->getPropertyMapper()->mapSchema(tablePtr, attributesPtr);
+    emptyRow = newRow();
     return true;
 }
 
@@ -237,6 +238,7 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
     attributes = attributesPtr;
     blob = attributes->getBlob();
     propertyMap = table->getPropertyMapper()->mapSchema(tablePtr, attributesPtr, propertyNames);
+    emptyRow = newRow();
     return true;
 }
 
@@ -332,7 +334,7 @@ Col_s* Grid::newRow()
     const volatile auto row = recast<int64_t*>(mem.newPtr(propertyMap->rowBytes));
     for (auto iter = row; iter < row + propertyMap->propertyCount; ++iter)
         *iter = NONE;
-    if (propertyMap->uuidPropIndex != -1)
+    if (propertyMap->uuidPropIndex != -1 && rawData)
         *(row + propertyMap->uuidPropIndex) = rawData->id;
     return reinterpret_cast<Col_s*>(row);
 }
@@ -403,6 +405,9 @@ void Grid::mount(PersonData_s* personData)
 #endif
     reset();
     rawData = personData;
+
+    if (propertyMap->uuidPropIndex != -1 && emptyRow)
+        emptyRow->cols[propertyMap->uuidPropIndex] = rawData->id;
 }
 
 void Grid::prepare()
@@ -496,8 +501,6 @@ void Grid::prepare()
 
 PersonData_s* Grid::commit()
 {
-    if (!rows.size()) { cout << "no rows" << endl; }
-
     // this is the worst case scenario temp buffer size for this data.
     // (properties * rows) + (properties * row headers) + number_of_set_values
     const auto rowCount = rows.size();
@@ -681,7 +684,8 @@ bool Grid::isFullSchema() const
 
 Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* insertRow)
 {
-    auto hasEventProps = false;
+    auto hasEventProp = false;
+    auto eventPropCount = 0;
     auto hasCustomerProps = false;
 
     const auto inboundProperties = doc->getNodes();
@@ -702,8 +706,15 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 continue;
             }
 
+            if (propInfo->idx >= PROP_INDEX_USER_DATA)
+            {
+                // do we actually have event props, or just a bare 'event' property, well check below
+                ++eventPropCount;
+            }
+
+            // we need an the 'event' prop to be set to record event row properties,
             if (propName == "event")
-                hasEventProps = true;
+                hasEventProp = true;
 
             attributes->getMake(schemaCol, NONE);
             attributes->setDirty(this->rawData->linId, schemaCol, NONE);
@@ -920,6 +931,11 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
         }
     }
 
+    // if there are no event row properties then we don't really have an event
+    // in which case we will skip inserting the empty event
+    if (eventPropCount == 0)
+        hasEventProp = false;
+
     if (hasCustomerProps)
     {
         auto insertProps = getProps(true);
@@ -1079,11 +1095,11 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
         setProps(insertProps);
     }
 
-    if (hasCustomerProps && hasEventProps)
+    if (hasCustomerProps && hasEventProp)
         return RowType_e::event_and_prop;
     if (hasCustomerProps)
         return RowType_e::prop;
-    if (hasEventProps)
+    if (hasEventProp)
         return RowType_e::event;
 
     return RowType_e::junk;

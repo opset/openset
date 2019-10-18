@@ -138,6 +138,7 @@ namespace openset
             // so rows have tight cache affinity
             HeapStack mem;
             Rows rows;
+            Row* emptyRow { nullptr };
             SetVector setData;
 
             PersonData_s* rawData { nullptr };
@@ -206,7 +207,17 @@ namespace openset
             bool isFullSchema() const;
 
             Table* getTable() const { return table; }
-            const Rows* getRows() const { return &rows; }
+
+            const Rows* getRows() const
+            {
+                return &rows;
+            }
+
+            const Row* getEmptyRow() const
+            {
+                return emptyRow;
+            }
+
             const SetVector& getSetData() const { return setData; }
             Attributes* getAttributes() const { return attributes; }
             PersonData_s* getMeta() const { return rawData; }
@@ -214,7 +225,7 @@ namespace openset
             AttributeBlob* getAttributeBlob() const;
 
             cjson toJSON() const; // brings object back to zero state
-            void reinit();
+            void reinitialize();
         private:
             Col_s* newRow();
 

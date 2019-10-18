@@ -53,7 +53,7 @@ namespace openset
 			~Customer() = default;
 
 			// totally reset the customer object back to square one
-			void reinit();
+			void reinitialize();
 
 			/**
 			 * \brief map a table and partition to this Customer object

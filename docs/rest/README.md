@@ -391,16 +391,14 @@ end
 @property product_price bucket=50
 
 @histogram customer_value bucket=50
-
-  return SUM total
+  return(sum(total) where event.is(== "purchase"))
 
 @histogram days_since
-
-  return int(to_days(now - last_event) / 7)
+  return( to_day(now - last_event) )
 
 @histogram total_by_shipper foreach=shipper bucket=100 min=0 max=1000
+  return( sum(total) where shipper.is(== each_value) )
 
-  return SUM total where shipper=each_value # inline aggregation
 ```
 
 # Internode (internode node chatter)
