@@ -1,29 +1,24 @@
 #pragma once
 
 #include "common.h"
-#include "people.h"
+#include "customers.h"
 #include "database.h"
 #include "threads/locks.h"
-#include "columns.h"
+#include "properties.h"
 #include "message_broker.h"
 #include "querycommon.h"
 #include "var/var.h"
-#include "columnmapping.h"
+#include "property_mapping.h"
 
 using namespace std;
 
 namespace openset
 {
-    namespace trigger
-    {
-        struct reventSettings_s;
-    };
-
     namespace db
     {
 
         class Database;
-        class ColumnMapping;
+        class PropertyMapping;
         class TablePartitioned;
 
         struct SegmentTtl_s
@@ -98,17 +93,17 @@ namespace openset
             cvar globalVars;
 
             // shared objects
-            Columns columns;
-            ColumnMapping columnMap;
+            Properties properties;
+            PropertyMapping propertyMap;
             openset::revent::MessageBroker messages;
 
-            using zMapStr = std::unordered_map<string, int>;
-            using zMapHash = std::unordered_map<int64_t, int>;
+            using EventOrderMapStr = std::unordered_map<string, int>;
+            using EventOrderMapHash = std::unordered_map<int64_t, int>;
             using PartitionMap = unordered_map<int, TablePartitioned*>;
             using ZombiePartitions = std::queue<TablePartitioned*>;
 
-            zMapStr zOrderStrings;
-            zMapHash zOrderInts;
+            EventOrderMapStr eventOrderStrings;
+            EventOrderMapHash eventOrderInts;
             AttributeBlob attributeBlob;
 
             // partition specific objects
@@ -150,24 +145,24 @@ namespace openset
                 return sessionTime;
             }
 
-            Columns* getColumns()
+            Properties* getProperties()
             {
-                return &columns;
+                return &properties;
             }
 
-            ColumnMapping* getColumnMapper()
+            PropertyMapping* getPropertyMapper()
             {
-                return &columnMap;
+                return &propertyMap;
             }
 
-            zMapHash* getZOrderHashes()
+            EventOrderMapHash* getEventOrderHashes()
             {
-                return &zOrderInts;
+                return &eventOrderInts;
             }
 
-            zMapStr* getZOrderStrings()
+            EventOrderMapStr* getEventOrderStrings()
             {
-                return &zOrderStrings;
+                return &eventOrderStrings;
             }
 
             CriticalSection* getLock()

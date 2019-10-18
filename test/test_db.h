@@ -5,7 +5,7 @@
 #include "../lib/cjson/cjson.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
@@ -27,42 +27,34 @@ inline Tests test_db()
             "id": "user1@test.com",
             "stamp": 1458820830,
             "event": "page_view",
-            "_":{
-                "page": "blog"
-            }
+            "page": "blog"
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820840,
             "event": "page_view",
-            "_":{
-                "page": "home page",
-                "referral_source": "google.co.uk",
-`				"referral_search": ["big", "floppy", "slippers"],
-                "prop_set": ["orange", "huge"],
-                "prop_txt": "rabbit",
-                "prop_int": 543,
-                "prop_float": 543.21
-                "prop_bool": false,
-            }
+            "page": "home page",
+            "referral_source": "google.co.uk",
+            "referral_search": ["big", "floppy", "slippers"],
+            "prop_set": ["orange", "huge"],
+            "prop_txt": "rabbit",
+            "prop_int": 543,
+            "prop_float": 543.21
+            "prop_bool": false,
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820841,
             "event": "page_view",
-            "_":{
-                "page": "home page",
-                "referral_source": "google.co.uk",
-                "referral_search": ["silly", "floppy", "ears"]
-            }
+            "page": "home page",
+            "referral_source": "google.co.uk",
+            "referral_search": ["silly", "floppy", "ears"]
         },
         {
             "id": "user1@test.com",
             "stamp": 1458820900,
             "event": "page_view",
-            "_":{
-                "page": "about"
-            }
+            "page": "about"
         }
     ]
     )raw_inserts";
@@ -106,34 +98,34 @@ inline Tests test_db()
                 // prepare our table
                 auto table = openset::globals::database->newTable("__test001__");
 
-                // add some columns
-                auto columns = table->getColumns();
+                // add some properties
+                auto columns = table->getProperties();
                 ASSERT(columns != nullptr);
 
                 // content (adding to 2000 range, these typically auto enumerated on create)
-                columns->setColumn(2000, "page", columnTypes_e::textColumn, false);
+                columns->setProperty(2000, "page", PropertyTypes_e::textProp, false);
                 // referral (adding to 3000 range)
-                columns->setColumn(3000, "referral_source", columnTypes_e::textColumn, false);
-                columns->setColumn(3001, "referral_search", columnTypes_e::textColumn, true);
+                columns->setProperty(3000, "referral_source", PropertyTypes_e::textProp, false);
+                columns->setProperty(3001, "referral_search", PropertyTypes_e::textProp, true);
 
 
-                columns->setColumn(4000, "prop_set", columnTypes_e::textColumn, true, true);
-                columns->setColumn(4001, "prop_txt", columnTypes_e::textColumn, false, true);
-                columns->setColumn(4002, "prop_bool", columnTypes_e::boolColumn, false, true);
-                columns->setColumn(4003, "prop_int", columnTypes_e::intColumn, false, true);
-                columns->setColumn(4004, "prop_float", columnTypes_e::doubleColumn, false, true);
+                columns->setProperty(4000, "prop_set", PropertyTypes_e::textProp, true, true);
+                columns->setProperty(4001, "prop_txt", PropertyTypes_e::textProp, false, true);
+                columns->setProperty(4002, "prop_bool", PropertyTypes_e::boolProp, false, true);
+                columns->setProperty(4003, "prop_int", PropertyTypes_e::intProp, false, true);
+                columns->setProperty(4004, "prop_float", PropertyTypes_e::doubleProp, false, true);
 
-                // do we have 10 columns (7 built ins plus 3 we added)
-                ASSERT(table->getColumns()->columnCount == 13);
+                // do we have 10 properties (7 built ins plus 3 we added)
+                ASSERT(table->getProperties()->propertyCount == 13);
 
                 // built-ins
-                ASSERT(table->getColumns()->nameMap.count("id"));
+                ASSERT(table->getProperties()->nameMap.count("id"));
 
-                // columns we've added
-                ASSERT(table->getColumns()->nameMap.count("page"));
-                ASSERT(table->getColumns()->nameMap.count("referral_source"));
-                ASSERT(table->getColumns()->nameMap.count("referral_search"));
-                //auto names = table.getColumns()->nameMap();
+                // properties we've added
+                ASSERT(table->getProperties()->nameMap.count("page"));
+                ASSERT(table->getProperties()->nameMap.count("referral_source"));
+                ASSERT(table->getProperties()->nameMap.count("referral_search"));
+                //auto names = table.getProperties()->nameMap();
             }
         },
         {
@@ -146,14 +138,14 @@ inline Tests test_db()
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
                 ASSERT(parts != nullptr);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto personRaw = parts->people.createCustomer("user1@test.com");
                 ASSERT(personRaw != nullptr);
                 ASSERT(personRaw->getIdStr() == "user1@test.com");
                 ASSERT(personRaw->id == MakeHash("user1@test.com"));
                 ASSERT(personRaw->bytes == 0);
                 ASSERT(personRaw->linId == 0); // first user in this partition should be zero
 
-                Person person; // Person overlay for personRaw;
+                Customer person; // Customer overlay for personRaw;
 
                 person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
                 person.mount(personRaw);
@@ -167,8 +159,6 @@ inline Tests test_db()
                 for (auto e : events)
                 {
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
-                    ASSERT(e->xPath("/_") != nullptr);
-
                     person.insert(e);
                 }
 
@@ -219,14 +209,14 @@ inline Tests test_db()
                 ASSERT(referral_searches.size() == 5);
                 ASSERT(pages.size() == 3);
 
-                // store this person
+                // store this customer
                 person.commit();
 
                 const auto attr = parts->attributes.get(4000, "huge");
                 ASSERT(attr != nullptr);
                 const auto bits = attr->getBits();
                 ASSERT(bits != nullptr);
-                const auto pop = bits->population(parts->people.peopleCount());
+                const auto pop = bits->population(parts->people.customerCount());
                 ASSERT(pop == 1);
 
             }
@@ -342,7 +332,7 @@ inline Tests test_db()
                 ASSERT(attr != nullptr);
                 auto bits = attr->getBits();
                 ASSERT(bits != nullptr);
-                auto pop = bits->population(parts->people.peopleCount());
+                auto pop = bits->population(parts->people.customerCount());
                 ASSERT(pop == 1);
 
                 attr = interpreter->interpreter->attrs->get(4000, "huge");
@@ -739,7 +729,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);
@@ -799,7 +789,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);
@@ -860,7 +850,7 @@ inline Tests test_db()
                 const auto table    = database->getTable("__test001__");
                 const auto parts = table->getPartitionObjects(0, true); // partition zero for test
 
-                const auto maxLinearId = parts->people.peopleCount();
+                const auto maxLinearId = parts->people.customerCount();
 
                 openset::query::Indexing indexing;
                 indexing.mount(table.get(), queryMacros, 0, maxLinearId);
@@ -869,7 +859,7 @@ inline Tests test_db()
                 const auto index      = indexing.getIndex("_", countable);
                 const auto population = index->population(maxLinearId);
 
-                // index is super broad because it contains `not equals` conditions (against columns/props)
+                // index is super broad because it contains `not equals` conditions (against properties/props)
                 ASSERT(population == 1);
 
                 delete interpreter;

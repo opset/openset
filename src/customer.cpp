@@ -1,11 +1,11 @@
-#include "person.h"
+#include "customer.h"
 #include "table.h"
 #include "logger.h"
 #include "tablepartitioned.h"
 
 using namespace openset::db;
 
-Person::Person():
+Customer::Customer():
     table(nullptr),
     attributes(nullptr),
     blob(nullptr),
@@ -13,17 +13,17 @@ Person::Person():
     partition(0)
 {}
 
-void Person::reinit()
+void Customer::reinitialize()
 {
     table = nullptr;
     attributes = nullptr;
     blob = nullptr;
     people = nullptr;
     partition = 0;
-    grid.reinit();
+    grid.reinitialize();
 }
 
-bool Person::mapTable(Table* tablePtr, int Partition)
+bool Customer::mapTable(Table* tablePtr, int Partition)
 {
     if (table && tablePtr && table == tablePtr)
         return false;
@@ -33,7 +33,7 @@ bool Person::mapTable(Table* tablePtr, int Partition)
 
     // attributes are partitioned, like users so that their bit indexes
     // remain consistent if partitions migrate.
-    // this will acquire the correct attribute data for this Person
+    // this will acquire the correct attribute data for this Customer
     const auto parts = table->getPartitionObjects(partition, false);
 
     if (!parts)
@@ -48,7 +48,7 @@ bool Person::mapTable(Table* tablePtr, int Partition)
     return true;
 }
 
-bool Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnNames)
+bool Customer::mapTable(Table* tablePtr, int Partition, vector<string> &columnNames)
 {
     if (table && tablePtr && table == tablePtr)
         return false;
@@ -58,7 +58,7 @@ bool Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnName
 
     // attributes are partitioned, like users so that their bit indexes
     // remain consistent if partitions migrate.
-    // this will acquire the correct attribute data for this Person
+    // this will acquire the correct attribute data for this Customer
     auto parts = table->getPartitionObjects(partition, false);
 
     if (!parts)
@@ -73,17 +73,17 @@ bool Person::mapTable(Table* tablePtr, int Partition, vector<string> &columnName
     return true;
 }
 
-bool Person::mapSchemaAll()
+bool Customer::mapSchemaAll()
 {
     return grid.mapSchema(table, attributes);
 }
 
-bool Person::mapSchemaList(const vector<string>& columnNames)
+bool Customer::mapSchemaList(const vector<string>& columnNames)
 {
     return grid.mapSchema(table, attributes, columnNames);
 }
 
-void Person::mount(PersonData_s* personData)
+void Customer::mount(PersonData_s* personData)
 {
 #if defined(_DEBUG) || defined(NDEBUG)
     Logger::get().fatal((table), "mapTable must be called before mount");
@@ -91,19 +91,19 @@ void Person::mount(PersonData_s* personData)
     grid.mount(personData);
 }
 
-void Person::prepare()
+void Customer::prepare()
 {
     grid.prepare();
 }
 
-void Person::insert(cjson* rowData)
+void Customer::insert(cjson* rowData)
 {
     grid.insertEvent(rowData);
 }
 
-PersonData_s* Person::commit()
+PersonData_s* Customer::commit()
 {
     const auto data = grid.commit();
-    people->replacePersonRecord(data);
+    people->replaceCustomerRecord(data);
     return data;
 }

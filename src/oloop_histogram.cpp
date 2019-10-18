@@ -14,7 +14,7 @@ OpenLoopHistogram::OpenLoopHistogram(
     openset::db::Database::TablePtr table,
     Macro_s macros,
     std::string groupName,
-    std::string eachColumn,
+    std::string eachProperty,
     const int64_t bucket,
     openset::result::ResultSet* result,
     const int instance)
@@ -23,7 +23,7 @@ OpenLoopHistogram::OpenLoopHistogram(
       macros(std::move(macros)),
       shuttle(shuttle),
       groupName(std::move(groupName)),
-      eachColumn(std::move(eachColumn)),
+      eachColumn(std::move(eachProperty)),
       table(table),
       bucket(bucket),
       parts(nullptr),
@@ -60,12 +60,12 @@ void OpenLoopHistogram::prepare()
         return;
     }
 
-    maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.customerCount();
 
-    // generate the index for this query	
+    // generate the index for this query
     indexing.mount(table.get(), macros, loop->partition, maxLinearId);
     bool countable;
-    index      = indexing.getIndex("_", countable);
+    index = indexing.getIndex("_", countable);
     population = index->population(maxLinearId);
 
     interpreter = new Interpreter(macros);
@@ -73,9 +73,9 @@ void OpenLoopHistogram::prepare()
 
     if (eachColumn.length())
     {
-        colInfo = table->getColumns()->getColumn(eachColumn);
+        propInfo = table->getProperties()->getProperty(eachColumn);
 
-        if (!colInfo)
+        if (!propInfo)
         {
             shuttle->reply(
                 0,
@@ -93,9 +93,9 @@ void OpenLoopHistogram::prepare()
             return;
         }
 
-        valueList = parts->attributes.getColumnValues(colInfo->idx);
+        valueList = parts->attributes.getPropertyValues(propInfo->idx);
 
-        for (auto v : macros.vars.userVars)
+        for (auto &v : macros.vars.userVars)
             if (v.actual == "each_value")
                 eachVarIdx = v.index;
 
@@ -109,7 +109,7 @@ void OpenLoopHistogram::prepare()
                     openset::errors::Error {
                         openset::errors::errorClass_e::run_time,
                         openset::errors::errorCode_e::item_not_found,
-                        "the 'each_value' variable was not found."
+                        "'foreach' specified in query, but the 'each_value' variable was not found in the script."
                     }
                 }
             );
@@ -133,7 +133,7 @@ void OpenLoopHistogram::prepare()
             }
             else
             {
-                /*auto attr = parts->attributes.get(COL_SEGMENT, MakeHash(segmentName));
+                /*auto attr = parts->attributes.get(PROP_SEGMENT, MakeHash(segmentName));
                 if (attr)
                 {
                     segments.push_back(attr->getBits());
@@ -183,7 +183,7 @@ void OpenLoopHistogram::prepare()
 
     auto mappedColumns = interpreter->getReferencedColumns();
 
-    // map table, partition and select schema columns to the Person object
+    // map table, partition and select schema properties to the Customer object
     if (!person.mapTable(table.get(), loop->partition, mappedColumns))
     {
         partitionRemoved();
@@ -201,21 +201,21 @@ void OpenLoopHistogram::prepare()
 
     if (valueList.size()) // if we are foreach mode
     {
-        switch (colInfo->type)
+        switch (propInfo->type)
         {
-        case columnTypes_e::intColumn:
+        case PropertyTypes_e::intProp:
             rowKey.types[1] = ResultTypes_e::Int;
             break;
-        case columnTypes_e::doubleColumn:
+        case PropertyTypes_e::doubleProp:
             rowKey.types[1] = ResultTypes_e::Double;
             break;
-        case columnTypes_e::boolColumn:
+        case PropertyTypes_e::boolProp:
             rowKey.types[1] = ResultTypes_e::Bool;
             break;
-        case columnTypes_e::textColumn:
+        case PropertyTypes_e::textProp:
             rowKey.types[1] = ResultTypes_e::Text;
             break;
-        case columnTypes_e::freeColumn:
+        case PropertyTypes_e::freeProp:
         default: ;
         }
 
@@ -236,7 +236,7 @@ bool OpenLoopHistogram::run()
         if (sliceComplete())
             return true;
 
-        // are we done? This will return the index of the 
+        // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
         if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
         {
@@ -252,7 +252,7 @@ bool OpenLoopHistogram::run()
             return false;
         }
 
-        if (const auto personData = parts->people.getPersonByLIN(currentLinId); personData != nullptr)
+        if (const auto personData = parts->people.getCustomerByLIN(currentLinId); personData != nullptr)
         {
             ++runCount;
 
@@ -266,37 +266,37 @@ bool OpenLoopHistogram::run()
 
                 for (auto& itemValue : valueList)
                 {
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
+                    case PropertyTypes_e::intProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value = itemValue.first;
                         break;
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::doubleProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value =
                             static_cast<double>(itemValue.first) / 10000.0;
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         key1Value = itemValue.first;
                         interpreter->macros.vars.userVars[eachVarIdx].value = (itemValue.first != 0);
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         if (itemValue.second->text)
                         {
                             result->addLocalText(itemValue.first, itemValue.second->text);
-                            key1Value                                           = itemValue.first;
+                            key1Value = itemValue.first;
                             interpreter->macros.vars.userVars[eachVarIdx].value = itemValue.second->text;
                         }
                         else
                             continue;
                         break;
-                    case columnTypes_e::freeColumn:
+                    case PropertyTypes_e::freeProp:
                     default:
                         continue;
                     }
 
-                    interpreter->exec(); // run the script on this person - do some magic
+                    interpreter->exec(); // run the script on this customer - do some magic
                     auto returns = interpreter->getLastReturn();
 
                     auto idx = -1;
@@ -347,7 +347,7 @@ bool OpenLoopHistogram::run()
             }
             else
             {
-                interpreter->exec(); // run the script on this person - do some magic
+                interpreter->exec(); // run the script on this customer - do some magic
                 auto returns = interpreter->getLastReturn();
 
                 auto idx = -1;

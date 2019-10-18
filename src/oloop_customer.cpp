@@ -1,15 +1,15 @@
-#include "oloop_person.h"
+#include "oloop_customer.h"
 #include "http_serve.h"
 #include "table.h"
 #include "tablepartitioned.h"
 #include "errors.h"
-#include "person.h"
+#include "customer.h"
 #include "cjson/cjson.h"
 
 using namespace openset::async;
 
-OpenLoopPerson::OpenLoopPerson(
-    Shuttle<int>* shuttle, 
+OpenLoopCustomer::OpenLoopCustomer(
+    Shuttle<int>* shuttle,
     const openset::db::Database::TablePtr table,
     const int64_t uuid) :
     OpenLoop(table->getName(), oloopPriority_e::realtime),
@@ -18,10 +18,10 @@ OpenLoopPerson::OpenLoopPerson(
     uuid(uuid)
 {}
 
-void OpenLoopPerson::prepare() 
+void OpenLoopCustomer::prepare()
 {}
 
-bool OpenLoopPerson::run()
+bool OpenLoopCustomer::run()
 {
     auto parts = table->getPartitionObjects(loop->partition, false );
 
@@ -31,28 +31,28 @@ bool OpenLoopPerson::run()
         return false;
     }
 
-    const auto personData = parts->people.getPersonByID(uuid);
+    const auto personData = parts->people.getCustomerByID(uuid);
 
-    if (!personData) // no person, not found
+    if (!personData) // no customer, not found
     {
         shuttle->reply(
             http::StatusCode::client_error_bad_request,
             openset::errors::Error{
             openset::errors::errorClass_e::query,
             openset::errors::errorCode_e::item_not_found,
-            "person could not be found"
+            "customer could not be found"
         }.getErrorJSON()
         );
         suicide();
         return false;
     }
 
-    db::Person person; // Person overlay for personRaw;
+    db::Customer person; // Customer overlay for personRaw;
     if (!person.mapTable(table.get(), loop->partition)) // will throw in DEBUG if not called before mount
     {
         partitionRemoved();
-	    suicide();
-        return false;       
+        suicide();
+        return false;
     }
 
     person.mount(personData);
@@ -63,7 +63,7 @@ bool OpenLoopPerson::run()
 
     shuttle->reply(
         http::StatusCode::success_ok,
-        &jsonString[0], 
+        &jsonString[0],
         jsonString.length());
 
     // were done
@@ -71,7 +71,7 @@ bool OpenLoopPerson::run()
     return false;
 }
 
-void OpenLoopPerson::partitionRemoved()
+void OpenLoopCustomer::partitionRemoved()
 {
     shuttle->reply(
         http::StatusCode::client_error_bad_request,

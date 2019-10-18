@@ -23,7 +23,7 @@ openset::db::IndexBits* openset::db::SegmentPartitioned_s::prepare(Attributes& a
         return bits;
 
     changeCount = 0;
-    const auto attr = attributes.getMake(COL_SEGMENT, segmentName);
+    const auto attr = attributes.getMake(PROP_SEGMENT, segmentName);
     bits = new IndexBits();
     bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
@@ -33,7 +33,7 @@ openset::db::IndexBits* openset::db::SegmentPartitioned_s::prepare(Attributes& a
 void openset::db::SegmentPartitioned_s::commit(Attributes& attributes)
 {
     if (changeCount)
-        attributes.swap(COL_SEGMENT, MakeHash(segmentName), bits);
+        attributes.swap(PROP_SEGMENT, MakeHash(segmentName), bits);
     changeCount = 0;
 }
 
@@ -74,7 +74,7 @@ TablePartitioned::TablePartitioned(
     Table* table,
     const int partition,
     AttributeBlob* attributeBlob,
-    Columns* schema) :
+    Properties* schema) :
         table(table),
         partition(partition),
         attributes(partition, table, attributeBlob, schema),
@@ -217,7 +217,7 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
 
         // if there are no bits with this name created in this query
         // then look in the index
-        auto attr = this->attributes.get(COL_SEGMENT, segmentName);
+        auto attr = this->attributes.get(PROP_SEGMENT, segmentName);
 
         if (!attr)
             return nullptr;

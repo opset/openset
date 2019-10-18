@@ -27,33 +27,33 @@ Returns a 200 or 400 status code.
 
 ## POST /v1/table/{table} (create table)
 
-Create a table by passing a JSON array of desired table columns.
+Create a table by passing a JSON array of desired table properties and types.
 
-A columns requires a name and type.
+A property at minimum requires a name and type.
 
-- `name` - columns can have lowercase alphanumeric names as long as they don't start with a number or contain spaces (`_` is valid, other symbols are not).
+- `name` - properties can have lowercase alphanumeric names as long as they don't start with a number or contain spaces (`_` is valid, other symbols are not).
 - `type` - valid types are `text`, `int`, `double`,  and `bool`.
-- `is_set` - if provided and `true`, this column will be a collection of values, rather than single value (think product tags i.e. 'red', 'big', 'kitchen')
-- `is_prop` - If provided and `true` this is column is a customer property.  Properties are are non-time sequenced facts about a customer. These might be values like `age` or `country` or created by an ML model.
+- `is_set` - if provided and `true`, this property will be a collection of values, rather than single value (think product tags i.e. 'red', 'big', 'kitchen')
+- `is_customer` - If provided and `true` this is property is a special customer property. Customer Properties unlike regular properties are associated with the customer rather than events in their history. Facts about a customer. These might be values like `age` or `country` or created by an ML model.
 
 ```
 {
-    "columns": [
+    "properties": [
         {
-            "name": "{column_name}",
+            "name": "{prop_name}",
             "type": "{text|int|double|bool}",
             "is_set": {optional: true|false},
-            "is_prop": {optional: true|false},            
+            "is_customer": {optional: true|false},
         },
         {
-            "name": "{column_name}",
+            "name": "{prop_name}",
             "type": "{text|int|double|bool}",
             "is_set": {optional: true|false},
-            "is_prop": {optional: true|false},                       
+            "is_customer": {optional: true|false},
         },
         //etc
     ],
-    "z-order": [
+    "event_order": [
         "{event_name}",
         "{event_name}",
         //etc
@@ -67,12 +67,12 @@ Returns a 200 or 400 status code.
 
 Returns JSON describing the table.
 
-> :bulb: columns marked as `is_set` and/or `is_prop` will as such in the column list.
+> :bulb: properties marked as `is_set` and/or `is_customer` will be identified in the property list.
 
 ```json
 {
     "table": "highstreet",
-    "columns": [
+    "properties": [
         {
             "name": "product_name",
             "type": "text"
@@ -113,32 +113,32 @@ Returns JSON describing the table.
         {
             "name": "age",
             "type": "int",
-            "is_prop": true
+            "is_customer": true
         }
     ]
 }
 ```
 
 -   `type` can be `text|int|double|bool`.
--   `name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+-   `name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Properties cannot start with number.
 
 Returns a 200 or 400 status code.
 
-## PUT /v1/table/{table}/column/{column_name}?type={type}&is_set={is_set}
+## PUT /v1/table/{table}/property/{prop_name}?type={type}&is_set={is_set}
 
-Adds a column to an existing table.
+Adds a property to an existing table.
 
 -   `type` can be `text|int|double|bool`.
--   `is_set` (optional) can be `true|false` and indicates that the column can contain multiple values per row.
--   `column_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+-   `is_set` (optional) can be `true|false` and indicates that the property can contain multiple values per row.
+-   `prop_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Properties cannot start with number.
 
 Returns a 200 or 400 status code.
 
-## DELETE /v1/table/{table}/column/{column_name}
+## DELETE /v1/table/{table}/property/{prop_name}
 
-Removes a column from the table.
+Removes a property from the table.
 
--   `column_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Column cannot start with number.
+-   `prop_name` can be any string consisting of lowercase letters `a-z`, numbers `0-9`, or the `_`. Properties cannot start with number.
 
 Returns a 200 or 400 status code.
 
@@ -212,7 +212,7 @@ This will perform an event scanning query by executing the provided `OSL` script
 | ----------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------|
 | `debug=`          | `true/false`      | will return the assembly for the query rather than the results                                                                         |
 | `segments=`       | `segment,segment` | comma separted segment list. Segment must be created with a `/segment` query (see next section). The segment `*` represents all people.|
-| `sort=`           | `column_name`     | sort by `select` column name or `as name` if specified. specifying `sort=group`, will sort the result set by using grouping names.     |
+| `sort=`           | `prop_name`       | sort by `select` property name or `as name` if specified. specifying `sort=group`, will sort the result set by using grouping names.     |
 | `order=`          | `asc/desc`        | default is descending order.                                                                                                           |
 | `trim=`           | `# limit`         | clip long branches at a certain count. Root nodes will still include totals for the entire branch.                                     |
 | `str_{var_name}`  | `text`            | populates variable of the same name in the params block with a string value                                                            |
@@ -278,9 +278,9 @@ end
 
 200 or 400 status with JSON data or error.
 
-## GET /v1/query/{table}/column/{column_name}
+## GET /v1/query/{table}/property/{prop_name}
 
-The column query allows you to query all the values within a named column in a table as well as perform searches and numeric grouping.
+The property query allows you to query all the values within a named property in a table as well as perform searches and numeric grouping.
 
 **query parameters:**
 
@@ -303,9 +303,9 @@ The column query allows you to query all the values within a named column in a t
 
 200 or 400 status with JSON data or error.
 
-## GET /v1/query/{table}/person
+## GET /v1/query/{table}/customer
 
-Returns the event sequence for an individual.
+Returns the event sequence for an individual customer.
 
 > :pushpin: If events contain complex data (i.e. sub values), OpenSet will re-condense the data by folding up data permeations generated on insert. The folded row may be grouped differently than the one provided to `/insert` but will be logically identical.
 
@@ -355,7 +355,7 @@ return( to_weeks(now - last_stamp) )
 |  `bucket=`         | `#`               | cluster values by `#`, all user counts                                                                            |
 |  `min=`            | `#`               | set histogram fill to `min=#`. This will create zero counted branches back to the min value.                      |
 |  `max=`            | `#`               | clip histogram fill at `max=#`. The value in max will contain the sum of all nodes `>=` to the `max=` value.      |
-|  `foreach=`        | `column name`     | calls provided OSL repeatedly filling the script variable `each_value` with each value in the column.             |
+|  `foreach=`        | `property name`   | calls provided OSL repeatedly filling the script variable `each_value` with each value in the property.             |
 
 **result**
 
@@ -363,7 +363,7 @@ return( to_weeks(now - last_stamp) )
 
 ## POST /v1/query/{table}/batch (experimental)
 
-Run multiple segment, column and histogram queries at once, generate a single result. Including `foreach` on histograms.
+Run multiple segment, property and histogram queries at once, generate a single result. Including `foreach` on histograms.
 
 Example post data using `highstreet` sample data:
 
@@ -384,23 +384,21 @@ end
 
 @use products_home products_yard
 
-@column product_name
+@property product_name
 
-@column product_group
+@property product_group
 
-@column product_price bucket=50
+@property product_price bucket=50
 
 @histogram customer_value bucket=50
-
-  return SUM total
+  return(sum(total) where event.is(== "purchase"))
 
 @histogram days_since
-
-  return int(to_days(now - last_event) / 7)
+  return( to_day(now - last_event) )
 
 @histogram total_by_shipper foreach=shipper bucket=100 min=0 max=1000
+  return( sum(total) where shipper.is(== each_value) )
 
-  return SUM total where shipper=each_value # inline aggregation
 ```
 
 # Internode (internode node chatter)

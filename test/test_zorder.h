@@ -7,7 +7,7 @@
 #include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
@@ -21,218 +21,187 @@
 inline Tests test_zorder()
 {
 
-	// An array of JSON events to insert, we are going to
-	// insert these out of order and count on zorder to
-	// sort them.
-	// we will set zorder for action to "alpha", "beta", "cappa", "delta", "echo"
-	auto user1_raw_inserts = R"raw_inserts(
-	[
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820830,
-			"action": "delta",
-			"attr":{
-				"some_val": 4
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820830,
-			"action": "cappa",
-			"attr":{
-				"some_val": 3
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820830,
-			"action": "beta",
-			"attr":{
-				"some_val": 2
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820830,
-			"action": "alpha",
-			"attr":{
-				"some_val": 1
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820830,
-			"action": "beta",
-			"attr":{
-				"some_val": 2222
-			}
-		},
+    // An array of JSON events to insert, we are going to
+    // insert these out of order and count on zorder to
+    // sort them.
+    // we will set zorder for action to "alpha", "beta", "cappa", "delta", "echo"
+    auto user1_raw_inserts = R"raw_inserts(
+    [
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "delta",
+            "some_val": 4
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "cappa",
+            "some_val": 3
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "beta",
+            "some_val": 2
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "alpha",
+            "some_val": 1
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820830,
+            "event": "beta",
+            "some_val": 2222
+        },
 
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820840,
-			"action": "delta",
-			"attr":{
-				"some_val": 4
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820840,
-			"action": "cappa",
-			"attr":{
-				"some_val": 3
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820840,
-			"action": "beta",
-			"attr":{
-				"some_val": 2
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "alpha",
-			"attr":{
-				"some_val": 1
-			}
-		},
-
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "delta",
-			"attr":{
-				"some_val": 4
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "cappa",
-			"attr":{
-				"some_val": 3
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "beta",
-			"attr":{
-				"some_val": 2
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "alpha",
-			"attr":{
-				"some_val": 2
-			}
-		},
-		{
-			"uuid": "user1@test.com",
-			"stamp": 1458820820,
-			"action": "echo",
-			"attr":{
-				"some_val": 5
-			}
-		},
-	]
-	)raw_inserts";
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820840,
+            "event": "delta",
+            "some_val": 4
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820840,
+            "event": "cappa",
+            "some_val": 3
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820840,
+            "event": "beta",
+            "some_val": 2
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "alpha",
+            "some_val": 1
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "delta",
+            "some_val": 4
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "cappa",
+            "some_val": 3
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "beta",
+            "some_val": 2
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "alpha",
+            "some_val": 2
+        },
+        {
+            "uuid": "user1@test.com",
+            "stamp": 1458820820,
+            "event": "echo",
+            "some_val": 5
+        },
+    ]
+    )raw_inserts";
 
 
 
-	/* In order to make the engine start there are a few required objects as
-	 * they will get called in the background during testing:
-	 *
-	 *  - cfg::manager must exist // cfg::initConfig)
-	 *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
-	 *  - Databse must exist // databases contain tabiles
-	 *
-	 *  These objects will be created on the heap, although in practice during
-	 *  the construction phase these are created as local objects to other classes.
-	 */
+    /* In order to make the engine start there are a few required objects as
+     * they will get called in the background during testing:
+     *
+     *  - cfg::manager must exist // cfg::initConfig)
+     *  - __AsyncManager must exist // new OpenSet::async::AyncPool(...)
+     *  - Databse must exist // databases contain tabiles
+     *
+     *  These objects will be created on the heap, although in practice during
+     *  the construction phase these are created as local objects to other classes.
+     */
 
-	// need config objects to run this
-	openset::config::CommandlineArgs args;
-	openset::globals::running = new openset::config::Config(args);
+    // need config objects to run this
+    openset::config::CommandlineArgs args;
+    openset::globals::running = new openset::config::Config(args);
 
-	// stop load/save objects from doing anything
-	openset::globals::running->testMode = true;
+    // stop load/save objects from doing anything
+    openset::globals::running->testMode = true;
 
-	// we need an async engine, although we won't really be using it,
-	// it's wired into the into features such as tablePartitioned (shared locks mostly)
-	openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
+    // we need an async engine, although we won't really be using it,
+    // it's wired into the into features such as tablePartitioned (shared locks mostly)
+    openset::async::AsyncPool* async = new openset::async::AsyncPool(1, 1); // 1 worker
 
-	openset::mapping::PartitionMap partitionMap;
-	// this must be on heap to keep it in scope
-	openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
-	mapper->startRouter();
+    openset::mapping::PartitionMap partitionMap;
+    // this must be on heap to keep it in scope
+    openset::mapping::Mapper* mapper = new openset::mapping::Mapper();
+    mapper->startRouter();
 
 
-	// put engine in a wait state otherwise we will throw an exception
-	async->suspendAsync();
+    // put engine in a wait state otherwise we will throw an exception
+    async->suspendAsync();
 
-	return {
-		{
-			"z-order: test event z-order", [=] {
+    return {
+        {
+            "z-order: test event z-order", [=] {
 
-				// prepare our table
-				auto table = openset::globals::database->newTable("__testzorder__");
+                // prepare our table
+                auto table = openset::globals::database->newTable("__testzorder__");
 
-				// add some columns
-				auto columns = table->getColumns();
-				ASSERT(columns != nullptr);
+                // add some properties
+                auto columns = table->getProperties();
+                ASSERT(columns != nullptr);
 
-				// content (adding to 2000 range, these typically auto enumerated on create)
-				columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false, 0);
+                // content (adding to 2000 range, these typically auto enumerated on create)
+                columns->setProperty(2000, "some_val", openset::db::PropertyTypes_e::intProp, false, 0);
 
-				auto zOrderStrings = table->getZOrderStrings();
-				auto zOrderInts = table->getZOrderHashes();
+                auto zOrderStrings = table->getEventOrderStrings();
+                auto zOrderInts = table->getEventOrderHashes();
 
-				// add zOrdering
-				zOrderStrings->emplace("alpha", 0);
-				zOrderInts->emplace(MakeHash("alpha"), 0);
+                // add zOrdering
+                zOrderStrings->emplace("alpha", 0);
+                zOrderInts->emplace(MakeHash("alpha"), 0);
 
-				zOrderStrings->emplace("beta", 1);
-				zOrderInts->emplace(MakeHash("beta"), 1);
+                zOrderStrings->emplace("beta", 1);
+                zOrderInts->emplace(MakeHash("beta"), 1);
 
-				zOrderStrings->emplace("cappa", 2);
-				zOrderInts->emplace(MakeHash("cappa"), 2);
+                zOrderStrings->emplace("cappa", 2);
+                zOrderInts->emplace(MakeHash("cappa"), 2);
 
-				auto parts = table->getPartitionObjects(0, true); // partition zero for test
-				auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto parts = table->getPartitionObjects(0, true); // partition zero for test
+                auto personRaw = parts->people.createCustomer("user1@test.com");
 
-				Person person; // Person overlay for personRaw;
+                Customer person; // Customer overlay for personRaw;
 
-				person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-				person.mount(personRaw);
+                person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
+                person.mount(personRaw);
 
-				// parse the user1_raw_inserts raw JSON text block
-				cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
+                // parse the user1_raw_inserts raw JSON text block
+                cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
 
-				// get vector of cjson nodes for each element in root array
-				auto events = insertJSON.getNodes();
+                // get vector of cjson nodes for each element in root array
+                auto events = insertJSON.getNodes();
 
-				for (auto e : events)
-				{
-					ASSERT(e->xPathInt("/stamp", 0) != 0);
-					ASSERT(e->xPath("/attr") != nullptr);
+                for (auto e : events)
+                {
+                    ASSERT(e->xPathInt("/stamp", 0) != 0);
+                    person.insert(e);
+                }
 
-					person.insert(e);
-				}
+                auto grid = person.getGrid();
+                auto json = grid->toJSON(); // non-condensed
 
-				auto grid = person.getGrid();
-				auto json = grid->toJSON(); // non-condensed
+                // TODO - finish test
 
-				// TODO - finish test
-
-			}
-		}
-	};
+            }
+        }
+    };
 
 }

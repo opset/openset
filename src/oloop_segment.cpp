@@ -1,6 +1,6 @@
 #include "oloop_segment.h"
 #include "indexbits.h"
-#include "columns.h"
+#include "properties.h"
 #include "tablepartitioned.h"
 #include "queryparserosl.h"
 #include "internoderouter.h"
@@ -54,7 +54,7 @@ void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
             resultColumns->columns[0].value = count;
         else
             resultColumns->columns[0].value += count;
-        //resultColumns->columns[0].distinctId = 0;
+        //resultColumns->properties[0].distinctId = 0;
     };
 
     RowKey rowKey;
@@ -106,7 +106,7 @@ void OpenLoopSegment::emitSegmentDifferences(openset::db::IndexBits* before, ope
         const auto beforeBit = before->bitState(i);
         const auto afterBit = after->bitState(i);
 
-        if ((personData = parts->people.getPersonByLIN(i)) == nullptr)
+        if ((personData = parts->people.getCustomerByLIN(i)) == nullptr)
             continue;
 
         if (afterBit && !beforeBit)
@@ -201,9 +201,9 @@ bool OpenLoopSegment::nextMacro()
 
         auto mappedColumns = interpreter->getReferencedColumns();
 
-        // clean the person object
-        person.reinit();
-        // map table, partition and select schema columns to the Person object
+        // clean the customer object
+        person.reinitialize();
+        // map table, partition and select schema properties to the Customer object
         if (!person.mapTable(table.get(), loop->partition, mappedColumns))
         {
             partitionRemoved();
@@ -258,7 +258,7 @@ void OpenLoopSegment::prepare()
     parts->checkForSegmentChanges();
     ++parts->segmentUsageCount;
 
-    maxLinearId = parts->people.peopleCount();
+    maxLinearId = parts->people.customerCount();
 
     startTime = Now();
 
@@ -316,7 +316,7 @@ bool OpenLoopSegment::run()
         }
 
         if (currentLinId < maxLinearId &&
-            (personData = parts->people.getPersonByLIN(currentLinId)) != nullptr)
+            (personData = parts->people.getCustomerByLIN(currentLinId)) != nullptr)
         {
             ++runCount;
             person.mount(personData);

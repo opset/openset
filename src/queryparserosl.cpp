@@ -1,6 +1,6 @@
 #include "queryparserosl.h"
 
-#include "columns.h"
+#include "properties.h"
 #include <iterator>
 #include <sstream>
 #include <iomanip>
@@ -71,9 +71,9 @@ string openset::query::MacroDbg(Macro_s& macro)
         ss << "NONE" << endl;
     outSpacer();
     ss << endl << endl;
-    ss << "Table Column Map (in script or aggregates):" << endl;
+    ss << "Table Properties Map (in script or aggregates):" << endl;
     outSpacer();
-    ss << "IDX | COLIDX | NAME                 | TYPE      | NOTE" << endl;
+    ss << "IDX | PRPIDX | NAME                 | TYPE      | NOTE" << endl;
     outSpacer();
     if (macro.vars.tableVars.size())
     {
@@ -85,19 +85,19 @@ string openset::query::MacroDbg(Macro_s& macro)
             std::string type;
             switch (v.schemaType)
             {
-            case db::columnTypes_e::freeColumn:
+            case db::PropertyTypes_e::freeProp:
                 type = "err(1)";
                 break;
-            case db::columnTypes_e::intColumn:
+            case db::PropertyTypes_e::intProp:
                 type = "int";
                 break;
-            case db::columnTypes_e::doubleColumn:
+            case db::PropertyTypes_e::doubleProp:
                 type = "double";
                 break;
-            case db::columnTypes_e::boolColumn:
+            case db::PropertyTypes_e::boolProp:
                 type = "bool";
                 break;
-            case db::columnTypes_e::textColumn:
+            case db::PropertyTypes_e::textProp:
                 type = "text";
                 break;
             default:
@@ -105,7 +105,7 @@ string openset::query::MacroDbg(Macro_s& macro)
             }
             ss << padding(type, 9, false) << " | "; /*
             if (v.actual == "__uuid")
-                ss << "actual for 'person' or 'people'";
+                ss << "actual for 'customer' or 'people'";
             else if (v.actual == "__action")
                 ss << "actual for 'action'";
             else if (v.actual == "__stamp")
@@ -137,7 +137,7 @@ string openset::query::MacroDbg(Macro_s& macro)
                 ss << padding(v.actual, 20, false) << " | ";
             ss << padding(v.alias, 20, false) << " | "; /*
             if (v.actual == "__uuid")
-                ss << "from 'person' or 'people'  ";
+                ss << "from 'customer' or 'people'  ";
             else if (v.actual == "__action")
                 ss << "from 'action'  ";
             else if (v.actual == "__stamp")

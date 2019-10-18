@@ -8,7 +8,7 @@
 
 #include "cjson/cjson.h"
 #include "oloop_insert.h"
-#include "oloop_column.h"
+#include "oloop_property.h"
 #include "oloop_histogram.h"
 
 #include "asyncpool.h"
@@ -64,26 +64,26 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     // TODO - look for spaces, check length, look for symbols that aren't - or _ etc.
 
-    const auto sourceColumns = request.xPath("/columns");
-    if (!sourceColumns)
+    const auto sourceProps = request.xPath("/properties");
+    if (!sourceProps)
     {
         RpcError(
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "column definition required, missing /columns" },
+                "properties definition required, missing /properties" },
                 message);
 
         return;
     }
 
-    const auto sourceZOrder = request.xPath("/z_order");
+    const auto sourceEventOrder = request.xPath("/event_order");
     const auto sourceSettings = request.xPath("/settings");
 
-    auto sourceColumnsList = sourceColumns->getNodes();
+    auto sourcePropsList = sourceProps->getNodes();
 
-    // validate column names and types
-    for (auto n : sourceColumnsList)
+    // validate property names and types
+    for (auto n : sourcePropsList)
     {
         const auto name = n->xPathString("/name", "");
         const auto type = n->xPathString("/type", "");
@@ -94,30 +94,30 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
                 openset::errors::Error{
                     openset::errors::errorClass_e::config,
                     openset::errors::errorCode_e::general_config_error,
-                    "missing column type or name" },
+                    "missing properties type or name" },
                     message);
             return;
         }
 
         // bad type
-        if (openset::db::ColumnTypes.find(type) == openset::db::ColumnTypes.end())
+        if (openset::db::PropertyTypes.find(type) == openset::db::PropertyTypes.end())
         {
             RpcError(
                 openset::errors::Error{
                     openset::errors::errorClass_e::config,
                     openset::errors::errorCode_e::general_config_error,
-                    "bad column type: must be int|double|text|bool" },
+                    "bad properties type: must be int|double|text|bool" },
                     message);
             return;
         }
 
-        if (!openset::db::Columns::validColumnName(name))
+        if (!openset::db::Properties::validPropertyName(name))
         {
             RpcError(
                 openset::errors::Error{
                     openset::errors::errorClass_e::config,
                     openset::errors::errorCode_e::general_config_error,
-                    "bad column name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
+                    "bad properties name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
                     message);
             return;
         }
@@ -127,67 +127,65 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     globals::async->suspendAsync();
     auto table = database->newTable(tableName);
-    auto columns = table->getColumns();
+    auto columns = table->getProperties();
 
     // lock the table object
     csLock lock(*table->getLock());
 
-    // set the default required columns
-    columns->setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
-    columns->setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
-    columns->setColumn(COL_TRIGGERS, "__triggers", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_EMIT, "__emit", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-    columns->setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
+    // set the default required properties
+    columns->setProperty(PROP_STAMP, "stamp", PropertyTypes_e::intProp, false);
+    columns->setProperty(PROP_EVENT, "event", PropertyTypes_e::textProp, false);
+    columns->setProperty(PROP_UUID, "id", PropertyTypes_e::intProp, false);
+    columns->setProperty(PROP_SEGMENT, "__segment", PropertyTypes_e::textProp, false);
+    columns->setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 
     int64_t columnEnum = 1000;
 
-    for (auto n : sourceColumnsList)
+    for (auto n : sourcePropsList)
     {
         const auto name = n->xPathString("/name", "");
         const auto type = n->xPathString("/type", "");
         const auto isSet = n->xPathBool("/is_set", false);
-        const auto isProp = n->xPathBool("/is_prop", false);
+        const auto isProp = n->xPathBool("/is_customer", false);
 
-        columnTypes_e colType;
+        PropertyTypes_e colType;
 
         if (type == "text")
-            colType = columnTypes_e::textColumn;
+            colType = PropertyTypes_e::textProp;
         else if (type == "int")
-            colType = columnTypes_e::intColumn;
+            colType = PropertyTypes_e::intProp;
         else if (type == "double")
-            colType = columnTypes_e::doubleColumn;
+            colType = PropertyTypes_e::doubleProp;
         else if (type == "bool")
-            colType = columnTypes_e::boolColumn;
+            colType = PropertyTypes_e::boolProp;
         else
         {
             RpcError(
                 openset::errors::Error{
                     openset::errors::errorClass_e::config,
                     openset::errors::errorCode_e::general_config_error,
-                    "invalide column type" },
+                    "invalid property type" },
                     message);
 
             return;
         }
 
-        columns->setColumn(columnEnum, name, colType, isSet, isProp);
+        columns->setProperty(columnEnum, name, colType, isSet, isProp);
         ++columnEnum;
     }
 
-    if (sourceZOrder)
+    if (sourceEventOrder)
     {
-        auto zOrderStrings = table->getZOrderStrings();
-        auto zOrderHashes = table->getZOrderHashes();
+        auto eventOrderStrings = table->getEventOrderStrings();
+        auto eventOrderHashes = table->getEventOrderHashes();
 
-        auto sourceZStrings = sourceZOrder->getNodes();
+        auto sourceEventOrderStrings = sourceEventOrder->getNodes();
 
         auto idx = 0;
-        for (auto n : sourceZStrings)
+        for (auto n : sourceEventOrderStrings)
         {
-            zOrderStrings->emplace(n->getString(), idx);
-            zOrderHashes->emplace(MakeHash(n->getString()), idx);
+            eventOrderStrings->emplace(n->getString(), idx);
+            eventOrderHashes->emplace(MakeHash(n->getString()), idx);
             ++idx;
         }
     }
@@ -286,11 +284,11 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
 
     response.set("table", tableName);
 
-    auto columnNodes = response.setArray("columns");
-    auto columns = table->getColumns();
+    auto columnNodes = response.setArray("properties");
+    auto columns = table->getProperties();
 
-    for (auto &c : columns->columns)
-        if (c.idx > 6 && c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
+    for (auto &c : columns->properties)
+        if (c.idx > 6 && c.deleted == 0 && c.name.size() && c.type != PropertyTypes_e::freeProp)
         {
             auto columnRecord = columnNodes->pushObject();
 
@@ -298,16 +296,16 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
 
             switch (c.type)
             {
-            case columnTypes_e::intColumn:
+            case PropertyTypes_e::intProp:
                 type = "int";
                 break;
-            case columnTypes_e::doubleColumn:
+            case PropertyTypes_e::doubleProp:
                 type = "double";
                 break;
-            case columnTypes_e::boolColumn:
+            case PropertyTypes_e::boolProp:
                 type = "bool";
                 break;
-            case columnTypes_e::textColumn:
+            case PropertyTypes_e::textProp:
                 type = "text";
                 break;
             default:
@@ -318,21 +316,21 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
             columnRecord->set("type", type);
             if (c.isSet)
                 columnRecord->set("is_set", true);
-            if (c.isProp)
-                columnRecord->set("is_prop", true);
+            if (c.isCustomerProperty)
+                columnRecord->set("is_customer", true);
         }
 
-    auto zOrder = response.setArray("z_order");
-    const auto zOrderMap = table->getZOrderStrings();
-    std::vector<std::string> zOrderList(zOrderMap->size());
+    auto eventOrder = response.setArray("event_order");
+    const auto eventOrderMap = table->getEventOrderStrings();
+    std::vector<std::string> eventOrderList(eventOrderMap->size());
 
-    for (auto m: *zOrderMap)
-       zOrderList[m.second] = m.first;
+    for (auto &m: *eventOrderMap)
+       eventOrderList[m.second] = m.first;
 
-    for (const auto &z : zOrderList)
-        zOrder->push(z);
+    for (const auto &z : eventOrderList)
+        eventOrder->push(z);
 
-    auto settings = response.setObject("settings");
+    const auto settings = response.setObject("settings");
     table->serializeSettings(settings);
 
     Logger::get().info("describe table '" + tableName + "'.");
@@ -353,7 +351,7 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
     const auto columnName = matches.find("name"s)->second;
     const auto columnType = message->getParamString("type"s);
     const auto isSet = message->getParamBool("is_set"s);
-    const auto isProp = message->getParamBool("is_prop"s);
+    const auto isProp = message->getParamBool("is_customer"s);
 
     if (!tableName.size())
     {
@@ -386,29 +384,29 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "missing or invalid column name" },
+                "missing or invalid property name" },
                 message);
         return;
     }
 
-    if (!openset::db::Columns::validColumnName(columnName))
+    if (!openset::db::Properties::validPropertyName(columnName))
     {
         RpcError(
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "bad column name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
+                "bad property name: may contain lowercase a-z, 0-9 and _ but cannot start with a number." },
                 message);
         return;
     }
 
-    if (openset::db::ColumnTypes.find(columnType) == openset::db::ColumnTypes.end())
+    if (openset::db::PropertyTypes.find(columnType) == openset::db::PropertyTypes.end())
     {
         RpcError(
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "bad column type: must be int|double|text|bool" },
+                "bad property type: must be int|double|text|bool" },
                 message);
         return;
     }
@@ -416,7 +414,7 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
     // lock the table object
     csLock lock(*table->getLock());
 
-    auto columns = table->getColumns();
+    auto columns = table->getProperties();
 
     int64_t lowest = 999;
     for (auto &c : columns->nameMap)
@@ -427,36 +425,25 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
 
     ++lowest;
 
-    columnTypes_e colType;
+    PropertyTypes_e colType;
 
     if (columnType == "text")
-        colType = columnTypes_e::textColumn;
+        colType = PropertyTypes_e::textProp;
     else if (columnType == "int")
-        colType = columnTypes_e::intColumn;
+        colType = PropertyTypes_e::intProp;
     else if (columnType == "double")
-        colType = columnTypes_e::doubleColumn;
-    else if (columnType == "bool")
-        colType = columnTypes_e::boolColumn;
+        colType = PropertyTypes_e::doubleProp;
     else
-    {
-        RpcError(
-            openset::errors::Error{
-                openset::errors::errorClass_e::config,
-                openset::errors::errorCode_e::general_config_error,
-                "missing or invalid column type" },
-                message);
+        colType = PropertyTypes_e::boolProp;
 
-        return; // TODO hmmm...
-    }
+    columns->setProperty(lowest, columnName, colType, isSet, isProp);
 
-    columns->setColumn(lowest, columnName, colType, isSet, isProp);
-
-    Logger::get().info("added column '" + columnName + "' from table '" + tableName + "' created.");
+    Logger::get().info("added property '" + columnName + "' to table '" + tableName + "' created.");
 
     cjson response;
     response.set("message", "added");
     response.set("table", tableName);
-    response.set("column", columnName);
+    response.set("property", columnName);
     response.set("type", columnType);
     message->reply(http::StatusCode::success_ok, response);
 }
@@ -499,7 +486,7 @@ void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMap
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "invalid column name" },
+                "invalid property name" },
                 message);
         return;
     }
@@ -507,28 +494,28 @@ void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMap
     // lock the table object
     csLock lock(*table->getLock());
 
-    const auto column = table->getColumns()->getColumn(columnName);
+    const auto column = table->getProperties()->getProperty(columnName);
 
-    if (!column || column->type == columnTypes_e::freeColumn)
+    if (!column || column->type == PropertyTypes_e::freeProp)
     {
         RpcError(
             openset::errors::Error{
                 openset::errors::errorClass_e::config,
                 openset::errors::errorCode_e::general_config_error,
-                "column not found" },
+                "property not found" },
                 message);
         return;
     }
 
-    // delete the actual column
-    table->getColumns()->deleteColumn(column);
+    // delete the actual property
+    table->getProperties()->deleteProperty(column);
 
-    Logger::get().info("dropped column '" + columnName + "' from table '" + tableName + "' created.");
+    Logger::get().info("dropped property '" + columnName + "' from table '" + tableName + "' created.");
 
     cjson response;
     response.set("message", "dropped");
     response.set("table", tableName);
-    response.set("column", columnName);
+    response.set("property", columnName);
     message->reply(http::StatusCode::success_ok, response);
 }
 
@@ -571,5 +558,20 @@ void RpcTable::table_settings(const openset::web::MessagePtr& message, const Rpc
 
     cjson response;
     table->serializeSettings(&response);
+    message->reply(http::StatusCode::success_ok, response);
+}
+
+void openset::comms::RpcTable::table_list(const openset::web::MessagePtr & message, const RpcMapping & matches)
+{
+    // lock the table object
+
+    auto database = openset::globals::database;
+    const auto names = database->getTableNames();
+
+    cjson response(cjson::Types_e::ARRAY);
+
+    for (auto &name: names)
+        response.push(name);
+
     message->reply(http::StatusCode::success_ok, response);
 }

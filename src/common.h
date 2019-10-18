@@ -7,7 +7,7 @@
 #include <tuple>
 
 const int32_t PARTITION_MAX = 1024; // hard limit, not operating limit
-const int32_t MAX_COLUMNS = 4096;
+const int32_t MAX_PROPERTIES = 4096;
 
 /*
 	Because the full names a just do damn long and ugly turning what could

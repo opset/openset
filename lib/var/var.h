@@ -374,7 +374,7 @@ public:
         {
         case valueType::INT32:
         case valueType::INT64:
-            return this->getInt64() == 0;
+            return this->getInt64() == 0 || this->getInt64() == LLONG_MIN;
         case valueType::BOOL:
             return this->getBool() == false;
         case valueType::FLT:

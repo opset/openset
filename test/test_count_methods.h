@@ -7,7 +7,7 @@
 #include "../lib/var/var.h"
 #include "../src/database.h"
 #include "../src/table.h"
-#include "../src/columns.h"
+#include "../src/properties.h"
 #include "../src/asyncpool.h"
 #include "../src/tablepartitioned.h"
 #include "../src/queryinterpreter.h"
@@ -134,22 +134,22 @@ inline Tests test_count_methods()
                 // prepare our table
                 auto table = openset::globals::database->newTable("__testcountmethods__");
 
-                // add some columns
-                auto columns = table->getColumns();
-                ASSERT(columns != nullptr);
+                // add some properties
+                auto properties = table->getProperties();
+                ASSERT(properties != nullptr);
 
                 // content (adding to 2000 range, these typically auto enumerated on create)
-                columns->setColumn(2000, "some_val", openset::db::columnTypes_e::intColumn, false);
-                columns->setColumn(2001, "some_thing", openset::db::columnTypes_e::textColumn, false);
-                columns->setColumn(2002, "some_color", openset::db::columnTypes_e::textColumn, false);
+                properties->setProperty(2000, "some_val", openset::db::PropertyTypes_e::intProp, false);
+                properties->setProperty(2001, "some_thing", openset::db::PropertyTypes_e::textProp, false);
+                properties->setProperty(2002, "some_color", openset::db::PropertyTypes_e::textProp, false);
 
                 auto parts = table->getPartitionObjects(0, true); // partition zero for test
-                auto personRaw = parts->people.getMakePerson("user1@test.com");
+                auto personRaw = parts->people.createCustomer("user1@test.com");
 
-                Person person; // Person overlay for personRaw;
+                Customer customer; // Customer overlay for personRaw;
 
-                person.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
-                person.mount(personRaw);
+                customer.mapTable(table.get(), 0); // will throw in DEBUG if not called before mount
+                customer.mount(personRaw);
 
                 // parse the user1_raw_inserts raw JSON text block
                 cjson insertJSON(user1_raw_inserts, cjson::Mode_e::string);
@@ -162,10 +162,10 @@ inline Tests test_count_methods()
                     ASSERT(e->xPathInt("/stamp", 0) != 0);
                     ASSERT(e->xPath("/_") != nullptr);
 
-                    person.insert(e);
+                    customer.insert(e);
                 }
 
-                person.commit();
+                customer.commit();
 
             }
         },
@@ -181,7 +181,7 @@ inline Tests test_count_methods()
                 openset::query::QueryParser p;
 
                 // compile this
-                p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
+                p.compileQuery(test1_pyql.c_str(), table->getProperties(), queryMacros);
                 ASSERT(p.error.inError() == false);
 
                 // mount the compiled query to an interpretor
@@ -190,24 +190,24 @@ inline Tests test_count_methods()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.createCustomer("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
                 // MappedColumns? Why? Because the basic mapTable function (without a
-                // columnList) maps all the columns in the table - which is what we want when
+                // columnList) maps all the properties in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
                 // when performing queries
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                Customer customer; // Customer overlay for personRaw;
+                customer.mapTable(table.get(), 0, mappedColumns);
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare(); // this actually decompresses
+                customer.mount(personRaw); // this tells the customer object where the raw compressed data is
+                customer.prepare(); // this actually decompresses
 
-                                  // this mounts the now decompressed data (in the person overlay)
+                                  // this mounts the now decompressed data (in the customer overlay)
                                   // into the interpreter
-                interpreter->mount(&person);
+                interpreter->mount(&customer);
 
                 // run it
                 interpreter->exec();
@@ -244,7 +244,7 @@ inline Tests test_count_methods()
                 //auto text = merger.mergeResultText(resultSets);
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
-                // sort descending on second column (1)
+                // sort descending on second property (1)
                 merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 1);
 
                 // NOTE - uncomment if you want to see the results
@@ -279,7 +279,7 @@ inline Tests test_count_methods()
                 openset::query::QueryParser p;
 
                 // compile this
-                p.compileQuery(test1_pyql.c_str(), table->getColumns(), queryMacros);
+                p.compileQuery(test1_pyql.c_str(), table->getProperties(), queryMacros);
                 ASSERT(p.error.inError() == false);
 
                 // count using time stamp based row identifies (allows for multiple rows to be treated as one)
@@ -291,24 +291,24 @@ inline Tests test_count_methods()
                 openset::result::ResultSet resultSet(queryMacros.vars.columnVars.size());
                 interpreter->setResultObject(&resultSet);
 
-                auto personRaw = parts->people.getMakePerson("user1@test.com"); // get a user
+                auto personRaw = parts->people.createCustomer("user1@test.com"); // get a user
                 ASSERT(personRaw != nullptr);
                 auto mappedColumns = interpreter->getReferencedColumns();
 
                 // MappedColumns? Why? Because the basic mapTable function (without a
-                // columnList) maps all the columns in the table - which is what we want when
+                // columnList) maps all the properties in the table - which is what we want when
                 // inserting or updating rows but means more processing and less data affinity
                 // when performing queries
 
-                Person person; // Person overlay for personRaw;
-                person.mapTable(table.get(), 0, mappedColumns);
+                Customer customer; // Customer overlay for personRaw;
+                customer.mapTable(table.get(), 0, mappedColumns);
 
-                person.mount(personRaw); // this tells the person object where the raw compressed data is
-                person.prepare(); // this actually decompresses
+                customer.mount(personRaw); // this tells the customer object where the raw compressed data is
+                customer.prepare(); // this actually decompresses
 
-                                  // this mounts the now decompressed data (in the person overlay)
+                                  // this mounts the now decompressed data (in the customer overlay)
                                   // into the interpreter
-                interpreter->mount(&person);
+                interpreter->mount(&customer);
 
                 // run it
                 interpreter->exec();
@@ -345,7 +345,7 @@ inline Tests test_count_methods()
                 //auto text = merger.mergeResultText(resultSets);
                 merger.resultSetToJson(queryMacros.vars.columnVars.size(), 1, resultSets, &resultJSON);
 
-                // sort descending on third column (2)
+                // sort descending on third property (2)
                 merger.jsonResultSortByColumn(&resultJSON, openset::result::ResultSortOrder_e::Desc, 2);
 
                 // NOTE - uncomment if you want to see the results

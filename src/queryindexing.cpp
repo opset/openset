@@ -48,7 +48,7 @@ openset::db::IndexBits* Indexing::getIndex(std::string name, bool &countable)
 }
 
 /*
- Mode is ListMode_e from Attributes class - this enumerates a column
+ Mode is ListMode_e from Attributes class - this enumerates a property
 and returns values that match the condition.
 
 In getBits we take the last item on the stack and apply all matching indexes to
@@ -59,7 +59,7 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 
     auto& entry = stack.back();
 
-    const auto colInfo = table->getColumns()->getColumn(entry.columnName);
+    const auto propInfo = table->getProperties()->getProperty(entry.columnName);
 
     // if the value side is NONE we go check for presence
 
@@ -73,7 +73,7 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
             negate = true; // != VAL -- anything other than VAL
     }
 
-    auto attrList = parts->attributes.getColumnValues(colInfo->idx, mode, entry.hash);
+    auto attrList = parts->attributes.getPropertyValues(propInfo->idx, mode, entry.hash);
 
     auto& resultBits = entry.bits; // where our bits will all accumulate
     resultBits.reset();
@@ -148,7 +148,7 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
 
     };
 
-    const auto maxLinId = parts->people.peopleCount();
+    const auto maxLinId = parts->people.customerCount();
 
     if (!stopBit)
     {

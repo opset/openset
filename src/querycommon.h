@@ -55,12 +55,12 @@ namespace openset
         {
             NOP = 0,     // No operation
             LAMBDA,      // lambda
-            PSHTBLCOL,   // push column
-            PSHTBLFLT,   // push column
+            PSHTBLCOL,   // push property
+            PSHTBLFLT,   // push property
             PSHRESCOL,   // push result Column (may be grid, may be variable)
             //PSHRESGRP, // push group_by (may be grid, may be variable)
             VARIDX,      // placeholder for an index to a variable
-            COLIDX,      // placeholder for an index to a column
+            COLIDX,      // placeholder for an index to a property
             PSHPAIR,     // pushes a single pair dict to the stack
             PSHUSROBJ,   // push object with deref
             PSHUSROREF,  // push object with deref
@@ -74,7 +74,7 @@ namespace openset
             PSHLITNUL,   // push None value (NONE)
             POPUSROBJ,   // pop object with deref
             POPUSRVAR,   // pop variable
-            POPTBLCOL,   // pop column (place holder)
+            POPTBLCOL,   // pop property (place holder)
             POPRESGRP,   // pop current group value
             POPRESCOL,   // pop current result Column value
             CNDIF,       // condition if
@@ -275,7 +275,7 @@ namespace openset
 {
     namespace query
     {
-        // String to Result Columns Modifier
+        // String to Result Properties Modifier
         static const unordered_map<string, int64_t> TimeConstants = {
             { "seconds", 1'000 },
             { "second", 1'000 },
@@ -300,7 +300,7 @@ namespace openset
             { "minutes", TimeSwitch_e::minutes },
             { "hours", TimeSwitch_e::hours },
             { "days", TimeSwitch_e::days }
-        }; // String to Result Columns Modifier
+        }; // String to Result Properties Modifier
         static const unordered_map<string, Modifiers_e> ColumnModifiers = {
             { "sum", Modifiers_e::sum },
             { "min", Modifiers_e::min },
@@ -660,19 +660,19 @@ namespace openset
             string actual;                               // actual name
             string alias;                                // alias
             string space;                                // namespace
-            string distinctColumnName { "event" };       // name of column used for aggregators
+            string distinctColumnName { "event" };       // name of property used for aggregators
             Modifiers_e modifier { Modifiers_e::value }; // default is value
             int index { -1 };                            // index
-            int column { -1 };                           // column in grid
-            int schemaColumn { -1 };                     // column in schema
-            int distinctColumn { db::COL_EVENT };        // column containing distinct key
-            db::columnTypes_e schemaType { db::columnTypes_e::freeColumn };
+            int column { -1 };                           // property in grid
+            int schemaColumn { -1 };                     // property in schema
+            int distinctColumn { db::PROP_EVENT };        // property containing distinct key
+            db::PropertyTypes_e schemaType { db::PropertyTypes_e::freeProp };
             bool isSet { false };
             bool isProp { false };
             bool isRowObject { false };
             int popRefs { 0 };      // reference counter for pops
             int pushRefs { 0 };     // reference counter for pushes
-            int sortOrder { -1 };   // used for sorting in column order
+            int sortOrder { -1 };   // used for sorting in property order
             int lambdaIndex { -1 }; // used for variable assignment by lambada
             bool nonDistinct { false };
             cvar value { NONE };
@@ -908,7 +908,7 @@ namespace openset
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
             bool isSegment { false };
-            bool useProps { false };      // uses person props
+            bool useProps { false };      // uses customer props
             bool writesProps { true };    // script can change props
             bool useGlobals { false };    // uses global for table
             bool useCached { false };     // for segments allow use of cached values within TTL

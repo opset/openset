@@ -63,6 +63,10 @@ set(SOURCE_FILES
         vendor/simple-web-server/utility.hpp
         src/common.cpp
         src/common.h
+        src/customer.cpp
+        src/customer.h
+        src/customers.cpp
+        src/customers.h
         lib/cjson/cjson.cpp
         lib/cjson/cjson.h
         lib/file/directory.cpp
@@ -102,10 +106,6 @@ set(SOURCE_FILES
         src/attributeblob.h
         src/attributes.cpp
         src/attributes.h
-        src/columns.cpp
-        src/columns.h
-        src/columnmapping.cpp
-        src/columnmapping.h
         src/config.cpp
         src/config.h
         src/database.cpp
@@ -134,24 +134,24 @@ set(SOURCE_FILES
         src/oloop.h
         src/oloop_cleaner.cpp
         src/oloop_cleaner.h
-        src/oloop_column.cpp
-        src/oloop_column.h
+        src/oloop_customer.cpp
+        src/oloop_customer.h
         src/oloop_histogram.cpp
         src/oloop_histogram.h
         src/oloop_insert.cpp
         src/oloop_insert.h
-        src/oloop_person.cpp
-        src/oloop_person.h
+        src/oloop_property.cpp
+        src/oloop_property.h
         src/oloop_query.cpp
         src/oloop_query.h
         src/oloop_segment.cpp
         src/oloop_segment.h
         src/oloop_seg_refresh.cpp
         src/oloop_seg_refresh.h
-        src/people.cpp
-        src/people.h
-        src/person.cpp
-        src/person.h
+        src/properties.cpp
+        src/properties.h
+        src/property_mapping.cpp
+        src/property_mapping.h
         src/querycommon.h
         src/queryindexing.cpp
         src/queryindexing.h

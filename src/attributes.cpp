@@ -1,7 +1,7 @@
 #include "attributes.h"
 #include "sba/sba.h"
 #include "table.h"
-#include "columns.h"
+#include "properties.h"
 #include "attributeblob.h"
 
 using namespace openset::db;
@@ -15,16 +15,16 @@ IndexBits* Attr_s::getBits()
     return bits;
 }
 
-Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Columns* columns) :
+Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties) :
     table(table),
     blob(attributeBlob),
-    columns(columns),
+    properties(properties),
     partition(partition)
 {}
 
 Attributes::~Attributes()
 {
-    for (auto &attr: columnIndex)
+    for (auto &attr: propertyIndex)
     {
         PoolMem::getPool().freePtr(attr.second);
         attr.second = nullptr;
@@ -43,9 +43,9 @@ Attributes::~Attributes()
     }
 }
 
-void Attributes::addChange(const int32_t column, const int64_t value, const int32_t linearId, const bool state)
+void Attributes::addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
 {
-    const auto changeRecord = changeIndex.get({ column, value });
+    const auto changeRecord = changeIndex.get({ propIndex, value });
     const auto changeTail = changeRecord ? changeRecord->second : nullptr;
 
     // using placement new here into a POOL buffer
@@ -55,16 +55,16 @@ void Attributes::addChange(const int32_t column, const int64_t value, const int3
         Attr_changes_s(
             linearId, (state) ? 1 : 0, changeTail);
 
-    changeIndex.set({ column, value }, change);
+    changeIndex.set({ propIndex, value }, change);
 }
 
 
-Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
+Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 {
-    if (auto attrPair = columnIndex.get({ column, value }); attrPair == nullptr)
+    if (auto attrPair = propertyIndex.get({ propIndex, value }); attrPair == nullptr)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-        attrPair = columnIndex.emplace({ column, value }, attr);
+        attrPair = propertyIndex.emplace({ propIndex, value }, attr);
         return attrPair->second;
     }
     else
@@ -73,15 +73,15 @@ Attr_s* Attributes::getMake(const int32_t column, const int64_t value)
     }
 }
 
-Attr_s* Attributes::getMake(const int32_t column, const string& value)
+Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
     const auto valueHash = MakeHash(value);
 
-    if (auto attrPair = columnIndex.get({ column, valueHash }); attrPair == nullptr)
+    if (auto attrPair = propertyIndex.get({ propIndex, valueHash }); attrPair == nullptr)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-        attr->text = blob->storeValue(column, value);
-        attrPair = columnIndex.set({ column, valueHash }, attr);
+        attr->text = blob->storeValue(propIndex, value);
+        attrPair = propertyIndex.set({ propIndex, valueHash }, attr);
         return attrPair->second;
     }
     else
@@ -90,30 +90,30 @@ Attr_s* Attributes::getMake(const int32_t column, const string& value)
     }
 }
 
-Attr_s* Attributes::get(const int32_t column, const int64_t value) const
+Attr_s* Attributes::get(const int32_t propIndex, const int64_t value) const
 {
-    if (const auto attrPair = columnIndex.get({ column, value }); attrPair != nullptr)
+    if (const auto attrPair = propertyIndex.get({ propIndex, value }); attrPair != nullptr)
         return attrPair->second;
 
     return nullptr;
 }
 
-Attr_s* Attributes::get(const int32_t column, const string& value) const
+Attr_s* Attributes::get(const int32_t propIndex, const string& value) const
 {
-    if (const auto attrPair = columnIndex.get({ column, MakeHash(value) }); attrPair != nullptr)
+    if (const auto attrPair = propertyIndex.get({ propIndex, MakeHash(value) }); attrPair != nullptr)
         return attrPair->second;
 
     return nullptr;
 }
 
-void Attributes::drop(const int32_t column, const int64_t value)
+void Attributes::drop(const int32_t propIndex, const int64_t value)
 {
-    columnIndex.erase({ column, value });
+    propertyIndex.erase({ propIndex, value });
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t column, const int64_t value, const bool on)
+void Attributes::setDirty(const int32_t linId, const int32_t propIndex, const int64_t value, const bool on)
 {
-    addChange(column, value, linId, on);
+    addChange(propIndex, value, linId, on);
 }
 
 void Attributes::clearDirty()
@@ -122,7 +122,7 @@ void Attributes::clearDirty()
 
     for (auto& change : changeIndex)
     {
-        const auto attrPair = columnIndex.get({ change.first.column, change.first.value });
+        const auto attrPair = propertyIndex.get({ change.first.index, change.first.value });
 
         if (!attrPair || !attrPair->second)
             continue;
@@ -146,7 +146,7 @@ void Attributes::clearDirty()
 
         if (!bits.population(bits.ints * 64)) //pop count zero? remove this
         {
-            drop(change.first.column, change.first.value );
+            drop(change.first.index, change.first.value );
             PoolMem::getPool().freePtr(attr);
         }
         else
@@ -184,11 +184,11 @@ void Attributes::clearDirty()
     changeIndex.clear();
 }
 
-void Attributes::swap(const int32_t column, const int64_t value, IndexBits* newBits) const
+void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* newBits) const
 {
     AttrPair* attrPair;
 
-    if ((attrPair = columnIndex.get({ column, value })) == nullptr)
+    if ((attrPair = propertyIndex.get({ propIndex, value })) == nullptr)
         return;
 
     const auto attr = attrPair->second;
@@ -231,18 +231,18 @@ AttributeBlob* Attributes::getBlob() const
     return blob;
 }
 
-Attributes::AttrListExpanded Attributes::getColumnValues(const int32_t column)
+Attributes::AttrListExpanded Attributes::getPropertyValues(const int32_t propIndex)
 {
     Attributes::AttrListExpanded result;
 
-    for (auto &kv : columnIndex)
-        if (kv.first.column == column && kv.first.value != NONE)
+    for (auto &kv : propertyIndex)
+        if (kv.first.index == propIndex && kv.first.value != NONE)
             result.push_back({ kv.first.value, kv.second });
 
     return result;
 }
 
-Attributes::AttrList Attributes::getColumnValues(const int32_t column, const listMode_e mode, const int64_t value)
+Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, const listMode_e mode, const int64_t value)
 {
     Attributes::AttrList result;
 
@@ -252,19 +252,19 @@ Attributes::AttrList Attributes::getColumnValues(const int32_t column, const lis
         // in query indexing
     case listMode_e::NEQ:
     case listMode_e::EQ:
-        if (const auto tAttr = get(column, value); tAttr)
+        if (const auto tAttr = get(propIndex, value); tAttr)
             result.push_back(tAttr);
         return result;
     case listMode_e::PRESENT:
-        if (const auto tAttr = get(column, NONE); tAttr)
+        if (const auto tAttr = get(propIndex, NONE); tAttr)
             result.push_back(tAttr);
         return result;
         default: ;
     }
 
-    for (auto &kv : columnIndex)
+    for (auto &kv : propertyIndex)
     {
-        if (kv.first.column != column)
+        if (kv.first.index != propIndex)
             continue;
 
         switch (mode)
@@ -303,16 +303,16 @@ void Attributes::serialize(HeapStack* mem)
     const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
     (*sectionLength) = 0;
 
-    for (auto& kv : columnIndex)
+    for (auto& kv : propertyIndex)
     {
         /* STL ugliness - I wish they let you alias these names somehow
          *
-         * kv.first is column and value
+         * kv.first is property and value
          * kv.second is Attr_s*
          *
          * so
          *
-         * kv.first.first is column
+         * kv.first.first is property
          * kv.first.second is value
          */
 
@@ -320,13 +320,13 @@ void Attributes::serialize(HeapStack* mem)
         const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
 
         // fill in the header
-        blockHeader->column = kv.first.column;
+        blockHeader->column = kv.first.index;
         blockHeader->hashValue = kv.first.value;
         blockHeader->ints = kv.second->ints;
         blockHeader->ofs = kv.second->ofs;
         blockHeader->len = kv.second->len;
         blockHeader->linId = kv.second->linId;
-        const auto text = this->blob->getValue(kv.first.column, kv.first.value);
+        const auto text = this->blob->getValue(kv.first.index, kv.first.value);
         blockHeader->textSize = text ? strlen(text) : 0;
         //blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
         blockHeader->compSize = kv.second->comp;
@@ -404,7 +404,7 @@ int64_t Attributes::deserialize(char* mem)
         memcpy(attr->index, dataPtr, blockHeader->compSize);
 
         // add it to the index
-        columnIndex.set({ blockHeader->column, blockHeader->hashValue }, attr);
+        propertyIndex.set({ blockHeader->column, blockHeader->hashValue }, attr);
 
         // next block please
         read += blockLength;

@@ -10,8 +10,8 @@
 #include "oloop_insert.h"
 #include "oloop_query.h"
 #include "oloop_segment.h"
-#include "oloop_person.h"
-#include "oloop_column.h"
+#include "oloop_customer.h"
+#include "oloop_property.h"
 #include "oloop_histogram.h"
 #include "asyncpool.h"
 #include "asyncloop.h"
@@ -237,22 +237,22 @@ shared_ptr<cjson> forkQuery(
                 toLower(mode);
                 tNode->set("mode", mode);
                 tNode->set("name", c.alias);
-                tNode->set("column", c.actual);
+                tNode->set("property", c.actual);
                 switch (c.schemaType)
                 {
-                case columnTypes_e::freeColumn:
+                case PropertyTypes_e::freeProp:
                     tNode->set("type", "na");
                     break;
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     tNode->set("type", "int");
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     tNode->set("type", "double");
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     tNode->set("type", "bool");
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     tNode->set("type", "text");
                     break;
                 default: ;
@@ -263,7 +263,7 @@ shared_ptr<cjson> forkQuery(
 
     //auto metaJson = resultJson->setObject("info");
     //auto dataJson = metaJson->setObject("data");
-    //fillMeta(queryMacros.vars.columnVars, dataJson->setArray("columns"));
+    //fillMeta(queryMacros.vars.columnVars, dataJson->setArray("properties"));
     //fillMeta(queryMacros.vars.groupVars, dataJson->setArray("groups"));
     //metaJson->set("query_time", queryTime);
     //metaJson->set("pop_evaluated", population);
@@ -384,7 +384,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
     query::QueryParser p;
     try
     {
-        p.compileQuery(queryCode.c_str(), table->getColumns(), queryMacros, &paramVars);
+        p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars);
         queryMacros.useStampedRowIds = useStampCounts;
     }
     catch (const std::runtime_error& ex)
@@ -427,7 +427,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             return;
         }
     } // set the sessionTime (timeout) value, this will get relayed
-    // through the to oloop_query, the person object and finally the grid
+    // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
     {
@@ -456,7 +456,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 errors::Error {
                     errors::errorClass_e::parse,
                     errors::errorCode_e::syntax_error,
-                    "sort column not found in query aggregates"
+                    "sort property not found in query aggregates"
                 },
                 message);
             return;
@@ -672,7 +672,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             continue;
         query::Macro_s queryMacros; // this is our compiled code block
         query::QueryParser p;
-        p.compileQuery(r.code.c_str(), table->getColumns(), queryMacros, &paramVars);
+        p.compileQuery(r.code.c_str(), table->getProperties(), queryMacros, &paramVars);
 
         if (p.error.inError())
         {
@@ -860,7 +860,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     Logger::get().info("Started " + to_string(workers) + " count worker async cells.");
 }
 
-void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database         = globals::database;
     const auto partitions = globals::async;
@@ -902,66 +902,66 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
             errors::Error {
                 errors::errorClass_e::config,
                 errors::errorCode_e::general_config_error,
-                "invalid column name"
+                "invalid property name"
             },
             message);
         return;
     }
 
-    const auto column = table->getColumns()->getColumn(columnName);
+    const auto column = table->getProperties()->getProperty(columnName);
 
-    if (!column || column->type == columnTypes_e::freeColumn)
+    if (!column || column->type == PropertyTypes_e::freeProp)
     {
         RpcError(
             errors::Error {
                 errors::errorClass_e::config,
                 errors::errorCode_e::general_config_error,
-                "column not found"
+                "property not found"
             },
             message);
         return;
     }
 
     // We are a Fork!
-    OpenLoopColumn::ColumnQueryConfig_s queryInfo;
-    queryInfo.columnName  = columnName;
-    queryInfo.columnType  = column->type;
-    queryInfo.columnIndex = column->idx;
+    OpenLoopProperty::ColumnQueryConfig_s queryInfo;
+    queryInfo.propName  = columnName;
+    queryInfo.propType  = column->type;
+    queryInfo.propIndex = column->idx;
 
     if (message->isParam("gt"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::gt;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::gt;
         queryInfo.filterLow = message->getParamString("gt");
     }
     else if (message->isParam("gte"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::gte;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::gte;
         queryInfo.filterLow = message->getParamString("gte");
     }
     else if (message->isParam("lt"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::lt;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::lt;
         queryInfo.filterLow = message->getParamString("lt");
     }
     else if (message->isParam("lte"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::lte;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::lte;
         queryInfo.filterLow = message->getParamString("lte");
     }
     else if (message->isParam("eq"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::eq;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::eq;
         queryInfo.filterLow = message->getParamString("eq");
     }
     else if (message->isParam("between"))
     {
-        queryInfo.mode       = OpenLoopColumn::ColumnQueryMode_e::between;
+        queryInfo.mode       = OpenLoopProperty::PropertyQueryMode_e::between;
         queryInfo.filterLow  = message->getParamString("between");
         queryInfo.filterHigh = message->getParamString("and");
     }
     else if (message->isParam("rx"))
     {
-        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::rx;
+        queryInfo.mode = OpenLoopProperty::PropertyQueryMode_e::rx;
         // bad regex blows this thing up... so lets catch any errors
         auto isError = false;
 
@@ -992,14 +992,14 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
     }
     else if (message->isParam("sub"))
     {
-        queryInfo.mode      = OpenLoopColumn::ColumnQueryMode_e::sub;
+        queryInfo.mode      = OpenLoopProperty::PropertyQueryMode_e::sub;
         queryInfo.filterLow = message->getParamString("sub");
     }
     else
     {
-        queryInfo.mode = OpenLoopColumn::ColumnQueryMode_e::all;
+        queryInfo.mode = OpenLoopProperty::PropertyQueryMode_e::all;
     }
-    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all)
+    if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::all)
     {
         if (queryInfo.filterLow.getString().length() == 0)
         {
@@ -1007,13 +1007,13 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                 errors::Error {
                     errors::errorClass_e::query,
                     errors::errorCode_e::syntax_error,
-                    "column filter requires a value"
+                    "property filter requires a value"
                 },
                 message);
             return;
         }
     }
-    if (queryInfo.mode == OpenLoopColumn::ColumnQueryMode_e::between)
+    if (queryInfo.mode == OpenLoopProperty::PropertyQueryMode_e::between)
     {
         if (queryInfo.filterHigh.getString().length() == 0)
         {
@@ -1021,7 +1021,7 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
                 errors::Error {
                     errors::errorClass_e::query,
                     errors::errorCode_e::syntax_error,
-                    "column query using 'between' requires an 'and' param"
+                    "property query using 'between' requires an 'and' param"
                 },
                 message);
             return;
@@ -1054,67 +1054,67 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         }
     }
 
-    // here we are going to force typing depending on the column type
+    // here we are going to force typing depending on the property type
     // note: prior to conversion these will all be strings
-    switch (queryInfo.columnType)
+    switch (queryInfo.propType)
     {
-    case columnTypes_e::intColumn:
+    case PropertyTypes_e::intProp:
         queryInfo.bucket = queryInfo.bucket.getInt64();
         queryInfo.filterLow  = queryInfo.filterLow.getInt64();
         queryInfo.filterHigh = queryInfo.filterHigh.getInt64();
         break;
-    case columnTypes_e::doubleColumn:
+    case PropertyTypes_e::doubleProp:
         // floating point data in the db is in scaled integers, scale our ranges and buckets
         queryInfo.bucket = static_cast<int64_t>(queryInfo.bucket.getDouble() * 10000.0);
         queryInfo.filterLow  = static_cast<int64_t>(queryInfo.filterLow.getDouble() * 10000.0);
         queryInfo.filterHigh = static_cast<int64_t>(queryInfo.filterHigh.getDouble() * 10000.0);
         break;
-    case columnTypes_e::boolColumn:
+    case PropertyTypes_e::boolProp:
         queryInfo.filterLow = queryInfo.filterLow.getBool();
         break;
-    case columnTypes_e::textColumn:
+    case PropertyTypes_e::textProp:
         queryInfo.filterLow = queryInfo.filterLow.getString();
         break;
     default: ;
     }
 
-    // now lets make sure the `columnType` and the `mode` make sense together and
+    // now lets make sure the `propType` and the `mode` make sense together and
     // return an error if they do not.
-    if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::all &&
-        queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::eq)
+    if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::all &&
+        queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::eq)
     {
-        switch (queryInfo.columnType)
+        switch (queryInfo.propType)
         {
-        case columnTypes_e::intColumn: case columnTypes_e::doubleColumn:
-            if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::between && queryInfo.mode != OpenLoopColumn::
-                ColumnQueryMode_e::gt && queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::gte && queryInfo.mode !=
-                OpenLoopColumn::ColumnQueryMode_e::lt && queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::lte)
+        case PropertyTypes_e::intProp: case PropertyTypes_e::doubleProp:
+            if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::between && queryInfo.mode != OpenLoopProperty::
+                PropertyQueryMode_e::gt && queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::gte && queryInfo.mode !=
+                OpenLoopProperty::PropertyQueryMode_e::lt && queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::lte)
             {
                 RpcError(
                     errors::Error {
                         errors::errorClass_e::query,
                         errors::errorCode_e::syntax_error,
-                        "specified filter type not compatible with integer or double column"
+                        "specified filter type not compatible with integer or double property"
                     },
                     message);
                 return;
             }
             break;
-        case columnTypes_e::textColumn:
-            if (queryInfo.mode != OpenLoopColumn::ColumnQueryMode_e::rx && queryInfo.mode != OpenLoopColumn::
-                ColumnQueryMode_e::sub)
+        case PropertyTypes_e::textProp:
+            if (queryInfo.mode != OpenLoopProperty::PropertyQueryMode_e::rx && queryInfo.mode != OpenLoopProperty::
+                PropertyQueryMode_e::sub)
             {
                 RpcError(
                     errors::Error {
                         errors::errorClass_e::query,
                         errors::errorCode_e::syntax_error,
-                        "specified filter type not compatible with string column"
+                        "specified filter type not compatible with string property"
                     },
                     message);
                 return;
             }
             break;
-        case columnTypes_e::boolColumn: default: ;
+        case PropertyTypes_e::boolProp: default: ;
         }
     }
 
@@ -1246,11 +1246,11 @@ void RpcQuery::column(openset::web::MessagePtr& message, const RpcMapping& match
         [shuttle, table, queryInfo, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
         {
             instance++;
-            return new OpenLoopColumn(shuttle, table, queryInfo, resultSets[loop->getWorkerId()], instance);
+            return new OpenLoopProperty(shuttle, table, queryInfo, resultSets[loop->getWorkerId()], instance);
         });
 }
 
-void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto uuString = message->getParamString("sid");
     auto uuid     = message->getParamInt("id");
@@ -1265,7 +1265,7 @@ void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& match
             errors::Error {
                 errors::errorClass_e::query,
                 errors::errorCode_e::general_error,
-                "person query must have an id={number} or idstring={text} parameter"
+                "customer query must have an id={number} or idstring={text} parameter"
             },
             message);
         return;
@@ -1332,7 +1332,7 @@ void RpcQuery::person(openset::web::MessagePtr& message, const RpcMapping& match
                 message);
             return;
         }
-        loop->queueCell(new OpenLoopPerson(shuttle, table, uuid));
+        loop->queueCell(new OpenLoopCustomer(shuttle, table, uuid));
     }
     else // remote - we will route to the correct destination node
     {
@@ -1406,7 +1406,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
     query::QueryParser p;
     try
     {
-        p.compileQuery(queryCode.c_str(), table->getColumns(), queryMacros, &paramVars);
+        p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars);
     }
     catch (const std::runtime_error& ex)
     {
@@ -1459,7 +1459,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             return;
         }
     } // set the sessionTime (timeout) value, this will get relayed
-    // through the to oloop_query, the person object and finally the grid
+    // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
     {
@@ -1668,9 +1668,9 @@ openset::mapping::Mapper::Responses queryDispatch(
                 segline += "\n";
                 payload += segline + std::move(iter->code); // eat it
             }
-            else if (iter->sectionType == "column")
+            else if (iter->sectionType == "property")
             {
-                path    = "/v1/query/" + tableName + "/column/" + iter->sectionName;
+                path    = "/v1/query/" + tableName + "/property/" + iter->sectionName;
                 payload = std::move(iter->code); // eat it
             }
             else if (iter->sectionType == "histogram")

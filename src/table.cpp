@@ -40,12 +40,12 @@ void openset::db::Table::initialize()
     // initialize the var object as a dictionary
     globalVars.dict();
 
-    // set the default required columns
-    columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
+    // set the default required properties
+    properties.setProperty(PROP_STAMP, "stamp", PropertyTypes_e::intProp, false);
+    properties.setProperty(PROP_EVENT, "event", PropertyTypes_e::textProp, false);
+    properties.setProperty(PROP_UUID, "id", PropertyTypes_e::intProp, false);
+    properties.setProperty(PROP_SEGMENT, "__segment", PropertyTypes_e::textProp, false);
+    properties.setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 
     createMissingPartitionObjects();
 }
@@ -78,7 +78,7 @@ TablePartitioned* Table::getPartitionObjects(const int32_t partition, const bool
         this,
         partition,
         &attributeBlob,
-        &columns);
+        &properties);
 
     {
         csLock lock(cs); // scoped lock
@@ -136,10 +136,10 @@ void Table::serializeTable(cjson* doc)
 {
     auto pkNode = doc->setArray("z_order");
 
-    std::vector<std::string> zList(zOrderStrings.size());
+    std::vector<std::string> zList(eventOrderStrings.size());
 
     // convert to list by stuffing into list at index in .second
-    for (auto &i : zOrderStrings)
+    for (auto &i : eventOrderStrings)
         zList[i.second] = i.first;
 
     // push the strings into the list in order
@@ -152,10 +152,10 @@ void Table::serializeTable(cjson* doc)
     settings->set("session_time", sessionTime);
     settings->set("tz_offset", tzOffset);
 
-    auto columnNodes = doc->setArray("columns");
+    auto columnNodes = doc->setArray("properties");
 
-    for (auto &c : columns.columns)
-        if (c.deleted == 0 && c.name.size() && c.type != columnTypes_e::freeColumn)
+    for (auto &c : properties.properties)
+        if (c.deleted == 0 && c.name.size() && c.type != PropertyTypes_e::freeProp)
         {
             auto columnRecord = columnNodes->pushObject();
 
@@ -163,16 +163,16 @@ void Table::serializeTable(cjson* doc)
 
             switch (c.type)
             {
-            case columnTypes_e::intColumn:
+            case PropertyTypes_e::intProp:
                 type = "int";
                 break;
-            case columnTypes_e::doubleColumn:
+            case PropertyTypes_e::doubleProp:
                 type = "double";
                 break;
-            case columnTypes_e::boolColumn:
+            case PropertyTypes_e::boolProp:
                 type = "bool";
                 break;
-            case columnTypes_e::textColumn:
+            case PropertyTypes_e::textProp:
                 type = "text";
                 break;
             default:
@@ -185,7 +185,7 @@ void Table::serializeTable(cjson* doc)
             columnRecord->set("type", type);
             columnRecord->set("deleted", c.deleted);
             columnRecord->set("is_set", c.isSet);
-            columnRecord->set("is_prop", c.isProp);
+            columnRecord->set("is_prop", c.isCustomerProperty);
         }
 }
 
@@ -222,7 +222,7 @@ void Table::deserializeTable(const cjson* doc)
 {
     auto count = 0;
 
-    // load the columns
+    // load the properties
     const auto addToSchema = [&](cjson* item)
     {
         auto colName = item->xPathString("/name", "");
@@ -236,26 +236,26 @@ void Table::deserializeTable(const cjson* doc)
         if (!type.length() || !colName.length() || index == -1)
             return;
 
-        columnTypes_e colType;
+        PropertyTypes_e colType;
 
         if (type == "text")
-            colType = columnTypes_e::textColumn;
+            colType = PropertyTypes_e::textProp;
         else if (type == "int")
-            colType = columnTypes_e::intColumn;
+            colType = PropertyTypes_e::intProp;
         else if (type == "double")
-            colType = columnTypes_e::doubleColumn;
+            colType = PropertyTypes_e::doubleProp;
         else if (type == "bool")
-            colType = columnTypes_e::boolColumn;
+            colType = PropertyTypes_e::boolProp;
         else
             return; // skip
 
-        columns.setColumn(index, colName, colType, isSet, isProp, deleted);
+        properties.setProperty(index, colName, colType, isSet, isProp, deleted);
         count++;
     };
 
     // load the PK
-    zOrderStrings.clear();
-    zOrderInts.clear();
+    eventOrderStrings.clear();
+    eventOrderInts.clear();
     const auto pkNode = doc->xPath("/z_order");
 
     // list of keys
@@ -269,8 +269,8 @@ void Table::deserializeTable(const cjson* doc)
         {
             if (n->type() == cjson::Types_e::STR)
             {
-                zOrderStrings.emplace(n->getString(), idx);
-                zOrderInts.emplace(MakeHash(n->getString()), idx);
+                eventOrderStrings.emplace(n->getString(), idx);
+                eventOrderInts.emplace(MakeHash(n->getString()), idx);
                 ++idx;
             }
         }
@@ -294,15 +294,15 @@ void Table::deserializeTable(const cjson* doc)
     }
 
 
-    // set the default required columns
-    columns.setColumn(COL_STAMP, "stamp", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_EVENT, "event", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_UUID, "id", columnTypes_e::intColumn, false);
-    columns.setColumn(COL_SEGMENT, "__segment", columnTypes_e::textColumn, false);
-    columns.setColumn(COL_SESSION, "session", columnTypes_e::intColumn, false);
+    // set the default required properties
+    properties.setProperty(PROP_STAMP, "stamp", PropertyTypes_e::intProp, false);
+    properties.setProperty(PROP_EVENT, "event", PropertyTypes_e::textProp, false);
+    properties.setProperty(PROP_UUID, "id", PropertyTypes_e::intProp, false);
+    properties.setProperty(PROP_SEGMENT, "__segment", PropertyTypes_e::textProp, false);
+    properties.setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 
-    // load the columns
-    const auto columnNode = doc->xPath("/columns");
+    // load the properties
+    const auto columnNode = doc->xPath("/properties");
 
     if (columnNode)
     {

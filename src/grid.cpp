@@ -13,28 +13,28 @@ void IndexDiffing::reset()
     after.clear();
 }
 
-void IndexDiffing::add(int32_t column, int64_t value, Mode_e mode)
+void IndexDiffing::add(int32_t propIndex, int64_t value, Mode_e mode)
 {
     if (mode == Mode_e::before)
     {
-        if (const auto iter = before.find({ column, value }); iter != before.end())
+        if (const auto iter = before.find({ propIndex, value }); iter != before.end())
             iter->second++;
         else
-            before[{ column, value }] = 1;
+            before[{ propIndex, value }] = 1;
     }
     else
     {
-        if (const auto iter = after.find({ column, value }); iter != after.end())
+        if (const auto iter = after.find({ propIndex, value }); iter != after.end())
             iter->second++;
         else
-            after[{ column, value }] = 1;
+            after[{ propIndex, value }] = 1;
     }
 
-    // a Value of NONE in combination with a column indicates that
-    // the column is referenced. This is used to index a column, rather
-    // than a column and value.
+    // a Value of NONE in combination with a property indicates that
+    // the property is referenced. This is used to index a property, rather
+    // than a property and value.
     if (value != NONE)
-        add(column, NONE, mode);
+        add(propIndex, NONE, mode);
 }
 
 void IndexDiffing::add(const Grid* grid, const cvar& props, Mode_e mode)
@@ -42,113 +42,113 @@ void IndexDiffing::add(const Grid* grid, const cvar& props, Mode_e mode)
     if (props.typeOf() != cvar::valueType::DICT)
         return;
 
-    const auto columns = grid->getTable()->getColumns();
+    const auto properties = grid->getTable()->getProperties();
     const auto attributes = grid->getAttributes();
 
     for (const auto &key : *props.getDict())
     {
-        const auto colInfo =  columns->getColumn(key.first.getString());
+        const auto propInfo =  properties->getProperty(key.first.getString());
         const auto& value = key.second;
 
-        if (!colInfo || !colInfo->isProp)
+        if (!propInfo || !propInfo->isCustomerProperty)
             continue;
 
-        const auto column = colInfo->idx;
+        const auto propertyIndex = propInfo->idx;
 
         auto indexedValue = NONE;
 
         if (value.typeOf() == cvar::valueType::SET)
         {
-            attributes->getMake(column, NONE);
+            attributes->getMake(propertyIndex, NONE);
 
             // breaking this into loops and cases by type will be faster but much more verbose
             for (const auto& setValue: *value.getSet())
             {
-                switch (colInfo->type)
+                switch (propInfo->type)
                 {
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     indexedValue = setValue.getInt64();
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     indexedValue = setValue.getDouble() * 10'000;
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     indexedValue = setValue.isEvalTrue() ? 1 : 0;
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     indexedValue = MakeHash(setValue.getString());
                     break;
                 default: ;
                 }
 
-                if (colInfo->type == columnTypes_e::textColumn)
-                    attributes->getMake(column, setValue.getString());
+                if (propInfo->type == PropertyTypes_e::textProp)
+                    attributes->getMake(propertyIndex, setValue.getString());
                 else
-                    attributes->getMake(column, indexedValue);
+                    attributes->getMake(propertyIndex, indexedValue);
 
-                add(column, indexedValue, mode);
+                add(propertyIndex, indexedValue, mode);
             }
         }
         else
         {
-            switch (colInfo->type)
+            switch (propInfo->type)
             {
-            case columnTypes_e::intColumn:
+            case PropertyTypes_e::intProp:
                 indexedValue = value.getInt64();
                 break;
-            case columnTypes_e::doubleColumn:
+            case PropertyTypes_e::doubleProp:
                 indexedValue = value.getDouble() * 10'000;
                 break;
-            case columnTypes_e::boolColumn:
+            case PropertyTypes_e::boolProp:
                 indexedValue = value.isEvalTrue() ? 1 : 0;
                 break;
-            case columnTypes_e::textColumn:
+            case PropertyTypes_e::textProp:
                 indexedValue = MakeHash(value.getString());
                 break;
             default: ;
             }
 
-            attributes->getMake(column, NONE);
+            attributes->getMake(propertyIndex, NONE);
 
-            if (colInfo->type == columnTypes_e::textColumn)
-                attributes->getMake(column, value.getString());
+            if (propInfo->type == PropertyTypes_e::textProp)
+                attributes->getMake(propertyIndex, value.getString());
             else
-                attributes->getMake(column, indexedValue);
+                attributes->getMake(propertyIndex, indexedValue);
 
-            add(column, indexedValue, mode);
+            add(propertyIndex, indexedValue, mode);
         }
     }
 }
 
 void IndexDiffing::add(const Grid* grid, Mode_e mode)
 {
-    const auto columns = grid->getTable()->getColumns();
+    const auto properties = grid->getTable()->getProperties();
     const auto rows = grid->getRows();
     const auto& setData = grid->getSetData();
-    const auto colMap = grid->getColumnMap();
+    const auto colMap = grid->getPropertyMap();
     for (auto r : *rows)
     {
-        for (auto c = 0; c < colMap->columnCount; ++c)
+        for (auto c = 0; c < colMap->propertyCount; ++c)
         {
-            const auto actualColumn = colMap->columnMap[c];
-            // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
-            if (r->cols[c] == NONE || (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
+            const auto actualProperty = colMap->propertyMap[c];
+            // skip NONE values, placeholder (non-event) properties and auto-generated properties (like session)
+            if (r->cols[c] == NONE || (actualProperty >= PROP_INDEX_OMIT_FIRST && actualProperty <= PROP_INDEX_OMIT_LAST))
                 continue;
 
-            if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            if (const auto propInfo = properties->getProperty(actualProperty); propInfo)
             {
-                if (colInfo->isSet)
+                if (propInfo->isSet)
                 {
                     // cast SetInfo_s over the value and get offset and length
                     const auto& ol = reinterpret_cast<SetInfo_s*>(&r->cols[c]);
 
                     // write out values
                     for (auto idx = ol->offset; idx < ol->offset + ol->length; ++idx)
-                        add(actualColumn, setData[idx], mode);
+                        add(actualProperty, setData[idx], mode);
                 }
                 else
                 {
-                    add(actualColumn, r->cols[c], mode);
+                    add(actualProperty, r->cols[c], mode);
                 }
             }
         }
@@ -189,8 +189,8 @@ void IndexDiffing::iterRemoved(const std::function<void(int32_t, int64_t)>& cb)
 
 Grid::~Grid()
 {
-    if (colMap && table)
-        table->getColumnMapper()->releaseMap(colMap);
+    if (propertyMap && table)
+        table->getPropertyMapper()->releaseMap(propertyMap);
 }
 
 void Grid::reset()
@@ -201,12 +201,12 @@ void Grid::reset()
     propHash = 0;
 }
 
-void Grid::reinit()
+void Grid::reinitialize()
 {
     reset();
-    if (colMap && table)
-        table->getColumnMapper()->releaseMap(colMap);
-    colMap = nullptr;
+    if (propertyMap && table)
+        table->getPropertyMapper()->releaseMap(propertyMap);
+    propertyMap = nullptr;
     table = nullptr;
     blob = nullptr;
     attributes = nullptr;
@@ -217,26 +217,28 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr)
     // if we are already mapped on this object, skip all this
     if (tablePtr && table && tablePtr->getName() == table->getName())
         return true;
-    if (colMap)
-        table->getColumnMapper()->releaseMap(colMap);
+    if (propertyMap)
+        table->getPropertyMapper()->releaseMap(propertyMap);
     table = tablePtr;
     attributes = attributesPtr;
     blob = attributes->getBlob();
-    colMap = table->getColumnMapper()->mapSchema(tablePtr, attributesPtr);
+    propertyMap = table->getPropertyMapper()->mapSchema(tablePtr, attributesPtr);
+    emptyRow = newRow();
     return true;
 }
 
-bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& columnNames)
+bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& propertyNames)
 {
     // if we are already mapped on this object, skip all this
     if (tablePtr && table && tablePtr->getName() == table->getName())
         return true;
-    if (colMap)
-        table->getColumnMapper()->releaseMap(colMap);
+    if (propertyMap)
+        table->getPropertyMapper()->releaseMap(propertyMap);
     table = tablePtr;
     attributes = attributesPtr;
     blob = attributes->getBlob();
-    colMap = table->getColumnMapper()->mapSchema(tablePtr, attributesPtr, columnNames);
+    propertyMap = table->getPropertyMapper()->mapSchema(tablePtr, attributesPtr, propertyNames);
+    emptyRow = newRow();
     return true;
 }
 
@@ -248,37 +250,37 @@ cjson Grid::toJSON() const
     doc.set("id_string", this->rawData->getIdStr());
     doc.set("id", this->rawData->id);
     auto rowDoc = doc.setArray("rows");
-    auto columns = table->getColumns();
-    const auto convertToJSON = [&](cjson* branch, Columns::Columns_s* colInfo, int64_t value, bool isArray)
+    auto properties = table->getProperties();
+    const auto convertToJSON = [&](cjson* branch, Properties::Property_s* propInfo, int64_t value, bool isArray)
     {
-        switch (colInfo->type)
+        switch (propInfo->type)
         {
-        case columnTypes_e::intColumn:
+        case PropertyTypes_e::intProp:
             if (isArray)
                 branch->push(value);
             else
-                branch->set(colInfo->name, value);
+                branch->set(propInfo->name, value);
             break;
-        case columnTypes_e::doubleColumn:
+        case PropertyTypes_e::doubleProp:
             if (isArray)
                 branch->push(value / 10000.0);
             else
-                branch->set(colInfo->name, value / 10000.0);
+                branch->set(propInfo->name, value / 10000.0);
             break;
-        case columnTypes_e::boolColumn:
+        case PropertyTypes_e::boolProp:
             if (isArray)
                 branch->push(value != 0);
             else
-                branch->set(colInfo->name, value != 0);
+                branch->set(propInfo->name, value != 0);
             break;
-        case columnTypes_e::textColumn:
+        case PropertyTypes_e::textProp:
         {
-            if (const auto text = attributes->blob->getValue(colInfo->idx, value); text)
+            if (const auto text = attributes->blob->getValue(propInfo->idx, value); text)
             {
                 if (isArray)
                     branch->push(text);
                 else
-                    branch->set(colInfo->name, text);
+                    branch->set(propInfo->name, text);
             }
         }
         break;
@@ -290,32 +292,32 @@ cjson Grid::toJSON() const
     for (auto row : rows)
     {
         auto rootObj = rowDoc->pushObject();
-        rootObj->set("stamp", row->cols[COL_STAMP]);
-        rootObj->set("stamp_iso", Epoch::EpochToISO8601(row->cols[COL_STAMP]));
-        rootObj->set("event", attributes->blob->getValue(COL_EVENT, row->cols[COL_EVENT]));
+        rootObj->set("stamp", row->cols[PROP_STAMP]);
+        rootObj->set("stamp_iso", Epoch::EpochToISO8601(row->cols[PROP_STAMP]));
+        rootObj->set("event", attributes->blob->getValue(PROP_EVENT, row->cols[PROP_EVENT]));
         auto rowObj = rootObj->setObject("_");
-        for (auto c = 0; c < colMap->columnCount; ++c)
+        for (auto c = 0; c < propertyMap->propertyCount; ++c)
         {
-            // get the column information
-            const auto colInfo = columns->getColumn(colMap->columnMap[c]);
+            // get the property information
+            const auto propInfo = properties->getProperty(propertyMap->propertyMap[c]);
 
-            if (colInfo->idx < 1000) // first 1000 are reserved
+            if (propInfo->idx < 1000) // first 1000 are reserved
                 continue;
 
             const auto value = row->cols[c];
             if (value == NONE)
                 continue;
 
-            if (colInfo->isSet)
+            if (propInfo->isSet)
             {
-                const auto set = rowObj->setArray(colInfo->name);
+                const auto set = rowObj->setArray(propInfo->name);
                 const auto ol = reinterpret_cast<const SetInfo_s*>(&value);
                 for (auto offset = ol->offset; offset < ol->offset + ol->length; ++offset)
-                    convertToJSON(set, colInfo, this->setData[offset], true);
+                    convertToJSON(set, propInfo, this->setData[offset], true);
             }
             else
             {
-                convertToJSON(rowObj, colInfo, value, false);
+                convertToJSON(rowObj, propInfo, value, false);
             }
         }
     }
@@ -329,11 +331,11 @@ Col_s* Grid::newRow()
     // assigning *iter.
     // adding volatile makes it happy. I've had gcc do similar things with
     // for loops using pointers and *value = something
-    const volatile auto row = recast<int64_t*>(mem.newPtr(colMap->rowBytes));
-    for (auto iter = row; iter < row + colMap->columnCount; ++iter)
+    const volatile auto row = recast<int64_t*>(mem.newPtr(propertyMap->rowBytes));
+    for (auto iter = row; iter < row + propertyMap->propertyCount; ++iter)
         *iter = NONE;
-    if (colMap->uuidColumn != -1)
-        *(row + colMap->uuidColumn) = rawData->id;
+    if (propertyMap->uuidPropIndex != -1 && rawData)
+        *(row + propertyMap->uuidPropIndex) = rawData->id;
     return reinterpret_cast<Col_s*>(row);
 }
 
@@ -403,11 +405,14 @@ void Grid::mount(PersonData_s* personData)
 #endif
     reset();
     rawData = personData;
+
+    if (propertyMap->uuidPropIndex != -1 && emptyRow)
+        emptyRow->cols[propertyMap->uuidPropIndex] = rawData->id;
 }
 
 void Grid::prepare()
 {
-    if (!colMap || !rawData || !rawData->bytes || !colMap->columnCount)
+    if (!propertyMap || !rawData || !rawData->bytes || !propertyMap->propertyCount)
         return;
 
     setData.clear();
@@ -423,26 +428,26 @@ void Grid::prepare()
     const auto end = read + rawData->bytes;
     auto session = 0;
     int64_t lastSessionTime = 0;
-    auto columns = table->getColumns();
+    auto properties = table->getProperties();
 
     while (read < end)
     {
         const auto cursor = reinterpret_cast<Cast_s*>(read);
         /**
-        * when we are querying we only need the columns
-        * referenced in the query, as such, many columns
+        * when we are querying we only need the properties
+        * referenced in the query, as such, many properties
         * will be skipped, as we are not serializing the
         * data out (saving it) after a query it's okay to
         * selectively deserialize it.
         */
-        if (cursor->columnNum == -1) // -1 is new row
+        if (cursor->propIndex == -1) // -1 is new row
         {
-            if (colMap->sessionColumn != -1)
+            if (propertyMap->sessionPropIndex != -1)
             {
-                if (row->cols[COL_STAMP] - lastSessionTime > sessionTime)
+                if (row->cols[PROP_STAMP] - lastSessionTime > sessionTime)
                     ++session;
-                lastSessionTime = row->cols[COL_STAMP];
-                row->cols[colMap->sessionColumn] = session;
+                lastSessionTime = row->cols[PROP_STAMP];
+                row->cols[propertyMap->sessionPropIndex] = session;
             } // if we are parsing the property row we do not
             // push it, we store it under `propRow`
             rows.push_back(row);
@@ -450,10 +455,10 @@ void Grid::prepare()
             read += sizeOfCastHeader;
             continue;
         }
-        const auto mappedColumn = colMap->reverseMap[cursor->columnNum];
-        if (const auto colInfo = columns->getColumn(cursor->columnNum); colInfo)
+        const auto mappedProperty = propertyMap->reverseMap[cursor->propIndex];
+        if (const auto propInfo = properties->getProperty(cursor->propIndex); propInfo)
         {
-            if (colInfo->isSet)
+            if (propInfo->isSet)
             {
                 read += sizeof(int16_t); // += 2
                 const auto count = static_cast<int>(*reinterpret_cast<int16_t*>(read));
@@ -468,23 +473,23 @@ void Grid::prepare()
                     ++counted;
                 }
 
-                if (mappedColumn < 0 || mappedColumn >= colMap->columnCount)
+                if (mappedProperty < 0 || mappedProperty >= propertyMap->propertyCount)
                 {
                     continue;
                 }
 
-                // let our row use an encoded value for the column.
+                // let our row use an encoded value for the property.
                 SetInfo_s info { count, static_cast<int>(startIdx) };
-                *(row->cols + mappedColumn) = *reinterpret_cast<int64_t*>(&info);
+                *(row->cols + mappedProperty) = *reinterpret_cast<int64_t*>(&info);
             }
             else
             {
-                if (mappedColumn < 0 || mappedColumn >= colMap->columnCount)
+                if (mappedProperty < 0 || mappedProperty >= propertyMap->propertyCount)
                 {
                     read += sizeOfCast;
                     continue;
                 }
-                *(row->cols + mappedColumn) = cursor->val64;
+                *(row->cols + mappedProperty) = cursor->val64;
                 read += sizeOfCast;
             }
         }
@@ -496,15 +501,13 @@ void Grid::prepare()
 
 PersonData_s* Grid::commit()
 {
-    if (!rows.size()) { cout << "no rows" << endl; }
-
     // this is the worst case scenario temp buffer size for this data.
-    // (columns * rows) + (columns * row headers) + number_of_set_values
+    // (properties * rows) + (properties * row headers) + number_of_set_values
     const auto rowCount = rows.size();
     const auto tempBufferSize =
-        (rowCount * (colMap->columnCount * sizeOfCast)) +
+        (rowCount * (propertyMap->propertyCount * sizeOfCast)) +
         (rowCount * sizeOfCastHeader) + (setData.size() * sizeof(int64_t)) + // the set data
-        ((rowCount * colMap->columnCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
+        ((rowCount * propertyMap->propertyCount) * (sizeOfCastHeader + sizeof(int32_t))); // the NONES at the end of the list
 
     // make an intermediate buffer that is fully uncompressed
     const auto intermediateBuffer = recast<char*>(PoolMem::getPool().getPtr(tempBufferSize));
@@ -512,32 +515,32 @@ PersonData_s* Grid::commit()
 
     Cast_s* cursor;
     auto bytesNeeded = 0;
-    auto columns = table->getColumns();
+    auto properties = table->getProperties();
 
     // lambda to encode and minimize an row
     const auto pushRow = [&](Row* r)
     {
-        for (auto c = 0; c < colMap->columnCount; ++c)
+        for (auto c = 0; c < propertyMap->propertyCount; ++c)
         {
-            const auto actualColumn = colMap->columnMap[c];
+            const auto actualProperty = propertyMap->propertyMap[c];
 
-            // skip NONE values, placeholder (non-event) columns and auto-generated columns (like session)
-            if (r->cols[c] == NONE || (actualColumn >= COL_OMIT_FIRST && actualColumn <= COL_OMIT_LAST))
+            // skip NONE values, placeholder (non-event) properties and auto-generated properties (like session)
+            if (r->cols[c] == NONE || (actualProperty >= PROP_INDEX_OMIT_FIRST && actualProperty <= PROP_INDEX_OMIT_LAST))
                 continue;
 
-            if (const auto colInfo = columns->getColumn(actualColumn); colInfo)
+            if (const auto propInfo = properties->getProperty(actualProperty); propInfo)
             {
-                if (colInfo->isSet)
+                if (propInfo->isSet)
                 {
                     /* Output stream looks like this:
                     *
-                    *  int16_t column
+                    *  int16_t property
                     *  int16_t length
                     *  int64_t values[]
                     */
 
-                    // write out column id
-                    *reinterpret_cast<int16_t*>(write) = actualColumn;
+                    // write out property id
+                    *reinterpret_cast<int16_t*>(write) = actualProperty;
                     write += sizeof(int16_t);
                     bytesNeeded += sizeof(int16_t);
 
@@ -560,7 +563,7 @@ PersonData_s* Grid::commit()
                 else
                 {
                     cursor = recast<Cast_s*>(write);
-                    cursor->columnNum = actualColumn;
+                    cursor->propIndex = actualProperty;
                     cursor->val64 = r->cols[c];
 
                     write += sizeOfCast;
@@ -570,7 +573,7 @@ PersonData_s* Grid::commit()
         }
 
         cursor = recast<Cast_s*>(write); // END OF ROW - write a "row" marker at the end of the row
-        cursor->columnNum = -1;
+        cursor->propIndex = -1;
 
         write += sizeOfCastHeader;
 
@@ -622,7 +625,7 @@ bool Grid::cull()
     if (rows.empty())
         return false; // not at row limit, and first event is within time window? no cull
 
-    if (rows.size() < static_cast<size_t>(table->eventMax) && rows[0]->cols[COL_STAMP] > Now() - table->eventTtl)
+    if (rows.size() < static_cast<size_t>(table->eventMax) && rows[0]->cols[PROP_STAMP] > Now() - table->eventTtl)
         return false;
 
     diff.reset();
@@ -643,7 +646,7 @@ bool Grid::cull()
     auto expiredCount = 0;
     for (const auto& r : rows)
     {
-        if (r->cols[COL_STAMP] > cullStamp)
+        if (r->cols[PROP_STAMP] > cullStamp)
             break;
         ++expiredCount;
     }
@@ -669,42 +672,49 @@ bool Grid::cull()
     return removed;
 }
 
-int Grid::getGridColumn(const int schemaColumn) const
+int Grid::getGridProperty(const int propIndex) const
 {
-    return colMap->reverseMap[schemaColumn];
+    return propertyMap->reverseMap[propIndex];
 }
 
 bool Grid::isFullSchema() const
 {
-    return (colMap && colMap->hash == 0);
+    return (propertyMap && propertyMap->hash == 0);
 }
 
-Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cjson* doc, Col_s* insertRow)
+Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* insertRow)
 {
-    auto hasEventAttributes = false;
-    auto hasPropAttributes = false;
+    auto hasEventProp = false;
+    auto eventPropCount = 0;
+    auto hasCustomerProps = false;
 
-    if (event.length())
-        doc->set("event", event);
+    const auto inboundProperties = doc->getNodes();
 
-    const auto attrColumns = doc->getNodes();
-
-    for (auto c : attrColumns)
+    for (auto c : inboundProperties)
     {
+        const auto propName = c->name();
         // look for the name (by hash) in the insertMap
-        if (const auto iter = colMap->insertMap.find(MakeHash(c->name())); iter != colMap->insertMap.end())
+        if (const auto iter = propertyMap->insertMap.find(MakeHash(propName)); iter != propertyMap->insertMap.end())
         {
-            const auto schemaCol = colMap->columnMap[iter->second];
-            const auto colInfo = columns->getColumn(schemaCol);
+            const auto schemaCol = propertyMap->propertyMap[iter->second];
+            const auto propInfo = properties->getProperty(schemaCol);
             const auto col = iter->second;
 
-            if (colInfo->isProp)
+            if (propInfo->isCustomerProperty)
             {
-                hasPropAttributes = true;
+                hasCustomerProps = true;
                 continue;
             }
 
-            hasEventAttributes = true;
+            if (propInfo->idx >= PROP_INDEX_USER_DATA)
+            {
+                // do we actually have event props, or just a bare 'event' property, well check below
+                ++eventPropCount;
+            }
+
+            // we need an the 'event' prop to be set to record event row properties,
+            if (propName == "event")
+                hasEventProp = true;
 
             attributes->getMake(schemaCol, NONE);
             attributes->setDirty(this->rawData->linId, schemaCol, NONE);
@@ -714,18 +724,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
             switch (c->type())
             {
             case cjson::Types_e::INT:
-                switch (colInfo->type)
+                switch (propInfo->type)
                 {
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     tempVal = c->getInt();
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     tempVal = cast<int64_t>(c->getInt() * 10000LL);
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     tempVal = c->getInt() ? 1 : 0;
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     tempString = to_string(c->getInt());
                     tempVal = MakeHash(tempString);
                     break;
@@ -734,18 +744,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                 }
                 break;
             case cjson::Types_e::DBL:
-                switch (colInfo->type)
+                switch (propInfo->type)
                 {
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     tempVal = cast<int64_t>(c->getDouble());
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     tempVal = cast<int64_t>(c->getDouble() * 10000LL);
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     tempVal = c->getDouble() != 0;
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     tempString = to_string(c->getDouble());
                     tempVal = MakeHash(tempString);
                     break;
@@ -754,14 +764,14 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                 }
                 break;
             case cjson::Types_e::STR:
-                switch (colInfo->type)
+                switch (propInfo->type)
                 {
-                case columnTypes_e::intColumn: case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::intProp: case PropertyTypes_e::doubleProp:
                     continue;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     tempVal = c->getString() != "0";
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     tempString = c->getString();
                     tempVal = MakeHash(tempString);
                     break;
@@ -770,18 +780,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                 }
                 break;
             case cjson::Types_e::BOOL:
-                switch (colInfo->type)
+                switch (propInfo->type)
                 {
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     tempVal = c->getBool() ? 1 : 0;
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     tempVal = c->getBool() ? 10000 : 0;
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     tempVal = c->getBool();
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     tempString = c->getBool() ? "true" : "false";
                     tempVal = MakeHash(tempString);
                     break;
@@ -791,7 +801,7 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                 break;
             case cjson::Types_e::ARRAY:
             {
-                if (!colInfo->isSet)
+                if (!propInfo->isSet)
                     continue;
                 auto aNodes = c->getNodes();
                 const auto startIdx = setData.size();
@@ -800,18 +810,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                     switch (n->type())
                     {
                     case cjson::Types_e::INT:
-                        switch (colInfo->type)
+                        switch (propInfo->type)
                         {
-                        case columnTypes_e::intColumn:
+                        case PropertyTypes_e::intProp:
                             tempVal = n->getInt();
                             break;
-                        case columnTypes_e::doubleColumn:
+                        case PropertyTypes_e::doubleProp:
                             tempVal = cast<int64_t>(n->getInt() * 10000LL);
                             break;
-                        case columnTypes_e::boolColumn:
+                        case PropertyTypes_e::boolProp:
                             tempVal = n->getInt() ? 1 : 0;
                             break;
-                        case columnTypes_e::textColumn:
+                        case PropertyTypes_e::textProp:
                             tempString = to_string(n->getInt());
                             tempVal = MakeHash(tempString);
                             break;
@@ -820,18 +830,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                         }
                         break;
                     case cjson::Types_e::DBL:
-                        switch (colInfo->type)
+                        switch (propInfo->type)
                         {
-                        case columnTypes_e::intColumn:
+                        case PropertyTypes_e::intProp:
                             tempVal = cast<int64_t>(n->getDouble());
                             break;
-                        case columnTypes_e::doubleColumn:
+                        case PropertyTypes_e::doubleProp:
                             tempVal = cast<int64_t>(n->getDouble() * 10000LL);
                             break;
-                        case columnTypes_e::boolColumn:
+                        case PropertyTypes_e::boolProp:
                             tempVal = n->getDouble() != 0;
                             break;
-                        case columnTypes_e::textColumn:
+                        case PropertyTypes_e::textProp:
                             tempString = to_string(n->getDouble());
                             tempVal = MakeHash(tempString);
                             break;
@@ -840,14 +850,14 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                         }
                         break;
                     case cjson::Types_e::STR:
-                        switch (colInfo->type)
+                        switch (propInfo->type)
                         {
-                        case columnTypes_e::intColumn: case columnTypes_e::doubleColumn:
+                        case PropertyTypes_e::intProp: case PropertyTypes_e::doubleProp:
                             continue;
-                        case columnTypes_e::boolColumn:
+                        case PropertyTypes_e::boolProp:
                             tempVal = n->getString() != "0";
                             break;
-                        case columnTypes_e::textColumn:
+                        case PropertyTypes_e::textProp:
                             tempString = n->getString();
                             tempVal = MakeHash(tempString);
                             break;
@@ -856,18 +866,18 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                         }
                         break;
                     case cjson::Types_e::BOOL:
-                        switch (colInfo->type)
+                        switch (propInfo->type)
                         {
-                        case columnTypes_e::intColumn:
+                        case PropertyTypes_e::intProp:
                             tempVal = n->getBool() ? 1 : 0;
                             break;
-                        case columnTypes_e::doubleColumn:
+                        case PropertyTypes_e::doubleProp:
                             tempVal = n->getBool() ? 10000 : 0;
                             break;
-                        case columnTypes_e::boolColumn:
+                        case PropertyTypes_e::boolProp:
                             tempVal = n->getBool();
                             break;
-                        case columnTypes_e::textColumn:
+                        case PropertyTypes_e::textProp:
                             tempString = n->getBool() ? "true" : "false";
                             tempVal = MakeHash(tempString);
                             break;
@@ -879,7 +889,7 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                         continue;
                     }
 
-                    if (colInfo->type == columnTypes_e::textColumn)
+                    if (propInfo->type == PropertyTypes_e::textProp)
                         attributes->getMake(schemaCol, tempString);
                     else
                         attributes->getMake(schemaCol, tempVal);
@@ -898,13 +908,13 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
 
             // if it's pure prop, or it's not a prop at all, or it is a prop with an event
             // and this event is the same or more recent than the last prop in the dataset
-            if (colInfo->type == columnTypes_e::textColumn)
+            if (propInfo->type == PropertyTypes_e::textProp)
                 attributes->getMake(schemaCol, tempString);
             else
                 attributes->getMake(schemaCol, tempVal);
 
             attributes->setDirty(this->rawData->linId, schemaCol, tempVal);
-            if (colInfo->isSet)
+            if (propInfo->isSet)
             {
                 SetInfo_s info { 1, static_cast<int>(setData.size()) };
                 insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
@@ -917,90 +927,95 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
         }
         else
         {
-            // todo: do we care about non-mapped columns.
+            // todo: do we care about non-mapped properties.
         }
     }
 
-    if (hasPropAttributes)
+    // if there are no event row properties then we don't really have an event
+    // in which case we will skip inserting the empty event
+    if (eventPropCount == 0)
+        hasEventProp = false;
+
+    if (hasCustomerProps)
     {
         auto insertProps = getProps(true);
 
-        for (auto c : attrColumns)
+        for (auto c : inboundProperties)
         {
             // look for the name (by hash) in the insertMap
-            if (const auto iter = colMap->insertMap.find(MakeHash(c->name())); iter != colMap->insertMap.end())
+            if (const auto iter = propertyMap->insertMap.find(MakeHash(c->name())); iter != propertyMap->insertMap.end())
             {
-                const auto schemaCol = colMap->columnMap[iter->second];
-                const auto colInfo = columns->getColumn(schemaCol);
-                const auto& colName = colInfo->name;
+                const auto schemaCol = propertyMap->propertyMap[iter->second];
+                const auto propInfo = properties->getProperty(schemaCol);
+                const auto& colName = propInfo->name;
 
-                if (!colInfo->isProp)
+                if (!propInfo->isCustomerProperty)
                     continue;
 
                 switch (c->type())
                 {
                 case cjson::Types_e::INT:
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::intProp:
+                    case PropertyTypes_e::doubleProp:
                         insertProps[colName] = c->getInt();
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         insertProps[colName] = c->getInt() ? true : false;
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         insertProps[colName] = to_string(c->getInt());
                         break;
                     }
                     break;
                 case cjson::Types_e::DBL:
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::intProp:
+                    case PropertyTypes_e::doubleProp:
                         insertProps[colName] = c->getDouble();
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         insertProps[colName] = c->getDouble() != 0 ? true : false;
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         insertProps[colName] = to_string(c->getDouble());
                         break;
                     }
                     break;
                 case cjson::Types_e::STR:
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::intProp:
+                    case PropertyTypes_e::doubleProp:
                         continue;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         insertProps[colName] = c->getString() != "0";
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         insertProps[colName] = c->getString();
                         break;
                     }
                     break;
                 case cjson::Types_e::BOOL:
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::intProp:
+                    case PropertyTypes_e::doubleProp:
                         insertProps[colName] = c->getBool() ? 1 : 0;
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         insertProps[colName] = c->getBool();
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         insertProps[colName] = c->getBool() ? "true" : "false";
                         break;
                     }
                     break;
                 case cjson::Types_e::ARRAY:
                     {
-                        if (!colInfo->isSet)
+                        if (!propInfo->isSet)
                             continue;
 
                         insertProps[colName].set();
@@ -1012,60 +1027,60 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
                             switch (n->type())
                             {
                             case cjson::Types_e::INT:
-                                switch (colInfo->type)
+                                switch (propInfo->type)
                                 {
-                                case columnTypes_e::intColumn:
-                                case columnTypes_e::doubleColumn:
+                                case PropertyTypes_e::intProp:
+                                case PropertyTypes_e::doubleProp:
                                     insertProps[colName] += n->getInt();
                                     break;
-                                case columnTypes_e::boolColumn:
+                                case PropertyTypes_e::boolProp:
                                     insertProps[colName] += n->getInt() ? true : false;
                                     break;
-                                case columnTypes_e::textColumn:
+                                case PropertyTypes_e::textProp:
                                     insertProps[colName] += to_string(n->getInt());
                                     break;
                                 }
                                 break;
                             case cjson::Types_e::DBL:
-                                switch (colInfo->type)
+                                switch (propInfo->type)
                                 {
-                                case columnTypes_e::intColumn:
-                                case columnTypes_e::doubleColumn:
+                                case PropertyTypes_e::intProp:
+                                case PropertyTypes_e::doubleProp:
                                     insertProps[colName] += cast<int64_t>(n->getDouble());
                                     break;
-                                case columnTypes_e::boolColumn:
+                                case PropertyTypes_e::boolProp:
                                     insertProps[colName] += n->getDouble() != 0;
                                     break;
-                                case columnTypes_e::textColumn:
+                                case PropertyTypes_e::textProp:
                                     insertProps[colName] += to_string(n->getDouble());
                                     break;
                                 }
                                 break;
                             case cjson::Types_e::STR:
-                                switch (colInfo->type)
+                                switch (propInfo->type)
                                 {
-                                case columnTypes_e::intColumn:
-                                case columnTypes_e::doubleColumn:
+                                case PropertyTypes_e::intProp:
+                                case PropertyTypes_e::doubleProp:
                                     continue;
-                                case columnTypes_e::boolColumn:
+                                case PropertyTypes_e::boolProp:
                                     insertProps[colName] += n->getString() != "0";
                                     break;
-                                case columnTypes_e::textColumn:
+                                case PropertyTypes_e::textProp:
                                     insertProps[colName] += n->getString();
                                     break;
                                 }
                                 break;
                             case cjson::Types_e::BOOL:
-                                switch (colInfo->type)
+                                switch (propInfo->type)
                                 {
-                                case columnTypes_e::intColumn:
-                                case columnTypes_e::doubleColumn:
+                                case PropertyTypes_e::intProp:
+                                case PropertyTypes_e::doubleProp:
                                     insertProps[colName] += c->getBool() ? 1 : 0;
                                     break;
-                                case columnTypes_e::boolColumn:
+                                case PropertyTypes_e::boolProp:
                                     insertProps[colName] += c->getBool();
                                     break;
-                                case columnTypes_e::textColumn:
+                                case PropertyTypes_e::textProp:
                                     insertProps[colName] += c->getBool() ? "true" : "false";
                                     break;
                                 }
@@ -1080,11 +1095,11 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
         setProps(insertProps);
     }
 
-    if (hasPropAttributes && hasEventAttributes)
+    if (hasCustomerProps && hasEventProp)
         return RowType_e::event_and_prop;
-    if (hasPropAttributes)
+    if (hasCustomerProps)
         return RowType_e::prop;
-    if (hasEventAttributes)
+    if (hasEventProp)
         return RowType_e::event;
 
     return RowType_e::junk;
@@ -1092,19 +1107,19 @@ Grid::RowType_e Grid::insertParse(const std::string& event, Columns* columns, cj
 
 void Grid::insertEvent(cjson* rowData)
 {
-    const auto attrNode = rowData->xPath("/_");
+    const auto attrNode = rowData;
 
     if (!attrNode)
         return;
 
     const auto stampNode = rowData->xPath("/stamp");
-    const auto event = rowData->xPathString("/event", "");
+    const auto eventName = rowData->xPathString("/event", "");
 
     const auto insertRow = newRow();
-    const auto columns = table->getColumns();
+    const auto properties = table->getProperties();
 
-    // parse the event (columns & props)
-    const auto insertType = insertParse(event, columns, attrNode, insertRow);
+    // parse the event (properties & props)
+    const auto insertType = insertParse(properties, attrNode, insertRow);
 
     // is there any event here? if not, lets leave
     if (insertType == RowType_e::junk || insertType == RowType_e::prop)
@@ -1121,28 +1136,28 @@ void Grid::insertEvent(cjson* rowData)
     if (stamp < 0)
         return;
 
-    insertRow->cols[COL_STAMP] = stamp;
+    insertRow->cols[PROP_STAMP] = stamp;
 
     auto rowCount = rows.size();
-    const auto lastRowStamp = rowCount ? rows.back()->cols[COL_STAMP] : 0;
+    const auto lastRowStamp = rowCount ? rows.back()->cols[PROP_STAMP] : 0;
 
     decltype(newRow()) row = nullptr;
 
     const auto getRowHash = [&](Col_s* rowPtr) -> int64_t
     {
-        auto hash = rowPtr->cols[COL_STAMP];
-        for (auto col = COL_FIRST_USER_DATA; col < colMap->columnCount; ++col)
+        auto hash = rowPtr->cols[PROP_STAMP];
+        for (auto col = PROP_INDEX_USER_DATA; col < propertyMap->propertyCount; ++col)
         {
             if (rowPtr->cols[col] == NONE)
                 continue;
 
-            const auto colInfo = columns->getColumn(colMap->columnMap[col]);
+            const auto propInfo = properties->getProperty(propertyMap->propertyMap[col]);
 
-            // don't count deleted columns or props
-            if (!colInfo || colInfo->deleted || colInfo->isProp)
+            // don't count deleted properties or props
+            if (!propInfo || propInfo->deleted || propInfo->isCustomerProperty)
                 continue;
 
-            if (colInfo->isSet)
+            if (propInfo->isSet)
             {
                 const auto ol = *reinterpret_cast<SetInfo_s*>(&rowPtr->cols[col]);
                 for (auto idx = ol.offset; idx < ol.offset + ol.length; ++idx)
@@ -1157,16 +1172,16 @@ void Grid::insertEvent(cjson* rowData)
     };
     auto insertBefore = -1; // where a new row will be inserted if needed
 
-    const auto hashedAction = MakeHash(event);
-    const auto zOrderInts = table->getZOrderHashes();
-    const auto getZOrder = [&](int64_t value) -> int
+    const auto hashedEvent = MakeHash(eventName);
+    const auto eventOrderInts = table->getEventOrderHashes();
+    const auto getEventOrder = [&](int64_t value) -> int
     {
-        const auto iter = zOrderInts->find(value);
-        if (iter != zOrderInts->end())
+        const auto iter = eventOrderInts->find(value);
+        if (iter != eventOrderInts->end())
             return (*iter).second;
         return 99;
     };
-    const auto insertZOrder = getZOrder(hashedAction);
+    const auto insertZOrder = getEventOrder(hashedEvent);
 
     // lambda using binary search to find insert index
     const auto findInsert = [&]() -> int
@@ -1176,9 +1191,9 @@ void Grid::insertEvent(cjson* rowData)
         auto mid = last >> 1;
         while (first <= last)
         {
-            if (stamp > rows[mid]->cols[COL_STAMP])
+            if (stamp > rows[mid]->cols[PROP_STAMP])
                 first = mid + 1; // search bottom of list
-            else if (stamp < rows[mid]->cols[COL_STAMP])
+            else if (stamp < rows[mid]->cols[PROP_STAMP])
                 last = mid - 1; // search top of list
             else
                 return mid;
@@ -1188,7 +1203,9 @@ void Grid::insertEvent(cjson* rowData)
     };
 
     auto i = rowCount ? findInsert() : 0;
-    if (i < 0) // negative value (made positive - 1) is the insert position
+
+    // negative value (made positive - 1) is the insert position
+    if (i < 0)
         i = -i - 1;
 
     if (i != static_cast<int>(rowCount)) // if they are equal skip all this, we are appending
@@ -1196,7 +1213,7 @@ void Grid::insertEvent(cjson* rowData)
         // walk back to the beginning of all rows sharing this time stamp
         if (rowCount)
         {
-            while (i > 0 && rows[i]->cols[COL_STAMP] == stamp)
+            while (i > 0 && rows[i]->cols[PROP_STAMP] == stamp)
                 --i; // walk forward to find our insertion point
         }
 
@@ -1205,7 +1222,7 @@ void Grid::insertEvent(cjson* rowData)
             // we have found rows with same stamp
             if (rows[i]->cols[0] == stamp)
             {
-                auto zOrder = getZOrder(rows[i]->cols[COL_EVENT]);
+                auto zOrder = getEventOrder(rows[i]->cols[PROP_EVENT]);
                 // we have found rows in this stamp with the same zOrder
                 if (zOrder == insertZOrder)
                 {
@@ -1213,10 +1230,10 @@ void Grid::insertEvent(cjson* rowData)
                     // match (as in, we are replacing a row)
                     for (; i < static_cast<int>(rowCount); i++)
                     {
-                        zOrder = getZOrder(rows[i]->cols[COL_EVENT]);
+                        zOrder = getEventOrder(rows[i]->cols[PROP_EVENT]);
 
                         // we have moved passed replaceable rows, so insert here
-                        if (rows[i]->cols[COL_STAMP] > stamp || zOrder > insertZOrder)
+                        if (rows[i]->cols[PROP_STAMP] > stamp || zOrder > insertZOrder)
                         {
                             insertBefore = i;
                             break;
@@ -1242,7 +1259,7 @@ void Grid::insertEvent(cjson* rowData)
                     break;
                 }
             }
-            else if (rows[i]->cols[COL_STAMP] > stamp)
+            else if (rows[i]->cols[PROP_STAMP] > stamp)
             {
                 insertBefore = i;
                 break;

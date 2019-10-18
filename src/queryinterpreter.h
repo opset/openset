@@ -16,7 +16,7 @@ namespace openset
 {
     namespace db
     {
-        class Person;
+        class Customer;
         class Grid;
         class AttributeBlob;
         class IndexBits;
@@ -160,7 +160,7 @@ namespace openset
             int nestDepth{ 0 }; // how many nested loops are we in
             int breakDepth{ 0 }; // how many nested loops do we want to break
 
-            // column offsets and indexes used for queries with segments
+            // property offsets and indexes used for queries with segments
             int segmentColumnShift{ 0 };
             std::vector<IndexBits*> segmentIndexes;
 
@@ -187,7 +187,7 @@ namespace openset
             MarshalParams marshalParams = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
 
-            // distinct counting (with column as key)
+            // distinct counting (with property as key)
             ValuesSeen eventDistinct{ ringHint_e::lt_compact }; // distinct to group id
             ValuesSeenKey distinctKey;
 
@@ -218,7 +218,7 @@ namespace openset
             void configure();
 
             vector<string> getReferencedColumns() const;
-            void mount(Person* person);
+            void mount(Customer* person);
 
             static constexpr bool within(
                 const int64_t compStamp,

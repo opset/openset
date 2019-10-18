@@ -19,11 +19,13 @@ namespace openset::comms
         static void table_drop(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // GET /v1/table/{table}
         static void table_describe(const openset::web::MessagePtr& message, const RpcMapping& matches);
-        // PUT /v1/table/{table}/column/{name}
+        // PUT /v1/table/{table}/property/{name}
         static void column_add(const openset::web::MessagePtr& message, const RpcMapping& matches);
-        // DELETE /v1/table/{table}/column/{name}
+        // DELETE /v1/table/{table}/property/{name}
         static void column_drop(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // PUT /v1/table/{table}/settings
         static void table_settings(const openset::web::MessagePtr& message, const RpcMapping& matches);
+        // GET /v1/tables
+        static void table_list(const openset::web::MessagePtr& message, const RpcMapping& matches);
     };
 }

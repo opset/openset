@@ -16,7 +16,7 @@ namespace openset
     namespace async
     {
 
-        class OpenLoopPerson : public OpenLoop
+        class OpenLoopCustomer : public OpenLoop
         {
 
             Shuttle<int>* shuttle;
@@ -24,8 +24,8 @@ namespace openset
             int64_t uuid;
 
         public:
-            
-            explicit OpenLoopPerson(
+
+            explicit OpenLoopCustomer(
                 Shuttle<int>* shuttle,
                 const openset::db::Database::TablePtr table,
                 const int64_t uuid);
@@ -34,6 +34,6 @@ namespace openset
             bool run() final;
             void partitionRemoved() final;
         };
-               
+
     }
 }

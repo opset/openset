@@ -4,7 +4,7 @@
 
 #include "threads/locks.h"
 #include "table.h"
-#include "people.h"
+#include "customers.h"
 #include "attributes.h"
 #include "message_broker.h"
 #include "config.h"
@@ -92,7 +92,7 @@ namespace openset
             int partition;
             Attributes attributes;
             AttributeBlob* attributeBlob;
-            People people;
+            Customers people;
             openset::async::AsyncLoop* asyncLoop;
             //openset::revent::ReventManager* triggers;
 
@@ -126,7 +126,7 @@ namespace openset
                 Table* table,
                 const int partition,
                 AttributeBlob* attributeBlob,
-                Columns* schema);
+                Properties* schema);
 
             TablePartitioned() = default;
 

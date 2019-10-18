@@ -3,7 +3,7 @@
 #include "queryinterpreter.h"
 #include "time/epoch.h"
 #include "table.h"
-#include "columns.h"
+#include "properties.h"
 #include "grid.h"
 //const int MAX_EXEC_COUNT = 1'000'000'000;
 const int MAX_RECURSE_COUNT = 10;
@@ -37,24 +37,24 @@ void openset::query::Interpreter::configure()
      * When we get our first mount we have access
      * to the table and schema objects. With these
      * we can prepare the grid to only expand
-     * columns used in the query and map those
-     * columns to the schema
+     * properties used in the query and map those
+     * properties to the schema
      */
-    auto schema = grid->getTable()->getColumns();
+    auto schema = grid->getTable()->getProperties();
     for (auto& cvar : macros.vars.tableVars)
     {
-        const auto index = schema->getColumn(cvar.actual);
+        const auto index = schema->getProperty(cvar.actual);
         if (index)
         {
             if (grid->isFullSchema())
             {
-                cvar.column = grid->getGridColumn(cvar.schemaColumn);
+                cvar.column = grid->getGridProperty(cvar.schemaColumn);
                 cvar.index  = cvar.column;
                 if (cvar.column == -1)
                 {
                     error.set(
                         errors::errorClass_e::run_time,
-                        errors::errorCode_e::column_not_in_table,
+                        errors::errorCode_e::property_not_in_table,
                         "column_name: " + cvar.actual);
                     return;
                 }
@@ -64,7 +64,7 @@ void openset::query::Interpreter::configure()
         {
             error.set(
                 errors::errorClass_e::run_time,
-                errors::errorCode_e::column_not_in_table,
+                errors::errorCode_e::property_not_in_table,
                 "column_name: " + cvar.actual);
             return;
         }
@@ -74,22 +74,22 @@ void openset::query::Interpreter::configure()
 
 vector<string> openset::query::Interpreter::getReferencedColumns() const
 {
-    vector<string> mappedColumns; // extract "actual" column names in query and put in
+    vector<string> mappedColumns; // extract "actual" property names in query and put in
     // vector for mapTable call
     for (auto& c : macros.vars.tableVars)
         mappedColumns.push_back(c.actual);
     return mappedColumns;
 }
 
-void openset::query::Interpreter::mount(Person* person)
+void openset::query::Interpreter::mount(Customer* person)
 {
-    /** \brief Mount a person object.
+    /** \brief Mount a customer object.
      *
-     * When the first person object is mounted we
+     * When the first customer object is mounted we
      * will have access to the table and schema which
      * are referenced in the grid object. At this point
      * we can call configure which will map the
-     * columns in this query to the grid, allowing for
+     * properties in this query to the grid, allowing for
      * selective expansion of grid data when
      * grid::prepare is called
      */
@@ -219,20 +219,20 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                 /*
                  * This is where we make the "counting key" for our aggregator. If we have already seen
                  * a key we will never aggregate again using that key (the keys cache/hash "eventDistinct" is reset
-                 * upon when we switch to another person record before we re-execute the query script on that person.
+                 * upon when we switch to another customer record before we re-execute the query script on that customer.
                  *
                  * The key is a compound key made by taking in the following parameters:
                  *
-                 *   - index: the index of the column being counted in this iterator of "columnVars"
-                 *   - distinct: usually the value of the column in an event row, or an alternate column to count distinctly
-                 *               in the event row... or when it is a variable (rather than an event column) the
+                 *   - index: the index of the property being counted in this iterator of "columnVars"
+                 *   - distinct: usually the value of the property in an event row, or an alternate property to count distinctly
+                 *               in the event row... or when it is a variable (rather than an event property) the
                  *               value of that variable.
-                 *   - countKey: when counting people, stamp is zero (because we don't want to count a person more than once),
+                 *   - countKey: when counting people, stamp is zero (because we don't want to count a customer more than once),
                  *               otherwise it is set to the row-number so we don't count a value for a row twice... or
                  *               when we are counting with the special flag "useStampedRowIds" we use the timestamp of the row
                  *               allowing multiple rows with the same stamp to be counted as if they were part of one larger
                  *               row.
-                 *   - column:   integer version of the pointer to the result set ("resultColumns"). This is because each
+                 *   - property:   integer version of the pointer to the result set ("resultColumns"). This is because each
                  *               result grouping has it's own "resultColumns" and we must distinguish whether we have counted
                  *               for a specific group or not before (i.e. the keys above could potentially be met on another group)
                  *
@@ -242,10 +242,10 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                     (resCol.modifier == Modifiers_e::var)
                         ? fixToInt(resCol.value)
                         : columns->cols[resCol.distinctColumn],
-                    (resCol.schemaColumn == COL_UUID || resCol.modifier == Modifiers_e::dist_count_person)
+                    (resCol.schemaColumn == PROP_UUID || resCol.modifier == Modifiers_e::dist_count_person)
                         ? 0
                         : (macros.useStampedRowIds
-                               ? columns->cols[COL_STAMP]
+                               ? columns->cols[PROP_STAMP]
                                : currentRow),
                     reinterpret_cast<int64_t>(resultColumns));
                 if (eventDistinct.hasKey(distinctKey))
@@ -312,11 +312,11 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
             }
         }
     };
-    rowKey.clear(); // run column lambdas!
+    rowKey.clear(); // run property lambdas!
     if (macros.vars.columnLambdas.size())
         for (auto lambdaIndex : macros.vars.columnLambdas)
             opRunner(
-                // call the column lambda
+                // call the property lambda
                 &macros.code.front() + lambdaIndex,
                 currentRow);
     auto depth = 0;
@@ -1108,6 +1108,12 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
     if (*(stackPtr - 1) == NONE) // leave None on the stack
         return;
 
+    if (rows->size() == 0)
+    {
+        *(stackPtr - 1) = NONE;
+        return;
+    }
+
     const auto currentRow = (stackPtr - 1)->getInt32();
 
     cvar result(cvar::valueType::DICT);
@@ -1115,7 +1121,7 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
     for (const auto& tableVar : macros.vars.tableVars)
     {
         auto key = tableVar.actual; // we pop the actual user id in this case
-        if (tableVar.schemaColumn == COL_UUID)
+        if (tableVar.schemaColumn == PROP_UUID)
         {
             result[key] = this->grid->getUUIDString();
             continue;
@@ -1129,9 +1135,9 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
             continue;
         switch (tableVar.schemaType)
         {
-        case columnTypes_e::freeColumn:
+        case PropertyTypes_e::freeProp:
             break;
-        case columnTypes_e::intColumn:
+        case PropertyTypes_e::intProp:
             if (tableVar.isSet)
             {
                 auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
@@ -1144,7 +1150,7 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
             else
                 result[key] = colValue;
             break;
-        case columnTypes_e::doubleColumn:
+        case PropertyTypes_e::doubleProp:
             if (tableVar.isSet)
             {
                 auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
@@ -1157,7 +1163,7 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
             else
                 result[key] = colValue / 10000.0;
             break;
-        case columnTypes_e::boolColumn:
+        case PropertyTypes_e::boolProp:
             if (tableVar.isSet)
             {
                 auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
@@ -1175,7 +1181,7 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
                                   ? true
                                   : false;
             break;
-        case columnTypes_e::textColumn:
+        case PropertyTypes_e::textProp:
             if (tableVar.isSet)
             {
                 auto& info         = *reinterpret_cast<SetInfo_s*>(&colValue);
@@ -1221,6 +1227,10 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
     // extra maps to the param count (items on stack)
     // note: param order is reversed, last item on the stack
     // is also last param in function call
+
+    // sometimes we have no rows (customer props only), the empty row is full of NONE values
+    const auto rowData =  currentRow >= rowCount || currentRow < 0 ? grid->getEmptyRow() : (*rows)[currentRow];
+
     switch (cast<Marshals_e>(inst->index))
     {
     case Marshals_e::marshal_tally:
@@ -1235,7 +1245,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
             ++stackPtr;
             return true;
         }*/
-        marshal_tally(inst->extra, (*rows)[currentRow], currentRow);
+        marshal_tally(inst->extra, rowData, currentRow);
     }
     break;
     case Marshals_e::marshal_now:
@@ -1247,11 +1257,11 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         ++stackPtr;
         break;
     case Marshals_e::marshal_last_stamp:
-        *stackPtr = rows->back()->cols[COL_STAMP];
+        *stackPtr = rowCount ? rows->back()->cols[PROP_STAMP] : NONE;
         ++stackPtr;
         break;
     case Marshals_e::marshal_first_stamp:
-        *stackPtr = rows->front()->cols[COL_STAMP];
+        *stackPtr = rowCount ? rows->front()->cols[PROP_STAMP] : NONE;
         ++stackPtr;
         break;
     case Marshals_e::marshal_bucket:
@@ -1333,22 +1343,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         *(stackPtr - 1) = Epoch::fixMilli(Epoch::epochYearDate(*(stackPtr - 1)));
         break;
     case Marshals_e::marshal_row_count:
-        if (eventCount == -1)
-        {
-            int64_t currentGrp = 0;
-            auto countIter     = rows->begin();
-            eventCount         = 0;
-            while (countIter != rows->end())
-            {
-                if (currentGrp != HashPair((*countIter)->cols[COL_STAMP], (*countIter)->cols[COL_EVENT]))
-                {
-                    currentGrp = HashPair((*countIter)->cols[COL_STAMP], (*countIter)->cols[COL_EVENT]);
-                    ++eventCount;
-                }
-                ++countIter;
-            }
-        }
-        *stackPtr = eventCount;
+        *stackPtr = rowCount;
         ++stackPtr;
         break;
     case Marshals_e::marshal_population:
@@ -1577,7 +1572,7 @@ bool openset::query::Interpreter::marshal(Instruction_s* inst, int64_t& currentR
         break;
     case Marshals_e::marshal_session_count:
         if (macros.sessionColumn == -1)
-            throw std::runtime_error("session column could not be found");
+            throw std::runtime_error("session property could not be found");
         ++stackPtr;
         *(stackPtr - 1) = rowCount ? rows->back()->cols[macros.sessionColumn] : 0;
         break;
@@ -1644,14 +1639,21 @@ cvar* openset::query::Interpreter::lambda(int lambdaId, int currentRow)
 
 void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentRow)
 {
-    // count allows for now row pointer, and no mounted person
+    /*
+
+    Note - with the advent of properties, we can no longer exit if there are no rows
+           as it's valid for a customer to have no event rows, but have customer props
+
+    // count allows for now row pointer, and no mounted customer
     if ((!rows || rows->empty()) && interpretMode != InterpretMode_e::count)
     {
         loopState = LoopState_e::in_exit;
         *stackPtr = NONE;
         ++stackPtr;
         return;
-    } //auto rowIter = rows->begin() + currentRow;
+    }
+    */
+
     if (++recursion > MAX_RECURSE_COUNT)
     {
         error.set(
@@ -1707,14 +1709,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         {
         case OpCode_e::NOP: // do nothing... nothing to see here... move on
             break;
-        case OpCode_e::PSHTBLCOL: // push a column value
+        case OpCode_e::PSHTBLCOL: // push a property value
         {
             // if it's row iterator variable, we get its value, otherwise we use the current row
             const int64_t readRow = inst->extra != NONE
                                         ? macros.vars.userVars[inst->extra].value.getInt64()
                                         : currentRow; // we pop the actual user id in this case
 
-            if (macros.vars.tableVars[inst->index].schemaColumn == COL_UUID)
+            if (macros.vars.tableVars[inst->index].schemaColumn == PROP_UUID)
             {
                 *stackPtr = this->grid->getUUIDString();
             }
@@ -1722,9 +1724,9 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 auto colValue = NONE; // extract property value from grid->propRow
 
-                //if (macros.vars.tableVars[inst->index].isProp)
+                //if (macros.vars.tableVars[inst->index].isCustomerProperty)
                 //{
-                //    colValue = propRow->cols[macros.vars.tableVars[inst->index].column];
+                //    colValue = propRow->cols[macros.vars.tableVars[inst->index].property];
                 // }
                 //else
                 //{
@@ -1733,10 +1735,10 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
 
                 switch (macros.vars.tableVars[inst->index].schemaType)
                 {
-                case columnTypes_e::freeColumn:
+                case PropertyTypes_e::freeProp:
                     *stackPtr = NONE;
                     break;
-                case columnTypes_e::intColumn:
+                case PropertyTypes_e::intProp:
                     if (colValue == NONE)
                     {
                         //if (macros.vars.tableVars[inst->index].isSet)
@@ -1756,7 +1758,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     else
                         *stackPtr = colValue;
                     break;
-                case columnTypes_e::doubleColumn:
+                case PropertyTypes_e::doubleProp:
                     if (colValue == NONE)
                     {
                         //if (macros.vars.tableVars[inst->index].isSet)
@@ -1776,7 +1778,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     else
                         *stackPtr = colValue / 10000.0;
                     break;
-                case columnTypes_e::boolColumn:
+                case PropertyTypes_e::boolProp:
                     if (colValue == NONE)
                     {
                         //if (macros.vars.tableVars[inst->index].isSet)
@@ -1797,7 +1799,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     else
                         *stackPtr = colValue ? true : false;
                     break;
-                case columnTypes_e::textColumn:
+                case PropertyTypes_e::textProp:
                     if (colValue == NONE)
                     {
                         //if (macros.vars.tableVars[inst->index].isSet)
@@ -1858,7 +1860,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         {
             if (macros.vars.columnVars[inst->index].modifier != Modifiers_e::var)
             {
-                // push mapped column value into
+                // push mapped property value into
                 // TODO range check
                 *stackPtr = (*rows)[currentRow]->cols[macros.vars.columnVars[inst->index].column];
                 ++stackPtr;
@@ -1958,7 +1960,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             if (macros.vars.userVars[inst->index].isProp)
                 propsChanged = true;
             break;
-        case OpCode_e::POPTBLCOL: // pop stack into column value
+        case OpCode_e::POPTBLCOL: // pop stack into property value
             // NOTE: we don't actually do this
             break;
         case OpCode_e::POPRESCOL: // pop stack into select
@@ -2505,7 +2507,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     return;
                 } // set the value of referenced `for variable` to the current row number
 
-                if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                if ((*rows)[currentRow]->cols[PROP_STAMP] < startStamp)
                 {
                     if (filter.isReverse)
                         break;
@@ -2513,7 +2515,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     continue;
                 }
 
-                if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                if ((*rows)[currentRow]->cols[PROP_STAMP] > endStamp)
                 {
                     if (filter.isReverse)
                     {
@@ -2680,7 +2682,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     return;
                 }
 
-                if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                if ((*rows)[currentRow]->cols[PROP_STAMP] < startStamp)
                 {
                     if (filter.isReverse)
                         break;
@@ -2688,7 +2690,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                     continue;
                 }
 
-                if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                if ((*rows)[currentRow]->cols[PROP_STAMP] > endStamp)
                 {
                     if (filter.isReverse)
                     {
@@ -2753,7 +2755,12 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             filterRangeStack.pop_back();
 
             // failed to find a matching row
-            if (inst->op == OpCode_e::CALL_TST)
+            if (!count) // no runs?
+            {
+                *stackPtr = NONE;
+                ++stackPtr;
+            }
+            else if (inst->op == OpCode_e::CALL_TST)
             {
                 *stackPtr = lastMatchingRow != -1;
                 ++stackPtr;
@@ -2816,7 +2823,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             auto startStamp = LLONG_MIN;
             auto endStamp   = LLONG_MAX;
 
-            // column filters inherit date ranges carry from `each` or `if` filters
+            // property filters inherit date ranges carry from `each` or `if` filters
             if (filterRangeStack.size() && filterRangeStack.back().first != LLONG_MIN)
             {
                 startStamp = filterRangeStack.back().first;
@@ -2871,7 +2878,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                 currentRow = 0;
                 while (currentRow < rowCount && currentRow >= 0)
                 {
-                    if ((*rows)[currentRow]->cols[COL_STAMP] < startStamp)
+                    if ((*rows)[currentRow]->cols[PROP_STAMP] < startStamp)
                     {
                         if (filter.isReverse)
                             break;
@@ -2879,7 +2886,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
                         continue;
                     }
 
-                    if ((*rows)[currentRow]->cols[COL_STAMP] > endStamp)
+                    if ((*rows)[currentRow]->cols[PROP_STAMP] > endStamp)
                     {
                         if (filter.isReverse)
                         {
@@ -2970,7 +2977,7 @@ void openset::query::Interpreter::exec()
             segmentColumnShift = 0;
             for (auto seg : segmentIndexes)
             {
-                if (seg->bitState(linid)) // if the person is in this segment run the ops
+                if (seg->bitState(linid)) // if the customer is in this segment run the ops
                 {
                     execReset();
                     opRunner(inst, 0);
@@ -2979,7 +2986,7 @@ void openset::query::Interpreter::exec()
                     returns.push_back(NONE); // return NONE if stack is unwound
                 else
                     returns.push_back(*(stackPtr - 1)); // capture last value on stack
-                // for each segment we offset the results by the number of columns
+                // for each segment we offset the results by the number of properties
                 segmentColumnShift += macros.vars.columnVars.size();
             }
         }
@@ -3042,7 +3049,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                     segmentColumnShift = 0;
                     for (auto seg : segmentIndexes)
                     {
-                        if (seg->bitState(linid)) // if the person is in this segment run the ops
+                        if (seg->bitState(linid)) // if the customer is in this segment run the ops
                         {
                             execReset();
                             opRunner(inst, 0);
@@ -3051,7 +3058,7 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                             returns.push_back(NONE); // return NONE if stack is unwound
                         else
                             returns.push_back(*(stackPtr - 1)); // capture last value on stack
-                        // for each segment we offset the results by the number of columns
+                        // for each segment we offset the results by the number of properties
                         segmentColumnShift += macros.vars.columnVars.size();
                     }
                 }
@@ -3105,7 +3112,7 @@ void openset::query::Interpreter::setGridProps()
     if (!macros.writesProps || !propsChanged)
         return;
 
-    auto schema = grid->getTable()->getColumns();
+    auto schema = grid->getTable()->getProperties();
 
     for (auto& var : macros.vars.userVars)
     {
@@ -3126,26 +3133,26 @@ void openset::query::Interpreter::setGridProps()
         }
 
         // validate the props against the schema
-        const auto colInfo = schema->getColumn(var.actual);
+        const auto propInfo = schema->getProperty(var.actual);
 
-        // skip of the column no longer exists or is no longer a prop, skip empty sets
-        if (!colInfo || !colInfo->isProp || (colInfo->isSet && !var.value.len()))
+        // skip of the property no longer exists or is no longer a prop, skip empty sets
+        if (!propInfo || !propInfo->isCustomerProperty || (propInfo->isSet && !var.value.len()))
         {
             props[var.actual] = NONE;
             continue;
         }
 
-        if (!colInfo->isSet && var.value.isContainer())
+        if (!propInfo->isSet && var.value.isContainer())
             throw std::runtime_error("property '" + var.actual + "' is not defined as a 'set' type.");
 
-        if (colInfo->isSet && !var.value.isContainer())
+        if (propInfo->isSet && !var.value.isContainer())
             throw std::runtime_error("property '" + var.actual + "' is a set type. Values must be 'List' or 'Set'");
 
-        if (colInfo->isSet && var.value.typeOf() == cvar::valueType::DICT)
+        if (propInfo->isSet && var.value.typeOf() == cvar::valueType::DICT)
             throw std::runtime_error(
                 "property '" + var.actual + "' cannot be a Dict, valid input types are values, Lists or Sets.");
 
-        if (colInfo->isSet)
+        if (propInfo->isSet)
         {
             cvar set;
             set.set();
@@ -3154,18 +3161,18 @@ void openset::query::Interpreter::setGridProps()
             {
                 for (auto& v : *var.value.getList())
                 {
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
+                    case PropertyTypes_e::intProp:
                         set += v.getInt64();
                         break;
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::doubleProp:
                         set += v.getDouble();
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         set += v.getBool();
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         set += v.getString();
                         break;
                     }
@@ -3178,18 +3185,18 @@ void openset::query::Interpreter::setGridProps()
                     if (v == NONE) // skip nil/none values
                         continue;
 
-                    switch (colInfo->type)
+                    switch (propInfo->type)
                     {
-                    case columnTypes_e::intColumn:
+                    case PropertyTypes_e::intProp:
                         set += v.getInt64();
                         break;
-                    case columnTypes_e::doubleColumn:
+                    case PropertyTypes_e::doubleProp:
                         set += v.getDouble();
                         break;
-                    case columnTypes_e::boolColumn:
+                    case PropertyTypes_e::boolProp:
                         set += v.getBool();
                         break;
-                    case columnTypes_e::textColumn:
+                    case PropertyTypes_e::textProp:
                         set += v.getString();
                         break;
                     }
@@ -3202,18 +3209,18 @@ void openset::query::Interpreter::setGridProps()
         }
         else
         {
-            switch (colInfo->type)
+            switch (propInfo->type)
             {
-            case columnTypes_e::intColumn:
+            case PropertyTypes_e::intProp:
                 props[var.actual] = var.value.getInt64();
                 break;
-            case columnTypes_e::doubleColumn:
+            case PropertyTypes_e::doubleProp:
                 props[var.actual] = var.value.getDouble();
                 break;
-            case columnTypes_e::boolColumn:
+            case PropertyTypes_e::boolProp:
                 props[var.actual] = var.value.getBool();
                 break;
-            case columnTypes_e::textColumn:
+            case PropertyTypes_e::textProp:
                 props[var.actual] = var.value.getString();
                 break;
             }
