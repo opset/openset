@@ -25,14 +25,13 @@ char* openset::db::AttributeBlob::storeValue(const int32_t propIndex, const stri
 
     csLock lock(cs);
 
-    if (!attributesBlob.get(key, blob))
-    {
-        // not found let's make it!
-        const auto len = value.length();
-        blob = mem.newPtr(len + 1);//cast<char*>(PoolMem::getPool().getPtr(len + 1));
-        strcpy(blob, value.c_str());
-        attributesBlob.set(key, blob);
-    }
+    if (auto attr = attributesBlob.find(key); attr != attributesBlob.end())
+        return attr->second;
+
+    const auto len = value.length();
+    blob = mem.newPtr(len + 1);//cast<char*>(PoolMem::getPool().getPtr(len + 1));
+    strcpy(blob, value.c_str());
+    attributesBlob.insert({key, blob});
 
     return blob;
 }
@@ -43,8 +42,8 @@ char* openset::db::AttributeBlob::getValue(const int32_t propIndex, const int64_
     const auto key = attr_key_s::makeKey(propIndex, valueHash);
 
     csLock lock(cs);
-    if (attributesBlob.get(key, blob))
-        return blob;
+    if (auto attr = attributesBlob.find(key); attr != attributesBlob.end())
+        return attr->second;
     else
         return nullptr;
 }

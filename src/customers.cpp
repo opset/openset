@@ -19,13 +19,13 @@ PersonData_s* Customers::getCustomerByID(int64_t userId)
 {
     int32_t linId;
 
-    if (customerMap.get(userId, linId))
-        return getCustomerByLIN(linId);
+    if (const auto entry = customerMap.find(userId); entry != customerMap.end())
+        return getCustomerByLIN(entry->second);
 
     return nullptr;
 }
 
-PersonData_s* Customers::getCustomerByID(string userIdString)
+PersonData_s* Customers::getCustomerByID(const string& userIdString)
 {
     auto hashId = MakeHash(userIdString);
 
@@ -92,7 +92,7 @@ PersonData_s* Customers::createCustomer(string userIdString)
             if (!isReuse)
                 customerLinear.push_back(newUser);
 
-            customerMap.set(hashId, newUser->linId);
+            customerMap[hashId] = newUser->linId;
 
             return newUser;
         }
@@ -195,7 +195,7 @@ int64_t Customers::deserialize(char* mem)
 
         // index this customer
         customerLinear[customer->linId] = customer;
-        customerMap.set(customer->id, customer->linId);
+        customerMap[customer->id] = customer->linId;
 
         // next block please
         read += size;

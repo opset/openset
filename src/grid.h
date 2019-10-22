@@ -10,6 +10,8 @@
 #include "var/var.h"
 #include "cjson/cjson.h"
 
+#include "robin_hood.h"
+
 
 namespace openset
 {
@@ -30,7 +32,7 @@ namespace openset
         class IndexDiffing
         {
             using ColVal = std::pair<int32_t, int64_t>;
-            using CVMap = unordered_map<ColVal, int>;
+            using CVMap = robin_hood::unordered_map<ColVal, int, robin_hood::hash<ColVal>>;
             using CVList = vector<ColVal>;
             CVMap before;
             CVMap after;

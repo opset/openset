@@ -5,7 +5,8 @@
 
 #include "common.h"
 #include "cjson/cjson.h"
-#include "mem/bigring.h"
+//#include "mem/bigring.h"
+#include "robin_hood.h"
 #include "heapstack/heapstack.h"
 #include "querycommon.h"
 #include "table.h"
@@ -174,7 +175,7 @@ namespace openset
         class ResultSet
         {
         public:
-            bigRing<RowKey, Accumulator*> results { ringHint_e::lt_compact };
+            robin_hood::unordered_map<RowKey, Accumulator*, robin_hood::hash<RowKey>> results;
             using RowPair = pair<RowKey, Accumulator*>;
             using RowVector = vector<RowPair>;
             vector<RowPair> sortedResult;
@@ -189,7 +190,7 @@ namespace openset
             // object will be populated
             bool isPremerged = false;
 
-            bigRing<int64_t, char*> localText { ringHint_e::lt_compact }; // text local to result set
+            robin_hood::unordered_map<int64_t, char*, robin_hood::hash<int64_t>> localText; // text local to result set
 
             std::vector<ResultTypes_e> accTypes;
             std::vector<query::Modifiers_e> accModifiers;
@@ -201,7 +202,7 @@ namespace openset
 
             void makeSortedList();
 
-            void setAccTypesFromMacros(query::Macro_s macros);
+            void setAccTypesFromMacros(const query::Macro_s& macros);
 
             Accumulator* getMakeAccumulator(RowKey& key);
 
@@ -209,38 +210,32 @@ namespace openset
             // a lock, whereas this does not, we will merge them after.
             void addLocalText(const int64_t hashId, cvar& value)
             {
-                const auto textPair = localText.get(hashId);
-
-                if (!textPair)
+                if (!localText.count(hashId))
                 {
                     const auto textPtr = mem.newPtr(value.getString().length() + 1);
                     strcpy(textPtr, value.getString().c_str());
-                    localText.set(hashId, textPtr);
+                    localText.emplace(hashId, textPtr);
                 }
             }
 
             void addLocalText(const int64_t hashId, const std::string& value)
             {
-                const auto textPair = localText.get(hashId);
-
-                if (!textPair)
+                if (!localText.count(hashId))
                 {
                     const auto textPtr = mem.newPtr(value.length() + 1);
                     strcpy(textPtr, value.c_str());
-                    localText.set(hashId, textPtr);
+                    localText.emplace(hashId, textPtr);
                 }
             }
 
             void addLocalText(const int64_t hashId, char* value, const int32_t length)
             {
-                const auto textPair = localText.get(hashId);
-
-                if (!textPair)
+                if (!localText.count(hashId))
                 {
                     const auto textPtr = mem.newPtr(length + 1);
                     memcpy(textPtr, value, length);
                     textPtr[length] = 0;
-                    localText.set(hashId, textPtr);
+                    localText.emplace(hashId, textPtr);
                 }
             }
         };
@@ -263,7 +258,7 @@ namespace openset
             CellQueryResult_s(CellQueryResult_s&& other) noexcept
             {
                 instance = other.instance;
-                error    = std::move(other.error);
+                error    = other.error;
                 stats    = std::move(other.stats);
             }
 

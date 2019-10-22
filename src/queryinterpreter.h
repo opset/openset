@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "xxhash.h"
+#include "robin_hood.h"
 
 #include "querycommon.h"
 #include "result.h"
@@ -179,7 +180,7 @@ namespace openset
 
             // distinct counting structures
             using ValuesSeenKey = EventDistinct_s;//tuple<int32_t, int64_t, int64_t, int64_t>;
-            using ValuesSeen = bigRing<ValuesSeenKey, int32_t>;
+            using ValuesSeen = robin_hood::unordered_map<ValuesSeenKey, int32_t, robin_hood::hash<ValuesSeenKey>>;
             using MarshalParams = std::array<cvar, 24>;
 
             // object global non-heap container for marhal function parameters
@@ -188,7 +189,7 @@ namespace openset
 
 
             // distinct counting (with property as key)
-            ValuesSeen eventDistinct{ ringHint_e::lt_compact }; // distinct to group id
+            ValuesSeen eventDistinct; // distinct to group id
             ValuesSeenKey distinctKey;
 
             // used to load global variables into user variable space

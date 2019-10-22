@@ -1,7 +1,8 @@
 #pragma once
 
 #include <array>
-#include <unordered_map>
+//#include <unordered_map>
+#include "robin_hood.h"
 
 #include "common.h"
 #include "threads/locks.h"
@@ -10,7 +11,7 @@
  * Map Objects are used to map Schema Column Indexes (which may not be sequential)
  * into sequential index based lookups.
  *
- * The PyQL compiler converst property references into 0 based indexes. If a Table has
+ * The PyQL compiler converts property references into 0 based indexes. If a Table has
  * 1000 properties, but a query uses 3 of those, the PyQL compiler will map only those three
  * properties.
  *
@@ -40,7 +41,7 @@ namespace openset
             int32_t sessionPropIndex{-1};
             std::array<int32_t, MAX_PROPERTIES> propertyMap{-1};
             std::array<int32_t, MAX_PROPERTIES> reverseMap{-1};
-            unordered_map<int64_t, int32_t> insertMap;
+            robin_hood::unordered_map<int64_t, int32_t, robin_hood::hash<int64_t>> insertMap;
         };
 
         // property maps are bulky, ugly, and fortunately, very sharable!
@@ -48,7 +49,7 @@ namespace openset
         {
             CriticalSection cs;
             PropertyMap_s* allMapping{ nullptr };
-            std::unordered_map<int64_t, PropertyMap_s*> map;
+            robin_hood::unordered_map<int64_t, PropertyMap_s*, robin_hood::hash<int64_t>> map;
 
         public:
 

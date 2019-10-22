@@ -1,10 +1,11 @@
 #pragma once
 
 #include <vector>
-#include "mem/bigring.h"
+//#include "mem/bigring.h"
 #include "mem/blhash.h"
 #include "heapstack/heapstack.h"
 
+#include "robin_hood.h"
 #include "dbtypes.h"
 #include "indexbits.h"
 
@@ -128,12 +129,12 @@ namespace openset::db
         using AttrList = vector<Attr_s*>;
 
         // value and attribute info
-        using ColumnIndex = bigRing<attr_key_s, Attr_s*>;
-        using ChangeIndex = bigRing<attr_key_s, Attr_changes_s*>;
+        using ColumnIndex = robin_hood::unordered_map<attr_key_s, Attr_s*, robin_hood::hash<attr_key_s>>;
+        using ChangeIndex = robin_hood::unordered_map<attr_key_s, Attr_changes_s*, robin_hood::hash<attr_key_s>>;
         using AttrPair = pair<attr_key_s, Attr_s*>;
 
-        ColumnIndex propertyIndex{ ringHint_e::lt_5_million };
-        ChangeIndex changeIndex{ ringHint_e::lt_5_million };
+        ColumnIndex propertyIndex;//{ ringHint_e::lt_5_million };
+        ChangeIndex changeIndex;//{ ringHint_e::lt_5_million };
 
         Table* table;
         AttributeBlob* blob;
@@ -157,7 +158,7 @@ namespace openset::db
         void clearDirty();
 
         // replace an indexes bits with new ones, used when generating segments
-        void swap(const int32_t propIndex, const int64_t value, IndexBits* newBits) const;
+        void swap(const int32_t propIndex, const int64_t value, IndexBits* newBits);
 
         AttributeBlob* getBlob() const;
 
