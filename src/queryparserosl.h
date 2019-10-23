@@ -770,7 +770,7 @@ namespace openset::query
             auto logicFound = false;
 
             std::for_each(words.begin() + start, words.begin() + end, [&](auto token) {
-                if (isTableColumn(token))
+                if (isTableColumn(token) || isProperty(token))
                     logicFound = true;
             });
 
@@ -1591,7 +1591,7 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "filter applied to: '" + token + "' (filters can only be applied to properties)",
+                        "filter applied to: '" + token + "' (filter chain functions can only be used with properties)",
                         lastDebug
                     };
 
@@ -3162,7 +3162,6 @@ namespace openset::query
 
         bool processLogic()
         {
-
             bool countable = true;
 
             // convert .row, .ever, .never and remove function calls and user vars from logic
@@ -3187,7 +3186,23 @@ namespace openset::query
                         {
                             tokensUnchained.emplace_back("VOID");
                         }
-                        else if (isTableColumn(token) || isProperty(token))
+                        else if (isProperty(token))
+                        {
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (isNumeric(token))
+                        {
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (isString(token))
+                        {
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (isBool(token))
+                        {
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (isTableColumn(token))
                         {
                             tokensUnchained.emplace_back(token);
 
@@ -3207,13 +3222,11 @@ namespace openset::query
                                     if (isRow)
                                         countable = false;
 
-                                    if (!isRow)
-                                    {
-                                        if (isNever)
-                                            tokens[idx + 2] = "[!=]";
-                                        else if (tokens[idx + 2] == "==")
-                                            tokens[idx + 2] = "[==]";
-                                    }
+                                    if (!isRow && isNever)
+                                        tokens[idx + 2] = "[!=]";
+                                        //else if (tokens[idx + 2] == "==")
+                                          //  tokens[idx + 2] = "[==]";
+                                    //}
 
                                     tokensUnchained.insert(tokensUnchained.end(), tokens.begin() + idx + 2, tokens.begin() + endOfLogic);
 
@@ -3221,6 +3234,7 @@ namespace openset::query
                                 }
                                 else
                                 {
+                                    countable = false; // other chain functions require event level evaluation
                                     idx = seekMatchingBrace(tokens, idx + 1);
                                 }
 
@@ -3327,7 +3341,7 @@ namespace openset::query
                                 auto value = param.first[0];
 
                                 // we are only interested in strings and numbers here, stuff that's in the index
-                                if (!isNumeric(value) && !isString(value))
+                                if (!isNumeric(value) && !isString(value) && !isBool(value))
                                     continue;
 
                                 if (ors.size() > 1)
@@ -3531,6 +3545,7 @@ namespace openset::query
                             // change this for presence checking (ever != nil)
                             output.emplace_back(token);
                             tokens[idx + 2] = "nil";
+                            countable = false; // presence check contains false positives
                         }
                         else
                         {
@@ -3548,6 +3563,18 @@ namespace openset::query
             }
 
             indexLogic = tokensFinalClean;
+
+            auto logicFound = false;
+
+            // if there are columns or properties left, then this query must be counted
+            // through execution (index counts will not suffice)
+            std::for_each(indexLogic.begin(), indexLogic.end(), [&](auto token) {
+                if (isTableColumn(token) || isProperty(token))
+                    logicFound = true;
+            });
+
+            if (!logicFound)
+                countable = false;
 
             return countable;
         }
