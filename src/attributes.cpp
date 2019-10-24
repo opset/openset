@@ -29,33 +29,19 @@ Attributes::~Attributes()
         PoolMem::getPool().freePtr(attr.second);
         attr.second = nullptr;
     }
-
-    for (auto &change: changeIndex)
-    {
-        auto changeIter = change.second;
-        while (changeIter)
-        {
-            const auto t = changeIter->prev;
-            PoolMem::getPool().freePtr(changeIter);
-            changeIter = t;
-        }
-        change.second = nullptr;
-    }
 }
 
 void Attributes::addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
 {
-    const auto changeRecord = changeIndex.find({ propIndex, value });
-    const auto changeTail = changeRecord != changeIndex.end() ? changeRecord->second : nullptr;
+    const auto key = attr_key_s{ propIndex, value };
 
-    // using placement new here into a POOL buffer
-    // Note we are adding the pointer to the last change to every new change
-    const auto change =
-        new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
-        Attr_changes_s(
-            linearId, (state) ? 1 : 0, changeTail);
+    if (auto changeRecord = changeIndex.find(key); changeRecord != changeIndex.end())
+    {
+        changeRecord->second.emplace_back(Attr_changes_s{linearId, state});
+        return;
+    }
 
-    changeIndex.insert({attr_key_s{ propIndex, value }, change});
+    changeIndex.emplace(key,  std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
 
@@ -131,17 +117,12 @@ void Attributes::clearDirty()
 
         bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
-        auto t = change.second; // second is the tail pointer for our changes
-
-        while (t)
+        for (const auto& t : change.second)
         {
-            if (t->state)
-                bits.bitSet(t->linId);
+            if (t.state)
+                bits.bitSet(t.linId);
             else
-                bits.bitClear(t->linId);
-            const auto prev = t->prev;
-            PoolMem::getPool().freePtr(t);
-            t = prev;
+                bits.bitClear(t.linId);
         }
 
         if (!bits.population(bits.ints * 64)) //pop count zero? remove this

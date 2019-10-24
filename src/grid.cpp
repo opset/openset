@@ -155,35 +155,17 @@ void IndexDiffing::add(const Grid* grid, Mode_e mode)
     }
 }
 
-IndexDiffing::CVList IndexDiffing::getAdded()
-{
-    CVList result;
-    for (auto& a : after)
-        if (!before.count(a.first))
-            result.push_back(a.first);
-    return result;
-}
-
-IndexDiffing::CVList IndexDiffing::getRemoved()
-{
-    CVList result;
-    for (auto& b : before)
-        if (!after.count(b.first))
-            result.push_back(b.first);
-    return result;
-}
-
 void IndexDiffing::iterAdded(const std::function<void(int32_t, int64_t)>& cb)
 {
     for (auto& a : after)
-        if (!before.count(a.first))
+        if (before.find(a.first) == before.end())
             cb(a.first.first, a.first.second);
 }
 
 void IndexDiffing::iterRemoved(const std::function<void(int32_t, int64_t)>& cb)
 {
     for (auto& b : before)
-        if (!after.count(b.first) && b.first.second != NONE)
+        if (after.find(b.first) == after.end() && b.first.second != NONE)
             cb(b.first.first, b.first.second);
 }
 
@@ -199,6 +181,7 @@ void Grid::reset()
     mem.reset();  // release the memory to the pool - will always leave one page
     rawData = nullptr;
     propHash = 0;
+    hasInsert = { false };
 }
 
 void Grid::reinitialize()
@@ -249,8 +232,10 @@ cjson Grid::toJSON() const
     cjson doc;
     doc.set("id_string", this->rawData->getIdStr());
     doc.set("id", this->rawData->id);
+
     auto rowDoc = doc.setArray("rows");
     auto properties = table->getProperties();
+
     const auto convertToJSON = [&](cjson* branch, Properties::Property_s* propInfo, int64_t value, bool isArray)
     {
         switch (propInfo->type)
@@ -332,10 +317,13 @@ Col_s* Grid::newRow()
     // adding volatile makes it happy. I've had gcc do similar things with
     // for loops using pointers and *value = something
     const volatile auto row = recast<int64_t*>(mem.newPtr(propertyMap->rowBytes));
+
     for (auto iter = row; iter < row + propertyMap->propertyCount; ++iter)
         *iter = NONE;
+
     if (propertyMap->uuidPropIndex != -1 && rawData)
         *(row + propertyMap->uuidPropIndex) = rawData->id;
+
     return reinterpret_cast<Col_s*>(row);
 }
 
@@ -374,6 +362,7 @@ void Grid::setProps(cvar& var)
 
     // if anything has changed, lets replace the props and free the last props
     const auto afterHash = varBlob::hash(var);
+
     if  (afterHash != propHash)
     {
         if (rawData->props)
@@ -381,21 +370,22 @@ void Grid::setProps(cvar& var)
 
         varBlob::serialize(propMem, var);
         rawData->props = propMem.flatten();
+        propMem.reset();
+
+        diff.iterRemoved(
+            [&](const int32_t col, const int64_t val)
+            {
+                attributes->setDirty(this->rawData->linId, col, val, false);
+            }
+        );
+
+        diff.iterAdded(
+            [&](const int32_t col, const int64_t val)
+            {
+                attributes->setDirty(this->rawData->linId, col, val, true);
+            }
+        );
     }
-
-    diff.iterAdded(
-        [&](const int32_t col, const int64_t val)
-        {
-            attributes->setDirty(this->rawData->linId, col, val, true);
-        }
-    );
-
-    diff.iterRemoved(
-        [&](const int32_t col, const int64_t val)
-        {
-            attributes->setDirty(this->rawData->linId, col, val, false);
-        }
-    );
 }
 
 void Grid::mount(PersonData_s* personData)
@@ -501,6 +491,10 @@ void Grid::prepare()
 
 PersonData_s* Grid::commit()
 {
+
+    if (!hasInsert)
+        return rawData;
+
     // this is the worst case scenario temp buffer size for this data.
     // (properties * rows) + (properties * row headers) + number_of_set_values
     const auto rowCount = rows.size();
@@ -901,28 +895,38 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 // put value in row
                 SetInfo_s info { static_cast<int>(setData.size() - startIdx), static_cast<int>(startIdx) };
                 insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                hasInsert = true;
+
+                // FIX??
             }
             default:
                 continue;
             }
 
-            // if it's pure prop, or it's not a prop at all, or it is a prop with an event
-            // and this event is the same or more recent than the last prop in the dataset
-            if (propInfo->type == PropertyTypes_e::textProp)
-                attributes->getMake(schemaCol, tempString);
-            else
-                attributes->getMake(schemaCol, tempVal);
 
-            attributes->setDirty(this->rawData->linId, schemaCol, tempVal);
-            if (propInfo->isSet)
+            if (c->type() != cjson::Types_e::ARRAY)
             {
-                SetInfo_s info { 1, static_cast<int>(setData.size()) };
-                insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
-                setData.push_back(tempVal);
-            }
-            else
-            {
-                insertRow->cols[col] = tempVal;
+                // if it's pure prop, or it's not a prop at all, or it is a prop with an event
+                // and this event is the same or more recent than the last prop in the dataset
+                if (propInfo->type == PropertyTypes_e::textProp)
+                    attributes->getMake(schemaCol, tempString);
+                else
+                    attributes->getMake(schemaCol, tempVal);
+
+                attributes->setDirty(this->rawData->linId, schemaCol, tempVal);
+
+                if (propInfo->isSet)
+                {
+                    SetInfo_s info { 1, static_cast<int>(setData.size()) };
+                    insertRow->cols[col] = *reinterpret_cast<int64_t*>(&info);
+                    setData.push_back(tempVal);
+                }
+                else
+                {
+                    insertRow->cols[col] = tempVal;
+                }
+
+                hasInsert = true;
             }
         }
         else

@@ -39,12 +39,11 @@ namespace openset::db
     {
         int32_t linId{ 0 }; // linear ID of Customer
         int32_t state{ 0 }; // 1 or 0
-        Attr_changes_s* prev{ nullptr }; // tail linked.
 
         Attr_changes_s() = default;
 
-        Attr_changes_s(const int32_t linId, const int32_t state, Attr_changes_s* prev) :
-            linId(linId), state(state), prev(prev)
+        Attr_changes_s(const int32_t linId, const int32_t state) :
+            linId(linId), state(state)
         {}
     };
 
@@ -130,7 +129,7 @@ namespace openset::db
 
         // value and attribute info
         using ColumnIndex = robin_hood::unordered_map<attr_key_s, Attr_s*, robin_hood::hash<attr_key_s>>;
-        using ChangeIndex = robin_hood::unordered_map<attr_key_s, Attr_changes_s*, robin_hood::hash<attr_key_s>>;
+        using ChangeIndex = robin_hood::unordered_map<attr_key_s, std::vector<Attr_changes_s>, robin_hood::hash<attr_key_s>>;
         using AttrPair = pair<attr_key_s, Attr_s*>;
 
         ColumnIndex propertyIndex;//{ ringHint_e::lt_5_million };

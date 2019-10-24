@@ -49,8 +49,6 @@ namespace openset
             void add(const Grid* grid, Mode_e mode);
             void add(const Grid* grid, const cvar& props, Mode_e mode);
 
-            CVList getAdded();
-            CVList getRemoved();
             void iterAdded(const std::function<void(int32_t, int64_t)>& cb);
             void iterRemoved(const std::function<void(int32_t, int64_t)>& cb);
         };
@@ -150,6 +148,8 @@ namespace openset
             Table* table { nullptr };
             Attributes* attributes { nullptr };
             AttributeBlob* blob { nullptr };
+
+            bool hasInsert { false };
 
             mutable IndexDiffing diff;
 
