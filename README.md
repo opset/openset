@@ -43,8 +43,8 @@ OpenSet can be clustered so you can scale for performance and redundancy.
 
 # Links
 
--   [Documentation](https://github.com/perple-io/openset/tree/master/docs)
--   [Docker Images](https://github.com/perple-io/openset/tree/master/docs/docker)
+-   [Documentation](https://github.com/opset/openset/tree/master/docs)
+-   [Docker Images](https://github.com/opset/openset/tree/master/docs/docker)
 
 # Examples using curl
 
@@ -143,7 +143,7 @@ response:
 }
 ```
 
-> :bulb: view the event data [here](https://github.com/perple-io/openset/blob/master/samples/data/highstreet_events.json)
+> :bulb: view the event data [here](https://github.com/opset/openset_samples/blob/master/data/highstreet_events.json)
 
 **7. Let's perform an `event` query.**
 

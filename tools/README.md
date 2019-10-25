@@ -16,7 +16,7 @@ npm install
 | :----------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 |        `init_cluster.js` | OpenSet starts in standby mode awaiting a role. You must make one node leader to start a cluster. Even if you intend to run a single node installation, you must initialize the cluster                                                    |
 |        `invite_node.js`  | To add more freshly started nodes (in standby) to an initialized cluster.                                                                                                                                                                  |
-|        `create_table.js` | Creates a table. This requires that you provide a JSON input file containing the table definition. There is an example [here]](https://github.com/perple-io/openset/blob/master/samples/pyql/highstreet_table.json)                        |
+|        `create_table.js` | Creates a table. This requires that you provide a JSON input file containing the table definition. There is an example [here]](https://github.com/opset/openset/blob/master/samples/pyql/highstreet_table.json)                        |
 |        `insert_json.js`  | A bulk import tool. You provide a directory containing JSON files. The files must have one JSON document per line, each line must define an event. Note: if your file names sort numerically they will be imported from lowest to highest. |
 
 

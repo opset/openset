@@ -8,7 +8,7 @@ Likewise, many of the cooler features in Ruby and Python are not included in OSL
 
 OSL queries are compiled into op codes and executed. In addition to being compiled the logic identified in a query is analyzed to optimize the query, this is why OSL uses chain functions such as `.within()` or `.ever()` to make clear intent of the logic.
 
-You can find the language reference [here](https://github.com/perple-io/openset/blob/master/docs/osl/language_reference.md).
+You can find the language reference [here](https://github.com/opset/openset/blob/master/docs/osl/language_reference.md).
 
 # Anatomy of an OpenSet query
 

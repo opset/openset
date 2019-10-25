@@ -10,7 +10,7 @@ OpenSet incorporates the following amazing and wonderful open source projects:
 - [lz4](https://github.com/lz4/lz4), the extremely fast compression/decompression library by Yann Collet. Event data and Indexes are compressed in OpenSet. Compression allows us to store 10x the data (or more) while realizing a < 10% performance impact (see the [benchmark](https://github.com/lz4/lz4#benchmarks) on GitHub)
 - [xxHash](https://github.com/Cyan4973/xxHash), another masterpiece by  Yann Collet. A good hash is hard to find, a fast hash is even harder --- Yann has created both.
 
-You will find recent versions of these projects under [openset/vendor](https://github.com/perple-io/openset/tree/master/vendor) in the OpenSet repo.
+You will find recent versions of these projects under [openset/vendor](https://github.com/opset/openset/tree/master/vendor) in the OpenSet repo.
 
 #### Linux requirements
 
@@ -20,7 +20,7 @@ You will find recent versions of these projects under [openset/vendor](https://g
 - GDB 7+ (optional)
 - Node.js 5+ (optional for running samples)
 
-> :pushpin: passing `--version` to these tools on the command line will help you verify they are the correct version.  If you need to install these please read the **[build tools](https://github.com/perple-io/openset/blob/master/docs/build_install/build_tools.md)** document.
+> :pushpin: passing `--version` to these tools on the command line will help you verify they are the correct version.  If you need to install these please read the **[build tools](https://github.com/opset/openset/blob/master/docs/build_install/build_tools.md)** document.
 
 #### Windows requirements
 
@@ -35,7 +35,7 @@ You will find recent versions of these projects under [openset/vendor](https://g
 ```bash
 mkdir openset
 cd openset
-git clone --recursive https://github.com/perple-io/openset.git 
+git clone --recursive https://github.com/opset/openset.git
 ```
 3. build OpenSet release:
 ```bash
@@ -63,7 +63,7 @@ You will need Visual Studio 2017 version 15.4.x (or higher).
 ```bash
 mkdir openset
 cd openset
-git clone --recursive https://github.com/perple-io/openset.git 
+git clone --recursive https://github.com/opset/openset.git
 ```
 1. Open the `openset` folder in Visual Studio
 2. Open the file `CMakeList.txt`, wait for Visual Studio to index it.
