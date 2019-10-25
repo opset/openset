@@ -177,7 +177,7 @@ inline Tests test_db()
                 std::unordered_set<std::string> referral_searches;
                 std::unordered_set<std::string> pages;
 
-                auto rows = json.xPath("rows");
+                auto rows = json.xPath("events");
 
                 ASSERT(rows != nullptr);
 
