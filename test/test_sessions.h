@@ -141,7 +141,7 @@ inline Tests test_sessions()
             "test_sessions: create and prepare a table", [=] {
 
                 // prepare our table
-                auto table = openset::globals::database->newTable("__testsessions__");
+                auto table = openset::globals::database->newTable("__testsessions__", false);
 
                 // add some properties
                 auto columns = table->getProperties();

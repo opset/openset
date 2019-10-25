@@ -239,14 +239,14 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  */
                 distinctKey.set(
                     resCol.index,
-                    (resCol.modifier == Modifiers_e::var)
-                        ? fixToInt(resCol.value)
-                        : columns->cols[resCol.distinctColumn],
-                    (resCol.schemaColumn == PROP_UUID || resCol.modifier == Modifiers_e::dist_count_person)
-                        ? 0
-                        : (macros.useStampedRowIds
-                               ? columns->cols[PROP_STAMP]
-                               : currentRow),
+                    (resCol.modifier == Modifiers_e::var) ?
+                        fixToInt(resCol.value) :
+                        columns->cols[resCol.distinctColumn],
+                    (resCol.schemaColumn == PROP_UUID || resCol.modifier == Modifiers_e::dist_count_person) ?
+                        0 :
+                       (macros.useStampedRowIds ?
+                               columns->cols[PROP_STAMP] :
+                               currentRow),
                     reinterpret_cast<int64_t>(resultColumns));
                 if (eventDistinct.count(distinctKey))
                     continue;
@@ -1123,7 +1123,10 @@ void openset::query::Interpreter::marshal_get_row(const int paramCount) const
         auto key = tableVar.actual; // we pop the actual user id in this case
         if (tableVar.schemaColumn == PROP_UUID)
         {
-            result[key] = this->grid->getUUIDString();
+            if (grid->getTable()->numericCustomerIds)
+                result[key] = this->grid->getUUID();
+            else
+                result[key] = this->grid->getUUIDString();
             continue;
         }
         auto colValue = NONE; // extract property value from grid->propRow

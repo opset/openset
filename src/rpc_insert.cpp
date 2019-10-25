@@ -102,9 +102,39 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     for (auto row : rows)
     {
         const auto personNode = row->xPath("/id");
-        if (!personNode ||
-            (personNode->type() != cjson::Types_e::INT && personNode->type() != cjson::Types_e::STR))
-            continue;
+
+        if (!personNode)
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::insert,
+                    openset::errors::errorCode_e::general_error,
+                    "missing customer id" },
+                    message);
+            return;
+        }
+
+        if (table->numericCustomerIds && personNode->type() != cjson::Types_e::INT)
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::insert,
+                    openset::errors::errorCode_e::general_error,
+                    "this table is configured for numeric customer ids" },
+                    message);
+            return;
+        }
+
+        if (!table->numericCustomerIds && personNode->type() != cjson::Types_e::STR)
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::insert,
+                    openset::errors::errorCode_e::general_error,
+                    "this table is configured for textual customer ids" },
+                    message);
+            return;
+        }
 
         // straight up numeric ID nodes don't need hashing, actually hashing would be very bad.
         // We can use numeric IDs (i.e. a customer id) directly.

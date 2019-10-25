@@ -233,7 +233,7 @@ cjson Grid::toJSON() const
     doc.set("id_string", this->rawData->getIdStr());
     doc.set("id", this->rawData->id);
 
-    auto rowDoc = doc.setArray("rows");
+    auto rowDoc = doc.setArray("events");
     auto properties = table->getProperties();
 
     const auto convertToJSON = [&](cjson* branch, Properties::Property_s* propInfo, int64_t value, bool isArray)

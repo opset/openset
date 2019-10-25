@@ -21,7 +21,6 @@ namespace openset
         class Customers
         {
         public:
-            //bigRing<int64_t, int32_t> customerMap; // probably delete this!
             robin_hood::unordered_map<int64_t, int32_t, robin_hood::hash<int64_t>> customerMap;
             vector<PersonData_s*> customerLinear;
             vector<int32_t> reuse;
@@ -36,6 +35,7 @@ namespace openset
 
             // will return a "found" customer if one exists
             // or create a new one
+            PersonData_s* createCustomer(int64_t userId);
             PersonData_s* createCustomer(string userIdString);
 
             void replaceCustomerRecord(PersonData_s* newRecord);

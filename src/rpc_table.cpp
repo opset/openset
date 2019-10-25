@@ -62,7 +62,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
         return;
     }
 
-    // TODO - look for spaces, check length, look for symbols that aren't - or _ etc.
+    const auto useNumericIds = request.xPathBool("/numeric_ids", true);
 
     const auto sourceProps = request.xPath("/properties");
     if (!sourceProps)
@@ -126,7 +126,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
 
     globals::async->suspendAsync();
-    auto table = database->newTable(tableName);
+    auto table = database->newTable(tableName, useNumericIds);
     auto columns = table->getProperties();
 
     // lock the table object
@@ -283,6 +283,7 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
     cjson response;
 
     response.set("table", tableName);
+    response.set("numeric_ids", table->numericCustomerIds);
 
     auto columnNodes = response.setArray("properties");
     auto columns = table->getProperties();

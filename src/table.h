@@ -116,6 +116,7 @@ namespace openset
             using TablePtr = shared_ptr<Table>;
 
             bool deleted{ false };
+            bool numericCustomerIds{ false };
 
             // Table Settings
             int eventMax{ 5000 }; // remove oldest rows if more than rowCull
@@ -129,7 +130,7 @@ namespace openset
 
             int64_t tableHash;
 
-            explicit Table(const string &name, openset::db::Database* database);
+            explicit Table(const string &name, const bool numericIds, openset::db::Database* database);
             ~Table();
 
             TablePtr getSharedPtr() const;

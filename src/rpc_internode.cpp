@@ -84,12 +84,14 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr& message, cons
     auto nodes = request.xPath("/tables")->getNodes();
     for (auto n : nodes)
     {
-        auto tableName = n->xPathString("/name", "");
+        const auto tableName = n->xPathString("/name", "");
+        const auto useNumericIds = n->xPathBool("/numeric_ids", true);
+
 
         if (!tableName.length())
             continue;
 
-        auto table = openset::globals::database->newTable(tableName);
+        auto table = openset::globals::database->newTable(tableName, useNumericIds);
 
         table->deserializeTable(n->xPath("/table"));
         table->deserializeTriggers(n->xPath("/triggers"));
@@ -226,7 +228,7 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr& message, con
 {
 
     // This is a binary message, it will contain an inbound table for a given partition.
-    // in the header will be the partition, and table name. 
+    // in the header will be the partition, and table name.
 
     Logger::get().info("transfer in (received " + to_string(message->getPayloadLength()) + " bytes).");
 
@@ -247,7 +249,8 @@ void RpcInternode::transfer_receive(const openset::web::MessagePtr& message, con
 
     // TODO - skipping this might be correct, and return false
     if (!table)
-        table = globals::database->newTable(tableName);
+        return;
+        //table = globals::database->newTable(tableName);
 
     // make table partition objects
     auto parts = table->getPartitionObjects(partitionId, true);
@@ -280,7 +283,7 @@ void RpcInternode::transfer_translog(openset::web::MessagePtr& message, const Rp
     // reply when done
     cjson response;
     response.set("transferred", true);
-    message->reply(http::StatusCode::success_ok, response);   
+    message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcInternode::map_change(const openset::web::MessagePtr& message, const RpcMapping& matches)
@@ -300,7 +303,7 @@ void RpcInternode::map_change(const openset::web::MessagePtr& message, const Rpc
             const auto table = t.second.get();
             table->getPartitionObjects(partitionId, true);
             db::SideLog::getSideLog().resetReadHead(table, partitionId);
-        }        
+        }
     };
 
     const auto removePartition = [&](int partitionId)

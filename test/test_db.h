@@ -96,7 +96,7 @@ inline Tests test_db()
             [=]
             {
                 // prepare our table
-                auto table = openset::globals::database->newTable("__test001__");
+                auto table = openset::globals::database->newTable("__test001__", false);
 
                 // add some properties
                 auto columns = table->getProperties();
