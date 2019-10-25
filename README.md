@@ -681,6 +681,7 @@ Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
 - switched from using the bigRing hash. It performed well, but was memory hungry. Switched to [robin-hood-hasing](https://github.com/martinus/robin-hood-hashing) by Martin Ankerl. Martins robin-hood hash table is STL `unordered_map` compatible, super fast, and resource friendly.
 - corrected a nasty bug where the property encoding cache wasn't cleared between subsequent encoding causing the memory growth and slowdowns.
 - switched the index change cache to use standard containers rather than the heap allocated linked list used before. New system is faster and maintains order.
+- updated query optimizer to understand customer properties.
 
 # OpenSet 0.4.2 release notes
 - code changes and API in order to rename concepts in OpenSet. 
