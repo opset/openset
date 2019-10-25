@@ -8,10 +8,10 @@
 
 | Platform    |  Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :------: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   |  0.4.2   | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 |  0.4.2   | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   |  0.4.3   | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.4.3   | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.4.2 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.4.3 release notes below.
 
 # What's it do?
 
@@ -62,7 +62,7 @@ git clone https://github.com/opset/openset_samples.git
 **2. Install [Docker](https://www.docker.com/) and start OpenSet (in interactive mode).**
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.2
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.3
 ```
 
 > **Note** The OpenSet images can always be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -676,6 +676,12 @@ The "40 reports" model seemed please most everyone. That was until one day Anheu
 The problem wasn't mining the data, the problem was doing so in a timely fashion. Computers weren't fast, and SQL would take hours or days to compute some of the results if was able to complete the task.
 
 Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
+
+# OpenSet 0.4.3 release notes
+- switched from using the bigRing hash. It performed well, but was memory hungry. Switched to [robin-hood-hasing](https://github.com/martinus/robin-hood-hashing) by Martin Ankerl. Martins robin-hood hash table is STL `unordered_map` compatible, super fast, and resource friendly.
+- corrected a nasty bug where the property encoding cache wasn't cleared between subsequent encoding causing the memory growth and slowdowns.
+- switched the index change cache to use standard containers rather than the heap allocated linked list used before. New system is faster and maintains order.
+- updated query optimizer to understand customer properties.
 
 # OpenSet 0.4.2 release notes
 - code changes and API in order to rename concepts in OpenSet. 

@@ -10,6 +10,8 @@
 #include "var/var.h"
 #include "cjson/cjson.h"
 
+#include "robin_hood.h"
+
 
 namespace openset
 {
@@ -30,7 +32,7 @@ namespace openset
         class IndexDiffing
         {
             using ColVal = std::pair<int32_t, int64_t>;
-            using CVMap = unordered_map<ColVal, int>;
+            using CVMap = robin_hood::unordered_map<ColVal, int, robin_hood::hash<ColVal>>;
             using CVList = vector<ColVal>;
             CVMap before;
             CVMap after;
@@ -47,8 +49,6 @@ namespace openset
             void add(const Grid* grid, Mode_e mode);
             void add(const Grid* grid, const cvar& props, Mode_e mode);
 
-            CVList getAdded();
-            CVList getRemoved();
             void iterAdded(const std::function<void(int32_t, int64_t)>& cb);
             void iterRemoved(const std::function<void(int32_t, int64_t)>& cb);
         };
@@ -148,6 +148,8 @@ namespace openset
             Table* table { nullptr };
             Attributes* attributes { nullptr };
             AttributeBlob* blob { nullptr };
+
+            bool hasInsert { false };
 
             mutable IndexDiffing diff;
 

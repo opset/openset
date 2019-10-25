@@ -3,5 +3,5 @@
 
 // line 6 is version
 const std::string __version__ =
-"0.4.2"
+"0.4.3"
 ;

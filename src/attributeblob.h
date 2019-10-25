@@ -4,8 +4,10 @@
 #include "dbtypes.h"
 
 #include "threads/locks.h"
-#include "mem/bigring.h"
+//#include "mem/bigring.h"
 #include "heapstack/heapstack.h"
+
+#include "robin_hood.h"
 
 using namespace std;
 
@@ -16,7 +18,7 @@ namespace openset
 		class AttributeBlob
 		{
 		public:
-			bigRing<attr_key_s, char*> attributesBlob{ ringHint_e::lt_5_million };
+			robin_hood::unordered_map<attr_key_s, char*, robin_hood::hash<attr_key_s>> attributesBlob;
 			HeapStack mem;
 
 			CriticalSection cs;

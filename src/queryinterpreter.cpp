@@ -248,9 +248,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                                ? columns->cols[PROP_STAMP]
                                : currentRow),
                     reinterpret_cast<int64_t>(resultColumns));
-                if (eventDistinct.hasKey(distinctKey))
+                if (eventDistinct.count(distinctKey))
                     continue;
-                eventDistinct.set(distinctKey, 1);
+                eventDistinct.emplace(distinctKey, 1);
             }
             const auto resultIndex = resCol.index + segmentColumnShift;
             switch (resCol.modifier)

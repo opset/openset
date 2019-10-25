@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <sstream>
 #include "cjson/cjson.h"
-#include "mem/bigring.h"
+//#include "mem/bigring.h"
 #include "tablepartitioned.h"
 
 using namespace openset::result;
@@ -46,10 +46,10 @@ void ResultSet::makeSortedList()
 
     sortedResult.clear();
 
-    sortedResult.reserve(results.distinct);
+    sortedResult.reserve(results.size());
 
     for (auto& kv : results)
-        sortedResult.emplace_back(kv);
+        sortedResult.emplace_back(RowPair{kv.first, kv.second});
 
     std::sort(
         sortedResult.begin(),
@@ -60,7 +60,7 @@ void ResultSet::makeSortedList()
         });
 }
 
-void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
+void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
 {
     // fix const auto
     resultWidth = macros.vars.columnVars.size() * (macros.segments.size() ? macros.segments.size() : 1);
@@ -154,16 +154,14 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s macros)
 
 Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
 {
-    auto tPair = results.get(key);
+    if (const auto tempPair = results.find(key); tempPair != results.end())
+        return tempPair->second;
 
-    if (!tPair)
-    {
-        const auto resultBytes = resultWidth * sizeof(Accumulation_s);
-        const auto t           = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
-        tPair                  = results.set(key, t);
-    }
+    const auto resultBytes = resultWidth * sizeof(Accumulation_s);
+    const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
+    results.emplace(key, t);
 
-    return tPair->second;
+    return t;
 }
 
 void mergeResultTypes(
@@ -190,16 +188,19 @@ void mergeResultTypes(
         s->accTypes = accTypes;
 }
 
-bigRing<int64_t, const char*> mergeResultText(
+robin_hood::unordered_map<int64_t, const char*, robin_hood::hash<int64_t>> mergeResultText(
     std::vector<openset::result::ResultSet*>& resultSets)
 {
     // merge all the text between from all the results
-    bigRing<int64_t, const char*> mergedText(ringHint_e::lt_compact);
+    robin_hood::unordered_map<int64_t, const char*, robin_hood::hash<int64_t>> mergedText;
 
     // merge all the localText mappings into a merged text mapping
     for (auto& r : resultSets)
         for (const auto& t : r->localText)
-            mergedText[t.first] = t.second;
+        {
+            if (!mergedText.count(t.first))
+                mergedText[t.first] = t.second;
+        }
 
     return mergedText;
 }
@@ -577,10 +578,7 @@ void ResultMuxDemux::resultSetToJson(
     // the merged localText or exorcise a lock and look in the blob
     const auto getText = [&](int64_t valueHash) -> const char*
     {
-        const auto textPair = mergedText.get(valueHash);
-
-        // if it is already cached return the cached pointer
-        if (textPair)
+        if (const auto textPair = mergedText.find(valueHash); textPair != mergedText.end())
             return textPair->second;
 
         // nothing found, NA_TEXT

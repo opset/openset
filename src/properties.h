@@ -2,7 +2,8 @@
 
 #include "common.h"
 
-#include <unordered_map>
+//#include <unordered_map>
+#include "robin_hood.h"
 #include <unordered_set>
 
 #include "threads/locks.h"
@@ -35,7 +36,7 @@ namespace openset
                 bool deleted{ false };
             };
 
-            using PropsMap = unordered_map<string, Property_s*>;
+            using PropsMap = robin_hood::unordered_map<std::string, Property_s*, robin_hood::hash<std::string>>;
 
             // shared lock (uses spin locks)
             CriticalSection lock;

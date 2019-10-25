@@ -225,6 +225,9 @@ string openset::query::MacroDbg(Macro_s& macro)
     }
 
     ss << endl << endl;
+    ss << "count method: " << (macro.indexIsCountable ? "result from index counts" : "result from event iteration") << endl;
+
+    ss << endl << endl;
     ss << "Assembly:" << endl;
     outSpacer();
     ss << "OFS  | OP           |           VAL |      IDX |      EXT | LINE | CODE" << endl;

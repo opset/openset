@@ -95,7 +95,7 @@ bool OpenLoopInsert::run()
     }
 
     int64_t readHandle = 0;
-    auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 5 : 25, readHandle);
+    auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 25 : 250, readHandle);
 
     if (inserts.empty())
     {

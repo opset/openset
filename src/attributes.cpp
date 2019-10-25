@@ -29,43 +29,29 @@ Attributes::~Attributes()
         PoolMem::getPool().freePtr(attr.second);
         attr.second = nullptr;
     }
-
-    for (auto &change: changeIndex)
-    {
-        auto changeIter = change.second;
-        while (changeIter)
-        {
-            const auto t = changeIter->prev;
-            PoolMem::getPool().freePtr(changeIter);
-            changeIter = t;
-        }
-        change.second = nullptr;
-    }
 }
 
 void Attributes::addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
 {
-    const auto changeRecord = changeIndex.get({ propIndex, value });
-    const auto changeTail = changeRecord ? changeRecord->second : nullptr;
+    const auto key = attr_key_s{ propIndex, value };
 
-    // using placement new here into a POOL buffer
-    // Note we are adding the pointer to the last change to every new change
-    const auto change =
-        new(PoolMem::getPool().getPtr(sizeof(Attr_changes_s)))
-        Attr_changes_s(
-            linearId, (state) ? 1 : 0, changeTail);
+    if (auto changeRecord = changeIndex.find(key); changeRecord != changeIndex.end())
+    {
+        changeRecord->second.emplace_back(Attr_changes_s{linearId, state});
+        return;
+    }
 
-    changeIndex.set({ propIndex, value }, change);
+    changeIndex.emplace(key,  std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
 
 Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 {
-    if (auto attrPair = propertyIndex.get({ propIndex, value }); attrPair == nullptr)
+    if (auto attrPair = propertyIndex.find({ propIndex, value }); attrPair == propertyIndex.end())
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-        attrPair = propertyIndex.emplace({ propIndex, value }, attr);
-        return attrPair->second;
+        propertyIndex.emplace(attr_key_s{ propIndex, value }, attr);
+        return attr;
     }
     else
     {
@@ -77,12 +63,12 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
     const auto valueHash = MakeHash(value);
 
-    if (auto attrPair = propertyIndex.get({ propIndex, valueHash }); attrPair == nullptr)
+    if (auto attrPair = propertyIndex.find({ propIndex, valueHash }); attrPair == propertyIndex.end())
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         attr->text = blob->storeValue(propIndex, value);
-        attrPair = propertyIndex.set({ propIndex, valueHash }, attr);
-        return attrPair->second;
+        propertyIndex.insert({attr_key_s{ propIndex, valueHash }, attr});
+        return attr;
     }
     else
     {
@@ -92,7 +78,7 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 
 Attr_s* Attributes::get(const int32_t propIndex, const int64_t value) const
 {
-    if (const auto attrPair = propertyIndex.get({ propIndex, value }); attrPair != nullptr)
+    if (const auto attrPair = propertyIndex.find({ propIndex, value }); attrPair != propertyIndex.end())
         return attrPair->second;
 
     return nullptr;
@@ -100,7 +86,7 @@ Attr_s* Attributes::get(const int32_t propIndex, const int64_t value) const
 
 Attr_s* Attributes::get(const int32_t propIndex, const string& value) const
 {
-    if (const auto attrPair = propertyIndex.get({ propIndex, MakeHash(value) }); attrPair != nullptr)
+    if (const auto attrPair = propertyIndex.find({ propIndex, MakeHash(value) }); attrPair != propertyIndex.end())
         return attrPair->second;
 
     return nullptr;
@@ -122,26 +108,21 @@ void Attributes::clearDirty()
 
     for (auto& change : changeIndex)
     {
-        const auto attrPair = propertyIndex.get({ change.first.index, change.first.value });
+        const auto attrPair = propertyIndex.find({ change.first.index, change.first.value });
 
-        if (!attrPair || !attrPair->second)
+        if (attrPair == propertyIndex.end() || !attrPair->second)
             continue;
 
         const auto attr = attrPair->second;
 
         bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
 
-        auto t = change.second; // second is the tail pointer for our changes
-
-        while (t)
+        for (const auto& t : change.second)
         {
-            if (t->state)
-                bits.bitSet(t->linId);
+            if (t.state)
+                bits.bitSet(t.linId);
             else
-                bits.bitClear(t->linId);
-            const auto prev = t->prev;
-            PoolMem::getPool().freePtr(t);
-            t = prev;
+                bits.bitClear(t.linId);
         }
 
         if (!bits.population(bits.ints * 64)) //pop count zero? remove this
@@ -184,11 +165,11 @@ void Attributes::clearDirty()
     changeIndex.clear();
 }
 
-void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* newBits) const
+void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* newBits)
 {
-    AttrPair* attrPair;
+    auto attrPair = propertyIndex.find(attr_key_s{ propIndex, value });
 
-    if ((attrPair = propertyIndex.get({ propIndex, value })) == nullptr)
+    if (attrPair == propertyIndex.end())
         return;
 
     const auto attr = attrPair->second;
@@ -199,7 +180,7 @@ void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* n
 
     // compress the data, get it back in a pool ptr, size returned in compBytes
     const auto compData = newBits->store(compBytes, linId, ofs, len);
-    const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
+    auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
 
     // copy header
     memcpy(destAttr, attr, sizeof(Attr_s));
@@ -219,8 +200,7 @@ void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* n
 
     // if we made a new destination, we have to update the
     // index to point to it, and free the old one up.
-    // update the Attr pointer directly in the index
-    attrPair->second = destAttr;
+    propertyIndex.insert({attr_key_s{ propIndex, value }, destAttr});
 
     // FIX - memory leak
     PoolMem::getPool().freePtr(attr);
@@ -404,7 +384,7 @@ int64_t Attributes::deserialize(char* mem)
         memcpy(attr->index, dataPtr, blockHeader->compSize);
 
         // add it to the index
-        propertyIndex.set({ blockHeader->column, blockHeader->hashValue }, attr);
+        propertyIndex.emplace(attr_key_s{ blockHeader->column, blockHeader->hashValue }, attr);
 
         // next block please
         read += blockLength;

@@ -3,7 +3,8 @@
 #include <unordered_set>
 
 #include "common.h"
-#include "mem/bigring.h"
+//#include "mem/bigring.h"
+#include "robin_hood.h"
 #include "file/file.h"
 #include "file/directory.h"
 #include "config.h"
@@ -202,7 +203,7 @@ namespace openset
 				}
 
 				// returns a list of nodes the partition was removed from
-				// primarily so data on nodes owning these partitions can be 
+				// primarily so data on nodes owning these partitions can be
 				// cleaned up.
 				std::vector<int64_t> purgeIncomplete()
 				{
@@ -210,12 +211,12 @@ namespace openset
 					std::vector<int64_t> result;
 
 					for (auto &n : nodes)
-						if (n.state != NodeState_e::active_owner && 
+						if (n.state != NodeState_e::active_owner &&
 							n.state != NodeState_e::active_clone)
 						{
 							result.push_back(n.nodeId);
 							n.state = NodeState_e::free;
-							n.nodeId = 0;							
+							n.nodeId = 0;
 						}
 
 					return result;
@@ -225,7 +226,7 @@ namespace openset
 			mutable CriticalSection cs;
 
 			// locStat is a map of location and status
-			bigRing<int, location_s> part2node;
+			robin_hood::unordered_map<int, location_s, robin_hood::hash<int>> part2node;
 
 			PartitionMap();
 
@@ -241,13 +242,13 @@ namespace openset
 
 			// return a list of nodeIds for a given partition
 			// this would generally be used to route inserts
-			std::vector<int64_t> getNodesByPartitionId(int partitionId) const;
+			std::vector<int64_t> getNodesByPartitionId(int partitionId);
 
 			bool isClusterComplete(int totalPartitions, std::unordered_set<NodeState_e> states, int replication = 1);
 
-			bool isOwner(int partitionId, int64_t nodeId) const;
-			bool isMapped(int partitionId, int64_t nodeId) const;
-			NodeState_e getState(int partitionId, int64_t nodeId) const;
+			bool isOwner(int partitionId, int64_t nodeId);
+			bool isMapped(int partitionId, int64_t nodeId);
+			NodeState_e getState(int partitionId, int64_t nodeId);
 
 			std::vector<int> getMissingPartitions(int totalPartitions, std::unordered_set<NodeState_e> states, int replication = 1);
 
@@ -257,9 +258,9 @@ namespace openset
 
 			void setOwner(int partitionId, int64_t nodeId);
 			void setState(int partitionId, int64_t nodeId, NodeState_e state);
-			bool swapState(int partitionId, int64_t oldOwner, int64_t newOwner) const;
+			bool swapState(int partitionId, int64_t oldOwner, int64_t newOwner);
 
-			void removeMap(int partitionId, int64_t nodeId, NodeState_e state) const;
+			void removeMap(int partitionId, int64_t nodeId, NodeState_e state);
 
 			void purgeNodeById(int64_t nodeId);
 			void purgeByState(NodeState_e state);
@@ -269,10 +270,10 @@ namespace openset
 			void serializePartitionMap(cjson* doc);
 
 			void changeMapping(
-				cjson* config, 
+				cjson* config,
 				std::function<void(int)> addPartition_cb,
 				std::function<void(int)> deletePartition_cb);
-			
+
 			void deserializePartitionMap(cjson* doc);
 			void loadPartitionMap();
 			void savePartitionMap();

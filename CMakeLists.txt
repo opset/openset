@@ -48,7 +48,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES RelWithDebInfo)
 
 endif()
 
-include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simple-web-server)
+include_directories(src lib vendor/lz4/lib vendor/asio/asio/include vendor/simple-web-server vendor/robin-hood-hashing)
 
 # file(GLOB_RECURSE ASIO_FILES vendor/asio/asio/include/*.hpp)
 
@@ -61,6 +61,7 @@ set(SOURCE_FILES
         vendor/simple-web-server/server_http.hpp
         vendor/simple-web-server/client_http.hpp
         vendor/simple-web-server/utility.hpp
+        vendor/robin-hood-hashing/robin_hood.h
         src/common.cpp
         src/common.h
         src/customer.cpp
@@ -80,7 +81,6 @@ set(SOURCE_FILES
         lib/sba/sba.cpp
         lib/sba/sba.h
         lib/include/libcommon.h
-        lib/mem/bigring.h
         lib/mem/bloom.cpp
         lib/mem/bloom.h
         lib/mem/prequeues.cpp
