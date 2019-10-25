@@ -198,9 +198,11 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
     {
         switch (value.typeOf())
         {
-        case cvar::valueType::INT32: case cvar::valueType::INT64:
+        case cvar::valueType::INT32:
+        case cvar::valueType::INT64:
             return result::ResultTypes_e::Int;
-        case cvar::valueType::FLT: case cvar::valueType::DBL:
+        case cvar::valueType::FLT:
+        case cvar::valueType::DBL:
             return result::ResultTypes_e::Double;
         case cvar::valueType::STR:
             return result::ResultTypes_e::Text;
@@ -326,19 +328,18 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
             break;
         rowKey.key[depth]   = fixToInt(item);
         rowKey.types[depth] = getType(item); //result->setAtDepth(rowKey, set_cb);
-        const auto aggs     = result->getMakeAccumulator(rowKey);
-        aggColumns(aggs);
+        aggColumns(result->getMakeAccumulator(rowKey));
         ++depth;
     }
 }
 
-void __nestItercvar(const cvar* cvariable, string& result)
+void __nestItercvar(const cvar* value, string& result)
 {
-    if (cvariable->typeOf() == cvar::valueType::DICT)
+    if (value->typeOf() == cvar::valueType::DICT)
     {
         result += "{";
         auto idx = 0;
-        for (auto& v : *cvariable->getDict())
+        for (auto& v : *value->getDict())
         {
             if (idx)
                 result += ", ";
@@ -348,11 +349,11 @@ void __nestItercvar(const cvar* cvariable, string& result)
         }
         result += "}";
     }
-    else if (cvariable->typeOf() == cvar::valueType::LIST)
+    else if (value->typeOf() == cvar::valueType::LIST)
     {
         result += "[";
         auto idx = 0;
-        for (auto& v : *cvariable->getList())
+        for (auto& v : *value->getList())
         {
             if (idx)
                 result += ", ";
@@ -361,11 +362,11 @@ void __nestItercvar(const cvar* cvariable, string& result)
         }
         result += "]";
     }
-    else if (cvariable->typeOf() == cvar::valueType::SET)
+    else if (value->typeOf() == cvar::valueType::SET)
     {
         result += "(";
         auto idx = 0;
-        for (auto& v : *cvariable->getSet())
+        for (auto& v : *value->getSet())
         {
             if (idx)
                 result += ", ";
@@ -374,13 +375,13 @@ void __nestItercvar(const cvar* cvariable, string& result)
         }
         result += ")";
     }
-    else if (cvariable->typeOf() == cvar::valueType::STR)
+    else if (value->typeOf() == cvar::valueType::STR)
     {
-        result += "\"" + cvariable->getString() + "\"";
+        result += "\"" + value->getString() + "\"";
     }
     else
     {
-        result += cvariable->getString();
+        result += value->getString();
     }
 }
 
