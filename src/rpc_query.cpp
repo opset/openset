@@ -1294,12 +1294,30 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
 
     if (table->numericCustomerIds)
     {
+        try
+        {
         uuid = stoll(uuString);
+        }
+        catch (...)
+        {
+        }
     }
     else
     {
         toLower(uuString);
         uuid = MakeHash(uuString);
+    }
+
+    if  (uuid == 0)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "invalid id"
+            },
+            message);
+        return;
     }
 
     const auto partitions = globals::async;

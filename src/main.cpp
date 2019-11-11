@@ -6,8 +6,9 @@
 #include "config.h"
 #include "logger.h"
 #include "../test/unittests.h"
-#include <string>
 #include "var/var.h"
+#include <string>
+#include <thread>
 
 #ifdef _MSC_VER
 #include <WinSock2.h>
@@ -19,6 +20,7 @@ using namespace std::string_literals;
 void StartOpenSet(openset::config::CommandlineArgs args)
 {
 #ifdef _MSC_VER
+
     // Goofy windows socket subsystem init.
     // We shouldn't have to call this nowadays Microsoft
     WSADATA wsaData;
@@ -27,41 +29,18 @@ void StartOpenSet(openset::config::CommandlineArgs args)
 
     if (err != 0)
     {
-        cout << "! could not initialize sockets." << endl;
+        Logger::get().error("Could not initialize socket.");
+        Logger::get().drain();
         exit(1);
     }
 
-    // Set colors windows style
-    SetConsoleCP(CP_UTF8);
-    SetConsoleOutputCP(CP_UTF8);
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 12);
 #endif
 
-    const auto banner =
-        R"banner(
-  _______  _______  _______  __    _  _______  _______  _______
- |       ||       ||       ||  \  | ||       ||       ||       |
- |   _   ||    _  ||    ___||   \ | ||  _____||    ___||_     _|
- |  | |  ||   |_| ||   |___ |    \| || |_____ |   |___   |   |
- |  | |  ||    ___||    ___||       ||_____  ||    ___|  |   |
- |  |_|  ||   |    |   |___ | |\    | _____| ||   |___   |   |
- |       ||   |    |       || | \   ||       ||       |  |   |
- |_______||___|    |_______||_|  \__||_______||_______|  |___|
+    Logger::get().info("OpenSet v" + __version__);
+    Logger::get().info("OpenSet, Copyright(c) 2015 - 2019, Seth Hamilton.");
 
-)banner";
-
-    cout << "\x1b[1;31m\b\b\b\b\b\b\b       " << endl;
-    cout << banner << "        \x1b[1;30m\b\b\b\b\b\b\b             " << endl;
-
-#ifdef _MSC_VER
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 8);
-#endif
-    cout << " v" << __version__ << " | OpenSet, Copyright(c) 2015 - 2019, Seth Hamilton." << endl;
-    cout << "\x1b[0m\b\b\b\b        " << endl;
-
-#ifdef _MSC_VER
-    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), 7);
-#endif
+    const auto workerCount = std::thread::hardware_concurrency();
+    Logger::get().info(to_string(workerCount) + " processor cores available.");
 
     args.fix(); // fix the default startup arguments after WSAStartup (on windows)
 

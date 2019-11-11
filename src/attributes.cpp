@@ -235,10 +235,10 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
         if (const auto tAttr = get(propIndex, value); tAttr)
             result.push_back(tAttr);
         return result;
-    case listMode_e::PRESENT:
-        if (const auto tAttr = get(propIndex, NONE); tAttr)
-            result.push_back(tAttr);
-        return result;
+    //case listMode_e::PRESENT_FAST: // fast for reducing set in `!= nil` test
+    //    if (const auto tAttr = get(propIndex, NONE); tAttr)
+    //        result.push_back(tAttr);
+    //    return result;
         default: ;
     }
 
@@ -249,6 +249,9 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
 
         switch (mode)
         {
+        case listMode_e::PRESENT: // sum of all indexes - slow but accurate for `== nil` test
+            result.push_back(kv.second);
+        break;
         case listMode_e::GT:
             if (kv.first.value > value)
                 result.push_back(kv.second);

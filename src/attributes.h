@@ -121,7 +121,7 @@ namespace openset::db
             GTE,
             LT,
             LTE,
-            PRESENT
+            PRESENT,
         };
 
         using AttrListExpanded = vector<std::pair<int64_t,Attr_s*>>; // pair, value and bits

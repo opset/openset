@@ -65,7 +65,12 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 
     auto negate = false;
 
-    if (mode == Attributes::listMode_e::NEQ)
+    if (mode == Attributes::listMode_e::EQ && entry.hash == NONE)
+    {
+        mode = Attributes::listMode_e::PRESENT;
+        negate = true;
+    }
+    else if (mode == Attributes::listMode_e::NEQ)
     {
         if (entry.hash == NONE)
             mode = Attributes::listMode_e::PRESENT; // != NONE -- same as equals anything

@@ -1716,13 +1716,16 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
         case OpCode_e::PSHTBLCOL: // push a property value
         {
             // if it's row iterator variable, we get its value, otherwise we use the current row
-            const int64_t readRow = inst->extra != NONE
-                                        ? macros.vars.userVars[inst->extra].value.getInt64()
-                                        : currentRow; // we pop the actual user id in this case
+            const auto readRow = inst->extra != NONE
+                ? macros.vars.userVars[inst->extra].value.getInt64()
+                : currentRow; // we pop the actual user id in this case
 
             if (macros.vars.tableVars[inst->index].schemaColumn == PROP_UUID)
             {
-                *stackPtr = this->grid->getUUIDString();
+                if (grid->getTable()->numericCustomerIds)
+                    *stackPtr = this->grid->getUUID();
+                else
+                    *stackPtr = this->grid->getUUIDString();
             }
             else
             {

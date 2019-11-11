@@ -226,7 +226,7 @@ namespace openset
             PropertyMap_s* getPropertyMap() const { return propertyMap; }
             AttributeBlob* getAttributeBlob() const;
 
-            cjson toJSON() const; // brings object back to zero state
+            cjson toJSON(); // brings object back to zero state
             void reinitialize();
         private:
             Col_s* newRow();

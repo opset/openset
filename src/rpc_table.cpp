@@ -62,7 +62,21 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
         return;
     }
 
-    const auto useNumericIds = request.xPathBool("/numeric_ids", true);
+    const auto idType = request.xPathString("/id_type", "none");
+
+    if (idType != "numeric" && idType != "textual")
+    {
+        RpcError(
+            openset::errors::Error{
+                openset::errors::errorClass_e::config,
+                openset::errors::errorCode_e::general_config_error,
+                "properties /id_type should be 'textual' or 'numeric'" },
+                message);
+
+        return;
+    }
+
+    const auto useNumericIds =  idType == "numeric" ? true : false;
 
     const auto sourceProps = request.xPath("/properties");
     if (!sourceProps)
@@ -283,7 +297,7 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
     cjson response;
 
     response.set("table", tableName);
-    response.set("numeric_ids", table->numericCustomerIds);
+    response.set("id_type", table->numericCustomerIds ? "numeric" : "textual");
 
     auto columnNodes = response.setArray("properties");
     auto columns = table->getProperties();

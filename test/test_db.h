@@ -840,7 +840,7 @@ inline Tests test_db()
                 ASSERT(queryMacros.index[3].value == "prop_txt"s);
 
                 ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
-                ASSERT(queryMacros.index[4].value == NONE); // should be replaced and de-indexed
+                ASSERT(queryMacros.index[4].value == "rabbit"); // should be replaced and de-indexed
 
                 ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::NEQ);
 

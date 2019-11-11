@@ -448,6 +448,11 @@ namespace openset::query
             return tableColumns->isEventProperty(name);
         }
 
+        bool isTableSet(const std::string& name) const
+        {
+            return tableColumns->isSet(name);
+        }
+
         bool isProperty(const std::string& name) const
         {
             return tableColumns->isCustomerProperty(name);
@@ -3178,7 +3183,11 @@ namespace openset::query
 
                     if (isTextual(token))
                     {
-                        if (Operators.count(token))
+                        if (token == "nil")
+                        {
+                            tokensUnchained.emplace_back(token);
+                        }
+                        else if (Operators.count(token))
                         {
                             tokensUnchained.emplace_back(token);
                         }
@@ -3296,7 +3305,7 @@ namespace openset::query
                         token = "==";
 
                     // clean up any residual user variables
-                    if (isUserVar(token) && !isProperty(token))
+                    if (isUserVar(token) && !isProperty(token) && token != "nil")
                         token = "VOID";
 
                     // convert lists into ORs if left or right side is not a void
@@ -3532,7 +3541,7 @@ namespace openset::query
                             )
                         )
                         {
-                            // once a property has been stripped to down to a standalone property
+                            // once a property has been stripped down to a standalone property
                             // with no conditions we simply test for presence of the property (!= nil)
                             stripped = true;
                             output.emplace_back(token);
@@ -3544,8 +3553,12 @@ namespace openset::query
                             // if it isn't a not_equal from an ever/never (which was changed to `[!=]`)
                             // change this for presence checking (ever != nil)
                             output.emplace_back(token);
-                            tokens[idx + 2] = "nil";
-                            countable = false; // presence check contains false positives
+
+                            if (!isProperty(token) || isTableSet(token))
+                            {
+                                tokens[idx + 2] = "nil";
+                                countable = false; // presence check contains false positives
+                            }
                         }
                         else
                         {

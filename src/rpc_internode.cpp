@@ -56,7 +56,7 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr& message, cons
     const auto partitionMax = request.xPathInt("/partition_max", 0);
 
     // TODO - error check here
-    Logger::get().info("Joining cluster as: '" + nodeName + "'.");
+    Logger::get().info("joining cluster as '" + nodeName + "'.");
 
     // assign a new node id
     {
@@ -99,8 +99,6 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr& message, cons
 
     openset::globals::async->resumeAsync();
 
-    Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
-
     cjson response;
     response.set("configured", true);
     message->reply(http::StatusCode::success_ok, response);
@@ -108,11 +106,11 @@ void RpcInternode::join_to_cluster(const openset::web::MessagePtr& message, cons
 
 void RpcInternode::add_node(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
-    auto requestJson = message->getJSON();
+    const auto requestJson = message->getJSON();
 
     const auto nodeName = requestJson.xPathString("/node_name", "");
     const auto nodeId = requestJson.xPathInt("/node_id", 0);
-    auto host = requestJson.xPathString("/host", "");
+    const auto host = requestJson.xPathString("/host", "");
     const auto port = requestJson.xPathInt("/port", 0);
 
     if (host.length() && port && nodeId)

@@ -40,9 +40,6 @@ void OpenLoopInsert::prepare()
     }
 
     tablePartitioned->checkForSegmentChanges();
-
-//	queueIter = localQueue.end();
-    Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* segment)
