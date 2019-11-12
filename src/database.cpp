@@ -29,13 +29,13 @@ Database::TablePtr Database::getTable(const string& tableName)
         return iter->second;
 }
 
-Database::TablePtr Database::newTable(const string& tableName)
+Database::TablePtr Database::newTable(const string& tableName, const bool numericIds)
 {
     auto table = getTable(tableName);
     if (table)
         return table;
 
-    table = make_shared<Table>(tableName, this);
+    table = make_shared<Table>(tableName, numericIds, this);
 
     {
         csLock lock(cs);

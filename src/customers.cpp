@@ -53,6 +53,43 @@ PersonData_s* Customers::getCustomerByLIN(const int64_t linId)
     return customerLinear[linId];
 }
 
+PersonData_s* Customers::createCustomer(int64_t userId)
+{
+    const auto person = getCustomerByID(userId);
+
+    auto isReuse = false;
+    auto linId = static_cast<int32_t>(customerLinear.size());
+
+    if (!person && !reuse.empty())
+    {
+        linId = reuse.back();
+        reuse.pop_back();
+        isReuse = true;
+    }
+
+    if (!person) // not found, lets create
+    {
+        auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s)));
+
+        newUser->id = userId;
+        newUser->linId = linId;
+        newUser->idBytes = 0;
+        newUser->bytes = 0;
+        newUser->comp = 0;
+        newUser->props = nullptr;
+
+        if (!isReuse)
+            customerLinear.push_back(newUser);
+
+        customerMap[userId] = newUser->linId;
+
+        return newUser;
+    }
+
+    // check for match/collision
+    return person;
+}
+
 PersonData_s* Customers::createCustomer(string userIdString)
 {
     auto idLen = userIdString.length();

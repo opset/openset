@@ -153,7 +153,7 @@ inline Tests test_zorder()
             "z-order: test event z-order", [=] {
 
                 // prepare our table
-                auto table = openset::globals::database->newTable("__testzorder__");
+                auto table = openset::globals::database->newTable("__testzorder__", false);
 
                 // add some properties
                 auto columns = table->getProperties();

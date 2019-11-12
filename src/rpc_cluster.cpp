@@ -65,7 +65,7 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
         globals::running->setNodeName(openset::config::createName());
         globals::running->state = openset::config::NodeState_e::active;
         globals::running->partitionMax = partitionMax;
-        Logger::get().info("Initialized as: '" + globals::running->nodeName + "'.");
+        Logger::get().info("instance has been named '" + globals::running->nodeName + "'.");
     }
 
     openset::globals::mapper->partitionMap.clear();
@@ -79,7 +79,7 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
 
     partitions->mapPartitionsToAsyncWorkers();
 
-    Logger::get().info(globals::running->nodeName + " configured for " + to_string(partitionMax) + " partitions.");
+    Logger::get().info("'" + globals::running->nodeName + "' started with " + to_string(partitionMax) + " data partitions.");
 
     cjson response;
     response.set("server_name", globals::running->nodeName);
@@ -329,7 +329,7 @@ void RpcCluster::join(const openset::web::MessagePtr message, const RpcMapping& 
             Logger::get().info(
                 "transferred translog to " + openset::globals::mapper->getRouteName(newNodeId) +
                 " (transfered " + to_string(blockSize) + " bytes).");
-       
+
     }
 
     // respond to client

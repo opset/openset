@@ -21,7 +21,7 @@ namespace openset
 	{
 		const auto ip = globals::running->host;
 		const auto port = globals::running->port;
-		const auto pool = std::thread::hardware_concurrency() * 2; // set to number of cores
+		const auto pool = std::thread::hardware_concurrency(); // set to number of cores
 
 		const auto partitionTotal = globals::running->partitionMax;
 
@@ -35,25 +35,25 @@ namespace openset
 
 		openset::mapping::Mapper mapper;
 		mapper.startRouter();
-		
+
 		openset::db::Database db;
 
 		// aysnc.run will create our thread pool o
-		// 
+		//
 		// This thread will create a pool of thread (in 'run') that
 		// where each thread is responsible for a list of partitions.
 		//
 		// Note: On an empty cluster this will exit out right away, which is fine.
 
 		async.startAsync();
-				
+
 		// async loop will not be running if this node is not part of a cluster
-		if (async.isRunning()) 
+		if (async.isRunning())
 			async.mapPartitionsToAsyncWorkers();
-	
+
 		openset::mapping::Sentinel teamster(&mapper, &db);
 
-		web::HttpServe httpd;	
+		web::HttpServe httpd;
 		httpd.serve(ip, port); // this function will never return
 
 		/*
@@ -105,7 +105,7 @@ namespace openset
 				openset::comms::Feed::onSub(&db, &async, message);
 			});
 
-		// Start the TCP server. 
+		// Start the TCP server.
 		// BTW - this function will never return...
 		server.serve(IP, port, pool);
 

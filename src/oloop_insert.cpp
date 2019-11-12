@@ -40,9 +40,6 @@ void OpenLoopInsert::prepare()
     }
 
     tablePartitioned->checkForSegmentChanges();
-
-//	queueIter = localQueue.end();
-    Logger::get().info("insert job started for " + table->getName() + " on partition " + std::to_string(tablePartitioned->partition));
 }
 
 void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* segment)
@@ -137,7 +134,10 @@ bool OpenLoopInsert::run()
         cjson row(*insertIter, cjson::Mode_e::string);
 
         // we will take profile or table to specify the table name
-        auto uuidString = row.xPathString("/id", "");
+        auto uuidString = tablePartitioned->table->numericCustomerIds ?
+            to_string(row.xPathInt("/id", 0)) :
+            row.xPathString("/id", "");
+
         toLower(uuidString);
 
         // do we have what we need to insert?
@@ -151,7 +151,9 @@ bool OpenLoopInsert::run()
     // now insert without locks
     for (auto& uuid : evtByPerson)
     {
-        const auto personData = tablePartitioned->people.createCustomer(uuid.first);
+        const auto personData = tablePartitioned->table->numericCustomerIds ?
+            tablePartitioned->people.createCustomer(stoll(uuid.first)) :
+            tablePartitioned->people.createCustomer(uuid.first);
         person.mount(personData);
         person.prepare();
 

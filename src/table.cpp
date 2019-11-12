@@ -12,10 +12,11 @@
 
 using namespace openset::db;
 
-Table::Table(const string &name, Database* database):
+Table::Table(const string &name, const bool numericIds, Database* database):
     name(name),
     database(database),
     loadVersion(Now()),
+    numericCustomerIds(numericIds),
     tableHash(MakeHash(name))
 {}
 

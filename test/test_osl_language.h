@@ -75,7 +75,7 @@ inline Tests test_osl_language()
             [user1_raw_inserts]
             {
                 auto database = openset::globals::database;        // prepare our table
-                auto table    = database->newTable("__test003__"); // add some properties
+                auto table    = database->newTable("__test003__", false); // add some properties
                 auto columns  = table->getProperties();
 
                 ASSERT(columns != nullptr);

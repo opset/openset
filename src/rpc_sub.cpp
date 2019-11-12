@@ -1,4 +1,4 @@
-#include "rpc_trigger.h"
+#include "rpc_sub.h"
 
 #include <cinttypes>
 #include <regex>
@@ -31,7 +31,7 @@ using namespace openset::db;
 using namespace openset::result;
 
 /*
-void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcSub::revent_create(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
@@ -142,7 +142,7 @@ void RpcRevent::revent_create(const openset::web::MessagePtr message, const RpcM
 */
 
 /*
-void RpcRevent::revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcSub::revent_describe(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
     csLock lock(globals::running->cs);
 
@@ -190,63 +190,88 @@ void RpcRevent::revent_describe(const openset::web::MessagePtr message, const Rp
 }
 */
 
-void RpcRevent::trigger_drop(const openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcSub::sub_delete(const openset::web::MessagePtr message, const RpcMapping& matches)
 {
-/*    
     csLock lock(globals::running->cs);
 
-    auto tableName = request->xPathString("/params/table", "");
-    auto triggerName = request->xPathString("/params/trigger", "");
+    // this request must be forwarded to all the other nodes
+    if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
+        return;
 
-    if (!tableName.size() || !triggerName.size())
+    auto database = openset::globals::database;
+
+    const auto request = message->getJSON();
+    const auto tableName = matches.find("table"s)->second;
+    const auto segmentName = matches.find("segment"s)->second;
+    const auto subName = matches.find("subname"s)->second;
+
+    if (!tableName.size())
     {
-    error(
-    openset::errors::Error{
-    openset::errors::errorClass_e::config,
-    openset::errors::errorCode_e::general_config_error,
-    "missing /params/table" },
-    response);
-    return;
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/{table_name}/.../..." },
+            message);
+        return;
+    }
+
+    if (!segmentName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/.../{segment_name}/..." },
+            message);
+        return;
+    }
+
+    if (!subName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/.../.../{subscriber_name}" },
+            message);
+        return;
     }
 
     auto table = database->getTable(tableName);
 
     if (!table)
     {
-    error(
-    openset::errors::Error{
-    openset::errors::errorClass_e::config,
-    openset::errors::errorCode_e::general_config_error,
-    "table not found" },
-    response);
-    return;
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "table not found" },
+            message);
+        return;
     }
 
-    const auto triggers = table->getTriggerConf();
-    const auto trigger = triggers->find(triggerName);
-
-    if (trigger == triggers->end())
+    if (!table->getMessages()->removeSubscriber(segmentName, subName))
     {
-    error(
-    openset::errors::Error{
-    openset::errors::errorClass_e::config,
-    openset::errors::errorCode_e::general_config_error,
-    "trigger not found" },
-    response);
-    return;
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "subscriber name not found: '" + subName + "'" },
+            message);
+        return;
     }
 
-    triggers->erase(triggerName);
-    table->forceReload();
-
-    const auto logLine = "dropped trigger '" + triggerName + "' on table '" + tableName + "'.";
-    Logger::get().info(logLine);
-    response->set("message", logLine);    
-*/
+    cjson response;
+    response.set("message", "removed");
+    response.set("table", tableName);
+    response.set("segment", segmentName);
+    response.set("subname", subName);
+    message->reply(http::StatusCode::success_ok, response);
 }
 
 
-void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& matches)
+void RpcSub::sub_create(openset::web::MessagePtr message, const RpcMapping& matches)
 {
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
@@ -263,11 +288,32 @@ void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& 
     {
         RpcError(
             openset::errors::Error{
-                openset::errors::errorClass_e::config,
-                openset::errors::errorCode_e::general_config_error,
-                "missing /params/table" },
-                message);
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/{table_name}/.../..." },
+            message);
+        return;
+    }
 
+    if (!segmentName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/.../{segment_name}/..." },
+            message);
+        return;
+    }
+
+    if (!subName.size())
+    {
+        RpcError(
+            openset::errors::Error{
+            openset::errors::errorClass_e::config,
+            openset::errors::errorCode_e::general_config_error,
+            "missing /v1/trigger/.../.../{subscriber_name}" },
+            message);
         return;
     }
 
@@ -306,7 +352,7 @@ void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& 
         return;
     }
 
-    auto config = message->getJSON();
+    const auto config = message->getJSON();
     const auto retention = config.xPathInt("/retention", 10'800'000);
     const auto host = config.xPathString("/host", "");
     const auto port = config.xPathInt("/port", 80);
@@ -325,7 +371,6 @@ void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& 
 
     auto testAndCreate = [message, retention, host, port, path, table, tableName, segmentName, subName]()
     {
-
         const auto hostPort = host + ":" + to_string(port);
         auto rest = std::make_shared<openset::web::Rest>(0, hostPort);
 
@@ -348,7 +393,7 @@ void RpcRevent::trigger_sub(openset::web::MessagePtr message, const RpcMapping& 
 
             // lets do some checking, are we making a new trigger
             // or updating an old one
-            auto segments = table->getSegmentRefresh();
+            const auto segments = table->getSegmentRefresh();
 
             // does this trigger exist? If not report the error
             if (!segments->count(segmentName))

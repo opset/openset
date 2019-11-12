@@ -8,33 +8,33 @@
 
 namespace openset
 {
-	namespace db
-	{
-		class Database
-		{
-		public:
-			CriticalSection cs;
+    namespace db
+    {
+        class Database
+        {
+        public:
+            CriticalSection cs;
 
             using TablePtr = shared_ptr<Table>;
             using TableMap = unordered_map<std::string, TablePtr>;
 
-			TableMap tables;
+            TableMap tables;
 
-			explicit Database();
-			~Database() = default;
+            explicit Database();
+            ~Database() = default;
 
-			TablePtr getTable(const std::string& tableName);
-			TablePtr newTable(const std::string& tableName);
+            TablePtr getTable(const std::string& tableName);
+            TablePtr newTable(const std::string& tableName, const bool numericIds);
             void dropTable(const std::string& tableName);
 
             std::vector<std::string> getTableNames();
 
-			void serialize(cjson* doc);
-		};
-	};
+            void serialize(cjson* doc);
+        };
+    };
 
-	namespace globals
-	{
-		extern openset::db::Database* database;
-	}
+    namespace globals
+    {
+        extern openset::db::Database* database;
+    }
 };

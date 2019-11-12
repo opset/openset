@@ -1252,20 +1252,15 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
 
 void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& matches)
 {
-    auto uuString = message->getParamString("sid");
-    auto uuid     = message->getParamInt("id");
-    if (uuid == 0 && uuString.length())
-    {
-        toLower(uuString);
-        uuid = MakeHash(uuString);
-    } // no UUID... so make an error!
-    if (uuid == 0)
+    auto uuString = message->getParamString("id");
+
+    if (!uuString.size())
     {
         RpcError(
             errors::Error {
                 errors::errorClass_e::query,
                 errors::errorCode_e::general_error,
-                "customer query must have an id={number} or idstring={text} parameter"
+                "customer query must expecting id= parameter"
             },
             message);
         return;
@@ -1294,17 +1289,54 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
             message);
         return;
     }
-    const auto partitions      = globals::async;
+
+    int64_t uuid = 0;
+
+    if (table->numericCustomerIds)
+    {
+        try
+        {
+        uuid = stoll(uuString);
+        }
+        catch (...)
+        {
+        }
+    }
+    else
+    {
+        toLower(uuString);
+        uuid = MakeHash(uuString);
+    }
+
+    if  (uuid == 0)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "invalid id"
+            },
+            message);
+        return;
+    }
+
+    const auto partitions = globals::async;
     const auto targetPartition = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
-    const auto mapper          = globals::mapper->getPartitionMap();
-    auto owners                = mapper->getNodesByPartitionId(targetPartition);
-    int64_t targetRoute        = -1; // find the owner
+    const auto mapper = globals::mapper->getPartitionMap();
+    auto owners = mapper->getNodesByPartitionId(targetPartition);
+
+    int64_t targetRoute = -1;
+
+    // find the owner
     for (auto o : owners)
+    {
         if (mapper->isOwner(targetPartition, o))
         {
             targetRoute = o;
             break;
         }
+    }
+
     if (targetRoute == -1)
     {
         RpcError(
@@ -1315,7 +1347,9 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
             },
             message);
         return;
-    } // this query is local - we will fire up a single async get user task on this node
+    }
+
+    // this query is local - we will fire up a single async get user task on this node
     if (targetRoute == globals::running->nodeId)
     {
         // lets use the super basic shuttle.
@@ -1343,6 +1377,7 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
             message->getQuery(),
             message->getPayload(),
             message->getPayloadLength());
+
         message->reply(response->code, response->data, response->length);
     }
 }

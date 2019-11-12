@@ -227,14 +227,96 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 
 AttributeBlob* Grid::getAttributeBlob() const { return attributes->blob; }
 
-cjson Grid::toJSON() const
+cjson Grid::toJSON()
 {
-    cjson doc;
-    doc.set("id_string", this->rawData->getIdStr());
-    doc.set("id", this->rawData->id);
-
-    auto rowDoc = doc.setArray("rows");
     auto properties = table->getProperties();
+    cjson doc;
+
+    if (table->numericCustomerIds)
+        doc.set("id", this->rawData->id);
+    else
+        doc.set("id", this->rawData->getIdStr());
+
+    auto propDoc = doc.setObject("properties");
+    const auto props = getProps(false);
+
+    const auto propDict = props.getDict();
+    if (propDict)
+    {
+        for (const auto &key : *propDict)
+        {
+            const auto propInfo = properties->getProperty(key.first);
+
+            if (!propInfo)
+                continue;
+
+            if (propInfo->isSet && key.second.typeOf() == cvar::valueType::SET)
+            {
+                auto propList = propDoc->setArray(key.first);
+                for (const auto &setItem : *key.second.getSet())
+                {
+                switch (propInfo->type)
+                {
+                case PropertyTypes_e::intProp:
+                    propList->push(key.second.getInt64());
+                    break;
+                case PropertyTypes_e::doubleProp:
+                    propList->push(key.second.getDouble());
+                    break;
+                case PropertyTypes_e::boolProp:
+                    propList->push(key.second.getBool());
+                    break;
+                case PropertyTypes_e::textProp:
+                    propList->push(key.second.getString());
+                    break;
+                }
+                }
+            }
+            else if (propInfo->isSet && key.second.typeOf() == cvar::valueType::LIST)
+            {
+                auto propList = propDoc->setArray(key.first);
+                for (const auto &setItem : *key.second.getList())
+                {
+                switch (propInfo->type)
+                {
+                case PropertyTypes_e::intProp:
+                    propList->push(key.second.getInt64());
+                    break;
+                case PropertyTypes_e::doubleProp:
+                    propList->push(key.second.getDouble());
+                    break;
+                case PropertyTypes_e::boolProp:
+                    propList->push(key.second.getBool());
+                    break;
+                case PropertyTypes_e::textProp:
+                    propList->push(key.second.getString());
+                    break;
+                }
+                }
+            }
+            else
+            {
+                switch (propInfo->type)
+                {
+                case PropertyTypes_e::intProp:
+                    propDoc->set(key.first, key.second.getInt64());
+                    break;
+                case PropertyTypes_e::doubleProp:
+                    propDoc->set(key.first, key.second.getDouble());
+                    break;
+                case PropertyTypes_e::boolProp:
+                    propDoc->set(key.first, key.second.getBool());
+                    break;
+                case PropertyTypes_e::textProp:
+                    propDoc->set(key.first, key.second.getString());
+                    break;
+                }
+            }
+        }
+
+    }
+
+    auto rowDoc = doc.setArray("events");
 
     const auto convertToJSON = [&](cjson* branch, Properties::Property_s* propInfo, int64_t value, bool isArray)
     {

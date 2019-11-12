@@ -96,7 +96,7 @@ inline Tests test_db()
             [=]
             {
                 // prepare our table
-                auto table = openset::globals::database->newTable("__test001__");
+                auto table = openset::globals::database->newTable("__test001__", false);
 
                 // add some properties
                 auto columns = table->getProperties();
@@ -177,7 +177,7 @@ inline Tests test_db()
                 std::unordered_set<std::string> referral_searches;
                 std::unordered_set<std::string> pages;
 
-                auto rows = json.xPath("rows");
+                auto rows = json.xPath("events");
 
                 ASSERT(rows != nullptr);
 
@@ -840,7 +840,7 @@ inline Tests test_db()
                 ASSERT(queryMacros.index[3].value == "prop_txt"s);
 
                 ASSERT(queryMacros.index[4].op == openset::query::HintOp_e::PUSH_VAL);
-                ASSERT(queryMacros.index[4].value == NONE); // should be replaced and de-indexed
+                ASSERT(queryMacros.index[4].value == "rabbit"); // should be replaced and de-indexed
 
                 ASSERT(queryMacros.index[5].op == openset::query::HintOp_e::NEQ);
 
