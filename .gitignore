@@ -91,4 +91,5 @@ ipch/
 .idea/
 *.sln.iml
 
-
+# code formatter
+.prettierrc

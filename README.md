@@ -6,12 +6,12 @@
 
 ###
 
-| Platform    |  Version | Info                            | Status                                                                                                                                                                     |
-| :---------- | :------: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   |  0.4.3   | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 |  0.4.3   | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Platform    | Version | Info                            | Status                                                                                                                                                                     |
+| :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux x64   |  0.4.4  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.4.4  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.4.3 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.4.4 release notes below.
 
 # What's it do?
 
@@ -62,7 +62,7 @@ git clone https://github.com/opset/openset_samples.git
 **2. Install [Docker](https://www.docker.com/) and start OpenSet (in interactive mode).**
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.3
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.4
 ```
 
 > **Note** The OpenSet images can always be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -96,6 +96,7 @@ curl \
 -X POST  http://127.0.0.1:8080/v1/table/highstreet \
 -d @- << EOF | json_pp
 {
+    "id_type": "textual",
     "properties": [
         {"name": "order_id", "type": "int"},
         {"name": "product_name", "type": "text"},
@@ -677,28 +678,40 @@ The problem wasn't mining the data, the problem was doing so in a timely fashion
 
 Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
 
-# OpenSet 0.4.3 release notes
-- switched from using the bigRing hash. It performed well, but was memory hungry. Switched to [robin-hood-hasing](https://github.com/martinus/robin-hood-hashing) by Martin Ankerl. Martins robin-hood hash table is STL `unordered_map` compatible, super fast, and resource friendly.
-- corrected a nasty bug where the property encoding cache wasn't cleared between subsequent encoding causing the memory growth and slowdowns.
-- switched the index change cache to use standard containers rather than the heap allocated linked list used before. New system is faster and maintains order.
-- updated query optimizer to understand customer properties.
+# Release Notes
 
-# OpenSet 0.4.2 release notes
-- code changes and API in order to rename concepts in OpenSet. 
-    * `people` are now `customers` 
-    * `person` is now `customer`
-- code changes and API changes rename `columns` to `properties`. Properties now have two types:
+### 0.4.4
+
+-   added `id_type` to switch in create table. This is now required and allows you to specify `numeric` or `textual` customer ids.
+-   corrected issue with query conditions that made `nil` comparisons (i.e. `some_prop == nil` or `some_prop != nil`)
+-   `/v1/query/{table}/customer` endpoint now returns customer properties in addition to event properties. The customer id will return as either a numeric or textual (whichever was specified during table creation)
+-   updated logging to make it more useful. Removed the startup banner (it polluted logs).
+-   `triggers` have been renamed to `subscribers` (see REST documentation)
+
+### 0.4.3
+
+-   switched from using the bigRing hash. It performed well, but was memory hungry. Switched to [robin-hood-hashing](https://github.com/martinus/robin-hood-hashing) by Martin Ankerl. Martins robin-hood hash table is STL `unordered_map` compatible, super fast, and resource friendly.
+-   corrected a nasty bug where the property encoding cache wasn't cleared between subsequent encoding causing the memory growth and slowdowns.
+-   switched the index change cache to use standard containers rather than the heap allocated linked list used before. New system is faster and maintains order.
+-   updated query optimizer to understand customer properties.
+
+### 0.4.2
+
+-   code changes and API in order to rename concepts in OpenSet.
+    -   `people` are now `customers`
+    -   `person` is now `customer`
+-   code changes and API changes rename `columns` to `properties`. Properties now have two types:
     1. event properties
     2. customer properties
-- fixed a parsing issue with filters (chained functions) parsing past the closing `)` bracket
-- fixed error where conditions with a `nil/none` value would evaluate to `true`.
+-   fixed a parsing issue with filters (chained functions) parsing past the closing `)` bracket
+-   fixed error where conditions with a `nil/none` value would evaluate to `true`.
 
-# OpenSet 0.4.1 release notes
+### 0.4.1
 
-- indexed customer properties that can be used by the query optimizer
-- props read/written anytime in any OSL script like regular user variables. The OSL Interpreter will determine whether a property has changed.
+-   indexed customer properties that can be used by the query optimizer
+-   props read/written anytime in any OSL script like regular user variables. The OSL Interpreter will determine whether a property has changed.
 
-# OpenSet 0.4.0 release notes
+### 0.4.0
 
 -   new OpenSet Langauge (OSL) introduced to replace PyQL language. It was difficult to ask easy questions with PyQL. OSL was designed to be expressive and make reading and writing queries more natural.
 -   new query optimizer that takes advantage of OSL language constructs to create smarter pre-query indexes.

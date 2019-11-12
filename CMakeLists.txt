@@ -169,14 +169,14 @@ set(SOURCE_FILES
         src/rpc_internode.h
         src/rpc_cluster.cpp
         src/rpc_cluster.h
-        src/rpc_trigger.cpp
-        src/rpc_trigger.h
-        src/rpc_table.cpp
-        src/rpc_table.h
-        src/rpc_status.cpp
-        src/rpc_status.h
         src/rpc_query.cpp
         src/rpc_query.h
+        src/rpc_sub.cpp
+        src/rpc_sub.h
+        src/rpc_status.cpp
+        src/rpc_status.h
+        src/rpc_table.cpp
+        src/rpc_table.h
         src/rpc.cpp
         src/rpc.h
         src/sentinel.h

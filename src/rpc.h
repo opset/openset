@@ -7,14 +7,18 @@
 #include "rpc_internode.h"
 #include "rpc_cluster.h"
 #include "rpc_table.h"
-#include "rpc_trigger.h"
+#include "rpc_sub.h"
 #include "rpc_query.h"
 #include "rpc_insert.h"
 #include "rpc_status.h"
+
 using namespace openset::async;
-using namespace openset::db; /*
+using namespace openset::db;
+
+/*
     All RPC maps to the giant tuple vector below.
 */
+
 namespace openset::comms
 {
     // order matters, longer matches in a section should appear first
@@ -64,16 +68,17 @@ namespace openset::comms
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/batch(\/|\?|\#|)$)"), RpcQuery::batch, { { 1, "table" } } },
         // RpcInsert
         { "POST", std::regex(R"(^/v1/insert/([a-z0-9_]+)(\/|\?|\#|)$)"), RpcInsert::insert, { { 1, "table" } } },
+        // Subscriptions
         {
             "DELETE",
-            std::regex(R"(^/v1/trigger/([a-z0-9_]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::trigger_drop,
-            { { 1, "table" }, { 2, "subname" } }
+            std::regex(R"(^/v1/subscription/([a-z0-9_]+)/([a-z0-9_\.]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            RpcSub::sub_delete,
+            { { 1, "table" }, {2, "segment"}, { 3, "subname" } }
         },
         {
             "PUT",
-            std::regex(R"(^/v1/trigger/([a-z0-9_]+)/([a-z0-9_\.]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
-            RpcRevent::trigger_sub,
+            std::regex(R"(^/v1/subscription/([a-z0-9_]+)/([a-z0-9_\.]+)/([a-z0-9_\.]+)(\/|\?|\#|)$)"),
+            RpcSub::sub_create,
             { { 1, "table" }, { 2, "segment" }, { 3, "subname" } }
         },
         // RpcInternode
