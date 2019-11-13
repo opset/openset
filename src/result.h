@@ -285,7 +285,7 @@ namespace openset
             // JSON
         public:
             static void mergeMacroLiterals(
-                query::Macro_s macros,
+                const query::Macro_s& macros,
                 std::vector<ResultSet*>& resultSets);
 
             static char* multiSetToInternode(

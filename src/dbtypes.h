@@ -81,7 +81,8 @@ namespace openset
             intProp = 1,
             doubleProp = 2,
             boolProp = 3,
-            textProp = 4
+            textProp = 4,
+            runTimeTypeProp = 5
         };
 
 #pragma pack(push,1)

@@ -21,6 +21,8 @@ namespace openset::comms
         static void property(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // GET /v1/query/{table}/customer?{id|idstr}={user_id_key}
         static void customer(const openset::web::MessagePtr& message, const RpcMapping& matches);
+        // GET /v1/query/{table}/customers?{various optional switches}
+        static void segment_customers(openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/histogram/{name}
         static void histogram(const openset::web::MessagePtr& message, const RpcMapping& matches);
         // POST /v1/query/{table}/batch

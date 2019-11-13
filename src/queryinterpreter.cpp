@@ -11,8 +11,8 @@ const int STACK_DEPTH       = 64;
 
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode)
     : macros(macros),
-      interpretMode(interpretMode),
-      rowKey()
+      rowKey(),
+      interpretMode(interpretMode)
 
 {
     stack    = new cvar[STACK_DEPTH];
@@ -244,7 +244,7 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                     (resCol.modifier == Modifiers_e::var) ?
                         fixToInt(resCol.value) :
                         columns->cols[resCol.distinctColumn],
-                    (resCol.schemaColumn == PROP_UUID || resCol.modifier == Modifiers_e::dist_count_person) ?
+                    (resCol.aggOnce) ?
                         0 :
                        (macros.useStampedRowIds ?
                                columns->cols[PROP_STAMP] :
@@ -254,73 +254,94 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                     continue;
                 eventDistinct.emplace(distinctKey, 1);
             }
-            const auto resultIndex = resCol.index + segmentColumnShift;
+
+            auto& resultColumnValue = resultColumns->columns[resCol.index + segmentColumnShift].value;
+            auto& resultColumnCount = resultColumns->columns[resCol.index + segmentColumnShift].count;
+
+            const auto aggValue = resCol.lambdaIndex == -1 ?
+                columns->cols[resCol.column] :
+                resCol.value.getInt64();
+
             switch (resCol.modifier)
             {
+            case Modifiers_e::avg:
             case Modifiers_e::sum:
-                if (columns->cols[resCol.column] != NONE)
+                if (aggValue != NONE)
                 {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                        resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                    if (resultColumnValue == NONE)
+                    {
+                        resultColumnValue = aggValue;
+                        resultColumnCount = 1;
+                    }
                     else
-                        resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
+                    {
+                        resultColumnValue += aggValue;
+                        ++resultColumnCount;
+                    }
                 }
                 break;
             case Modifiers_e::min:
-                if (columns->cols[resCol.column] != NONE && (resultColumns->columns[resultIndex].value == NONE ||
-                    resultColumns->columns[resultIndex].value > columns->cols[resCol.column]))
-                    resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                if (aggValue != NONE && (resultColumnValue == NONE || resultColumnValue > aggValue))
+                    resultColumnValue = aggValue;
                 break;
             case Modifiers_e::max:
-                if (columns->cols[resCol.column] != NONE && (resultColumns->columns[resultIndex].value == NONE ||
-                    resultColumns->columns[resultIndex].value < columns->cols[resCol.column]))
-                    resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                if (aggValue != NONE && (resultColumnValue == NONE || resultColumnValue < aggValue))
+                    resultColumnValue = aggValue;
                 break;
-            case Modifiers_e::avg:
-                if (columns->cols[resCol.column] != NONE)
+            case Modifiers_e::dist_count_person:
+            case Modifiers_e::count:
+                if (aggValue != NONE)
                 {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                    {
-                        resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
-                        resultColumns->columns[resultIndex].count = 1;
-                    }
+                    if (resultColumnValue == NONE)
+                        resultColumnValue = 1;
                     else
-                    {
-                        resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
-                        resultColumns->columns[resultIndex].count++;
-                    }
-                }
-                break;
-            case Modifiers_e::dist_count_person: case Modifiers_e::count:
-                if (columns->cols[resCol.column] != NONE)
-                {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                        resultColumns->columns[resultIndex].value = 1;
-                    else
-                        resultColumns->columns[resultIndex].value++;
+                        ++resultColumnValue;
                 }
                 break;
             case Modifiers_e::value:
-                resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                resultColumnValue = aggValue;
                 break;
-            case Modifiers_e::var:
+            /*case Modifiers_e::var:
                 if (resultColumns->columns[resultIndex].value == NONE)
                     resultColumns->columns[resultIndex].value = 1; //fixToInt(resCol.value);
                 else
                     resultColumns->columns[resultIndex].value++; //+= fixToInt(resCol.value);
-                break;
+                break;*/
             default:
                 break;
             }
         }
     };
-    rowKey.clear(); // run property lambdas!
+
+    rowKey.clear();
+
+    // run lambdas result columns
     if (macros.vars.columnLambdas.size())
-        for (auto lambdaIndex : macros.vars.columnLambdas)
-            opRunner(
-                // call the property lambda
-                &macros.code.front() + lambdaIndex,
-                currentRow);
+    {
+        for (auto varIndex : macros.vars.columnLambdas)
+        {
+            switch (macros.vars.columnVars[varIndex].schemaType)
+            {
+            case PropertyTypes_e::intProp:
+                macros.vars.columnVars[varIndex].value = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getInt32();
+                break;
+            case PropertyTypes_e::doubleProp:
+                macros.vars.columnVars[varIndex].value = round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getDouble() * 10000.0);
+                break;
+            case PropertyTypes_e::textProp:
+            {
+                const auto tString = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getString();
+                auto hash= MakeHash(tString);
+                result->addLocalText(hash, tString); // cache this text
+                macros.vars.columnVars[varIndex].value = hash;
+            }
+                break;
+            default:
+                macros.vars.columnVars[varIndex].value = 0;
+            }
+        }
+    }
+
     auto depth = 0;
     for (const auto& item : marshalParams)
     {

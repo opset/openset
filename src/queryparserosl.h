@@ -138,6 +138,13 @@ namespace openset::query
         }
     };
 
+    enum class ParseMode_e
+    {
+        report,
+        segment,
+        customers
+    };
+
     enum class MiddleOp_e
     {
         push_user,
@@ -312,6 +319,8 @@ namespace openset::query
 
         Debugger_s lastDebug;
         errors::Error error;
+
+        ParseMode_e parseMode { ParseMode_e::report };
 
         QueryParser() = default;
         ~QueryParser() = default;
@@ -962,8 +971,8 @@ namespace openset::query
             return false;
         }
 
-        // select
-        int parseSelect(Blocks::Line& tokens, const int start)
+        // select when parseMode is report
+        int parseSelectReport(Blocks::Line& tokens, const int start)
         {
             const std::unordered_set<std::string> newStatementWords = {
                 "count",
@@ -972,8 +981,7 @@ namespace openset::query
                 "avg",
                 "sum",
                 "value",
-                "var",
-                "code"
+                //"var",
             };
 
             auto idx = start + 1;
@@ -993,7 +1001,7 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "expecting an aggregate in `select` statement",
+                        "select: expecting an aggregate type (report query permits: count, min, max, avg, sum, value)",
                         lastDebug
                     };
 
@@ -1002,23 +1010,15 @@ namespace openset::query
                     throw QueryParse2Error_s {
                         errors::errorClass_e::parse,
                         errors::errorCode_e::syntax_error,
-                        "expecting a text value in `as` statement",
+                        "select: expecting a property name after aggregate",
                         lastDebug
                     };
-
 
                 auto modifier = ColumnModifiers.find(token)->second;
                 const auto columnName = nextToken; // actual property name in table
                 auto keyColumn = columnName; // distinct to itself
                 auto asName = columnName; // aliased as itself
-
-                if (!isTableColumn(columnName))
-                    throw QueryParse2Error_s {
-                        errors::errorClass_e::parse,
-                        errors::errorCode_e::syntax_error,
-                        "expecting a table property",
-                        lastDebug
-                    };
+                db::PropertyTypes_e type = db::PropertyTypes_e::runTimeTypeProp;
 
                 idx += 2;
 
@@ -1032,7 +1032,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "expecting a name in `as` portion of `select` statement",
+                            "select: expecting a name for `as`",
                             lastDebug
                         };
 
@@ -1040,7 +1040,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "`as` portion of `select` statement cannot be a table property",
+                            "select: name specified for `as` cannot be an existing table property",
                             lastDebug
                         };
 
@@ -1058,7 +1058,7 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "expecting a name in `key` portion of `select` statement",
+                            "select: expecting a name in `key` portion of statement",
                             lastDebug
                         };
 
@@ -1066,14 +1066,99 @@ namespace openset::query
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
-                            "`key` portion of `select` must be a table property",
+                            "select: `key` must be a table property",
                             lastDebug
                         };
 
                     keyColumn = nextToken;
                     idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
                 }
 
+                if (token == "type")
+                {
+                    if (!nextToken.length() || !isTextual(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: expecting a `type` for  `lambda` lambda ('int', 'double' or 'text')",
+                            lastDebug
+                        };
+
+                    if (nextToken == "int")
+                        type = db::PropertyTypes_e::intProp;
+                    else if (nextToken == "double")
+                        type = db::PropertyTypes_e::doubleProp;
+                    else if (nextToken == "text")
+                        type = db::PropertyTypes_e::textProp;
+                    else
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: `type` for `lambda` may be 'int', 'double' or 'text'",
+                            lastDebug
+                        };
+
+                    idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                }
+
+                auto selectLambdaId = -1;
+
+                if (token == "{")
+                {
+                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: `type` is required when using a `lambda`",
+                            lastDebug
+                        };
+
+                    const auto matchingIndex = seekMatchingCurly(tokens, idx);
+
+                    const Blocks::Line selectLambda(tokens.begin() + idx + 1, tokens.begin() + matchingIndex);
+
+                    if (isProperty(columnName) || isTableColumn(columnName))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "result columns in lambda aggregations cannot use an existing property name",
+                            lastDebug
+                        };
+
+                    if (selectLambda.size() == 0)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: lambda contains no code",
+                            lastDebug
+                        };
+
+                    // if there is no logic, just straight iteration we push the logic block as -1
+                    // the interpreter will run in a true state for the logic if it sees -1
+                    selectLambdaId = addLinesAsBlock(selectLambda);
+                    idx = matchingIndex + 1;
+                }
+
+                // automatic lambda - assume this is a just a variable
+                if (!isTableColumn(columnName) && !isProperty(columnName) && selectLambdaId == -1)
+                {
+                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: when using a variable in a select you must specify an output type",
+                            lastDebug
+                        };
+
+                    const Blocks::Line selectLambda { columnName };
+                    selectLambdaId = addLinesAsBlock(selectLambda);
+                }
 
                 // already used, then throw and suggest using `as`
                 if (getTrackingIndex(selects, asName) != -1)
@@ -1085,8 +1170,7 @@ namespace openset::query
                     };
 
                 // register this property as having been referenced
-                const auto columnIdx = columnIndex(columnName);
-
+                const auto columnIdx = selectLambdaId == -1 ? columnIndex(columnName) : 0;
                 const auto selectIdx = selectsIndex(asName);
 
                 if (columnName == "session")
@@ -1099,6 +1183,17 @@ namespace openset::query
                     columnIndex("session");
                 }
 
+                auto aggOnce = false;
+
+                // properties, the id property, lambdas, value types, and dist_count_person are
+                // counted just once per customer in result branches.
+                if (isProperty(columnName) ||
+                    selectLambdaId != -1 ||
+                    modifier == Modifiers_e::value ||
+                    modifier == Modifiers_e::dist_count_person ||
+                    columnName == "id")
+                    aggOnce = true;
+
                 const auto propInfo = tableColumns->getProperty(columnName);
 
                 Variable_s var(columnName, asName, "property", modifier);
@@ -1106,19 +1201,287 @@ namespace openset::query
 
                 var.index = selectIdx; // index in variable array
                 var.column = columnIdx; // index in grid
-                var.schemaColumn = propInfo->idx;
-                var.schemaType = propInfo->type;
+                var.schemaColumn = propInfo ? propInfo->idx : -1;
+                var.schemaType = !propInfo || type != db::PropertyTypes_e::runTimeTypeProp ? type : propInfo->type;
+                var.lambdaIndex = selectLambdaId;
+                var.aggOnce = aggOnce;
 
                 // if this is selection is keyed to another property lets reference it as well
-                const auto keyIdx = columnIndex(keyColumn);
+                const auto keyIdx = selectLambdaId == -1 ? columnIndex(keyColumn) : 0;
                 var.distinctColumn = keyIdx; // index of key property in grid
 
                 selectColumnInfo.push_back(var);
             }
 
             // THROW - should have found `end`
-
         }
+
+        // select when parseMode is customers
+        int parseSelectCustomers(Blocks::Line& tokens, const int start)
+        {
+            const std::unordered_set<std::string> newStatementWords = {
+                "value",
+                //"var",
+            };
+
+            auto idx = start + 1;
+            const auto end = static_cast<int>(tokens.size());
+
+            while (idx < end)
+            {
+                auto token = tokens[idx];
+                auto nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                // end of select definition
+                if (token == "end")
+                    return idx + 1;
+
+                // should be a modifier?
+                if (!ColumnModifiers.count(token))
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "select: expecting an aggregate type (customers query permits: value)",
+                        lastDebug
+                    };
+
+                // should be a textual word
+                if (!isTextual(nextToken))
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "select: expecting a property name after aggregate",
+                        lastDebug
+                    };
+
+
+                auto modifier = ColumnModifiers.find(token)->second;
+                const auto columnName = nextToken; // actual property name in table
+                auto keyColumn = columnName; // distinct to itself
+                auto asName = columnName; // aliased as itself
+                db::PropertyTypes_e type = db::PropertyTypes_e::runTimeTypeProp;
+
+                idx += 2;
+
+                token = tokens[idx];
+                nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+
+                if (token == "as")
+                {
+
+                    if (!nextToken.length() || !isTextual(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: expecting a name for `as`",
+                            lastDebug
+                        };
+
+                    if (isTableColumn(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: name specified for `as` cannot be an existing table property",
+                            lastDebug
+                        };
+
+                    asName = nextToken;
+                    idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                }
+
+                if (token == "key")
+                {
+
+                    if (!nextToken.length() || !isTextual(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: expecting a name in `key` portion of statement",
+                            lastDebug
+                        };
+
+                    if (!isTableColumn(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: `key` must be a table property",
+                            lastDebug
+                        };
+
+                    keyColumn = nextToken;
+                    idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                }
+
+                if (token == "type")
+                {
+                    if (!nextToken.length() || !isTextual(nextToken))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: expecting a `type` for  `lambda` lambda ('int', 'double' or 'text')",
+                            lastDebug
+                        };
+
+                    if (nextToken == "int")
+                        type = db::PropertyTypes_e::intProp;
+                    else if (nextToken == "double")
+                        type = db::PropertyTypes_e::doubleProp;
+                    else if (nextToken == "text")
+                        type = db::PropertyTypes_e::textProp;
+                    else
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: `type` for `lambda` may be 'int', 'double' or 'text'",
+                            lastDebug
+                        };
+
+                    idx += 2;
+
+                    token = tokens[idx];
+                    nextToken = idx + 1 >= static_cast<int>(tokens.size()) ? std::string() : tokens[idx + 1];
+                }
+
+                auto selectLambdaId = -1;
+
+                if (token == "{")
+                {
+                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: `type` is required when using a `lambda`",
+                            lastDebug
+                        };
+
+                    const auto matchingIndex = seekMatchingCurly(tokens, idx);
+
+                    const Blocks::Line selectLambda(tokens.begin() + idx + 1, tokens.begin() + matchingIndex);
+
+                    if (isProperty(columnName) || isTableColumn(columnName))
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "result columns in lambda aggregations cannot use an existing property name",
+                            lastDebug
+                        };
+
+                    if (selectLambda.size() == 0)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: lambda contains no code",
+                            lastDebug
+                        };
+
+                    // if there is no logic, just straight iteration we push the logic block as -1
+                    // the interpreter will run in a true state for the logic if it sees -1
+                    selectLambdaId = addLinesAsBlock(selectLambda);
+                    idx = matchingIndex + 1;
+                }
+
+                // automatic lambda - assume this is a just a variable
+                if (!isTableColumn(columnName) && !isProperty(columnName) && selectLambdaId == -1)
+                {
+                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                        throw QueryParse2Error_s {
+                            errors::errorClass_e::parse,
+                            errors::errorCode_e::syntax_error,
+                            "select: when using a variable in a select you must specify an output type",
+                            lastDebug
+                        };
+
+                    const Blocks::Line selectLambda { columnName };
+                    selectLambdaId = addLinesAsBlock(selectLambda);
+                }
+
+                // already used, then throw and suggest using `as`
+                if (getTrackingIndex(selects, asName) != -1)
+                    throw QueryParse2Error_s {
+                        errors::errorClass_e::parse,
+                        errors::errorCode_e::syntax_error,
+                        "`as` name in `select` already in use",
+                        lastDebug
+                    };
+
+                // register this property as having been referenced
+                const auto columnIdx = selectLambdaId == -1 ? columnIndex(columnName) : 0;
+                const auto selectIdx = selectsIndex(asName);
+
+                if (columnName == "session")
+                {
+                    usesSessions = true;
+                    // session counting uses a specialized count method
+                    modifier = ColumnModifiers.find("dist_count_person")->second;
+
+                    // reference session so it becomes part of data set
+                    columnIndex("session");
+                }
+
+                auto aggOnce = false;
+
+                // properties, the id property, lambdas, value types, and dist_count_person are
+                // counted just once per customer in result branches.
+                if (isProperty(columnName) ||
+                    selectLambdaId != -1 ||
+                    modifier == Modifiers_e::value ||
+                    modifier == Modifiers_e::dist_count_person ||
+                    columnName == "id")
+                    aggOnce = true;
+
+                const auto propInfo = tableColumns->getProperty(columnName);
+
+                Variable_s var(columnName, asName, "property", modifier);
+                var.distinctColumnName = keyColumn;
+
+                var.index = selectIdx; // index in variable array
+                var.column = columnIdx; // index in grid
+                var.schemaColumn = propInfo ? propInfo->idx : -1;
+                var.schemaType = !propInfo || type != db::PropertyTypes_e::runTimeTypeProp ? type : propInfo->type;
+                var.lambdaIndex = selectLambdaId;
+                var.aggOnce = aggOnce;
+
+                // if this is selection is keyed to another property lets reference it as well
+                const auto keyIdx = selectLambdaId == -1 ? columnIndex(keyColumn) : 0;
+                var.distinctColumn = keyIdx; // index of key property in grid
+
+                selectColumnInfo.push_back(var);
+            }
+
+            // THROW - should have found `end`
+        }
+
+        int parseSelect(Blocks::Line& tokens, const int start)
+        {
+            switch (parseMode)
+            {
+            case ParseMode_e::report:
+                return parseSelectReport(tokens, start);
+            case ParseMode_e::segment:
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "`select` is not used in segment scripts",
+                    lastDebug
+                };
+            case ParseMode_e::customers:
+                return parseSelectCustomers(tokens, start);
+            default:
+                throw QueryParse2Error_s {
+                    errors::errorClass_e::parse,
+                    errors::errorCode_e::syntax_error,
+                    "unexpected parse mode while parsing select",
+                    lastDebug
+                };
+            }
+        }
+
 
         int extractLine(Blocks::Line& tokens, const int start, Blocks::Line& extraction)
         {
@@ -2100,7 +2463,7 @@ namespace openset::query
 
             if (isString(item))
             {
-                auto cleanString = stripQuotes(item);
+                const auto cleanString = stripQuotes(item);
                 auto stringIdx = stringLiteralIndex(cleanString);
                 middle.emplace_back(MiddleOp_e::push_literal, stringIdx, lastDebug.line, start);
 
@@ -2740,7 +3103,6 @@ namespace openset::query
 
         void compile(Macro_s& inMacros)
         {
-
             auto& finCode = inMacros.code;
             auto& lambdas = inMacros.lambdas;
 
@@ -3103,18 +3465,19 @@ namespace openset::query
                 }
             }
 
-            // add user vars
-            //Tracking stringLiterals;
-            //Tracking properties;
-            //Tracking aggregates;
-
             auto index = 0;
             for (auto& v : columns)
             {
                 const auto schemaInfo = tableColumns->getProperty(v);
 
+                if (!schemaInfo)
+                    continue;
+
                 if (v == "session"s)
+                {
+                    usesSessions = true;
                     inMacros.sessionColumn = index;
+                }
 
                 inMacros.vars.tableVars.push_back(Variable_s{v, ""});
                 inMacros.vars.tableVars.back().index = index;
@@ -3161,6 +3524,14 @@ namespace openset::query
             }
 
             inMacros.vars.columnVars = selectColumnInfo;
+
+            index = 0;
+            for (auto& col : selectColumnInfo)
+            {
+                if (col.lambdaIndex != -1)
+                    inMacros.vars.columnLambdas.push_back(index);
+                ++index;
+            }
 
             inMacros.filters = filters;
         }
@@ -3723,8 +4094,9 @@ namespace openset::query
                 inMacros.rawIndex += word + " ";
         }
 
-        bool compileQuery(const std::string& query, openset::db::Properties* columnsPtr, Macro_s& inMacros, ParamVars* templateVars)
+        bool compileQuery(const std::string& query, openset::db::Properties* columnsPtr, Macro_s& inMacros, ParamVars* templateVars, ParseMode_e parseAs = ParseMode_e::report)
         {
+            parseMode = parseAs;
 
             try
             {

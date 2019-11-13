@@ -136,10 +136,10 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
                     accTypes[dataIndex] = ResultTypes_e::Double;
                     break;
                 case db::PropertyTypes_e::boolProp:
-                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    accTypes[dataIndex] = ResultTypes_e::Bool;
                     break;
                 case db::PropertyTypes_e::textProp:
-                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    accTypes[dataIndex] = ResultTypes_e::Text;
                     break;
                 case db::PropertyTypes_e::freeProp:
                 default:
@@ -210,7 +210,7 @@ robin_hood::unordered_map<int64_t, const char*, robin_hood::hash<int64_t>> merge
 * merge performs a sync merge on a vector of sorted results.
 *
 * STL was used here because it has great iterators, but a little is lost in
-* readabilty. I apologize in advance for the **blah stuff.
+* readability. I apologize in advance for the **blah stuff.
 *
 * Step one make a vector of iterators for each result in the results vector.
 * (note, the results vector contains vectors of sorted results).
@@ -345,7 +345,6 @@ ResultSet::RowVector mergeResultSets(
                                         }
                                         break;
                                     case openset::query::Modifiers_e::value:
-
                                         left->columns[valueIndex].value = right->columns[valueIndex].value;
                                         left->columns[valueIndex].count = right->columns[valueIndex].count;
                                         break;
@@ -384,10 +383,10 @@ ResultSet::RowVector mergeResultSets(
 }
 
 void ResultMuxDemux::mergeMacroLiterals(
-    const openset::query::Macro_s macros,
+    const openset::query::Macro_s& macros,
     std::vector<openset::result::ResultSet*>& resultSets)
 {
-    // copy literals from macros into a localtext object
+    // copy literals from macros into a local text object
     for (auto& l : macros.vars.literals)
         resultSets.front()->addLocalText(l.hashValue, l.value);
 }

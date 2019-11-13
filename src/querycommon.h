@@ -49,6 +49,7 @@ namespace openset
             quarter_date,
             year_number,
             year_date,
+            //lambda,
         };
 
         enum class OpCode_e : int32_t
@@ -312,7 +313,7 @@ namespace openset
             { "val", Modifiers_e::value },
             { "variable", Modifiers_e::var },
             { "var", Modifiers_e::var },
-            { "lambda", Modifiers_e::var },
+            //{ "lambda", Modifiers_e::lambda },
         }; // Modifier to String (for debug output)
         static const unordered_map<Modifiers_e, string> ModifierDebugStrings = {
             { Modifiers_e::sum, "SUM" },
@@ -340,6 +341,7 @@ namespace openset
             { Modifiers_e::quarter_date, "DT_QUARTER" },
             { Modifiers_e::year_number, "YEAR" },
             { Modifiers_e::year_date, "DT_YEAR" },
+            //{ Modifiers_e::lambda, "LAMBDA"}
         }; // opCode to String (for debug output)
         static const unordered_map<OpCode_e, string> OpDebugStrings = {
             { OpCode_e::NOP, "NOP" },
@@ -670,6 +672,7 @@ namespace openset
             bool isSet { false };
             bool isProp { false };
             bool isRowObject { false };
+            bool aggOnce { false }; // customer props, distinct counts and value selects are counted once per branch per person in a result
             int popRefs { 0 };      // reference counter for pops
             int pushRefs { 0 };     // reference counter for pushes
             int sortOrder { -1 };   // used for sorting in property order
@@ -714,6 +717,7 @@ namespace openset
                 isSet              = source.isSet;
                 isProp             = source.isProp;
                 isRowObject        = source.isRowObject;
+                aggOnce            = source.aggOnce;
                 popRefs            = source.popRefs;
                 pushRefs           = source.pushRefs;
                 sortOrder          = source.sortOrder;
