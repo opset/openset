@@ -3484,6 +3484,7 @@ namespace openset::query
                 inMacros.vars.tableVars.back().column = index;
                 inMacros.vars.tableVars.back().actual = v;
                 inMacros.vars.tableVars.back().isSet = schemaInfo->isSet;
+                inMacros.vars.tableVars.back().isProp = schemaInfo->isCustomerProperty;
                 inMacros.vars.tableVars.back().sortOrder = schemaInfo->idx;
                 inMacros.vars.tableVars.back().schemaColumn = schemaInfo->idx;
                 inMacros.vars.tableVars.back().schemaType = schemaInfo->type;
@@ -3526,10 +3527,12 @@ namespace openset::query
             inMacros.vars.columnVars = selectColumnInfo;
 
             index = 0;
-            for (auto& col : selectColumnInfo)
+            for (auto& col : inMacros.vars.columnVars)
             {
                 if (col.lambdaIndex != -1)
                     inMacros.vars.columnLambdas.push_back(index);
+                if (isProperty(col.actual))
+                    col.isProp = true;
                 ++index;
             }
 

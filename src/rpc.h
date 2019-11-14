@@ -50,10 +50,10 @@ namespace openset::comms
         },
         { "GET", std::regex(R"(^/v1/tables(\/|\?|\#|)$)"), RpcTable::table_list, {} },
         // RpcQuery
-        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/report(\/|\?|\#|)$)"), RpcQuery::event, { { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/report(\/|\?|\#|)$)"), RpcQuery::report, { { 1, "table" } } },
         { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/segment(\/|\?|\#|)$)"), RpcQuery::segment, { { 1, "table" } } },
         { "GET", std::regex(R"(^/v1/query/([a-z0-9_]+)/customer(\/|\?|\#|)$)"), RpcQuery::customer, { { 1, "table" } } },
-        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/customers(\/|\?|\#|)$)"), RpcQuery::segment_customers, { { 1, "table" } } },
+        { "POST", std::regex(R"(^/v1/query/([a-z0-9_]+)/customers(\/|\?|\#|)$)"), RpcQuery::customer_list, { { 1, "table" } } },
         {
             "GET",
             std::regex(R"(^/v1/query/([a-z0-9_]+)/property/([a-z0-9_\.]+)(\/|\?|\#|)$)"),

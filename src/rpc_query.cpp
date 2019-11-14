@@ -11,6 +11,7 @@
 #include "oloop_query.h"
 #include "oloop_segment.h"
 #include "oloop_customer.h"
+#include "oloop_customer_list.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
 #include "asyncpool.h"
@@ -143,7 +144,7 @@ shared_ptr<cjson> forkQuery(
             }
             else if (r.code != openset::http::StatusCode::success_ok)
             {
-                // try to capture a json error that has perculated up from the forked call.
+                // try to capture a json error that has peculated up from the forked call.
                 if (r.data && r.length && r.data[0] == '{')
                 {
                     cjson error(std::string(r.data, r.length), cjson::Mode_e::string);
@@ -164,6 +165,7 @@ shared_ptr<cjson> forkQuery(
                     result.routeError = true; // this will trigger the next error
             }
         }
+
         if (result.routeError)
         {
             RpcError(
@@ -328,7 +330,7 @@ openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr& mes
     return paramVars;
 }
 
-void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::report(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database             = globals::database;
     const auto partitions     = globals::async;
@@ -636,7 +638,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
         });
 }
 
-void RpcQuery::segment_customers(const openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database         = globals::database;
     const auto partitions = globals::async;
@@ -645,19 +647,15 @@ void RpcQuery::segment_customers(const openset::web::MessagePtr& message, const 
     const auto queryCode  = std::string { message->getPayload(), message->getPayloadLength() };
     const auto debug      = message->getParamBool("debug");
     const auto isFork     = message->getParamBool("fork");
-    const auto trimSize       = message->getParamInt("trim", -1);
-    const auto sortOrder      = message->getParamString("order", "desc") == "asc"
+    const auto trimSize   = message->getParamInt("trim", -1);
+    const auto sortMode = ResultSortMode_e::key;
+    const auto sortOrder  = message->getParamString("order", "desc") == "asc"
         ? ResultSortOrder_e::Asc
         : ResultSortOrder_e::Desc;
+    auto sortKeyString    = message->getParamString("sort", "");
 
-    auto sortColumnName = ""s;
-    auto sortMode       = ResultSortMode_e::column;
-    if (message->isParam("sort"))
-    {
-        sortColumnName = message->getParamString("sort");
-        if (sortColumnName == "group")
-            sortMode = ResultSortMode_e::key;
-    }
+    if (!sortKeyString.length())
+        sortKeyString = "id";
 
     const auto log = "Inbound counts query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
@@ -730,6 +728,47 @@ void RpcQuery::segment_customers(const openset::web::MessagePtr& message, const 
         return;
     }
 
+    // validate that sortKeys are in the select statement
+    const auto sortKeyParts = split(sortKeyString, ',');
+
+    auto index = 0;
+    for (auto key : sortKeyParts)
+    {
+        key = trim(key);
+        auto found = false;
+
+        if (key.length())
+        {
+            for (auto& column : queryMacros.vars.columnVars)
+            {
+                if (column.alias == key)
+                {
+                    found = true;
+
+                    queryMacros.vars.autoGrouping.push_back(index);
+
+                    break;
+                }
+            }
+        }
+
+        if (key.length() == 0 || !found)
+        {
+            RpcError(
+                errors::Error {
+                    errors::errorClass_e::query,
+                    errors::errorCode_e::general_error,
+                    "sort key in query string not found in query script select statement"
+                },
+                message);
+            return;
+        }
+
+        ++index;
+    }
+
+
+
     if (message->isParam("segments"))
     {
         const auto segmentText = message->getParamString("segments");
@@ -764,32 +803,6 @@ void RpcQuery::segment_customers(const openset::web::MessagePtr& message, const 
         return;
     }
     auto sortColumn = 0;
-    if (sortMode != ResultSortMode_e::key && sortColumnName.size())
-    {
-        auto set = false;
-        auto idx = -1;
-        for (auto& c : queryMacros.vars.columnVars)
-        {
-            ++idx;
-            if (c.alias == sortColumnName)
-            {
-                set        = true;
-                sortColumn = c.index;
-                break;
-            }
-        }
-        if (!set)
-        {
-            RpcError(
-                errors::Error {
-                    errors::errorClass_e::parse,
-                    errors::errorCode_e::syntax_error,
-                    "sort property not found in query aggregates"
-                },
-                message);
-            return;
-        }
-    }
 
     /*
     * We are originating the query.
@@ -942,9 +955,8 @@ void RpcQuery::segment_customers(const openset::web::MessagePtr& message, const 
         [shuttle, table, queryMacros, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
         {
             instance++;
-            return new OpenLoopQuery(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
+            return new OpenLoopCustomerList(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
         });
-
 }
 
 void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping& matches)

@@ -136,6 +136,8 @@ set(SOURCE_FILES
         src/oloop_cleaner.h
         src/oloop_customer.cpp
         src/oloop_customer.h
+        src/oloop_customer_list.cpp
+        src/oloop_customer_list.h
         src/oloop_histogram.cpp
         src/oloop_histogram.h
         src/oloop_insert.cpp

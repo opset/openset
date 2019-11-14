@@ -235,6 +235,8 @@ namespace openset
 
             void extractMarshalParams(const int paramCount);
 
+            void tally(const int paramCount, const Col_s* columns, const int currentRow);
+
             void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
 
             void marshal_log(const int paramCount);

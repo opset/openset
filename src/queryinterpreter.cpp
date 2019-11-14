@@ -156,7 +156,8 @@ void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
     for (auto i = 0; i < paramCount; ++i) // PERF
     {
-        --stackPtr; // if any of these params are undefined, exit
+        --stackPtr;
+        // if any of these params are undefined, exit
         if (stackPtr->typeOf() != cvar::valueType::STR && *stackPtr == NONE)
             marshalParams[i] = NONE;
         else
@@ -164,11 +165,11 @@ void openset::query::Interpreter::extractMarshalParams(const int paramCount)
     }
 }
 
-void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+void openset::query::Interpreter::tally(const int paramCount, const Col_s* columns, const int currentRow)
 {
     if (paramCount <= 0)
-        return;                       // pop the stack into a pre-allocated array of cvars in reverse order
-    extractMarshalParams(paramCount); // strings, doubles, and bools are all ints internally,
+        return;
+
     // this will ensure non-int types are represented as ints
     // during grouping
     const auto fixToInt = [&](const cvar& value) -> int64_t
@@ -180,16 +181,9 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
         case cvar::valueType::FLT: case cvar::valueType::DBL:
             return value.getDouble() * 10000;
         case cvar::valueType::STR:
-        {
-            const auto tString = value.getString();
-            const auto hash    = MakeHash(tString);
-            result->addLocalText(hash, tString); // cache this text
-            return hash;
-        }
+            return result->addLocalTextAndHash(value.getString()); // cache this text
         case cvar::valueType::BOOL:
-            return value.getBool()
-                       ? 1
-                       : 0;
+            return value.getBool() ? 1 : 0;
         default:
             return NONE;
         }
@@ -301,12 +295,6 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
             case Modifiers_e::value:
                 resultColumnValue = aggValue;
                 break;
-            /*case Modifiers_e::var:
-                if (resultColumns->columns[resultIndex].value == NONE)
-                    resultColumns->columns[resultIndex].value = 1; //fixToInt(resCol.value);
-                else
-                    resultColumns->columns[resultIndex].value++; //+= fixToInt(resCol.value);
-                break;*/
             default:
                 break;
             }
@@ -329,12 +317,8 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                 macros.vars.columnVars[varIndex].value = round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getDouble() * 10000.0);
                 break;
             case PropertyTypes_e::textProp:
-            {
-                const auto tString = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getString();
-                auto hash= MakeHash(tString);
-                result->addLocalText(hash, tString); // cache this text
-                macros.vars.columnVars[varIndex].value = hash;
-            }
+                macros.vars.columnVars[varIndex].value =
+                    result->addLocalTextAndHash((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getString()); // cache this text
                 break;
             default:
                 macros.vars.columnVars[varIndex].value = 0;
@@ -352,6 +336,12 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
         aggColumns(result->getMakeAccumulator(rowKey));
         ++depth;
     }
+}
+
+void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+{
+    extractMarshalParams(paramCount);
+    tally(paramCount, columns, currentRow);
 }
 
 void __nestItercvar(const cvar* value, string& result)

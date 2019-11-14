@@ -867,15 +867,18 @@ namespace openset
             int64_t withinWindow {LLONG_MAX};
             int64_t continueFrom {0};
         };
+
         using FilterList = vector<Filter_s>;
         using CountList = vector<Count_S>; // structure for variables
         using BlockMap = vector<int>;
+        using AutoGrouping = vector<int>;
 
         struct Variables_S
         {
             VarList userVars;
             VarList tableVars;
             VarList columnVars;
+            AutoGrouping autoGrouping;
             BlockMap blockList;
             ColumnLambdas columnLambdas;
             FunctionList functions;

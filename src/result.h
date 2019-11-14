@@ -238,6 +238,13 @@ namespace openset
                     localText.emplace(hashId, textPtr);
                 }
             }
+
+             int64_t addLocalTextAndHash(const std::string& value)
+            {
+                const auto hash = MakeHash(value);
+                addLocalText(hash, value);
+                return hash;
+            }
         };
 
         struct CellQueryResult_s
