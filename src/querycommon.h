@@ -14,6 +14,13 @@ namespace openset
 {
     namespace query
     {
+        enum class ScriptMode_e
+        {
+            report,
+            segment,
+            customers
+        };
+
         enum class BlockType_e
         {
             code,
@@ -911,6 +918,7 @@ namespace openset
             int64_t segmentTTL { -1 };
             int64_t segmentRefresh { -1 };
             int sessionColumn { -1 };
+            ScriptMode_e scriptMode;
 
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;

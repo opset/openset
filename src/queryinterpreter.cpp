@@ -129,7 +129,9 @@ void openset::query::Interpreter::mount(Customer* person)
         uuid  = person->getUUID();
         linid = person->getMeta()->linId;
     }
+
     stackPtr = stack;
+
     if (!isConfigured && rows->size())
         configure();
 }
@@ -235,8 +237,8 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
                  */
                 distinctKey.set(
                     resCol.index,
-                    (resCol.modifier == Modifiers_e::var) ?
-                        fixToInt(resCol.value) :
+                    (resCol.lambdaIndex != -1) ?
+                        resCol.value.getInt64() :
                         columns->cols[resCol.distinctColumn],
                     (resCol.aggOnce) ?
                         0 :
@@ -255,6 +257,9 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
             const auto aggValue = resCol.lambdaIndex == -1 ?
                 columns->cols[resCol.column] :
                 resCol.value.getInt64();
+
+            if (resCol.column == PROP_UUID)
+                exportCustomerId = true;
 
             switch (resCol.modifier)
             {
@@ -311,7 +316,7 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
             switch (macros.vars.columnVars[varIndex].schemaType)
             {
             case PropertyTypes_e::intProp:
-                macros.vars.columnVars[varIndex].value = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getInt32();
+                macros.vars.columnVars[varIndex].value = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getInt64();
                 break;
             case PropertyTypes_e::doubleProp:
                 macros.vars.columnVars[varIndex].value = round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getDouble() * 10000.0);
@@ -319,6 +324,9 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
             case PropertyTypes_e::textProp:
                 macros.vars.columnVars[varIndex].value =
                     result->addLocalTextAndHash((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getString()); // cache this text
+                break;
+            case PropertyTypes_e::boolProp:
+                macros.vars.columnVars[varIndex].value = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
                 break;
             default:
                 macros.vars.columnVars[varIndex].value = 0;
@@ -332,10 +340,71 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
         if (depth == paramCount || (item.typeOf() != cvar::valueType::STR && item == NONE))
             break;
         rowKey.key[depth]   = fixToInt(item);
-        rowKey.types[depth] = getType(item); //result->setAtDepth(rowKey, set_cb);
-        aggColumns(result->getMakeAccumulator(rowKey));
+        rowKey.types[depth] = getType(item);
+        if (macros.scriptMode != ScriptMode_e::customers)
+            aggColumns(result->getMakeAccumulator(rowKey));
         ++depth;
     }
+
+    if (macros.scriptMode == ScriptMode_e::customers)
+        aggColumns(result->getMakeAccumulator(rowKey));
+}
+
+void openset::query::Interpreter::autoTally()
+{
+    // the script is in an exit state because it terminated, we are going to resurect it.
+    loopState = LoopState_e::run;
+
+    const auto paramCount = static_cast<int>(macros.vars.autoGrouping.size());
+    auto index = 0;
+    for (const auto varIndex : macros.vars.autoGrouping)
+    {
+        if (macros.vars.columnVars[varIndex].lambdaIndex != -1)
+        {
+            switch (macros.vars.columnVars[varIndex].schemaType)
+            {
+            case PropertyTypes_e::intProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getInt64();
+                break;
+            case PropertyTypes_e::doubleProp:
+                marshalParams[index] = round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getDouble() * 10000.0);
+                break;
+            case PropertyTypes_e::textProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getString();
+                break;
+            case PropertyTypes_e::boolProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
+                break;
+            default:
+                marshalParams[index] = NONE;
+            }
+        }
+        else
+        {
+            if (macros.vars.columnVars[varIndex].schemaColumn == PROP_UUID)
+            {
+                if (grid->getTable()->numericCustomerIds)
+                {
+                   marshalParams[index] = this->grid->getUUID();
+                }
+                else
+                {
+                    const auto id = this->grid->getUUIDString();
+                    result->addLocalTextAndHash(id);
+                    marshalParams[index] = id;
+                }
+            }
+            else
+            {
+                cout << "hmmm" << endl;
+            }
+
+        }
+
+        ++index;
+    }
+
+    tally(paramCount, grid->getEmptyRow(), 0);
 }
 
 void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
@@ -3019,6 +3088,9 @@ void openset::query::Interpreter::exec()
                 returns.push_back(*(stackPtr - 1)); // capture last value on stack
         }
 
+        if (macros.scriptMode == ScriptMode_e::customers)
+            autoTally();
+
         setGridProps();
     }
     catch (const std::runtime_error& ex)
@@ -3112,6 +3184,10 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                     "unknown run-time error (3)",
                     additional);
             }
+
+            if (macros.scriptMode == ScriptMode_e::customers)
+                autoTally();
+
             // write back props (checks for change by hashing)
             setGridProps();
 
@@ -3126,11 +3202,19 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 
 void openset::query::Interpreter::setGridProps()
 {
+    auto table = grid->getTable();
+
+    if (exportCustomerId && table->numericCustomerIds)
+    {
+        result->addLocalTextAndHash(this->grid->getUUIDString()); // cache this text
+        exportCustomerId = false;
+    }
+
     // write back props (checks for change by hashing)
     if (!macros.writesProps || !propsChanged)
         return;
 
-    auto schema = grid->getTable()->getProperties();
+    auto schema = table->getProperties();
 
     for (auto& var : macros.vars.userVars)
     {

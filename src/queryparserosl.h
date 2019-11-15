@@ -138,13 +138,6 @@ namespace openset::query
         }
     };
 
-    enum class ParseMode_e
-    {
-        report,
-        segment,
-        customers
-    };
-
     enum class MiddleOp_e
     {
         push_user,
@@ -320,7 +313,7 @@ namespace openset::query
         Debugger_s lastDebug;
         errors::Error error;
 
-        ParseMode_e parseMode { ParseMode_e::report };
+        ScriptMode_e parseMode { ScriptMode_e::report };
 
         QueryParser() = default;
         ~QueryParser() = default;
@@ -1146,9 +1139,9 @@ namespace openset::query
                 }
 
                 // automatic lambda - assume this is a just a variable
-                if (!isTableColumn(columnName) && !isProperty(columnName) && selectLambdaId == -1)
+                if ((!isTableColumn(columnName) || isProperty(columnName)) && selectLambdaId == -1)
                 {
-                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                    if (!isProperty(columnName) && type == db::PropertyTypes_e::runTimeTypeProp)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -1387,9 +1380,9 @@ namespace openset::query
                 }
 
                 // automatic lambda - assume this is a just a variable
-                if (!isTableColumn(columnName) && !isProperty(columnName) && selectLambdaId == -1)
+                if ((!isTableColumn(columnName) || isProperty(columnName)) && selectLambdaId == -1)
                 {
-                    if (type == db::PropertyTypes_e::runTimeTypeProp)
+                    if (!isProperty(columnName) && type == db::PropertyTypes_e::runTimeTypeProp)
                         throw QueryParse2Error_s {
                             errors::errorClass_e::parse,
                             errors::errorCode_e::syntax_error,
@@ -1461,16 +1454,16 @@ namespace openset::query
         {
             switch (parseMode)
             {
-            case ParseMode_e::report:
+            case ScriptMode_e::report:
                 return parseSelectReport(tokens, start);
-            case ParseMode_e::segment:
+            case ScriptMode_e::segment:
                 throw QueryParse2Error_s {
                     errors::errorClass_e::parse,
                     errors::errorCode_e::syntax_error,
                     "`select` is not used in segment scripts",
                     lastDebug
                 };
-            case ParseMode_e::customers:
+            case ScriptMode_e::customers:
                 return parseSelectCustomers(tokens, start);
             default:
                 throw QueryParse2Error_s {
@@ -4097,12 +4090,13 @@ namespace openset::query
                 inMacros.rawIndex += word + " ";
         }
 
-        bool compileQuery(const std::string& query, openset::db::Properties* columnsPtr, Macro_s& inMacros, ParamVars* templateVars, ParseMode_e parseAs = ParseMode_e::report)
+        bool compileQuery(const std::string& query, openset::db::Properties* columnsPtr, Macro_s& inMacros, ParamVars* templateVars, ScriptMode_e parseAs = ScriptMode_e::report)
         {
             parseMode = parseAs;
 
             try
             {
+                inMacros.scriptMode = parseAs;
 
                 tableColumns = columnsPtr;
 
@@ -4112,7 +4106,6 @@ namespace openset::query
                 inMacros.rawScript = rawScript;
 
                 initialParse(query);
-
 
                 if (!selectColumnInfo.size())
                 {

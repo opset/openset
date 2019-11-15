@@ -307,6 +307,12 @@ namespace openset
                 char* data,
                 int64_t blockLength);
 
+            static void resultFlatColumnsToJson(
+                int resultColumnCount,
+                int resultSetCount,
+                std::vector<openset::result::ResultSet*>& resultSets,
+                cjson* doc);
+
             static void resultSetToJson(
                 int resultColumnCount,
                 int resultSetCount,

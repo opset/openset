@@ -149,7 +149,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
     // set the default required properties
     columns->setProperty(PROP_STAMP, "stamp", PropertyTypes_e::intProp, false);
     columns->setProperty(PROP_EVENT, "event", PropertyTypes_e::textProp, false);
-    columns->setProperty(PROP_UUID, "id", PropertyTypes_e::intProp, false);
+    columns->setProperty(PROP_UUID, "id", useNumericIds ? PropertyTypes_e::intProp : PropertyTypes_e::textProp, false);
     columns->setProperty(PROP_SEGMENT, "__segment", PropertyTypes_e::textProp, false);
     columns->setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 

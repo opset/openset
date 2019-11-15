@@ -194,8 +194,8 @@ namespace openset
 
             // used to load global variables into user variable space
             bool firstRun{ true };
-
             bool inReturn{ false };
+            bool exportCustomerId { false };
 
             // this will always point to the last debug message
             Debug_s* lastDebug{ nullptr };
@@ -236,9 +236,9 @@ namespace openset
             void extractMarshalParams(const int paramCount);
 
             void tally(const int paramCount, const Col_s* columns, const int currentRow);
+            void autoTally();
 
             void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
-
             void marshal_log(const int paramCount);
             void marshal_break(const int paramCount);
             void marshal_dt_within(const int paramCount, const int64_t rowStamp);
@@ -247,24 +247,19 @@ namespace openset
             void marshal_bucket(const int paramCount);
             void marshal_round(const int paramCount);
             void marshal_fix(const int paramCount);
-
             void marshal_makeDict(const int paramCount);
             void marshal_makeList(const int paramCount);
             void marshal_makeSet(const int paramCount);
-
             void marshal_population(const int paramCount);
             void marshal_intersection(const int paramCount);
             void marshal_union(const int paramCount);
             void marshal_compliment(const int paramCount);
             void marshal_difference(const int paramCount);
-
             void marshal_slice(const int paramCount);
             void marshal_find(const int paramCount, const bool reverse = false);
             void marshal_split(const int paramCount) const;
             void marshal_strip(const int paramCount) const;
-
             void marshal_url_decode(const int paramCount) const;
-
             void marshal_get_row(const int paramCount) const;
 
             // get a string from the literals script block by ID

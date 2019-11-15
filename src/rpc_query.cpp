@@ -62,6 +62,7 @@ shared_ptr<cjson> forkQuery(
     const openset::web::MessagePtr& message,
     const int resultColumnCount,
     const int resultSetCount,
+    const openset::query::ScriptMode_e scriptMode,
     const ResultSortMode_e sortMode   = ResultSortMode_e::column,
     const ResultSortOrder_e sortOrder = ResultSortOrder_e::Desc,
     const int sortColumn              = 0,
@@ -86,6 +87,7 @@ shared_ptr<cjson> forkQuery(
             message,
             resultColumnCount,
             resultSetCount,
+            scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -120,6 +122,7 @@ shared_ptr<cjson> forkQuery(
             message,
             resultColumnCount,
             resultSetCount,
+            scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -137,7 +140,7 @@ shared_ptr<cjson> forkQuery(
             resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.data, r.length));
         else
         {
-            // there is an error message from one of the participing nodes
+            // there is an error message from one of the participating nodes
             if (!r.data || !r.length)
             {
                 result.routeError = true;
@@ -184,6 +187,21 @@ shared_ptr<cjson> forkQuery(
             return nullptr;
         }
     }
+
+    if (scriptMode == openset::query::ScriptMode_e::customers)
+    {
+        auto resultJson = make_shared<cjson>();
+        ResultMuxDemux::resultFlatColumnsToJson(resultColumnCount, setCount, resultSets, resultJson.get());
+
+        // free up the responses
+        openset::globals::mapper->releaseResponses(result);
+        // clean up all those resultSet*
+        for (auto res : resultSets)
+            delete res;
+        Logger::get().info("RpcQuery on " + table->getName());
+        return resultJson;
+    }
+
     auto resultJson = make_shared<cjson>();
     ResultMuxDemux::resultSetToJson(resultColumnCount, setCount, resultSets, resultJson.get());
 
@@ -503,6 +521,7 @@ void RpcQuery::report(const openset::web::MessagePtr& message, const RpcMapping&
             message,
             queryMacros.vars.columnVars.size(),
             queryMacros.segments.size(),
+            queryMacros.scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -707,7 +726,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
     try
     {
         // compile in customers mode
-        p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars, query::ParseMode_e::customers);
+        p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars, query::ScriptMode_e::customers);
     }
     catch (const std::runtime_error& ex)
     {
@@ -731,7 +750,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
     // validate that sortKeys are in the select statement
     const auto sortKeyParts = split(sortKeyString, ',');
 
-    auto index = 0;
+
     for (auto key : sortKeyParts)
     {
         key = trim(key);
@@ -739,6 +758,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
         if (key.length())
         {
+            auto index = 0;
             for (auto& column : queryMacros.vars.columnVars)
             {
                 if (column.alias == key)
@@ -749,6 +769,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
                     break;
                 }
+                ++index;
             }
         }
 
@@ -763,11 +784,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
                 message);
             return;
         }
-
-        ++index;
     }
-
-
 
     if (message->isParam("segments"))
     {
@@ -824,6 +841,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
             message,
             queryMacros.vars.columnVars.size(),
             queryMacros.segments.size(),
+            queryMacros.scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -1022,7 +1040,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             continue;
         query::Macro_s queryMacros; // this is our compiled code block
         query::QueryParser p;
-        p.compileQuery(r.code.c_str(), table->getProperties(), queryMacros, &paramVars, query::ParseMode_e::segment);
+        p.compileQuery(r.code.c_str(), table->getProperties(), queryMacros, &paramVars, query::ScriptMode_e::segment);
 
         if (p.error.inError())
         {
@@ -1111,7 +1129,10 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table,
             message,
             queries.front().second.vars.columnVars.size(),
-            queries.front().second.segments.size());
+            queries.front().second.segments.size(),
+            queries.front().second.scriptMode
+        );
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
@@ -1492,6 +1513,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             message,
             1,
             queryInfo.segments.size(),
+            query::ScriptMode_e::report,
             ResultSortMode_e::column,
             sortOrder,
             0,
@@ -1911,6 +1933,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message,
             1,
             queryMacros.segments.size(),
+            openset::query::ScriptMode_e::report,
             sortMode,
             sortOrder,
             0,
@@ -1918,8 +1941,10 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             bucket,
             forceMin,
             forceMax);
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
+
         return;
     }
 

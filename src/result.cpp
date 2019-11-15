@@ -561,6 +561,115 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
     return result;
 }
 
+void ResultMuxDemux::resultFlatColumnsToJson(
+    const int resultColumnCount,
+    const int resultSetCount,
+    std::vector<openset::result::ResultSet*>& resultSets,
+    cjson* doc)
+{
+
+    auto mergedText = mergeResultText(resultSets);
+    auto rows       = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
+
+    const auto shiftIterations = resultSetCount ? resultSetCount : 1;
+    const auto shiftSize       = resultColumnCount;
+
+    // this will retrieve either the string literals from the macros,
+    // the merged localText or exorcise a lock and look in the blob
+    const auto getText = [&](int64_t valueHash) -> const char*
+    {
+        if (const auto textPair = mergedText.find(valueHash); textPair != mergedText.end())
+            return textPair->second;
+
+        // nothing found, NA_TEXT
+        return NA_TEXT;
+    };
+
+    auto current = doc->pushArray();
+    current->setName("_");
+
+    auto& modifiers = resultSets[0]->accModifiers;
+    auto& types     = resultSets[0]->accTypes;
+
+    auto rowCounter = -1;
+    for (auto& r : rows)
+    {
+        ++rowCounter;
+
+        const auto shiftOffset = 0;
+
+        auto array = current->pushArray();
+
+        for (auto dataIndex = shiftOffset, colIndex = 0; dataIndex < shiftOffset + shiftSize; ++dataIndex, ++
+             colIndex)
+        {
+            const auto& value = r.second->columns[dataIndex].value;
+            const auto& count = r.second->columns[dataIndex].count;
+
+            // Is this a null, a double, a string or anything else (ints)
+            if (r.second->columns[dataIndex].value == NONE)
+            {
+                if (types[colIndex] == ResultTypes_e::Double ||
+                    types[colIndex] == ResultTypes_e::Int)
+                    array->push(static_cast<int64_t>(0));
+                else
+                    array->pushNull();
+            }
+            else
+            {
+                switch (modifiers[colIndex])
+                {
+                case query::Modifiers_e::sum:
+                case query::Modifiers_e::min:
+                case query::Modifiers_e::max:
+                    if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else
+                        array->push(value);
+                    break;
+                case query::Modifiers_e::avg:
+                    if (!count)
+                        array->pushNull();
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push((value / 10000.0) / static_cast<double>(count));
+                    else
+                        array->push(value / static_cast<double>(count));
+                    break;
+                case query::Modifiers_e::count:
+                case query::Modifiers_e::dist_count_person:
+                    array->push(value);
+                    break;
+                case query::Modifiers_e::value:
+                    if (types[colIndex] == ResultTypes_e::Text)
+                        array->push(getText(value));
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else if (types[colIndex] == ResultTypes_e::Bool)
+                        array->push(value ? true : false);
+                    else
+                        array->push(value);
+                    break;
+                case query::Modifiers_e::var:
+                {
+                    if (types[colIndex] == ResultTypes_e::Text)
+                        array->push(getText(value));
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else if (types[colIndex] == ResultTypes_e::Bool)
+                        array->push(value ? true : false);
+                    else
+                        array->push(value);
+                }
+                break;
+
+                default:
+                    array->push(value);
+                }
+            }
+        }
+    }
+}
+
 void ResultMuxDemux::resultSetToJson(
     const int resultColumnCount,
     const int resultSetCount,
@@ -946,8 +1055,8 @@ void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e 
         "_",
         [&](const cjson* left, const cjson* right) -> bool
         {
-            auto colLeft  = left->xPath("/c");
-            auto colRight = right->xPath("/c");
+            const auto colLeft  = left->find("c");//left->xPath("/c");
+            const auto colRight = right->find("c");//right->xPath("/c");
 
             switch (colLeft->at(column)->type())
             {
@@ -964,11 +1073,6 @@ void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e 
                 if (sort == ResultSortOrder_e::Asc)
                     return (colLeft->at(column)->getString() < colRight->at(column)->getString());
                 return (colLeft->at(column)->getString() > colRight->at(column)->getString());
-
-            case cjson::Types_e::OBJECT:
-            case cjson::Types_e::ARRAY:
-            case cjson::Types_e::VOIDED:
-            case cjson::Types_e::NUL:
             default:
                 return false;
             }
@@ -981,8 +1085,8 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
         "_",
         [&](const cjson* left, const cjson* right) -> bool
         {
-            auto colLeft  = left->xPath("/g");
-            auto colRight = right->xPath("/g");
+            auto colLeft  = left->find("g");
+            auto colRight = right->find("/g");
 
             cvar leftValue;
             cvar rightValue;
@@ -1029,8 +1133,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
 
             if (sort == ResultSortOrder_e::Asc)
                 return (leftValue < rightValue);
-            else
-                return (leftValue > rightValue);
+             return (leftValue > rightValue);
         });
 }
 
