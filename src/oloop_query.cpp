@@ -122,10 +122,13 @@ void OpenLoopQuery::prepare()
 
 bool OpenLoopQuery::run()
 {
+    int count = 0;
     while (true)
     {
-        if (sliceComplete())
+        if (count % 50 == 0 && sliceComplete())
             return true;
+
+        ++count;
 
         // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met

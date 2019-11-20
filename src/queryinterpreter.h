@@ -7,6 +7,7 @@
 #include "xxhash.h"
 #include "robin_hood.h"
 
+#include "customer_props.h"
 #include "querycommon.h"
 #include "result.h"
 #include "errors.h"
@@ -173,7 +174,6 @@ namespace openset
             // debug - log entries are entered in order by calling debug
             DebugLog debugLog;
             errors::Error error;
-            int32_t eventCount{ -1 }; // -1 is uninitialized, calculation cached here
 
             // callbacks to external code (i.e. triggers)
             function<IndexBits*(const string&, bool&)> getSegment_cb{ nullptr };

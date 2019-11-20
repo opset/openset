@@ -65,7 +65,7 @@ shared_ptr<cjson> forkQuery(
     const openset::query::ScriptMode_e scriptMode,
     const ResultSortMode_e sortMode   = ResultSortMode_e::column,
     const ResultSortOrder_e sortOrder = ResultSortOrder_e::Desc,
-    const int sortColumn              = 0,
+    const vector<int> sortColumn      = {0},
     const int trim                    = -1,
     const int64_t bucket              = 0,
     const int64_t forceMin            = std::numeric_limits<int64_t>::min(),
@@ -100,6 +100,8 @@ shared_ptr<cjson> forkQuery(
 
     const auto setCount = resultSetCount ? resultSetCount : 1;
 
+    const auto dispatchStartTime = Now();
+
     // call all nodes and gather results - JSON is what's coming back
     // NOTE - it would be fully possible to flatten results to binary
     auto result = openset::globals::mapper->dispatchCluster(
@@ -132,6 +134,9 @@ shared_ptr<cjson> forkQuery(
             forceMax,
             retryCount + 1);
     }
+
+    const auto gatherStartTime = Now();
+
 
     std::vector<ResultSet*> resultSets;
     for (auto& r : result.responses)
@@ -188,17 +193,31 @@ shared_ptr<cjson> forkQuery(
         }
     }
 
+    const auto gatherEndTime = Now();
+
     if (scriptMode == openset::query::ScriptMode_e::customers)
     {
         auto resultJson = make_shared<cjson>();
+        const auto toJsonStartTime = Now();
         ResultMuxDemux::resultFlatColumnsToJson(resultColumnCount, setCount, resultSets, resultJson.get());
+        const auto toJsonEndTime = Now();
 
         // free up the responses
         openset::globals::mapper->releaseResponses(result);
         // clean up all those resultSet*
         for (auto res : resultSets)
             delete res;
-        Logger::get().info("RpcQuery on " + table->getName());
+
+        const auto trimStartTime = Now();
+        //ResultMuxDemux::flatColumnMultiSort(resultJson.get(), sortOrder, sortColumn[0]);
+        ResultMuxDemux::jsonResultTrim(resultJson.get(), trim); // local function to fill Meta data in result JSON
+        const auto trimEndTime = Now();
+
+        cout << "dispatch: " << (dispatchEndTime - dispatchStartTime) <<
+                " gather: " << (gatherEndTime - gatherStartTime) <<
+                " json: " << (toJsonEndTime - toJsonStartTime) <<
+                " trim: " << (trimEndTime - trimStartTime) << endl;
+
         return resultJson;
     }
 
@@ -220,7 +239,7 @@ shared_ptr<cjson> forkQuery(
         ResultMuxDemux::jsonResultSortByGroup(resultJson.get(), sortOrder);
         break;
     case ResultSortMode_e::column:
-        ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn);
+        ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn[0]);
         break;
     default: ;
     }
@@ -524,7 +543,7 @@ void RpcQuery::report(const openset::web::MessagePtr& message, const RpcMapping&
             queryMacros.scriptMode,
             sortMode,
             sortOrder,
-            sortColumn,
+            {sortColumn},
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
@@ -750,6 +769,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
     // validate that sortKeys are in the select statement
     const auto sortKeyParts = split(sortKeyString, ',');
 
+    std::vector<int> sortOrders;
 
     for (auto key : sortKeyParts)
     {
@@ -766,6 +786,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
                     found = true;
 
                     queryMacros.vars.autoGrouping.push_back(index);
+                    sortOrders.push_back(index);
 
                     break;
                 }
@@ -844,7 +865,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
             queryMacros.scriptMode,
             sortMode,
             sortOrder,
-            sortColumn,
+            sortOrders,
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
@@ -1516,7 +1537,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             query::ScriptMode_e::report,
             ResultSortMode_e::column,
             sortOrder,
-            0,
+            {0},
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
@@ -1936,7 +1957,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             openset::query::ScriptMode_e::report,
             sortMode,
             sortOrder,
-            0,
+            {0},
             trimSize,
             bucket,
             forceMin,

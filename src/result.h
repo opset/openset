@@ -16,9 +16,9 @@ namespace openset
 {
     namespace result
     {
-        const int keyDepth = 8;
+        const int keyDepth = 4;
 
-        enum class ResultTypes_e : int
+        enum class ResultTypes_e : int8_t
         {
             Int = 0,
             Double = 1,
@@ -41,8 +41,11 @@ namespace openset
 
         struct RowKey
         {
+#pragma pack(push,1)
+            //size_t hash;
             int64_t key[keyDepth];
             ResultTypes_e types[keyDepth];
+#pragma pack(pop)
 
             RowKey() = default;
 
@@ -52,24 +55,34 @@ namespace openset
                 key[1]   = NONE;
                 key[2]   = NONE;
                 key[3]   = NONE;
-                key[4]   = NONE;
-                key[5]   = NONE;
-                key[6]   = NONE;
-                key[7]   = NONE;
+                //key[4]   = NONE;
+                //key[5]   = NONE;
+                //key[6]   = NONE;
+                //key[7]   = NONE;
                 types[0] = ResultTypes_e::Int;
                 types[1] = ResultTypes_e::Int;
                 types[2] = ResultTypes_e::Int;
                 types[3] = ResultTypes_e::Int;
-                types[4] = ResultTypes_e::Int;
-                types[5] = ResultTypes_e::Int;
-                types[6] = ResultTypes_e::Int;
-                types[7] = ResultTypes_e::Int;
+                //types[4] = ResultTypes_e::Int;
+                //types[5] = ResultTypes_e::Int;
+                //types[6] = ResultTypes_e::Int;
+                //types[7] = ResultTypes_e::Int;
             }
 
             void clearFrom(const int index)
             {
                 for (auto iter = key + index; iter < key + keyDepth; ++iter)
                     *iter = NONE;
+            }
+
+            void makeReady()
+            {
+                //hash = MakeHash(reinterpret_cast<char*>(key), keyDepth * sizeof(int64_t));
+            }
+
+            size_t makeHash() const
+            {
+                return MakeHash(reinterpret_cast<const char*>(key), keyDepth * sizeof(int64_t));
             }
 
             RowKey keyFrom(const int index) const
@@ -116,6 +129,29 @@ namespace openset
             }
             return false;
         }
+
+        inline bool operator>(const RowKey& left, const RowKey& right)
+        {
+            for (auto i = 0; i < keyDepth; ++i)
+            {
+                if (left.key[i] < right.key[i])
+                    return false;
+                if (left.key[i] > right.key[i])
+                    return true;
+            }
+            return false;
+        }
+
+        inline bool operator<=(const RowKey& left, const RowKey& right)
+        {
+            for (auto i = 0; i < keyDepth; ++i)
+            {
+                if (left.key[i] > right.key[i])
+                    return false;
+            }
+            return true;
+        }
+
     }
 }
 
@@ -125,9 +161,11 @@ namespace std
     template <>
     struct hash<openset::result::RowKey>
     {
-        size_t operator()(const openset::result::RowKey key) const noexcept
+        size_t operator()(const openset::result::RowKey& key) const noexcept
         {
-            auto hash  = key.key[0];
+            return key.makeHash();
+            //return key.hash;
+            /*auto hash  = key.key[0];
             auto count = 1;
             for (auto iter = key.key + 1; iter < key.key + openset::result::keyDepth; ++iter, ++count)
             {
@@ -135,7 +173,7 @@ namespace std
                     return hash;
                 hash = (hash << count) + key.key[1];
             }
-            return hash;
+            return hash;*/
         }
     };
 }
@@ -181,6 +219,7 @@ namespace openset
             vector<RowPair> sortedResult;
             HeapStack mem;
             int64_t resultWidth { 1 };
+            int64_t resultBytes { 8 };
 
             CriticalSection cs;
 
@@ -324,6 +363,7 @@ namespace openset
                 int64_t bucket,
                 int64_t forceMin = std::numeric_limits<int64_t>::min(),
                 int64_t forceMax = std::numeric_limits<int64_t>::min());
+            static void flatColumnMultiSort(cjson* doc, ResultSortOrder_e sort, int column);
 
             static void jsonResultSortByColumn(cjson* doc, ResultSortOrder_e sort, int column);
             static void jsonResultSortByGroup(cjson* doc, ResultSortOrder_e sort);

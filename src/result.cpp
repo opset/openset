@@ -9,8 +9,9 @@ using namespace openset::result;
 
 static char NA_TEXT[] = "n/a";
 
-ResultSet::ResultSet(const int64_t resultWidth)
-    : resultWidth(resultWidth)
+ResultSet::ResultSet(const int64_t resultWidth) :
+    resultWidth(resultWidth),
+    resultBytes(resultWidth * sizeof(Accumulation_s))
 {
     accTypes.resize(resultWidth, ResultTypes_e::Int);
     accModifiers.resize(resultWidth, query::Modifiers_e::sum);
@@ -20,6 +21,7 @@ ResultSet::ResultSet(ResultSet&& other) noexcept
     : results(std::move(other.results)),
       mem(std::move(other.mem)),
       resultWidth(other.resultWidth),
+      resultBytes(other.resultBytes),
       localText(std::move(other.localText)),
       accTypes(std::move(other.accTypes)),
       accModifiers(std::move(other.accModifiers))
@@ -154,14 +156,25 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
 
 Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
 {
-    if (const auto tempPair = results.find(key); tempPair != results.end())
+    if (auto& res = results.emplace(key, nullptr); res.second == true)
+    {
+        const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
+        res.first->second = t;
+        return t;
+     }
+    else
+    {
+        return res.first->second;
+    }
+
+    /*if (const auto tempPair = results.find(key); tempPair != results.end())
         return tempPair->second;
 
     const auto resultBytes = resultWidth * sizeof(Accumulation_s);
     const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
     results.emplace(key, t);
 
-    return t;
+    return t;*/
 }
 
 void mergeResultTypes(
@@ -237,13 +250,38 @@ ResultSet::RowVector mergeResultSets(
 
     vector<ResultSet::RowVector*> mergeList;
 
-    auto count = 0;
-
+    /*
     for (auto& r : resultSets)
     {
         // sort the list
         r->makeSortedList();
 
+        // if no data, skip
+        if (!r->sortedResult.size())
+            continue;
+
+        // add it the merge list
+        mergeList.push_back(&r->sortedResult);
+        count += static_cast<int>(r->sortedResult.size());
+    }*/
+
+    std::vector<std::thread> threads;
+    //create threads
+    threads.reserve(resultSets.size());
+    for (auto& r : resultSets)
+        threads.emplace_back(std::thread([](ResultSet* set)
+        {
+            set->makeSortedList();
+        }, r)
+    );
+
+    //wait for them to complete
+    for (auto& th : threads)
+        th.join();
+
+    auto count = 0;
+    for (auto& r : resultSets)
+    {
         // if no data, skip
         if (!r->sortedResult.size())
             continue;
@@ -290,8 +328,8 @@ ResultSet::RowVector mergeResultSets(
             // is it less than equal or
             // not set (lowestIdx defaults to end(), so not set)
             if (lowestIdx == iterators.end() ||
-                (*t).first < (**lowestIdx).first ||
-                (*t).first == (**lowestIdx).first)
+                (*t).first <= (**lowestIdx).first) //||
+                //(*t).first == (**lowestIdx).first)
             {
                 lowestIdx = it;
             }
@@ -600,8 +638,9 @@ void ResultMuxDemux::resultFlatColumnsToJson(
 
         auto array = current->pushArray();
 
-        for (auto dataIndex = shiftOffset, colIndex = 0; dataIndex < shiftOffset + shiftSize; ++dataIndex, ++
-             colIndex)
+        for (auto dataIndex = shiftOffset, colIndex = 0;
+             dataIndex < shiftOffset + shiftSize;
+            ++dataIndex, ++colIndex)
         {
             const auto& value = r.second->columns[dataIndex].value;
             const auto& count = r.second->columns[dataIndex].count;
@@ -1049,14 +1088,41 @@ void ResultMuxDemux::jsonResultHistogramFill(
     }
 }
 
+void ResultMuxDemux::flatColumnMultiSort(cjson* doc, const ResultSortOrder_e sort, const int column)
+{
+    doc->recurseSort(
+        "_",
+        [&](const cjson* left, const cjson* right) -> bool
+        {
+            switch (left->at(column)->type())
+            {
+            case cjson::Types_e::BOOL:
+            case cjson::Types_e::INT:
+                if (sort == ResultSortOrder_e::Asc)
+                    return (left->at(column)->getInt() < right->at(column)->getInt());
+                return (left->at(column)->getInt() > right->at(column)->getInt());
+            case cjson::Types_e::DBL:
+                if (sort == ResultSortOrder_e::Asc)
+                    return (left->at(column)->getDouble() < right->at(column)->getDouble());
+                return (left->at(column)->getDouble() > right->at(column)->getDouble());
+            case cjson::Types_e::STR:
+                if (sort == ResultSortOrder_e::Asc)
+                    return (left->at(column)->getString() < right->at(column)->getString());
+                return (left->at(column)->getString() > right->at(column)->getString());
+            default:
+                return false;
+            }
+        });
+}
+
 void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column)
 {
     doc->recurseSort(
         "_",
         [&](const cjson* left, const cjson* right) -> bool
         {
-            const auto colLeft  = left->find("c");//left->xPath("/c");
-            const auto colRight = right->find("c");//right->xPath("/c");
+            const auto colLeft  = left->find("c");
+            const auto colRight = right->find("c");
 
             switch (colLeft->at(column)->type())
             {

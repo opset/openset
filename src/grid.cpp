@@ -180,8 +180,7 @@ void Grid::reset()
     rows.clear(); // release the rows - likely to not free vector internals
     mem.reset();  // release the memory to the pool - will always leave one page
     rawData = nullptr;
-    propHash = 0;
-    hasInsert = { false };
+    hasInsert = false;
 }
 
 void Grid::reinitialize()
@@ -227,6 +226,34 @@ bool Grid::mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<st
 
 AttributeBlob* Grid::getAttributeBlob() const { return attributes->blob; }
 
+
+openset::db::CustomerProps* Grid::getCustomerPropsManager()
+{
+    return &customerProps;
+}
+
+
+openset::db::CustomerPropMap* Grid::getCustomerProps()
+{
+    customerProps.decodeCustomerProps(table, rawData->props);
+    return customerProps.getCustomerProps();
+}
+
+void Grid::setCustomerProps()
+{
+    if (!customerProps.havePropsChanged())
+        return;
+    if (rawData->props)
+        PoolMem::getPool().freePtr(rawData->props);
+    rawData->props = customerProps.encodeCustomerProps(table);
+
+    for (auto &change : customerProps.getOldValues())
+        attributes->setDirty(this->rawData->linId, change.first, change.second, false);
+
+    for (auto &change : customerProps.getNewValues())
+        attributes->setDirty(this->rawData->linId, change.first, change.second, true);
+}
+
 cjson Grid::toJSON()
 {
     auto properties = table->getProperties();
@@ -238,83 +265,80 @@ cjson Grid::toJSON()
         doc.set("id", this->rawData->getIdStr());
 
     auto propDoc = doc.setObject("properties");
-    const auto props = getProps(false);
+    const auto props = getCustomerProps();
 
-    const auto propDict = props.getDict();
-    if (propDict)
+    for (const auto &key : *props)
     {
-        for (const auto &key : *propDict)
+        const auto propInfo = properties->getProperty(key.first);
+
+        if (!propInfo)
+            continue;
+
+        if (propInfo->isSet && key.second.typeOf() == cvar::valueType::SET)
         {
-            const auto propInfo = properties->getProperty(key.first);
-
-            if (!propInfo)
-                continue;
-
-            if (propInfo->isSet && key.second.typeOf() == cvar::valueType::SET)
+            auto propList = propDoc->setArray(propInfo->name);
+            for (const auto &setItem : *key.second.getSet())
             {
-                auto propList = propDoc->setArray(key.first);
-                for (const auto &setItem : *key.second.getSet())
-                {
-                switch (propInfo->type)
-                {
-                case PropertyTypes_e::intProp:
-                    propList->push(key.second.getInt64());
-                    break;
-                case PropertyTypes_e::doubleProp:
-                    propList->push(key.second.getDouble());
-                    break;
-                case PropertyTypes_e::boolProp:
-                    propList->push(key.second.getBool());
-                    break;
-                case PropertyTypes_e::textProp:
-                    propList->push(key.second.getString());
-                    break;
-                }
-                }
+            switch (propInfo->type)
+            {
+            case PropertyTypes_e::intProp:
+                propList->push(key.second.getInt64());
+                break;
+            case PropertyTypes_e::doubleProp:
+                propList->push(key.second.getDouble());
+                break;
+            case PropertyTypes_e::boolProp:
+                propList->push(key.second.getBool());
+                break;
+            case PropertyTypes_e::textProp:
+                propList->push(key.second.getString());
+                break;
             }
-            else if (propInfo->isSet && key.second.typeOf() == cvar::valueType::LIST)
-            {
-                auto propList = propDoc->setArray(key.first);
-                for (const auto &setItem : *key.second.getList())
-                {
-                switch (propInfo->type)
-                {
-                case PropertyTypes_e::intProp:
-                    propList->push(key.second.getInt64());
-                    break;
-                case PropertyTypes_e::doubleProp:
-                    propList->push(key.second.getDouble());
-                    break;
-                case PropertyTypes_e::boolProp:
-                    propList->push(key.second.getBool());
-                    break;
-                case PropertyTypes_e::textProp:
-                    propList->push(key.second.getString());
-                    break;
-                }
-                }
-            }
-            else
-            {
-                switch (propInfo->type)
-                {
-                case PropertyTypes_e::intProp:
-                    propDoc->set(key.first, key.second.getInt64());
-                    break;
-                case PropertyTypes_e::doubleProp:
-                    propDoc->set(key.first, key.second.getDouble());
-                    break;
-                case PropertyTypes_e::boolProp:
-                    propDoc->set(key.first, key.second.getBool());
-                    break;
-                case PropertyTypes_e::textProp:
-                    propDoc->set(key.first, key.second.getString());
-                    break;
-                }
             }
         }
-
+        else if (propInfo->isSet && key.second.typeOf() == cvar::valueType::LIST)
+        {
+            auto propList = propDoc->setArray(propInfo->name);
+            for (const auto &setItem : *key.second.getList())
+            {
+            switch (propInfo->type)
+            {
+            case PropertyTypes_e::intProp:
+                propList->push(key.second.getInt64());
+                break;
+            case PropertyTypes_e::doubleProp:
+                propList->push(key.second.getDouble());
+                break;
+            case PropertyTypes_e::boolProp:
+                propList->push(key.second.getBool());
+                break;
+            case PropertyTypes_e::textProp:
+                propList->push(key.second.getString());
+                break;
+            }
+            }
+        }
+        else
+        {
+            switch (propInfo->type)
+            {
+            case PropertyTypes_e::intProp:
+                propDoc->set(propInfo->name, key.second.getInt64());
+                break;
+            case PropertyTypes_e::doubleProp:
+                propDoc->set(propInfo->name, key.second.getDouble());
+                break;
+            case PropertyTypes_e::boolProp:
+                propDoc->set(propInfo->name, key.second.getBool());
+                break;
+            case PropertyTypes_e::textProp:
+                propDoc->set(propInfo->name, key.second.getString());
+                break;
+            }
+        }
     }
+
+
 
     auto rowDoc = doc.setArray("events");
 
@@ -407,67 +431,6 @@ Col_s* Grid::newRow()
         *(row + propertyMap->uuidPropIndex) = rawData->id;
 
     return reinterpret_cast<Col_s*>(row);
-}
-
-cvar Grid::getProps(const bool propsMayChange)
-{
-    if (!rawData->props)
-        return cvar(cvar::valueType::DICT);
-
-    cvar var;
-
-    // deserialize the props into a cvar for injection into the interpreter
-    varBlob::deserialize(var, rawData->props);
-
-    // hash props so we can detect changes
-    propHash = varBlob::hash(var);
-
-    if (propsMayChange)
-        diff.add(this, var, IndexDiffing::Mode_e::before);
-
-    return var;
-}
-
-void Grid::setProps(cvar& var)
-{
-
-    diff.add(this, var, IndexDiffing::Mode_e::after);
-
-    // are the props deleted or empty? Yes, then lets free memory
-    if (var == NONE || var.len() == 0)
-    {
-        if (rawData->props)
-            PoolMem::getPool().freePtr(rawData->props);
-        rawData->props = nullptr;
-        return;
-    }
-
-    // if anything has changed, lets replace the props and free the last props
-    const auto afterHash = varBlob::hash(var);
-
-    if  (afterHash != propHash)
-    {
-        if (rawData->props)
-            PoolMem::getPool().freePtr(rawData->props);
-
-        varBlob::serialize(propMem, var);
-        rawData->props = propMem.flatten();
-        propMem.reset();
-
-        diff.iterRemoved(
-            [&](const int32_t col, const int64_t val)
-            {
-                attributes->setDirty(this->rawData->linId, col, val, false);
-            }
-        );
-
-        diff.iterAdded(
-            [&](const int32_t col, const int64_t val)
-            {
-                attributes->setDirty(this->rawData->linId, col, val, true);
-            }
-        );
-    }
 }
 
 void Grid::mount(PersonData_s* personData)
@@ -1024,7 +987,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
 
     if (hasCustomerProps)
     {
-        auto insertProps = getProps(true);
+        customerProps.decodeCustomerProps(table, rawData->props);
 
         for (auto c : inboundProperties)
         {
@@ -1033,7 +996,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
             {
                 const auto schemaCol = propertyMap->propertyMap[iter->second];
                 const auto propInfo = properties->getProperty(schemaCol);
-                const auto& colName = propInfo->name;
+                const auto& propIndex = propInfo->idx;
 
                 if (!propInfo->isCustomerProperty)
                     continue;
@@ -1041,70 +1004,24 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 switch (c->type())
                 {
                 case cjson::Types_e::INT:
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                    case PropertyTypes_e::doubleProp:
-                        insertProps[colName] = c->getInt();
-                        break;
-                    case PropertyTypes_e::boolProp:
-                        insertProps[colName] = c->getInt() ? true : false;
-                        break;
-                    case PropertyTypes_e::textProp:
-                        insertProps[colName] = to_string(c->getInt());
-                        break;
-                    }
+                    customerProps.setProp(table, propIndex, cvar(c->getInt()));
                     break;
                 case cjson::Types_e::DBL:
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                    case PropertyTypes_e::doubleProp:
-                        insertProps[colName] = c->getDouble();
-                        break;
-                    case PropertyTypes_e::boolProp:
-                        insertProps[colName] = c->getDouble() != 0 ? true : false;
-                        break;
-                    case PropertyTypes_e::textProp:
-                        insertProps[colName] = to_string(c->getDouble());
-                        break;
-                    }
+                    customerProps.setProp(table, propIndex, cvar(c->getDouble()));
                     break;
                 case cjson::Types_e::STR:
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                    case PropertyTypes_e::doubleProp:
-                        continue;
-                    case PropertyTypes_e::boolProp:
-                        insertProps[colName] = c->getString() != "0";
-                        break;
-                    case PropertyTypes_e::textProp:
-                        insertProps[colName] = c->getString();
-                        break;
-                    }
+                    customerProps.setProp(table, propIndex, cvar(c->getString()));
                     break;
                 case cjson::Types_e::BOOL:
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                    case PropertyTypes_e::doubleProp:
-                        insertProps[colName] = c->getBool() ? 1 : 0;
-                        break;
-                    case PropertyTypes_e::boolProp:
-                        insertProps[colName] = c->getBool();
-                        break;
-                    case PropertyTypes_e::textProp:
-                        insertProps[colName] = c->getBool() ? "true" : "false";
-                        break;
-                    }
+                    customerProps.setProp(table, propIndex, cvar(c->getBool()));
                     break;
                 case cjson::Types_e::ARRAY:
                     {
                         if (!propInfo->isSet)
                             continue;
 
-                        insertProps[colName].set();
+                        cvar tempSet;
+                        tempSet.set();
 
                         auto aNodes = c->getNodes();
                         const auto startIdx = setData.size();
@@ -1113,72 +1030,27 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                             switch (n->type())
                             {
                             case cjson::Types_e::INT:
-                                switch (propInfo->type)
-                                {
-                                case PropertyTypes_e::intProp:
-                                case PropertyTypes_e::doubleProp:
-                                    insertProps[colName] += n->getInt();
-                                    break;
-                                case PropertyTypes_e::boolProp:
-                                    insertProps[colName] += n->getInt() ? true : false;
-                                    break;
-                                case PropertyTypes_e::textProp:
-                                    insertProps[colName] += to_string(n->getInt());
-                                    break;
-                                }
+                                tempSet += n->getInt();
                                 break;
                             case cjson::Types_e::DBL:
-                                switch (propInfo->type)
-                                {
-                                case PropertyTypes_e::intProp:
-                                case PropertyTypes_e::doubleProp:
-                                    insertProps[colName] += cast<int64_t>(n->getDouble());
-                                    break;
-                                case PropertyTypes_e::boolProp:
-                                    insertProps[colName] += n->getDouble() != 0;
-                                    break;
-                                case PropertyTypes_e::textProp:
-                                    insertProps[colName] += to_string(n->getDouble());
-                                    break;
-                                }
+                                tempSet += n->getDouble();
                                 break;
                             case cjson::Types_e::STR:
-                                switch (propInfo->type)
-                                {
-                                case PropertyTypes_e::intProp:
-                                case PropertyTypes_e::doubleProp:
-                                    continue;
-                                case PropertyTypes_e::boolProp:
-                                    insertProps[colName] += n->getString() != "0";
-                                    break;
-                                case PropertyTypes_e::textProp:
-                                    insertProps[colName] += n->getString();
-                                    break;
-                                }
+                                tempSet += n->getString();
                                 break;
                             case cjson::Types_e::BOOL:
-                                switch (propInfo->type)
-                                {
-                                case PropertyTypes_e::intProp:
-                                case PropertyTypes_e::doubleProp:
-                                    insertProps[colName] += c->getBool() ? 1 : 0;
-                                    break;
-                                case PropertyTypes_e::boolProp:
-                                    insertProps[colName] += c->getBool();
-                                    break;
-                                case PropertyTypes_e::textProp:
-                                    insertProps[colName] += c->getBool() ? "true" : "false";
-                                    break;
-                                }
+                                tempSet += c->getBool();
                                 break;
                             }
                         }
+
+                        customerProps.setProp(table, propIndex, tempSet);
                     }
                 }
             }
         }
 
-        setProps(insertProps);
+        setCustomerProps();
     }
 
     if (hasCustomerProps && hasEventProp)

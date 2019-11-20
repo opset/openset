@@ -1379,6 +1379,8 @@ namespace openset::query
                     idx = matchingIndex + 1;
                 }
 
+                auto propShortcut = -1;
+
                 // automatic lambda - assume this is a just a variable
                 if ((!isTableColumn(columnName) || isProperty(columnName)) && selectLambdaId == -1)
                 {
@@ -1390,8 +1392,15 @@ namespace openset::query
                             lastDebug
                         };
 
-                    const Blocks::Line selectLambda { columnName };
-                    selectLambdaId = addLinesAsBlock(selectLambda);
+                    if (isProperty(columnName))
+                    {
+                        propShortcut = userVarIndex(columnName);
+                    }
+                    else
+                    {
+                        const Blocks::Line selectLambda { columnName };
+                        selectLambdaId = addLinesAsBlock(selectLambda);
+                    }
                 }
 
                 // already used, then throw and suggest using `as`
@@ -1438,6 +1447,7 @@ namespace openset::query
                 var.schemaColumn = propInfo ? propInfo->idx : -1;
                 var.schemaType = !propInfo || type != db::PropertyTypes_e::runTimeTypeProp ? type : propInfo->type;
                 var.lambdaIndex = selectLambdaId;
+                var.propShortcut = propShortcut;
                 var.aggOnce = aggOnce;
 
                 // if this is selection is keyed to another property lets reference it as well
@@ -3495,6 +3505,9 @@ namespace openset::query
 
                 if (isProperty(v))
                 {
+                    const auto schemaInfo = tableColumns->getProperty(v);
+                    inMacros.vars.userVars.back().schemaColumn = schemaInfo->idx;
+
                     inMacros.vars.userVars.back().isProp = true;
                     inMacros.useProps = true;
                     inMacros.props.push_back(index);
@@ -3522,7 +3535,7 @@ namespace openset::query
             index = 0;
             for (auto& col : inMacros.vars.columnVars)
             {
-                if (col.lambdaIndex != -1)
+                if (col.lambdaIndex != -1 || col.propShortcut != -1)
                     inMacros.vars.columnLambdas.push_back(index);
                 if (isProperty(col.actual))
                     col.isProp = true;

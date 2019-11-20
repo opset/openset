@@ -20,6 +20,7 @@ namespace openset
         class Database;
         class PropertyMapping;
         class TablePartitioned;
+        class AttributeBlob;
 
         struct SegmentTtl_s
         {

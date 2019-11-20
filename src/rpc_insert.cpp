@@ -101,7 +101,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
 
     for (auto row : rows)
     {
-        const auto personNode = row->xPath("/id");
+        const auto personNode = row->find("id");
 
         if (!personNode)
         {

@@ -38,7 +38,7 @@ using namespace std;
 // constants used by HeapStack and PoolMem
 namespace MemConstants
 {
-	const int64_t HeapStackBlockSize = 256LL * 1024LL;
+    const int64_t HeapStackBlockSize = 256LL * 1024LL;
 }
 
 class HeapStackBlockPool
@@ -47,51 +47,51 @@ private:
 
     const size_t MAXPOOLBLOCKS = 32;
 
-	std::vector<void*> pool;
-	CriticalSection poolLock;
+    std::vector<void*> pool;
+    CriticalSection poolLock;
 
     HeapStackBlockPool() = default;
 
 public:
 
-	// singlton
-	static HeapStackBlockPool& getPool()
-	{
+    // singlton
+    static HeapStackBlockPool& getPool()
+    {
         static HeapStackBlockPool globalPool{};
-		return globalPool;
-	}
+        return globalPool;
+    }
 
-	inline void* Get()
-	{
-		{ // scope the lock
-			csLock lock(poolLock);
+    inline void* Get()
+    {
+        { // scope the lock
+            csLock lock(poolLock);
 
-			if (!pool.empty())
-			{
-			    const auto block = pool.back();
-				pool.pop_back();
-				return block;
-			}
-		}
-		return new char[MemConstants::HeapStackBlockSize];
-	}
+            if (!pool.empty())
+            {
+                const auto block = pool.back();
+                pool.pop_back();
+                return block;
+            }
+        }
+        return new char[MemConstants::HeapStackBlockSize];
+    }
 
-	inline void Put(void* item)
-	{
-		csLock lock(poolLock);
+    inline void Put(void* item)
+    {
+        csLock lock(poolLock);
 
         // cap the number of blocks... not resource friendly
-        if (pool.size() >= MAXPOOLBLOCKS) 
+        if (pool.size() >= MAXPOOLBLOCKS)
             delete[] static_cast<char*>(item);
         else
-		    pool.push_back(item);
-	}
+            pool.push_back(item);
+    }
 
 
-	int32_t blockCount() const
-	{
-		return static_cast<int>(pool.size());
-	}
+    int32_t blockCount() const
+    {
+        return static_cast<int>(pool.size());
+    }
 
 };
 
@@ -100,33 +100,33 @@ class HeapStack
 {
 private:
 
-	// this is the block structure, blocks of heap memory cast to this type will ultimately
-	// become our stack(s). 
-	// Note: alignment forced
+    // this is the block structure, blocks of heap memory cast to this type will ultimately
+    // become our stack(s).
+    // Note: alignment forced
 #pragma pack(push,1)
-	struct block_s
-	{
-		block_s* nextBlock{ nullptr };
-		int64_t endOffset{ 0 };
-		bool nonpooled{ false };
-		char data[1] {0}; // fake size, we will be casting this over a buffer
-	};
+    struct block_s
+    {
+        block_s* nextBlock{ nullptr };
+        int64_t endOffset{ 0 };
+        bool nonpooled{ false };
+        char data[1] {0}; // fake size, we will be casting this over a buffer
+    };
 #pragma pack(pop)
 
-	const int64_t headerSize{ sizeof(block_s) - 1LL }; // size of block header, minus the 1 byte 'data' array
-	const int64_t blockSize{ MemConstants::HeapStackBlockSize };
-	const int64_t dataSize{ MemConstants::HeapStackBlockSize - headerSize };
+    const int64_t headerSize{ sizeof(block_s) - 1LL }; // size of block header, minus the 1 byte 'data' array
+    const int64_t blockSize{ MemConstants::HeapStackBlockSize };
+    const int64_t dataSize{ MemConstants::HeapStackBlockSize - headerSize };
 
-	int64_t blocks{ 0 };
-	int64_t bytes{ 0 };
+    int64_t blocks{ 0 };
+    int64_t bytes{ 0 };
 
-	block_s* head{ nullptr };
-	block_s* tail{ nullptr };
+    block_s* head{ nullptr };
+    block_s* tail{ nullptr };
 
 public:
 
-	// constructor, default allocates 4 meg blocks. 
-	HeapStack() = default;
+    // constructor, default allocates 4 meg blocks.
+    HeapStack() = default;
 
     HeapStack(HeapStack&& other) noexcept
     {
@@ -160,57 +160,82 @@ public:
         return *this;
     }
 
-	~HeapStack();
+    ~HeapStack();
 
 private:
-	void Release();
+    void Release();
 
 public:
-	// newPtr - returns a pointer to a block of memory of "size"
-	inline char* newPtr(const int64_t size)
-	{
-		if (size >= dataSize)
-			newNonpooledBlock(size);
-		else if (!tail || tail->endOffset + size >= dataSize)
-			newBlock();
+    // newPtr - returns a pointer to a block of memory of "size"
+    inline char* newPtr(const int64_t size)
+    {
+        if (size >= dataSize)
+            newNonpooledBlock(size);
+        else if (!tail || tail->endOffset + size >= dataSize)
+            newBlock();
 
-		char* insertPtr = tail->data + tail->endOffset;
-		tail->endOffset += size;
-		bytes += size;
-		return insertPtr;
-	}
+        char* insertPtr = tail->data + tail->endOffset;
+        tail->endOffset += size;
+        bytes += size;
+        return insertPtr;
+    }
 
-	void reset();
+    int64_t* newInt64()
+    {
+        return reinterpret_cast<int64_t*>(newPtr(sizeof(int64_t)));
+    }
 
-	// currentData - returns a pointer to current memory block
-	char* currentData() const;
+    int32_t* newInt32()
+    {
+        return reinterpret_cast<int32_t*>(newPtr(sizeof(int32_t)));
+    }
 
-	char* getHeadPtr() const;
+    int16_t* newInt16()
+    {
+        return reinterpret_cast<int16_t*>(newPtr(sizeof(int16_t)));
+    }
 
-	block_s* firstBlock() const;
+    int8_t* newInt8()
+    {
+        return reinterpret_cast<int8_t*>(newPtr(sizeof(int8_t)));
+    }
 
-	// getSizeBytes - returns how many bytes are being used by DATA in the block stack.
-	int64_t getBytes() const;
+    char* newChar()
+    {
+        return newPtr(sizeof(char));
+    }
 
-	// getAllocated - returns how many bytes are used by the raw blocks in the block stack
-	int64_t getAllocated() const;
+    void reset();
 
-	// getBlocks - returns how many blocks are within the block stack
-	int64_t getBlocks() const;
+    // currentData - returns a pointer to current memory block
+    char* currentData() const;
 
-	// flatten - returns a contiguous block of memory containing the data within all the blocks.
-	//
-	// returns pointer made with pooled mem, must be deleted with pooled mem
-	char* flatten() const;
+    char* getHeadPtr() const;
 
-	// flatten - same as basic flatten but returns length via reference param
-	char* flatten(int64_t& length) const;
+    block_s* firstBlock() const;
 
-	// release a flattened pointer here
-	static void releaseFlatPtr(char* flatPtr);
+    // getSizeBytes - returns how many bytes are being used by DATA in the block stack.
+    int64_t getBytes() const;
+
+    // getAllocated - returns how many bytes are used by the raw blocks in the block stack
+    int64_t getAllocated() const;
+
+    // getBlocks - returns how many blocks are within the block stack
+    int64_t getBlocks() const;
+
+    // flatten - returns a contiguous block of memory containing the data within all the blocks.
+    //
+    // returns pointer made with pooled mem, must be deleted with pooled mem
+    char* flatten() const;
+
+    // flatten - same as basic flatten but returns length via reference param
+    char* flatten(int64_t& length) const;
+
+    // release a flattened pointer here
+    static void releaseFlatPtr(char* flatPtr);
 
 private:
-	// newBlock - adds a new block to the list of blocks, updates the block links.
-	void newBlock();
-	void newNonpooledBlock(int64_t size);
+    // newBlock - adds a new block to the list of blocks, updates the block links.
+    void newBlock();
+    void newNonpooledBlock(int64_t size);
 };

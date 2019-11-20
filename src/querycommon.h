@@ -684,9 +684,10 @@ namespace openset
             int pushRefs { 0 };     // reference counter for pushes
             int sortOrder { -1 };   // used for sorting in property order
             int lambdaIndex { -1 }; // used for variable assignment by lambada
+            int propShortcut { -1 };
             bool nonDistinct { false };
             cvar value { NONE };
-            cvar startingValue { NONE };
+            int64_t valueInt64 { NONE };
             Variable_s() = default;
 
             Variable_s(const string& actual, const string& space, const int sortOrder = -1)
@@ -729,9 +730,9 @@ namespace openset
                 pushRefs           = source.pushRefs;
                 sortOrder          = source.sortOrder;
                 lambdaIndex        = source.lambdaIndex;
+                propShortcut       = source.propShortcut;
                 nonDistinct        = source.nonDistinct;
                 value              = source.value;
-                startingValue      = source.startingValue;
             }
         };
 

@@ -637,6 +637,17 @@ public:
         return reference != nullptr;
     }
 
+    bool isPod() const
+    {
+        return (
+            type == valueType::DBL ||
+            type == valueType::FLT ||
+            type == valueType::INT32 ||
+            type == valueType::INT64 ||
+            type == valueType::BOOL ||
+            type == valueType::STR);
+    }
+
     bool isContainer() const
     {
         return (type == valueType::DICT || type == valueType::LIST || type == valueType::SET);

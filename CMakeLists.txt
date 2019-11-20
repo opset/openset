@@ -108,6 +108,8 @@ set(SOURCE_FILES
         src/attributes.h
         src/config.cpp
         src/config.h
+        src/customer_props.cpp
+        src/customer_props.h
         src/database.cpp
         src/database.h
         src/dbtypes.h
