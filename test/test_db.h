@@ -162,15 +162,15 @@ inline Tests test_db()
                     person.insert(e);
                 }
 
+                auto grid = person.getGrid();
+
                 // write back any dirty change bits from the insert
                 parts->attributes.clearDirty();
-
-                auto grid = person.getGrid();
 
                 auto json = grid->toJSON(); // non-condensed
 
                 // NOTE - uncomment if you want to see the results
-                //cout << cjson::stringify(&json, true) << endl;
+                cout << cjson::stringify(&json, true) << endl;
 
                 std::unordered_set<int64_t> timeStamps;
                 std::unordered_set<std::string> referral_sources;

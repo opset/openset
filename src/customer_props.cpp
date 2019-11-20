@@ -119,20 +119,18 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
                 *mem.newInt32() = prop.second.len();
                 for (auto& item : *var.getSet())
                 {
-                    const auto text = var.getString();
-                    const auto buffer = mem.newPtr(text.length());
-                    // text length
+                    const auto text = item.getString();
                     *mem.newInt32() = text.length();
-                    memcpy(buffer, text.c_str(),text.length());
+                    const auto buffer = mem.newPtr(text.length());
+                    memcpy(buffer, text.c_str(), text.length());
                 }
             }
             else
             {
                 const auto text = var.getString();
-                const auto buffer = mem.newPtr(text.length());
-                // text length
                 *mem.newInt32() = text.length();
-                memcpy(buffer, text.c_str(),text.length());
+                const auto buffer = mem.newPtr(text.length());
+                memcpy(buffer, text.c_str(), text.length());
             }
             break;
         }
@@ -277,20 +275,47 @@ void openset::db::CustomerProps::decodeCustomerProps(openset::db::Table* table, 
     }
 }
 
-int64_t cvarToDB(cvar& value)
+int64_t cvarToDB(openset::db::PropertyTypes_e type, const cvar& value)
 {
-    switch (value.typeOf())
+
+    switch (type)
     {
-    case cvar::valueType::INT32: case cvar::valueType::INT64:
+    case openset::db::PropertyTypes_e::intProp:
         return value.getInt64();
-    case cvar::valueType::FLT: case cvar::valueType::DBL:
+    case openset::db::PropertyTypes_e::doubleProp:
         return value.getDouble() * 10000;
-    case cvar::valueType::STR:
-        return MakeHash(value.getString());
-    case cvar::valueType::BOOL:
+    case openset::db::PropertyTypes_e::boolProp:
         return value.getBool() ? 1 : 0;
+    case openset::db::PropertyTypes_e::textProp:
+        return MakeHash(value.getString());
     default:
         return NONE;
+    }
+}
+
+void listFix(cvar& value)
+{
+    if (value.typeOf() == cvar::valueType::DICT)
+    {
+        cvar set;
+        set.set();
+
+        for (auto& item : *value.getDict())
+            set += std::move(item.first);
+
+        value = set;
+        return;
+    }
+    if (value.typeOf() == cvar::valueType::LIST)
+    {
+        cvar set;
+        set.set();
+
+        for (auto& item : *value.getList())
+            set += std::move(item);
+
+        value = set;
+        return;
     }
 }
 
@@ -301,21 +326,68 @@ void openset::db::CustomerProps::setProp(openset::db::Table* table, int propInde
     if (!propInfo || !propInfo->isCustomerProperty)
         return;
 
+    if (propInfo->isSet)
+        listFix(value);
+
     if (auto& iter = props.find(propIndex); iter != props.end())
     {
-        if (iter->second != value)
+        if (propInfo->isSet)
+        {
+            if (iter->second.typeOf() == cvar::valueType::SET)
+            {
+                for (auto& element : *iter->second.getSet())
+                {
+                    if (!value.contains(element) && element != NONE)
+                    {
+                        oldValues.emplace_back(propIndex, cvarToDB(propInfo->type, element));
+                        propsChanged = true;
+                    }
+                }
+
+                for (auto& element : *value.getSet())
+                {
+                    if (!iter->second.contains(element))
+                    {
+                        newValues.emplace_back(propIndex, cvarToDB(propInfo->type, element));
+                        propsChanged = true;
+                    }
+                }
+            }
+
+            iter->second = value;
+        }
+        else if (iter->second != value)
         {
             propsChanged = true;
-            oldValues.emplace_back(propIndex, cvarToDB(iter->second));
+            oldValues.emplace_back(propIndex, cvarToDB(propInfo->type, iter->second));
+            newValues.emplace_back(propIndex, cvarToDB(propInfo->type, value));
             iter->second = value;
         }
     }
     else
     {
-        props[propIndex] = value;
         propsChanged = true;
+        if (propInfo->isSet)
+        {
+            if (value.typeOf() == cvar::valueType::SET)
+            {
+                for (auto& element : *value.getSet())
+                    newValues.emplace_back(propIndex, cvarToDB(propInfo->type, element));
+                props[propIndex] = value;
+            }
+            else
+            {
+                props[propIndex] = NONE;
+            }
+        }
+        else
+        {
+            props[propIndex] = value;
+            newValues.emplace_back(propIndex, cvarToDB(propInfo->type, value));
+        }
+
+        newValues.emplace_back(propIndex, NONE);
     }
-    newValues.emplace_back(propIndex, cvarToDB(value));
 }
 
 void openset::db::CustomerProps::setProp(openset::db::Table* table, std::string& name, cvar& value)

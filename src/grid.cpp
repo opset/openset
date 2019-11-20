@@ -251,7 +251,10 @@ void Grid::setCustomerProps()
         attributes->setDirty(this->rawData->linId, change.first, change.second, false);
 
     for (auto &change : customerProps.getNewValues())
+    {
+        attributes->getMake(change.first, change.second);
         attributes->setDirty(this->rawData->linId, change.first, change.second, true);
+    }
 }
 
 cjson Grid::toJSON()
@@ -282,16 +285,16 @@ cjson Grid::toJSON()
             switch (propInfo->type)
             {
             case PropertyTypes_e::intProp:
-                propList->push(key.second.getInt64());
+                propList->push(setItem.getInt64());
                 break;
             case PropertyTypes_e::doubleProp:
-                propList->push(key.second.getDouble());
+                propList->push(setItem.getDouble());
                 break;
             case PropertyTypes_e::boolProp:
-                propList->push(key.second.getBool());
+                propList->push(setItem.getBool());
                 break;
             case PropertyTypes_e::textProp:
-                propList->push(key.second.getString());
+                propList->push(setItem.getString());
                 break;
             }
             }
