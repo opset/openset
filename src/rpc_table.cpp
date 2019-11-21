@@ -92,6 +92,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
     }
 
     const auto sourceEventOrder = request.xPath("/event_order");
+    const auto sourcePropIndexes = request.xPath("/prop_indexes");
     const auto sourceSettings = request.xPath("/settings");
 
     auto sourcePropsList = sourceProps->getNodes();
@@ -138,7 +139,6 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     }
 
-
     globals::async->suspendAsync();
     auto table = database->newTable(tableName, useNumericIds);
     auto columns = table->getProperties();
@@ -181,6 +181,8 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
                     "invalid property type" },
                     message);
 
+            database->dropTable(tableName);
+            globals::async->resumeAsync();
             return;
         }
 
@@ -202,6 +204,77 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
             eventOrderHashes->emplace(MakeHash(n->getString()), idx);
             ++idx;
         }
+    }
+
+    if (sourcePropIndexes)
+    {
+
+        auto props = table->getCustomerIndexProps();
+        auto propNodes = sourcePropIndexes->getNodes();
+
+        auto idx = 0;
+        for (auto n : propNodes)
+        {
+            const auto propName = n->getString();
+            const auto propInfo = columns->getProperty(propName);
+
+            if (!propInfo)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' not found" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (!propInfo->isCustomerProperty)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' must be configured as a 'customer_property'" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (propInfo->isSet)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' cannot be a 'set' type" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (propInfo->type != PropertyTypes_e::intProp && propInfo->type != PropertyTypes_e::doubleProp)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' must be an 'int' or 'double' type" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            props->push_back(propInfo->idx);
+        }
+
+        table->propagateCustomerIndexes();
+
     }
 
     if (sourceSettings)

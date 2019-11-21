@@ -3284,16 +3284,6 @@ void openset::query::Interpreter::getGridProps()
     if (!macros.useProps)
         return;
 
-    props.dict();
-
-    // no props? clean props is userVars
-    if (propsIndex != -1 && grid)
-    {
-        for (auto varIndex : macros.props)
-            macros.vars.userVars[varIndex].value = NONE;
-        return;
-    }
-
     grid->getCustomerProps();
 
     // copy props into userVars

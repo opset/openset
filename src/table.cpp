@@ -100,6 +100,12 @@ void Table::releasePartitionObjects(const int32_t partition)
     }
 }
 
+void Table::propagateCustomerIndexes()
+{
+    for (auto& part : partitions)
+        part.second->attributes.createCustomerPropIndexes();
+}
+
 void Table::setSegmentRefresh(
     const std::string& segmentName,
     const openset::query::Macro_s& macros,

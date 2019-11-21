@@ -55,39 +55,24 @@ PersonData_s* Customers::getCustomerByLIN(const int64_t linId)
 
 PersonData_s* Customers::createCustomer(int64_t userId)
 {
-    const auto person = getCustomerByID(userId);
-
-    auto isReuse = false;
-    auto linId = static_cast<int32_t>(customerLinear.size());
-
-    if (!person && !reuse.empty())
+    if (auto& res = customerMap.emplace(userId, 0); res.second == true)
     {
-        linId = reuse.back();
-        reuse.pop_back();
-        isReuse = true;
-    }
-
-    if (!person) // not found, lets create
-    {
-        auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s)));
-
+        const auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s)));
         newUser->id = userId;
-        newUser->linId = linId;
+        newUser->linId = static_cast<int32_t>(customerLinear.size());;
         newUser->idBytes = 0;
         newUser->bytes = 0;
         newUser->comp = 0;
         newUser->props = nullptr;
 
-        if (!isReuse)
-            customerLinear.push_back(newUser);
-
-        customerMap[userId] = newUser->linId;
-
+        res.first->second = newUser->linId;
+        customerLinear.emplace_back(newUser);
         return newUser;
+     }
+    else
+    {
+        return customerLinear.at(res.first->second);
     }
-
-    // check for match/collision
-    return person;
 }
 
 PersonData_s* Customers::createCustomer(string userIdString)
@@ -104,15 +89,7 @@ PersonData_s* Customers::createCustomer(string userIdString)
     {
         const auto person = getCustomerByID(hashId);
 
-        auto isReuse = false;
-        auto linId = static_cast<int32_t>(customerLinear.size());
-
-        if (!person && !reuse.empty())
-        {
-            linId = reuse.back();
-            reuse.pop_back();
-            isReuse = true;
-        }
+        const auto linId = static_cast<int32_t>(customerLinear.size());
 
         if (!person) // not found, lets create
         {
@@ -126,10 +103,8 @@ PersonData_s* Customers::createCustomer(string userIdString)
             newUser->props = nullptr;
             newUser->setIdStr(userIdString);
 
-            if (!isReuse)
-                customerLinear.push_back(newUser);
-
             customerMap[hashId] = newUser->linId;
+            customerLinear.emplace_back(newUser);
 
             return newUser;
         }
@@ -164,8 +139,6 @@ void Customers::drop(const int64_t userId)
     //customerMap.erase(userId);
 
     customerLinear[info->linId] = nullptr;
-
-    reuse.push_back(info->linId);
 
     PoolMem::getPool().freePtr(info);
 }
@@ -213,7 +186,6 @@ int64_t Customers::deserialize(char* mem)
     customerMap.clear();
     customerLinear.clear();
     customerLinear.reserve(sectionLength);
-    reuse.clear();
 
     // end is the length of the block after the 16 bytes of header
     const auto end = read + sectionLength;
@@ -237,13 +209,6 @@ int64_t Customers::deserialize(char* mem)
         // next block please
         read += size;
     }
-
-    for (auto i = 0; i < static_cast<int>(customerLinear.size()); ++i)
-    {
-        if (!customerLinear[i])
-            reuse.push_back(i);
-    }
-
 
     return sectionLength + 16;
 }

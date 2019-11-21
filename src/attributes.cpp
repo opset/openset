@@ -31,9 +31,14 @@ Attributes::~Attributes()
     }
 }
 
-void Attributes::addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
+void Attributes::addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
 {
     const auto key = attr_key_s{ propIndex, value };
+
+    if (state)
+        customerIndexing.insert(propIndex, customerId, linearId, value);
+    else
+        customerIndexing.erase(propIndex, customerId, value);
 
     if (auto changeRecord = changeIndex.find(key); changeRecord != changeIndex.end())
     {
@@ -44,9 +49,20 @@ void Attributes::addChange(const int32_t propIndex, const int64_t value, const i
     changeIndex.emplace(key,  std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
-
 Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 {
+
+    if (auto& res = propertyIndex.emplace(attr_key_s{ propIndex, value }, nullptr); res.second == true)
+    {
+        const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
+        res.first->second = attr;
+        return attr;
+    }
+    else
+    {
+        return res.first->second;
+    }
+    /*
     if (auto attrPair = propertyIndex.find({ propIndex, value }); attrPair == propertyIndex.end())
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
@@ -57,22 +73,23 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
     {
         return attrPair->second;
     }
+    */
 }
 
 Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
     const auto valueHash = MakeHash(value);
 
-    if (auto attrPair = propertyIndex.find({ propIndex, valueHash }); attrPair == propertyIndex.end())
+    if (auto& res = propertyIndex.emplace(attr_key_s{ propIndex, valueHash }, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         attr->text = blob->storeValue(propIndex, value);
-        propertyIndex.insert({attr_key_s{ propIndex, valueHash }, attr});
+        res.first->second = attr;
         return attr;
     }
     else
     {
-        return attrPair->second;
+        return res.first->second;
     }
 }
 
@@ -97,9 +114,9 @@ void Attributes::drop(const int32_t propIndex, const int64_t value)
     propertyIndex.erase({ propIndex, value });
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t propIndex, const int64_t value, const bool on)
+void Attributes::setDirty(const int64_t customerId, const int32_t linId, const int32_t propIndex, const int64_t value, const bool on)
 {
-    addChange(propIndex, value, linId, on);
+    addChange(customerId, propIndex, value, linId, on);
 }
 
 void Attributes::clearDirty()
@@ -275,6 +292,13 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
     }
 
     return result;
+}
+
+void Attributes::createCustomerPropIndexes()
+{
+    const auto props = table->getCustomerIndexProps();
+    for (auto prop : *props)
+        customerIndexing.createIndex(prop);
 }
 
 void Attributes::serialize(HeapStack* mem)

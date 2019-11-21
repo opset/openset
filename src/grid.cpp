@@ -248,12 +248,12 @@ void Grid::setCustomerProps()
     rawData->props = customerProps.encodeCustomerProps(table);
 
     for (auto &change : customerProps.getOldValues())
-        attributes->setDirty(this->rawData->linId, change.first, change.second, false);
+        attributes->setDirty(this->rawData->id, this->rawData->linId, change.first, change.second, false);
 
     for (auto &change : customerProps.getNewValues())
     {
         attributes->getMake(change.first, change.second);
-        attributes->setDirty(this->rawData->linId, change.first, change.second, true);
+        attributes->setDirty(this->rawData->id, this->rawData->linId, change.first, change.second, true);
     }
 }
 
@@ -707,7 +707,7 @@ bool Grid::cull()
     diff.iterRemoved(
         [&](int32_t col, int64_t val)
         {
-            attributes->setDirty(this->rawData->linId, col, val, false);
+            attributes->setDirty(this->rawData->id, this->rawData->linId, col, val, false);
         }
     );
 
@@ -759,7 +759,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 hasEventProp = true;
 
             attributes->getMake(schemaCol, NONE);
-            attributes->setDirty(this->rawData->linId, schemaCol, NONE);
+            attributes->setDirty(this->rawData->id, this->rawData->linId, schemaCol, NONE, true);
             auto tempVal = NONE;
             string tempString;
 
@@ -936,7 +936,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                     else
                         attributes->getMake(schemaCol, tempVal);
 
-                    attributes->setDirty(this->rawData->linId, schemaCol, tempVal);
+                    attributes->setDirty(this->rawData->id, this->rawData->linId, schemaCol, tempVal, true);
                     setData.push_back(tempVal);
                 }
 
@@ -961,7 +961,7 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 else
                     attributes->getMake(schemaCol, tempVal);
 
-                attributes->setDirty(this->rawData->linId, schemaCol, tempVal);
+                attributes->setDirty(this->rawData->id, this->rawData->linId, schemaCol, tempVal, true);
 
                 if (propInfo->isSet)
                 {

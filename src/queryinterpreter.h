@@ -151,8 +151,6 @@ namespace openset
             IndexBits* bits{ nullptr };
             int maxBitPop{ 0 }; // largest linear user_id in table/partition
 
-            cvar props;
-            int propsIndex{ -1 };
             bool propsChanged{ false };
 
             // counters

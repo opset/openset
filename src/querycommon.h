@@ -6,8 +6,8 @@
 #include <utility>
 #include "errors.h"
 #include "dbtypes.h"
-#include "attributes.h"
 #include "var/var.h"
+#include "attributes.h"
 #include "../lib/str/strtools.h"
 
 namespace openset

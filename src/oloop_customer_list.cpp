@@ -117,6 +117,23 @@ void OpenLoopCustomerList::prepare()
 
     person.setSessionTime(macros.sessionTime);
 
+    const auto filter = [&](SortKeyOneProp_s* key, int* value) -> bool {
+        return true;
+    };
+
+
+    auto propIndex = parts->table->getProperties()->getProperty("score")->idx;
+
+    indexedList = std::move(parts->attributes.customerIndexing.getListAscending(
+        propIndex,
+        10000,
+        4,
+        1000,
+        filter
+    ));
+
+    iter = indexedList.begin();
+
     startTime = Now();
 }
 
@@ -129,7 +146,7 @@ bool OpenLoopCustomerList::run()
 
         // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
-        if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
+        if (interpreter->error.inError() || iter == indexedList.end())
         {
             result->setAccTypesFromMacros(macros);
 
@@ -147,7 +164,7 @@ bool OpenLoopCustomerList::run()
             return false;
         }
 
-        if (const auto personData = parts->people.getCustomerByLIN(currentLinId); personData != nullptr)
+        if (const auto personData = parts->people.getCustomerByLIN(iter->second); personData != nullptr)
         {
             ++runCount;
             person.mount(personData);
@@ -155,6 +172,8 @@ bool OpenLoopCustomerList::run()
             interpreter->mount(&person);
             interpreter->exec(); // run the script on this customer - do some magic
         }
+
+        ++iter;
     }
 }
 

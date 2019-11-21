@@ -23,9 +23,8 @@ namespace openset
         public:
             robin_hood::unordered_map<int64_t, int32_t, robin_hood::hash<int64_t>> customerMap;
             vector<PersonData_s*> customerLinear;
-            vector<int32_t> reuse;
             int partition;
-        public:
+
             explicit Customers(int partition);
             ~Customers();
 

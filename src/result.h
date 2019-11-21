@@ -202,18 +202,27 @@ namespace openset
 
             Accumulator(const int64_t resultWidth)
             {
+                auto columnIter = columns;
+
+                while (columnIter < columns + resultWidth)
+                {
+                    columnIter->value = NONE;
+                    columnIter->count = 0;
+                    ++columnIter;
+                }
+                /*
                 for (auto i = 0; i < resultWidth; ++i)
                 {
                     columns[i].value = NONE;
                     columns[i].count = 0;
-                }
+                }*/
             }
         };
 
         class ResultSet
         {
         public:
-            robin_hood::unordered_map<RowKey, Accumulator*, robin_hood::hash<RowKey>> results;
+            robin_hood::unordered_map<RowKey, Accumulator*> results;
             using RowPair = pair<RowKey, Accumulator*>;
             using RowVector = vector<RowPair>;
             vector<RowPair> sortedResult;

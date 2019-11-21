@@ -8,6 +8,7 @@
 #include "robin_hood.h"
 #include "dbtypes.h"
 #include "indexbits.h"
+#include "customer_index.h"
 
 using namespace std;
 
@@ -132,8 +133,9 @@ namespace openset::db
         using ChangeIndex = robin_hood::unordered_map<attr_key_s, std::vector<Attr_changes_s>, robin_hood::hash<attr_key_s>>;
         using AttrPair = pair<attr_key_s, Attr_s*>;
 
-        ColumnIndex propertyIndex;//{ ringHint_e::lt_5_million };
-        ChangeIndex changeIndex;//{ ringHint_e::lt_5_million };
+        ColumnIndex propertyIndex; // prop/value store
+        ChangeIndex changeIndex; // cache for property changes
+        CustomerIndexing customerIndexing; // indexes for customer_list sort ordering
 
         Table* table;
         AttributeBlob* blob;
@@ -143,7 +145,7 @@ namespace openset::db
         explicit Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties);
         ~Attributes();
 
-        void addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state);
+        void addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state);
 
         Attr_s* getMake(const int32_t propIndex, const int64_t value);
         Attr_s* getMake(const int32_t propIndex, const string& value);
@@ -153,7 +155,7 @@ namespace openset::db
 
         void drop(const int32_t propIndex, const int64_t value);
 
-        void setDirty(const int32_t linId, const int32_t propIndex, const int64_t value, const bool on = true);
+        void setDirty(const int64_t customerId, const int32_t linId, const int32_t propIndex, const int64_t value, const bool on);
         void clearDirty();
 
         // replace an indexes bits with new ones, used when generating segments
@@ -168,6 +170,8 @@ namespace openset::db
         {
             return (partition == other.partition);
         }
+
+        void createCustomerPropIndexes();
 
         void serialize(HeapStack* mem);
         int64_t deserialize(char* mem);
