@@ -19,8 +19,11 @@ PersonData_s* Customers::getCustomerByID(int64_t userId)
 {
     int32_t linId;
 
-    if (const auto entry = customerMap.find(userId); entry != customerMap.end())
-        return getCustomerByLIN(entry->second);
+    if (customerMap.get(userId, linId))
+        return getCustomerByLIN(linId);
+
+    //if (const auto entry = customerMap.find(userId); entry != customerMap.end())
+    //    return getCustomerByLIN(entry->second);
 
     return nullptr;
 }
@@ -55,6 +58,25 @@ PersonData_s* Customers::getCustomerByLIN(const int64_t linId)
 
 PersonData_s* Customers::createCustomer(int64_t userId)
 {
+    int linId;
+    if (customerMap.get(userId, linId))
+    {
+        return customerLinear.at(linId);
+    }
+
+    const auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s)));
+    newUser->id = userId;
+    newUser->linId = static_cast<int32_t>(customerLinear.size());;
+    newUser->idBytes = 0;
+    newUser->bytes = 0;
+    newUser->comp = 0;
+    newUser->props = nullptr;
+
+    customerMap.set(userId, newUser->linId);
+    customerLinear.emplace_back(newUser);
+    return newUser;
+
+    /*
     if (auto& res = customerMap.emplace(userId, 0); res.second == true)
     {
         const auto newUser = recast<PersonData_s*>(PoolMem::getPool().getPtr(sizeof(PersonData_s)));
@@ -73,6 +95,7 @@ PersonData_s* Customers::createCustomer(int64_t userId)
     {
         return customerLinear.at(res.first->second);
     }
+    */
 }
 
 PersonData_s* Customers::createCustomer(string userIdString)
@@ -103,7 +126,7 @@ PersonData_s* Customers::createCustomer(string userIdString)
             newUser->props = nullptr;
             newUser->setIdStr(userIdString);
 
-            customerMap[hashId] = newUser->linId;
+            customerMap.set(hashId, newUser->linId);
             customerLinear.emplace_back(newUser);
 
             return newUser;
@@ -204,7 +227,7 @@ int64_t Customers::deserialize(char* mem)
 
         // index this customer
         customerLinear[customer->linId] = customer;
-        customerMap[customer->id] = customer->linId;
+        customerMap.set(customer->id, customer->linId);
 
         // next block please
         read += size;

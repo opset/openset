@@ -74,15 +74,15 @@ void OpenLoopProperty::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].bits);
+                segments.push_back(parts->segments[segmentName].getBits());
             }
         }
     }
 
     // get the root value
-    const auto all = parts->attributes.get(config.propIndex, NONE);
+    const auto allBits = parts->attributes.getBits(config.propIndex, NONE);
 
-    if (!all)
+    if (!allBits)
     {
         shuttle->reply(
             0,
@@ -127,7 +127,7 @@ void OpenLoopProperty::prepare()
     auto idx = 0;
     for (auto s : segments)
     {
-        auto bits = all->getBits();
+        auto bits = allBits;
         bits->opAnd(*s);
         aggs->columns[idx].value = bits->population(stopBit);
         delete bits;
@@ -136,7 +136,7 @@ void OpenLoopProperty::prepare()
     }
 
     // turn ints and doubles into their bucketed name
-    auto toBucket = [&](const int64_t value)->int64_t
+    const auto toBucket = [&](const int64_t value)->int64_t
     {
         if (config.bucket == 0)
             return value;
@@ -257,15 +257,12 @@ bool OpenLoopProperty::run()
 
                 for (auto value : groupsIter->second)
                 {
+                    const auto bits = parts->attributes.getBits(config.propIndex, value);
 
-                    auto attr = parts->attributes.get(config.propIndex, value);
-
-                    if (!attr)
+                    if (!bits)
                         continue;
 
-                    const auto bits = attr->getBits();
                     sumBits->opOr(*bits);
-                    delete bits;
                 }
 
                 // remove bits not in the segment

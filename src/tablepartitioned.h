@@ -45,9 +45,8 @@ namespace openset
             int64_t lastModified {0};
             bool    onInsert {false};
             query::Interpreter* interpreter { nullptr };
-            IndexBits* bits { nullptr };
 
-            int changeCount {0};
+            Attributes* attributes;
 
             SegmentPartitioned_s(
                     const std::string& segmentName,
@@ -75,8 +74,8 @@ namespace openset
              *
              * setBit - flips a bit to the desired state and returns the state change that took place
              */
-            IndexBits* prepare(Attributes& attributes); // mounts bits, if they are not already
-            void commit(Attributes& attributes); // commits changed bits, if any
+            void prepare(Attributes& attributes); // mounts bits, if they are not already
+            IndexBits* getBits();
             SegmentChange_e setBit(int64_t linearId, bool state); // flip bits by persion linear id
 
             // returns a new or cached interpreter. Call prepare before calling get Interpreter
@@ -191,8 +190,6 @@ namespace openset
             //
             // The Interpreter needs this callback to operate when performing segment math
             std::function<openset::db::IndexBits*(const string&, bool&)> getSegmentCallback();
-
-            void storeAllChangedSegments();
 
             openset::db::IndexBits* getBits(std::string& segmentName);
 

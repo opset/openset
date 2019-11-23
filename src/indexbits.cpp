@@ -216,7 +216,7 @@ void IndexBits::grow(int64_t required, bool exact)
         return;
 
     if (!exact)
-        required += 32;
+        required += ints > 100 ? (ints > 1000 ? 128 : 64) : 32;
 
     const auto bytes = required * sizeof(uint64_t);
     const auto write = cast<char*>(PoolMem::getPool().getPtr(bytes));

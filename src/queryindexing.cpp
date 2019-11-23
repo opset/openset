@@ -87,7 +87,7 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
     for (auto attr: attrList)
     {
         // get the bits
-        const auto workBits = attr->getBits();
+        const auto workBits = parts->attributes.getBits(attr.index, attr.value);
 
         if (initialized)
         {
@@ -98,9 +98,6 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
             resultBits.opCopy(*workBits);
             initialized = true;
         }
-
-        // clean up them bits
-        delete workBits;
     }
 
     if (!initialized)

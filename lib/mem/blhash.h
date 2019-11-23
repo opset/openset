@@ -177,25 +177,6 @@ private:
         {
             return reinterpret_cast<tKey*>(words);
         }
-
-
-        bool operator >(const overlay &right) const
-        {
-            auto leftPtr = const_cast<tBranch*>(words + elements - 1);
-            auto rightPtr = const_cast<tBranch*>(right.words + elements - 1);
-
-            while (leftPtr >= words)
-            {
-                if (*leftPtr > *rightPtr)
-                    return true;
-                if (*leftPtr < *rightPtr)
-                    return false;
-                --leftPtr;
-                --rightPtr;
-            }
-            return false;
-        }
-
     };
 #pragma pack(pop)
 
@@ -206,7 +187,6 @@ private:
 
     // serialize variables (passing them as params is just really slow)
     overlay serializeOver;
-    overlay serializeStart;
     int serializeLimit;
     FilterCB serializeCB;
 
@@ -379,11 +359,10 @@ public:
     };
 
 
-    HashVector& serialize(tKey& start, int limit, FilterCB filterCallBack)
+    HashVector& serialize(int limit, FilterCB filterCallBack)
     {
         tKey key;
         serializeOver.set(&key);
-        serializeStart.set(&start);
 
         serializeList.clear();
         serializeList.reserve(distinct);
@@ -409,7 +388,7 @@ private:
 
             if (depth == serializeOver.elements - 1)
             {
-                if (serializeOver > serializeStart &&
+                if (//serializeOver > serializeStart &&
                     serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
                 {
                     serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));

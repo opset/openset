@@ -6,20 +6,12 @@
 
 using namespace openset::db;
 
-IndexBits* Attr_s::getBits()
-{
-    auto bits = new IndexBits();
-
-    bits->mount(index, ints, ofs, len, linId);
-
-    return bits;
-}
-
 Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties) :
     table(table),
     blob(attributeBlob),
     properties(properties),
-    partition(partition)
+    partition(partition),
+    indexCache(50)
 {}
 
 Attributes::~Attributes()
@@ -31,8 +23,63 @@ Attributes::~Attributes()
     }
 }
 
+IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
+{
+
+    if (const auto bits = indexCache.get(propIndex, value); bits)
+        return bits;
+
+    const auto attribute = Attributes::getMake(propIndex, value);
+
+    auto bits = new IndexBits();
+    bits->mount(attribute->index, attribute->ints, attribute->ofs, attribute->len, attribute->linId);
+
+    // cache these bits
+    const auto [evictPropIndex, evictValue, evictBits] = indexCache.set(propIndex, value, bits);
+
+    // if anything got squeezed out compress it
+    if (evictBits)
+    {
+        const auto attrPair = propertyIndex.find({ evictPropIndex, evictValue });
+        const auto evictAttribute = attrPair->second;
+
+        int64_t compBytes = 0; // OUT value via reference
+        int64_t linId;
+        int32_t ofs, len;
+
+        // compress the data, get it back in a pool ptr
+        const auto compData = bits->store(compBytes, linId, ofs, len, table->indexCompression);
+        const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
+
+        // copy header
+        memcpy(destAttr, evictAttribute, sizeof(Attr_s));
+        if (compData)
+        {
+            memcpy(destAttr->index, compData, compBytes);
+            // return work buffer from bits.store to the pool
+            PoolMem::getPool().freePtr(compData);
+        }
+
+        destAttr->ints = bits->ints;//(isList) ? 0 : bits.ints;
+        destAttr->comp = static_cast<int>(compBytes);
+        destAttr->linId = linId;
+        destAttr->ofs = ofs;
+        destAttr->len = len;
+
+        attrPair->second = destAttr;
+        PoolMem::getPool().freePtr(evictAttribute);
+
+        delete evictBits;
+    }
+
+    return bits;
+}
+
 void Attributes::addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
 {
+    if (propIndex == PROP_STAMP || propIndex == PROP_UUID || propIndex == PROP_SESSION)
+        return;
+
     const auto key = attr_key_s{ propIndex, value };
 
     if (state)
@@ -46,7 +93,7 @@ void Attributes::addChange(const int64_t customerId, const int32_t propIndex, co
         return;
     }
 
-    changeIndex.emplace(key,  std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
+    changeIndex.emplace(key, std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
 Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
@@ -121,15 +168,29 @@ void Attributes::setDirty(const int64_t customerId, const int32_t linId, const i
 
 void Attributes::clearDirty()
 {
-    IndexBits bits;
+    //IndexBits bits;
 
     for (auto& change : changeIndex)
     {
-        const auto attrPair = propertyIndex.find({ change.first.index, change.first.value });
+        getMake(change.first.index, change.first.value);
 
-        if (attrPair == propertyIndex.end() || !attrPair->second)
-            continue;
+        //if (attrPair == propertyIndex.end() || !attrPair->second)
+          //  continue;
 
+        auto bits = getBits(change.first.index, change.first.value);
+
+        for (const auto& t : change.second)
+        {
+            if (t.state)
+                bits->bitSet(t.linId);
+            else
+                bits->bitClear(t.linId);
+        }
+
+        // TODO - check for non-existent prop.
+
+
+        /*
         const auto attr = attrPair->second;
 
         bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
@@ -178,10 +239,12 @@ void Attributes::clearDirty()
             attrPair->second = destAttr;
             PoolMem::getPool().freePtr(attr);
         }
+        */
     }
     changeIndex.clear();
 }
 
+/*
 void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* newBits)
 {
     auto attrPair = propertyIndex.find(attr_key_s{ propIndex, value });
@@ -222,6 +285,7 @@ void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* n
     // FIX - memory leak
     PoolMem::getPool().freePtr(attr);
 }
+*/
 
 AttributeBlob* Attributes::getBlob() const
 {
@@ -250,7 +314,7 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
     case listMode_e::NEQ:
     case listMode_e::EQ:
         if (const auto tAttr = get(propIndex, value); tAttr)
-            result.push_back(tAttr);
+            result.emplace_back(propIndex, value);
         return result;
     //case listMode_e::PRESENT_FAST: // fast for reducing set in `!= nil` test
     //    if (const auto tAttr = get(propIndex, NONE); tAttr)
@@ -267,23 +331,23 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
         switch (mode)
         {
         case listMode_e::PRESENT: // sum of all indexes - slow but accurate for `== nil` test
-            result.push_back(kv.second);
+            result.push_back(kv.first);
         break;
         case listMode_e::GT:
             if (kv.first.value > value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::GTE:
             if (kv.first.value >= value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::LT:
             if (kv.first.value < value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::LTE:
             if (kv.first.value <= value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         default:
             // never happens

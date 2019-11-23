@@ -2,6 +2,8 @@
 #include "cjson/cjson.h"
 #include "str/strtools.h"
 
+#include "robin_hood.h"
+
 #include "customers.h"
 #include "customer.h"
 #include "database.h"
@@ -83,8 +85,7 @@ bool OpenLoopInsert::run()
         // if we are not in owner or clone state we are just going to backlog
         // the inserts until our state changes, then we will perform inserts
         Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
-        this->scheduleFuture(1000);
-        sleepCounter = 0;
+        this->scheduleFuture(250);
 
         tablePartitioned->attributes.clearDirty();
 
@@ -97,15 +98,11 @@ bool OpenLoopInsert::run()
     if (inserts.empty())
     {
         SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
-        scheduleFuture((sleepCounter > 10 ? 10 : sleepCounter) * 100); // lazy back-off function
-        ++sleepCounter; // inc after, this will make it run one more time before sleeping
-
+        scheduleFuture(250); // lazy back-off function
         tablePartitioned->attributes.clearDirty();
 
         return false;
     }
-
-    sleepCounter = 0;
 
     // reusable object representing a customer
     Customer person;
@@ -126,7 +123,7 @@ bool OpenLoopInsert::run()
     // pass. This can greatly reduce redundant calls to Mount and Commit
     // which can be expensive as they both call LZ4 (which is fast, but still
     // has it's overhead)
-    std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
+    robin_hood::unordered_map < std::string, std::vector<cjson>, robin_hood::hash<std::string>> evtByPerson;
     auto insertIter = inserts.begin();
 
     for (; insertIter != inserts.end(); ++insertIter)

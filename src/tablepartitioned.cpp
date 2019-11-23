@@ -10,46 +10,33 @@ using namespace openset::db;
 
 SegmentPartitioned_s::~SegmentPartitioned_s()
 {
-    if (bits)
-        delete bits;
-
     if (interpreter)
         delete interpreter;
 }
 
-openset::db::IndexBits* openset::db::SegmentPartitioned_s::prepare(Attributes& attributes)
+void openset::db::SegmentPartitioned_s::prepare(Attributes& attr)
 {
-    if (bits)
-        return bits;
-
-    changeCount = 0;
-    const auto attr = attributes.getMake(PROP_SEGMENT, segmentName);
-    bits = new IndexBits();
-    bits->mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
-
-    return bits;
+    attributes = &attr;
+    attributes->getMake(PROP_SEGMENT, segmentName);
 }
 
-void openset::db::SegmentPartitioned_s::commit(Attributes& attributes)
+openset::db::IndexBits* openset::db::SegmentPartitioned_s::getBits()
 {
-    if (changeCount)
-        attributes.swap(PROP_SEGMENT, MakeHash(segmentName), bits);
-    changeCount = 0;
+    return attributes->getBits(PROP_SEGMENT, MakeHash(segmentName));
 }
 
 openset::db::SegmentPartitioned_s::SegmentChange_e openset::db::SegmentPartitioned_s::setBit(int64_t linearId, bool state)
 {
+    const auto bits = getBits();
     const auto currentState = bits->bitState(linearId);
     if (state && !currentState)
     {
-        ++changeCount;
         bits->bitSet(linearId);
         return SegmentChange_e::enter;
     }
 
     if (!state && currentState)
     {
-        ++changeCount;
         bits->bitClear(linearId);
         return SegmentChange_e::exit;
     }
@@ -62,10 +49,10 @@ openset::query::Interpreter * openset::db::SegmentPartitioned_s::getInterpreter(
     if (!interpreter)
         interpreter = new openset::query::Interpreter(macros, openset::query::InterpretMode_e::count);
 
+    const auto bits = getBits();
+
     if (!bits)
         throw std::runtime_error("call prepare before calling getInterpreter");
-
-    interpreter->setBits(bits, maxLinearId);
 
     return interpreter;
 }
@@ -81,7 +68,6 @@ TablePartitioned::TablePartitioned(
         attributeBlob(attributeBlob),
         people(partition),
         asyncLoop(openset::globals::async->getPartition(partition)),
-        //triggers(new openset::revent::ReventManager(this)),
         insertBacklog(0)
 {
     // this will stop any translog purging until the insertCell (below)
@@ -101,7 +87,6 @@ TablePartitioned::TablePartitioned(
     async::OpenLoop* cleanerCell = new async::OpenLoopCleaner(sharedTablePtr);
     cleanerCell->scheduleFuture(table->maintInterval);
     asyncLoop->queueCell(cleanerCell);
-
 }
 
 TablePartitioned::~TablePartitioned()
@@ -134,8 +119,6 @@ void TablePartitioned::checkForSegmentChanges()
     // prepare, and decrement on exit
     if (segmentUsageCount)
         return;
-
-    storeAllChangedSegments();
 
     std::vector<std::string> orphanedSegments;
     InterpreterList onInsertList;
@@ -212,32 +195,26 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
         if (this->segments.count(segmentName))
         {
             deleteAfterUsing = false;
-            return this->segments[segmentName].prepare(this->attributes);
+            this->segments[segmentName].prepare(this->attributes);
+            return this->segments[segmentName].getBits();
         }
 
         // if there are no bits with this name created in this query
         // then look in the index
-        auto attr = this->attributes.get(PROP_SEGMENT, segmentName);
-
-        if (!attr)
-            return nullptr;
-
+        const auto bits = this->attributes.getBits(PROP_SEGMENT, MakeHash(segmentName));
         deleteAfterUsing = true;
-        return attr->getBits();
+        return bits;
     };
 
-}
-
-void TablePartitioned::storeAllChangedSegments()
-{
-    for (auto& seg: segments)
-        seg.second.commit(attributes);
 }
 
 openset::db::IndexBits* TablePartitioned::getBits(std::string& segmentName)
 {
     if (this->segments.count(segmentName))
-        return this->segments[segmentName].prepare(attributes);
+    {
+        this->segments[segmentName].prepare(attributes);
+        return this->segments[segmentName].getBits();
+    }
 
     return nullptr;
 }

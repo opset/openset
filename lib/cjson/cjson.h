@@ -68,10 +68,10 @@ public:
 
 private:
 
-    HeapStack* mem;
+    HeapStack* mem { nullptr };
 
     Types_e nodeType;
-    char* nodeName;
+    char* nodeName { nullptr };
 
     // dataUnion uses the often ignored but always awesome
     // union feature of C++
@@ -222,7 +222,7 @@ public:
     cjson(char* data, const size_t length);
     cjson(HeapStack* mem);
 
-    cjson(const cjson&) = delete;  // can't copy - actually we could... but..
+    cjson(const cjson&);  // can't copy - actually we could... but..
     cjson(cjson&& other) noexcept; // moveable 
 
     ~cjson();

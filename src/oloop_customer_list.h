@@ -37,6 +37,10 @@ namespace openset
             openset::db::IndexBits* index;
             openset::result::ResultSet* result;
 
+            std::vector<int> sortOrderProperties;
+            std::vector<int64_t> cursor;
+            int limit;
+
             CustomerIndexList indexedList;
             CustomerIndexList::iterator iter;
 
@@ -45,6 +49,9 @@ namespace openset
                 openset::db::Database::TablePtr table,
                 openset::query::Macro_s macros,
                 openset::result::ResultSet* result,
+                const std::vector<int>& indexProperties,
+                const std::vector<int64_t>& cursor,
+                const int limit,
                 int instance);
 
             ~OpenLoopCustomerList() final;

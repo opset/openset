@@ -202,21 +202,46 @@ shared_ptr<cjson> forkQuery(
         ResultMuxDemux::resultFlatColumnsToJson(resultColumnCount, setCount, resultSets, resultJson.get());
         const auto toJsonEndTime = Now();
 
+        const auto resultNode = resultJson.get()->find("_");
+        const auto rowsInResult = resultNode ? resultNode->memberCount : 0;
+
         // free up the responses
         openset::globals::mapper->releaseResponses(result);
         // clean up all those resultSet*
         for (auto res : resultSets)
             delete res;
 
+        const auto sortStartTime = Now();
+        ResultMuxDemux::flatColumnMultiSort(resultJson.get(), sortOrder, sortColumn);
+        const auto sortEndTime = Now();
+
         const auto trimStartTime = Now();
-        //ResultMuxDemux::flatColumnMultiSort(resultJson.get(), sortOrder, sortColumn[0]);
         ResultMuxDemux::jsonResultTrim(resultJson.get(), trim); // local function to fill Meta data in result JSON
         const auto trimEndTime = Now();
 
         cout << "dispatch: " << (dispatchEndTime - dispatchStartTime) <<
                 " gather: " << (gatherEndTime - gatherStartTime) <<
                 " json: " << (toJsonEndTime - toJsonStartTime) <<
+                " sort: " << (sortEndTime - sortStartTime) <<
                 " trim: " << (trimEndTime - trimStartTime) << endl;
+
+        const auto rowsAfterTrim = resultNode ? resultNode->memberCount : 0;
+
+        const auto info = resultJson.get()->setObject("info");
+
+        if (rowsAfterTrim != 0 && rowsInResult == rowsAfterTrim)
+        {
+            info->set("more", true);
+
+            std::string cursor =
+                to_string(resultNode->membersTail->at(sortColumn[0])->getInt()) + "," +
+                to_string(resultNode->membersTail->at(sortColumn[1])->getInt());
+            info->set("cursor", cursor);
+        }
+        else
+        {
+            info->set("more", false);
+        }
 
         return resultJson;
     }
@@ -691,6 +716,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
         ? ResultSortOrder_e::Asc
         : ResultSortOrder_e::Desc;
     auto sortKeyString    = message->getParamString("sort", "");
+    auto cursorString    = message->getParamString("cursor", "");
 
     if (!sortKeyString.length())
         sortKeyString = "id";
@@ -766,11 +792,14 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
         return;
     }
 
+    // Ordering keys (at this point we only use one)
+    std::vector<int> sortOrderProperties;
+
+
+    int customerIdIndex = -1;
+
     // validate that sortKeys are in the select statement
     const auto sortKeyParts = split(sortKeyString, ',');
-
-    std::vector<int> sortOrders;
-
     for (auto key : sortKeyParts)
     {
         key = trim(key);
@@ -778,15 +807,55 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
         if (key.length())
         {
+
+            auto propInfo = table->getProperties()->getProperty(key);
+
+            if (!propInfo)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' not found"
+                    },
+                    message);
+                return;
+            }
+
+            if (propInfo->isSet)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' cannot be a 'set' type"
+                    },
+                    message);
+                return;
+            }
+
+            if (propInfo->type != PropertyTypes_e::intProp && propInfo->type != PropertyTypes_e::doubleProp)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' must be an 'int' or 'double' type"
+                    },
+                    message);
+                return;
+            }
+
             auto index = 0;
             for (auto& column : queryMacros.vars.columnVars)
             {
+                if (column.alias == "id")
+                    customerIdIndex = index;
+
                 if (column.alias == key)
                 {
                     found = true;
-
-                    queryMacros.vars.autoGrouping.push_back(index);
-                    sortOrders.push_back(index);
+                    sortOrderProperties.push_back(index);
 
                     break;
                 }
@@ -800,11 +869,98 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
                 errors::Error {
                     errors::errorClass_e::query,
                     errors::errorCode_e::general_error,
-                    "sort key in query string not found in query script select statement"
+                    "param 'sort': sort property must be part of query 'select' statement"
                 },
                 message);
             return;
         }
+    }
+
+    if (customerIdIndex == -1)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'sort': sorting requires that customer 'id' is part of a 'select' statement"
+            },
+            message);
+        return;
+    }
+
+    if (sortOrderProperties.size() > 1)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'sort': currently only 1 sort property can be specified"
+            },
+            message);
+        return;
+    }
+
+    // add customerId as secondary sort
+    if (sortOrderProperties.size() == 1)
+        sortOrderProperties.push_back(customerIdIndex);
+
+    for (const auto propIndex: sortOrderProperties)
+        queryMacros.vars.autoGrouping.push_back(propIndex);
+
+    std::vector<int64_t> cursorValues;
+
+        // validate that sortKeys are in the select statement
+    const auto cursorParts = split(cursorString, ',');
+    for (auto key : cursorParts)
+    {
+        key = trim(key);
+        auto found = false;
+
+        if (key.length())
+        {
+            try
+            {
+                cursorValues.push_back(stoll(key));
+            }
+            catch (const std::runtime_error&)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'cursor': expecting a numeric value"
+                    },
+                    message);
+                return;
+            }
+            catch (...)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'cursor': expecting a numeric value"
+                    },
+                    message);
+                return;
+            }
+        }
+    }
+
+    if (cursorValues.size() == 0)
+    {
+        cursorValues = { LLONG_MIN, LLONG_MIN };
+    }
+    else if (cursorValues.size() != 2)
+    {
+            RpcError(
+                errors::Error {
+                    errors::errorClass_e::query,
+                    errors::errorCode_e::general_error,
+                    "param 'cursor': expecting two numeric values (separated by a comma)"
+                },
+                message);
+            return;
     }
 
     if (message->isParam("segments"))
@@ -865,7 +1021,7 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
             queryMacros.scriptMode,
             sortMode,
             sortOrder,
-            sortOrders,
+            sortOrderProperties,
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
@@ -991,10 +1147,18 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
     // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
-        [shuttle, table, queryMacros, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
+        [shuttle, table, queryMacros, resultSets, &instance, sortOrderProperties, cursorValues, trimSize](AsyncLoop* loop) -> OpenLoop*
         {
             instance++;
-            return new OpenLoopCustomerList(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
+            return new OpenLoopCustomerList(
+                shuttle,
+                table,
+                queryMacros,
+                resultSets[loop->getWorkerId()],
+                sortOrderProperties,
+                cursorValues,
+                trimSize,
+                instance);
         });
 }
 

@@ -1088,31 +1088,81 @@ void ResultMuxDemux::jsonResultHistogramFill(
     }
 }
 
-void ResultMuxDemux::flatColumnMultiSort(cjson* doc, const ResultSortOrder_e sort, const int column)
+void ResultMuxDemux::flatColumnMultiSort(cjson* doc, const ResultSortOrder_e sort, std::vector<int> sortProps)
 {
-    doc->recurseSort(
-        "_",
-        [&](const cjson* left, const cjson* right) -> bool
-        {
-            switch (left->at(column)->type())
+    if (sortProps.size() == 1)
+    {
+        const auto column = sortProps[0];
+        doc->recurseSort(
+            "_",
+            [&](const cjson* left, const cjson* right) -> bool
             {
-            case cjson::Types_e::BOOL:
-            case cjson::Types_e::INT:
-                if (sort == ResultSortOrder_e::Asc)
-                    return (left->at(column)->getInt() < right->at(column)->getInt());
-                return (left->at(column)->getInt() > right->at(column)->getInt());
-            case cjson::Types_e::DBL:
-                if (sort == ResultSortOrder_e::Asc)
-                    return (left->at(column)->getDouble() < right->at(column)->getDouble());
-                return (left->at(column)->getDouble() > right->at(column)->getDouble());
-            case cjson::Types_e::STR:
-                if (sort == ResultSortOrder_e::Asc)
-                    return (left->at(column)->getString() < right->at(column)->getString());
-                return (left->at(column)->getString() > right->at(column)->getString());
-            default:
-                return false;
+                switch (left->at(column)->type())
+                {
+                case cjson::Types_e::BOOL:
+                case cjson::Types_e::INT:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getInt() < right->at(column)->getInt());
+                    return (left->at(column)->getInt() > right->at(column)->getInt());
+                case cjson::Types_e::DBL:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getDouble() < right->at(column)->getDouble());
+                    return (left->at(column)->getDouble() > right->at(column)->getDouble());
+                case cjson::Types_e::STR:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getString() < right->at(column)->getString());
+                    return (left->at(column)->getString() > right->at(column)->getString());
+                default:
+                    return false;
+                }
             }
-        });
+        );
+    }
+    else if (sortProps.size() == 2)
+    {
+        const auto firstColumn = sortProps[0];
+        const auto secondColumn = sortProps[1];
+
+        doc->recurseSort(
+            "_",
+            [&](const cjson* left, const cjson* right) -> bool
+            {
+                switch (left->at(firstColumn)->type())
+                {
+                case cjson::Types_e::BOOL:
+                case cjson::Types_e::INT:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getInt() < right->at(firstColumn)->getInt()) ||
+                                (left->at(firstColumn)->getInt() == right->at(firstColumn)->getInt() &&
+                                 left->at(secondColumn)->getInt() < right->at(secondColumn)->getInt()));
+
+                    return ((left->at(firstColumn)->getInt() > right->at(firstColumn)->getInt()) ||
+                            (left->at(firstColumn)->getInt() == right->at(firstColumn)->getInt() &&
+                             left->at(secondColumn)->getInt() > right->at(secondColumn)->getInt()));
+                case cjson::Types_e::DBL:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getDouble() < right->at(firstColumn)->getDouble()) ||
+                                (left->at(firstColumn)->getDouble() == right->at(firstColumn)->getDouble() &&
+                                 left->at(secondColumn)->getDouble() < right->at(secondColumn)->getDouble()));
+
+                    return ((left->at(firstColumn)->getDouble() > right->at(firstColumn)->getDouble()) ||
+                            (left->at(firstColumn)->getDouble() == right->at(firstColumn)->getDouble() &&
+                             left->at(secondColumn)->getDouble() > right->at(secondColumn)->getDouble()));
+                case cjson::Types_e::STR:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getString() < right->at(firstColumn)->getString()) ||
+                                (left->at(firstColumn)->getString() == right->at(firstColumn)->getString() &&
+                                 left->at(secondColumn)->getString() < right->at(secondColumn)->getString()));
+
+                    return ((left->at(firstColumn)->getString() > right->at(firstColumn)->getString()) ||
+                            (left->at(firstColumn)->getString() == right->at(firstColumn)->getString() &&
+                             left->at(secondColumn)->getString() > right->at(secondColumn)->getString()));
+                default:
+                    return false;
+                }
+            }
+        );
+    }
 }
 
 void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column)

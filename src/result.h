@@ -372,7 +372,7 @@ namespace openset
                 int64_t bucket,
                 int64_t forceMin = std::numeric_limits<int64_t>::min(),
                 int64_t forceMax = std::numeric_limits<int64_t>::min());
-            static void flatColumnMultiSort(cjson* doc, ResultSortOrder_e sort, int column);
+            static void flatColumnMultiSort(cjson* doc, ResultSortOrder_e sort, std::vector<int> sortProps);
 
             static void jsonResultSortByColumn(cjson* doc, ResultSortOrder_e sort, int column);
             static void jsonResultSortByGroup(cjson* doc, ResultSortOrder_e sort);

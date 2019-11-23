@@ -102,5 +102,67 @@ namespace openset
                 return os;
             }
         };
+
+        class IndexLRU
+        {
+            using Key = std::pair<int, int64_t>;
+            using Value = std::pair<IndexBits*, list<Key>::iterator>;
+
+            list<Key> items;
+            unordered_map <Key, Value> keyValuesMap;
+            int cacheSize;
+
+        public:
+            IndexLRU(int cacheSize) :
+                cacheSize(cacheSize)
+            {}
+
+            std::tuple<int, int64_t, IndexBits*> set(int propIndex, int64_t value, IndexBits* bits)
+            {
+                const Key key(propIndex, value);
+
+                if (const auto iter = keyValuesMap.find(key); iter == keyValuesMap.end())
+                {
+                    items.push_front(key);
+
+                    const Value listMap(bits, items.begin());
+                    keyValuesMap[key] = listMap;
+
+                    if (keyValuesMap.size() > cacheSize) {
+                        const auto evicted = keyValuesMap[items.back()].first;
+                        keyValuesMap.erase(items.back());
+                        items.pop_back();
+                        return {key.first, key.second, evicted};
+                    }
+                }
+                else
+                {
+                    items.erase(iter->second.second);
+                    items.push_front(key);
+                    const Value listMap(bits, items.begin());
+                    keyValuesMap[key] = listMap;
+                }
+
+                return {0,0,0};
+            }
+
+            IndexBits* get(int propIndex, int64_t value)
+            {
+
+                const Key key(propIndex, value);
+
+                if (auto iter = keyValuesMap.find(key); iter == keyValuesMap.end())
+                {
+                    return nullptr;
+                }
+                else
+                {
+                    items.erase(iter->second.second);
+                    items.push_front(key);
+                    keyValuesMap[key] = { iter->second.first, items.begin() };
+                    return iter->second.first;
+                }
+            }
+        };
     };
 };

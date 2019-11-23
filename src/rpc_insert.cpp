@@ -154,7 +154,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         const auto destination = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
 
         int64_t len;
-        SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));
+        auto logSize = SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));
     }
 
     SideLog::getSideLog().unlock();
@@ -216,7 +216,21 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         }
     }
 
-    message->reply(http::StatusCode::success_ok, response);
+    if (SideLog::getSideLog().getLogSize() < 25000)
+    {
+        message->reply(http::StatusCode::success_ok, response);
+    }
+    else
+    {
+        thread work([=]()
+        {
+            while (SideLog::getSideLog().getLogSize() > 25000)
+                ThreadSleep(55);
+
+            message->reply(http::StatusCode::success_ok, response);
+        });
+        work.detach();
+    }
 }
 
 void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)

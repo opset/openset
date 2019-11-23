@@ -28,17 +28,12 @@ OpenLoopSegmentRefresh::~OpenLoopSegmentRefresh()
     {
        if (prepared)
         --parts->segmentUsageCount;
-
-        parts->storeAllChangedSegments();
         parts->flushMessageMessages();
     }
 }
 
 void OpenLoopSegmentRefresh::storeSegment() const
 {
-    // store any changes we've made to the segments
-    parts->storeAllChangedSegments();
-
     const auto delta = bits->population(maxLinearId) - startPopulation;
 
     // update the segment refresh
@@ -218,6 +213,11 @@ bool OpenLoopSegmentRefresh::run()
     }
 
     openset::db::PersonData_s* personData;
+
+    // get a fresh pointer to bits on each entry in case they left the LRU
+    maxLinearId = parts->people.customerCount();
+    segmentName = segmentsIter->first;
+    interpreter->setBits(parts->getBits(segmentName), maxLinearId);
 
     while (true)
     {

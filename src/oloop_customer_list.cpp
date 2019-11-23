@@ -14,6 +14,9 @@ OpenLoopCustomerList::OpenLoopCustomerList(
     Database::TablePtr table,
     Macro_s macros,
     openset::result::ResultSet* result,
+    const std::vector<int> &sortOrderProperties,
+    const std::vector<int64_t> &cursor,
+    const int limit,
     int instance)
     : OpenLoop(table->getName(), oloopPriority_e::realtime),
       // queries are high priority and will preempt other running cells
@@ -29,7 +32,10 @@ OpenLoopCustomerList::OpenLoopCustomerList(
       startTime(0),
       population(0),
       index(nullptr),
-      result(result)
+      result(result),
+      cursor(cursor),
+      sortOrderProperties(sortOrderProperties),
+      limit(limit)
 {}
 
 OpenLoopCustomerList::~OpenLoopCustomerList()
@@ -98,7 +104,7 @@ void OpenLoopCustomerList::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].bits);
+                segments.push_back(parts->segments[segmentName].getBits());
 
             }
         }
@@ -117,8 +123,16 @@ void OpenLoopCustomerList::prepare()
 
     person.setSessionTime(macros.sessionTime);
 
-    const auto filter = [&](SortKeyOneProp_s* key, int* value) -> bool {
-        return true;
+
+
+    const auto filterAscending = [&](SortKeyOneProp_s* key, int* value) -> bool {
+        if (key->value == cursor[0] && key->customerId == cursor[1])
+            return false;
+        if (key->value < cursor[0])
+            return false;
+        if (key->value > cursor[0] || key->customerId >= cursor[1])
+            return true;
+        return false;
     };
 
 
@@ -126,10 +140,8 @@ void OpenLoopCustomerList::prepare()
 
     indexedList = std::move(parts->attributes.customerIndexing.getListAscending(
         propIndex,
-        10000,
-        4,
-        1000,
-        filter
+        limit,
+        filterAscending
     ));
 
     iter = indexedList.begin();

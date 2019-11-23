@@ -42,8 +42,6 @@ namespace openset
             }
 
             CustomerIndexList serialize(
-                int64_t startCustomer,
-                int64_t startValue,
                 int limit,
                 const std::function<bool(SortKeyOneProp_s*, int*)>& filterCallback);
         };
@@ -71,25 +69,23 @@ namespace openset
                 if (value == NONE)
                     return;
 
-                if (auto& iter = indexes.find(propIndex); iter != indexes.end())
+                if (const auto& iter = indexes.find(propIndex); iter != indexes.end())
                     iter->second->insert(customerId, linId, value);
             }
 
             void erase(int propIndex, int64_t customerId, int64_t value)
             {
-                if (auto& iter = indexes.find(propIndex); iter != indexes.end())
+                if (const auto& iter = indexes.find(propIndex); iter != indexes.end())
                     iter->second->erase(customerId, value);
             }
 
             CustomerIndexList getListAscending(
                 int propIndex,
-                int64_t startCustomer,
-                int64_t startValue,
                 int limit,
                 const std::function<bool(SortKeyOneProp_s*, int*)>& filterCallback)
             {
-                if (auto& iter = indexes.find(propIndex); iter != indexes.end())
-                    return iter->second->serialize(startCustomer, startValue, limit, filterCallback);
+                if (const auto& iter = indexes.find(propIndex); iter != indexes.end())
+                    return iter->second->serialize(limit, filterCallback);
                 return {};
             }
         };

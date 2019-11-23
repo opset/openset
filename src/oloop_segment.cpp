@@ -39,7 +39,6 @@ OpenLoopSegment::~OpenLoopSegment()
     {
         if (prepared)
             --parts->segmentUsageCount;
-        parts->storeAllChangedSegments();
         parts->flushMessageMessages();
     }
 }
@@ -77,9 +76,6 @@ void OpenLoopSegment::storeSegments()
      *  on a partition within an async worker thread, and indexes
      *  are local to the partition
      */
-
-    // store any changes we've made to the segments
-    parts->storeAllChangedSegments();
 
     for (auto& macro : macrosList)
     {
@@ -269,8 +265,13 @@ void OpenLoopSegment::prepare()
 
 bool OpenLoopSegment::run()
 {
-
     openset::db::PersonData_s* personData;
+
+    // get a fresh pointer to bits on each entry in case they left the LRU
+    maxLinearId = parts->people.customerCount();
+    segmentName = macroIter->first;
+    interpreter->setBits(parts->getBits(segmentName), maxLinearId);
+
     while (true)
     {
         if (sliceComplete())
@@ -326,8 +327,7 @@ bool OpenLoopSegment::run()
 
             if (interpreter->error.inError())
             {
-                openset::errors::Error error;
-                error = interpreter->error;
+                const openset::errors::Error error = interpreter->error;
                 interpreter = nullptr;
 
                 storeSegments();
