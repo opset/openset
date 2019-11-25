@@ -309,7 +309,7 @@ namespace openset
 
                 const Key key(propIndex, value);
 
-                if (auto &iter = keyValuesMap.find(key); iter != keyValuesMap.end())
+                if (auto iter = keyValuesMap.find(key); iter != keyValuesMap.end())
                 {
                     items.erase(iter->second.second);
                     items.push_front(key);
