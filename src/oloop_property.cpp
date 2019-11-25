@@ -130,7 +130,6 @@ void OpenLoopProperty::prepare()
         auto bits = allBits;
         bits->opAnd(*s);
         aggs->columns[idx].value = bits->population(stopBit);
-        delete bits;
 
         ++idx;
     }

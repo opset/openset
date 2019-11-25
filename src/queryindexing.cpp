@@ -105,7 +105,7 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 
     if (negate)
     {
-        resultBits.grow((stopBit / 64) + 1); // grow it to it's fullest size before we flip them all
+        resultBits.setSizeByBit(stopBit); // grow it to it's fullest size before we flip them all
         resultBits.opNot();
     }
 
@@ -239,12 +239,14 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
     {
         IndexBits bits;
         bits.makeBits(maxLinId, 1);
+        cout << bits.population(maxLinId) << ":" << maxLinId << ":" << stopBit << endl;
+
         countable = false;
         return bits;
     }
 
     auto res = stack.back().bits;
-    res.grow((stopBit / 64) + 1);
+    cout << res.population(stopBit) << ":" << stopBit << endl;
+    res.setSizeByBit(stopBit);
     return res;
-
 }

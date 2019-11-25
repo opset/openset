@@ -225,7 +225,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         thread work([=]()
         {
             while (SideLog::getSideLog().getLogSize() > 25000)
-                ThreadSleep(55);
+                ThreadSleep(5);
 
             message->reply(http::StatusCode::success_ok, response);
         });

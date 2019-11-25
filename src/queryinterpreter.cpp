@@ -3067,7 +3067,7 @@ void openset::query::Interpreter::setBits(IndexBits* indexBits, const int maxPop
 {
     bits      = indexBits;
     maxBitPop = maxPopulation;
-    bits->lastBit(maxBitPop);
+    bits->setSizeByBit(maxBitPop);
 }
 
 void openset::query::Interpreter::setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments)

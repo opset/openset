@@ -269,7 +269,6 @@ bool OpenLoopSegment::run()
 
     // get a fresh pointer to bits on each entry in case they left the LRU
     maxLinearId = parts->people.customerCount();
-    segmentName = macroIter->first;
     interpreter->setBits(parts->getBits(segmentName), maxLinearId);
 
     while (true)
@@ -278,7 +277,10 @@ bool OpenLoopSegment::run()
             return true; // let some other cells run
 
         if (!interpreter)
+        {
+            suicide();
             return false;
+        }
 
         // if there was an error, exit
         if (interpreter->error.inError())

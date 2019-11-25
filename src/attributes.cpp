@@ -32,7 +32,7 @@ IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
     const auto attribute = Attributes::getMake(propIndex, value);
 
     auto bits = new IndexBits();
-    bits->mount(attribute->index, attribute->ints, attribute->ofs, attribute->len, attribute->linId);
+    bits->mount(attribute->data);
 
     // cache these bits
     const auto [evictPropIndex, evictValue, evictBits] = indexCache.set(propIndex, value, bits);
@@ -40,34 +40,11 @@ IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
     // if anything got squeezed out compress it
     if (evictBits)
     {
-        const auto attrPair = propertyIndex.find({ evictPropIndex, evictValue });
-        const auto evictAttribute = attrPair->second;
-
-        int64_t compBytes = 0; // OUT value via reference
-        int64_t linId;
-        int32_t ofs, len;
+        const auto& attrPair = propertyIndex.find({ evictPropIndex, evictValue });
+        const auto& evictAttribute = attrPair->second;
 
         // compress the data, get it back in a pool ptr
-        const auto compData = bits->store(compBytes, linId, ofs, len, table->indexCompression);
-        const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
-
-        // copy header
-        memcpy(destAttr, evictAttribute, sizeof(Attr_s));
-        if (compData)
-        {
-            memcpy(destAttr->index, compData, compBytes);
-            // return work buffer from bits.store to the pool
-            PoolMem::getPool().freePtr(compData);
-        }
-
-        destAttr->ints = bits->ints;//(isList) ? 0 : bits.ints;
-        destAttr->comp = static_cast<int>(compBytes);
-        destAttr->linId = linId;
-        destAttr->ofs = ofs;
-        destAttr->len = len;
-
-        attrPair->second = destAttr;
-        PoolMem::getPool().freePtr(evictAttribute);
+        evictAttribute->data = bits->store();
 
         delete evictBits;
     }
@@ -391,7 +368,10 @@ void Attributes::serialize(HeapStack* mem)
         const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
 
         // fill in the header
-        blockHeader->column = kv.first.index;
+        //
+        // TODO - copy the shizzle
+
+/*        blockHeader->column = kv.first.index;
         blockHeader->hashValue = kv.first.value;
         blockHeader->ints = kv.second->ints;
         blockHeader->ofs = kv.second->ofs;
@@ -421,7 +401,9 @@ void Attributes::serialize(HeapStack* mem)
             sizeof(serializedAttr_s) +
             blockHeader->textSize +
             blockHeader->compSize;
+        */
     }
+
 }
 
 int64_t Attributes::deserialize(char* mem)
@@ -465,14 +447,8 @@ int64_t Attributes::deserialize(char* mem)
         // create an attr_s object
         const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
         attr->text = blobPtr;
-        attr->ints = blockHeader->ints;
-        attr->ofs = blockHeader->ofs;
-        attr->len = blockHeader->len;
-        attr->comp = blockHeader->compSize;
-        attr->linId = blockHeader->linId;
 
-        // copy the data in
-        memcpy(attr->index, dataPtr, blockHeader->compSize);
+        // TODO - copy the data
 
         // add it to the index
         propertyIndex.emplace(attr_key_s{ blockHeader->column, blockHeader->hashValue }, attr);

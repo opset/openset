@@ -202,7 +202,7 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
         // if there are no bits with this name created in this query
         // then look in the index
         const auto bits = this->attributes.getBits(PROP_SEGMENT, MakeHash(segmentName));
-        deleteAfterUsing = true;
+        deleteAfterUsing = false;
         return bits;
     };
 
