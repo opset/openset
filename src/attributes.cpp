@@ -57,7 +57,7 @@ void Attributes::addChange(const int64_t customerId, const int32_t propIndex, co
     if (propIndex == PROP_STAMP || propIndex == PROP_UUID || propIndex == PROP_SESSION)
         return;
 
-    const auto key = attr_key_s{ propIndex, value };
+    const auto key = attr_key_s( propIndex, value );
 
     if (state)
         customerIndexing.insert(propIndex, customerId, linearId, value);
@@ -76,7 +76,8 @@ void Attributes::addChange(const int64_t customerId, const int32_t propIndex, co
 Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 {
 
-    if (auto& res = propertyIndex.emplace(attr_key_s{ propIndex, value }, nullptr); res.second == true)
+    auto key = attr_key_s( propIndex, value );
+    if (auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         res.first->second = attr;
@@ -102,9 +103,9 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 
 Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
-    const auto valueHash = MakeHash(value);
+    auto key = attr_key_s( propIndex,  MakeHash(value) );
 
-    if (auto& res = propertyIndex.emplace(attr_key_s{ propIndex, valueHash }, nullptr); res.second == true)
+    if (auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         attr->text = blob->storeValue(propIndex, value);

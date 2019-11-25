@@ -1,7 +1,7 @@
 #pragma once
 
 #include "logger.h"
-
+#include <cstdlib>
 #include <memory>
 #include <functional>
 #include <tuple>

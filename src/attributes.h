@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.h"
 #include <vector>
 //#include "mem/bigring.h"
 #include "mem/blhash.h"

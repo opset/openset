@@ -24,8 +24,10 @@ THE SOFTWARE.
 
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <stack>
+#include <functional>
 #include "../heapstack/heapstack.h"
 
 typedef uint16_t tBranch;
