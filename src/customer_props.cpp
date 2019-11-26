@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "customer_props.h"
 #include "table.h"
 #include "properties.h"
@@ -329,7 +331,7 @@ void openset::db::CustomerProps::setProp(openset::db::Table* table, int propInde
     if (propInfo->isSet)
         listFix(value);
 
-    if (auto& iter = props.find(propIndex); iter != props.end())
+    if (const auto& iter = props.find(propIndex); iter != props.end())
     {
         if (propInfo->isSet)
         {
