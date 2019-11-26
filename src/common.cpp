@@ -12,8 +12,6 @@ int64_t Now()
         (std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-static const int64_t HASH_SEED = 0xFACEFEEDDEADBEEFLL;
-
 int64_t MakeHash(const char* buffer, const int64_t len)
 {
     return XXH64(buffer, len, HASH_SEED);

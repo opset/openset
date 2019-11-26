@@ -239,14 +239,11 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
     {
         IndexBits bits;
         bits.makeBits(maxLinId, 1);
-        cout << bits.population(maxLinId) << ":" << maxLinId << ":" << stopBit << endl;
-
         countable = false;
         return bits;
     }
 
     auto res = stack.back().bits;
-    cout << res.population(stopBit) << ":" << stopBit << endl;
     res.setSizeByBit(stopBit);
     return res;
 }

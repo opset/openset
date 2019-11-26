@@ -14,20 +14,19 @@ SegmentPartitioned_s::~SegmentPartitioned_s()
         delete interpreter;
 }
 
-void openset::db::SegmentPartitioned_s::prepare(Attributes& attr)
+/*void openset::db::SegmentPartitioned_s::prepare(Attributes& attr)
 {
     attributes = &attr;
     attributes->getMake(PROP_SEGMENT, segmentName);
+}*/
+
+openset::db::IndexBits* openset::db::SegmentPartitioned_s::getBits(Attributes& attributes)
+{
+    return attributes.getBits(PROP_SEGMENT, MakeHash(segmentName));
 }
 
-openset::db::IndexBits* openset::db::SegmentPartitioned_s::getBits()
+openset::db::SegmentPartitioned_s::SegmentChange_e openset::db::SegmentPartitioned_s::setBit(IndexBits* bits, int64_t linearId, bool state)
 {
-    return attributes->getBits(PROP_SEGMENT, MakeHash(segmentName));
-}
-
-openset::db::SegmentPartitioned_s::SegmentChange_e openset::db::SegmentPartitioned_s::setBit(int64_t linearId, bool state)
-{
-    const auto bits = getBits();
     const auto currentState = bits->bitState(linearId);
     if (state && !currentState)
     {
@@ -44,15 +43,11 @@ openset::db::SegmentPartitioned_s::SegmentChange_e openset::db::SegmentPartition
     return SegmentChange_e::noChange;
 }
 
-openset::query::Interpreter * openset::db::SegmentPartitioned_s::getInterpreter(int64_t maxLinearId)
+openset::query::Interpreter * openset::db::SegmentPartitioned_s::getInterpreter(Attributes& attributes, int64_t maxId)
 {
     if (!interpreter)
         interpreter = new openset::query::Interpreter(macros, openset::query::InterpretMode_e::count);
-
-    const auto bits = getBits();
-
-    if (!bits)
-        throw std::runtime_error("call prepare before calling getInterpreter");
+    interpreter->setBits(getBits(attributes), maxId);
 
     return interpreter;
 }
@@ -107,7 +102,7 @@ openset::query::Interpreter* TablePartitioned::getInterpreter(const std::string&
      if (!segments.count(segmentName))
          return nullptr;
 
-    return segments[segmentName].getInterpreter(maxLinearId);
+    return segments[segmentName].getInterpreter(attributes, people.customerCount());
 }
 
 void TablePartitioned::checkForSegmentChanges()
@@ -195,8 +190,7 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
         if (this->segments.count(segmentName))
         {
             deleteAfterUsing = false;
-            this->segments[segmentName].prepare(this->attributes);
-            return this->segments[segmentName].getBits();
+            return this->segments[segmentName].getBits(attributes);
         }
 
         // if there are no bits with this name created in this query
@@ -208,13 +202,10 @@ std::function<openset::db::IndexBits*(const string&, bool&)> TablePartitioned::g
 
 }
 
-openset::db::IndexBits* TablePartitioned::getBits(std::string& segmentName)
+openset::db::IndexBits* TablePartitioned::getSegmentBits(const std::string& segmentName)
 {
     if (this->segments.count(segmentName))
-    {
-        this->segments[segmentName].prepare(attributes);
-        return this->segments[segmentName].getBits();
-    }
+        return this->segments[segmentName].getBits(attributes);
 
     return nullptr;
 }

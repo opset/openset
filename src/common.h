@@ -5,10 +5,11 @@
 #include <memory>
 #include <functional>
 #include <tuple>
+#include <xxhash.h>
 
-const int32_t PARTITION_MAX = 1024; // hard limit, not operating limit
-const int32_t MAX_PROPERTIES = 4096;
-
+static const int32_t PARTITION_MAX = 1024; // hard limit, not operating limit
+static const int32_t MAX_PROPERTIES = 4096;
+static const int64_t HASH_SEED = 0xFACEFEEDDEADBEEFLL;
 /*
     Because the full names a just do damn long and ugly turning what could
     usually fit on one line of code into two
@@ -68,7 +69,14 @@ namespace std
     {
         size_t operator()(const std::pair<int32_t, int64_t>& v) const
         {
-            return static_cast<size_t>(MakeHash(recast<const char*>(&v), sizeof(v)));
+            return static_cast<size_t>(XXH64(
+                reinterpret_cast<const void*>(&v.first),
+                4,
+                XXH64(
+                        reinterpret_cast<const void*>(&v.second),
+                    8,
+                    HASH_SEED)
+            ));
         }
     };
 
@@ -76,9 +84,17 @@ namespace std
     template <>
     struct hash<std::pair<int64_t, int32_t>>
     {
-        size_t operator()(const std::pair<int32_t, int32_t>& v) const
+        size_t operator()(const std::pair<int64_t, int32_t>& v) const
         {
-            return static_cast<size_t>(MakeHash(recast<const char*>(&v), sizeof(v)));
+            return static_cast<size_t>(XXH64(
+                reinterpret_cast<const void*>(&v.first),
+                8,
+                XXH64(
+                        reinterpret_cast<const void*>(&v.second),
+                    4,
+                    HASH_SEED)
+            ));
+
         }
     };
 

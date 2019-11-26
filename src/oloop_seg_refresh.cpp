@@ -34,14 +34,14 @@ OpenLoopSegmentRefresh::~OpenLoopSegmentRefresh()
 
 void OpenLoopSegmentRefresh::storeSegment() const
 {
-    const auto delta = bits->population(maxLinearId) - startPopulation;
+    const auto delta = parts->getSegmentBits(segmentName)->population(maxLinearId) - startPopulation;
 
     // update the segment refresh
     parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
     parts->setSegmentTTL(segmentName, macros.segmentTTL);
 
     if (delta != 0)
-        Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName + ". (delta " + to_string(delta) + ")");
+        Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName );
 }
 
 void OpenLoopSegmentRefresh::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
@@ -101,7 +101,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
         index = indexing.getIndex("_", countable);
 
         // get bits for this segment
-        bits = parts->getBits(segmentName);
+        auto bits = parts->getSegmentBits(segmentName);
         startPopulation = bits->population(maxLinearId);
 
         auto getSegmentCB = parts->getSegmentCallback();
@@ -217,7 +217,7 @@ bool OpenLoopSegmentRefresh::run()
     // get a fresh pointer to bits on each entry in case they left the LRU
     maxLinearId = parts->people.customerCount();
     segmentName = segmentsIter->first;
-    interpreter->setBits(parts->getBits(segmentName), maxLinearId);
+    interpreter->setBits(parts->getSegmentBits(segmentName), maxLinearId);
 
     while (true)
     {
@@ -261,7 +261,7 @@ bool OpenLoopSegmentRefresh::run()
                 auto returns = interpreter->getLastReturn();
 
                 // any returns, are they true?
-                const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+                const auto stateChange = segmentInfo->setBit(interpreter->bits, currentLinId, returns.size() && returns[0].getBool() == true);
                 if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
                     parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
             }

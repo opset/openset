@@ -73,10 +73,12 @@ namespace openset
             db::TablePartitioned* parts;
             result::ResultSet* result;
 
+            db::IndexBits all;
+
             int64_t stopBit{ 0 };
             int64_t instance{ 0 };
 
-            std::vector<db::IndexBits*> segments;
+            std::vector<std::string> segments;
 
             // loop locals
             result::RowKey rowKey;

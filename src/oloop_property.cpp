@@ -50,9 +50,8 @@ void OpenLoopProperty::prepare()
         {
             if (segmentName == "*")
             {
-                auto bits = new db::IndexBits();
-                bits->makeBits(stopBit, 1); // make an index of all ones.
-                segments.push_back(bits);
+                all.makeBits(stopBit, 1); // make an index of all ones.
+                segments.push_back(segmentName);
             }
             else
             {
@@ -74,7 +73,7 @@ void OpenLoopProperty::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].getBits());
+                segments.push_back(segmentName);
             }
         }
     }
@@ -128,7 +127,7 @@ void OpenLoopProperty::prepare()
     for (auto s : segments)
     {
         auto bits = allBits;
-        bits->opAnd(*s);
+        bits->opAnd(*parts->getSegmentBits(s));
         aggs->columns[idx].value = bits->population(stopBit);
 
         ++idx;
@@ -242,12 +241,19 @@ bool OpenLoopProperty::run()
             }
 
             auto columnIndex = 0;
-            for (auto s : segments)
+            for (auto segmentName : segments)
             {
 
                 // here we are setting the key for the bucket,
                 // this is under our root which is the property name
                 rowKey.key[1] = bucket; // value hash (or value)
+
+                db::IndexBits* sourceBits;
+
+                if (segmentName == "*")
+                    sourceBits = &all;
+                else
+                    sourceBits = parts->getSegmentBits(segmentName);
 
 
                 const auto aggs = result->getMakeAccumulator(rowKey);
@@ -265,7 +271,7 @@ bool OpenLoopProperty::run()
                 }
 
                 // remove bits not in the segment
-                sumBits->opAnd(*s);
+                sumBits->opAnd(*sourceBits);
 
                 aggs->columns[columnIndex].value = sumBits->population(stopBit);
                 delete sumBits;

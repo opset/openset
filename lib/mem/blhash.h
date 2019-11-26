@@ -361,7 +361,7 @@ public:
     };
 
 
-    HashVector& serialize(int limit, FilterCB filterCallBack)
+    HashVector& serialize(bool descending, int limit, FilterCB filterCallBack)
     {
         tKey key;
         serializeOver.set(&key);
@@ -372,14 +372,17 @@ public:
         serializeLimit = limit;
         serializeCB = filterCallBack;
 
-        serializeRecurse(root, 0);
+        if (descending)
+            serializeRecurseDescending(root, 0);
+        else
+            serializeRecurseAscending(root, 0);
 
         return serializeList;
     }
 
 private:
 
-    void serializeRecurse(bl_array_s* node, int depth)
+    void serializeRecurseAscending(bl_array_s* node, int depth)
     {
         for (auto idx = 0; idx < node->used; ++idx)
         {
@@ -403,10 +406,38 @@ private:
             }
             else
             {
-                serializeRecurse(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), depth + 1);
+                serializeRecurseAscending(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), depth + 1);
             }
         }
+    }
 
+    void serializeRecurseDescending(bl_array_s* node, int depth)
+    {
+        for (auto idx = node->used - 1; idx >= 0; --idx)
+        {
+            if (serializeLimit == -1)
+                return;
+
+            serializeOver.words[serializeOver.elements - 1 - depth] = node->nodes[idx].valueWord;
+
+            if (depth == serializeOver.elements - 1)
+            {
+                if (//serializeOver > serializeStart &&
+                    serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
+                {
+                    serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));
+                    if (serializeList.size() == serializeLimit)
+                    {
+                        serializeLimit = -1;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                serializeRecurseDescending(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), depth + 1);
+            }
+        }
     }
 
     // this is a fairly common binary search. Google will find you serveral

@@ -100,23 +100,21 @@ IndexBits::IndexBits()
 
 // move constructor
 IndexBits::IndexBits(IndexBits&& source) noexcept
-   : data(std::move(source.data))
 {
+    data               = std::move(source.data);
     placeHolder        = source.placeHolder;
     source.placeHolder = false;
 }
 
 // copy constructor
 IndexBits::IndexBits(const IndexBits& source)
-    : data(data),
-      placeHolder(false)
+    : placeHolder(false)
 {
     opCopy(source);
 }
 
 IndexBits::IndexBits(IndexBits* source)
-    : data(),
-      placeHolder(false)
+    : placeHolder(false)
 {
     opCopy(*source);
 }

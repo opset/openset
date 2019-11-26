@@ -18,7 +18,7 @@ namespace openset
 
     namespace async
     {
-        class OpenLoopCustomerList : public OpenLoop
+        class OpenLoopCustomerBasicList : public OpenLoop
         {
         public:
             openset::query::Macro_s macros;
@@ -37,26 +37,26 @@ namespace openset
             openset::db::IndexBits* index;
             openset::result::ResultSet* result;
 
-            std::vector<int> sortOrderProperties;
             std::vector<int64_t> cursor;
             bool descending;
             int limit;
 
-            CustomerIndexList indexedList;
-            CustomerIndexList::iterator iter;
+            using BasicCustomerList = std::vector<std::pair<int64_t,int>>;
 
-            explicit OpenLoopCustomerList(
+            BasicCustomerList indexedList;
+            BasicCustomerList::iterator iter;
+
+            explicit OpenLoopCustomerBasicList(
                 ShuttleLambda<openset::result::CellQueryResult_s>* shuttle,
                 openset::db::Database::TablePtr table,
                 openset::query::Macro_s macros,
                 openset::result::ResultSet* result,
-                const std::vector<int>& indexProperties,
                 const std::vector<int64_t>& cursor,
                 const bool descending,
                 const int limit,
                 int instance);
 
-            ~OpenLoopCustomerList() final;
+            ~OpenLoopCustomerBasicList() final;
 
             void prepare() final;
             bool run() final;

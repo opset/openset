@@ -4259,7 +4259,7 @@ namespace openset::query
 
                                     if (keyVal[0] == "ttl" || keyVal[0] == "refresh")
                                         // these are special and allow for time appends like 's' or 'm', or 'd'
-                                        flags[keyVal[0]] = expandTime(keyVal[1], lastDebug) * 1000;
+                                        flags[keyVal[0]] = expandTime(keyVal[1], lastDebug);
 
                                     else if (keyVal[0] == "use_cached")
                                         flags["use_cached"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==

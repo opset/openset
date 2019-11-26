@@ -54,7 +54,10 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
         return;
 
     // mount the customer
-    const auto personData = tablePartitioned->people.createCustomer(uuid);
+    const auto personData = tablePartitioned->table->numericCustomerIds ?
+        tablePartitioned->people.createCustomer(stoll(uuid)) :
+        tablePartitioned->people.createCustomer(uuid);
+
     person.mount(personData);
     person.prepare();
 
@@ -65,7 +68,8 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
     auto returns = segment->interpreter->getLastReturn();
 
     // set bit according to interpreter results
-    const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
+    auto bits = segment->getBits(tablePartitioned->attributes);
+    const auto stateChange = segment->setBit(bits, personData->linId, returns.size() && returns[0].getBool() == true);
     if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
     {
         tablePartitioned->pushMessage(segment->segmentHash, stateChange, personData->getIdStr());
@@ -164,10 +168,8 @@ bool OpenLoopInsert::run()
         const auto insertSegments = tablePartitioned->getOnInsertSegments();
         for (auto segment : insertSegments)
         {
-            // ensure we have bits mounted for this segment
-            segment->prepare(tablePartitioned->attributes);
             // get a cached interpreter (or make one) and set the bits
-            const auto interpreter = segment->getInterpreter(tablePartitioned->people.customerCount());
+            const auto interpreter = segment->getInterpreter(tablePartitioned->attributes, tablePartitioned->people.customerCount());
 
             // we can't crunch segment math on refresh, but we can expire it, so it crunches the next time it's used
             if (interpreter->macros.isSegmentMath)

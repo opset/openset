@@ -28,6 +28,7 @@ openset::query::Interpreter::~Interpreter()
 void openset::query::Interpreter::setResultObject(result::ResultSet* resultSet)
 {
     result = resultSet;
+    result->addLocalText(NONE, "n/a");
 }
 
 void openset::query::Interpreter::configure()

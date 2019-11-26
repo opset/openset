@@ -10,12 +10,11 @@ namespace openset
 {
     namespace db
     {
-        const int64_t BitArraySize = 510;
+        const int64_t BitArraySize = 128;
 
         struct IndexPageMemory_s
         {
             bool dirty { false };
-            bool empty { true };
             // 4096 bytes
             int64_t bitArray[BitArraySize];
         };
@@ -52,18 +51,15 @@ namespace openset
 
             IndexMemory(IndexMemory&& source) noexcept
             {
-                lastIndex = source.lastIndex;
+                lastIndex = nullptr;
                 indexPages = std::move(source.indexPages);
                 rawPages = std::move(source.rawPages);
-
-                source.indexPages.clear();
-                source.rawPages.clear();
             }
 
             IndexMemory(const IndexMemory& source)
             {
                 // raw pages are not copied
-                lastIndex = source.lastIndex;
+                lastIndex = nullptr;
 
                 for (auto sourcePage : source.indexPages)
                 {
@@ -76,7 +72,7 @@ namespace openset
             IndexMemory(IndexMemory* source)
             {
                 // raw pages are not copied
-                lastIndex = source->lastIndex;
+                lastIndex = nullptr;
 
                 for (auto sourcePage : source->indexPages)
                 {
@@ -88,7 +84,7 @@ namespace openset
 
             IndexMemory& operator=(IndexMemory&& source) noexcept
             {
-                lastIndex = source.lastIndex;
+                lastIndex = nullptr;
                 indexPages = std::move(source.indexPages);
                 rawPages = std::move(source.rawPages);
 
@@ -99,7 +95,7 @@ namespace openset
             {
                 // raw pages are not copied
                 reset();
-                lastIndex = source.lastIndex;
+                lastIndex = nullptr;
 
                 for (auto sourcePage : source.indexPages)
                 {
@@ -272,7 +268,7 @@ namespace openset
 
         class IndexLRU
         {
-            using Key = std::pair<int, int64_t>;
+            using Key = std::pair<int64_t, int64_t>;
             using Value = std::pair<IndexBits*, std::list<Key>::iterator>;
 
             std::list<Key> items;
@@ -284,7 +280,7 @@ namespace openset
                 cacheSize(cacheSize)
             {}
 
-            std::tuple<int, int64_t, IndexBits*> set(int propIndex, int64_t value, IndexBits* bits)
+            std::tuple<int64_t, int64_t, IndexBits*> set(const int64_t propIndex, const int64_t value, IndexBits* bits)
             {
                 const Key key(propIndex, value);
 
@@ -293,20 +289,20 @@ namespace openset
                 const Value listMap(bits, items.begin());
                 keyValuesMap[key] = listMap;
 
-                if (keyValuesMap.size() > cacheSize) {
+                if (keyValuesMap.size() > cacheSize)
+                {
                     const auto evictedKey = items.back();
-                    const auto evicted = keyValuesMap[items.back()].first;
+                    const auto evicted    = keyValuesMap[items.back()].first;
                     keyValuesMap.erase(items.back());
                     items.pop_back();
-                    return {evictedKey.first, evictedKey.second, evicted};
+                    return { evictedKey.first, evictedKey.second, evicted };
                 }
 
-                return {0,0,0};
+                return { 0, 0, nullptr };
             }
 
-            IndexBits* get(int propIndex, int64_t value)
+            IndexBits* get(const int64_t propIndex, const int64_t value)
             {
-
                 const Key key(propIndex, value);
 
                 if (auto iter = keyValuesMap.find(key); iter != keyValuesMap.end())
@@ -318,6 +314,7 @@ namespace openset
                 }
                 return nullptr;
             }
+
         };
     };
 };

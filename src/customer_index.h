@@ -31,7 +31,7 @@ namespace openset
             CustomerPropIndex() = default;
             ~CustomerPropIndex() = default;
 
-            void insert(int64_t customerId, int linId, int64_t value)
+            void insert(const int64_t customerId, const int linId, const int64_t value)
             {
                 index.set(SortKeyOneProp_s{ customerId, value}, linId);
             }
@@ -42,6 +42,7 @@ namespace openset
             }
 
             CustomerIndexList serialize(
+                bool descending,
                 int limit,
                 const std::function<bool(SortKeyOneProp_s*, int*)>& filterCallback);
         };
@@ -79,13 +80,14 @@ namespace openset
                     iter->second->erase(customerId, value);
             }
 
-            CustomerIndexList getListAscending(
+            CustomerIndexList getList(
                 int propIndex,
+                bool descending,
                 int limit,
                 const std::function<bool(SortKeyOneProp_s*, int*)>& filterCallback)
             {
                 if (const auto& iter = indexes.find(propIndex); iter != indexes.end())
-                    return iter->second->serialize(limit, filterCallback);
+                    return iter->second->serialize(descending, limit, filterCallback);
                 return {};
             }
         };

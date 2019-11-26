@@ -173,7 +173,7 @@ void OpenLoopHistogram::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].getBits());
+                segments.push_back(parts->segments[segmentName].getBits(parts->attributes));
 
             }
         }

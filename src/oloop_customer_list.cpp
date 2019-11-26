@@ -16,38 +16,33 @@ OpenLoopCustomerList::OpenLoopCustomerList(
     openset::result::ResultSet* result,
     const std::vector<int> &sortOrderProperties,
     const std::vector<int64_t> &cursor,
+    const bool descending,
     const int limit,
-    int instance)
-    : OpenLoop(table->getName(), oloopPriority_e::realtime),
-      // queries are high priority and will preempt other running cells
-      macros(std::move(macros)),
-      shuttle(shuttle),
-      table(table),
-      parts(nullptr),
-      maxLinearId(0),
-      currentLinId(-1),
-      interpreter(nullptr),
-      instance(instance),
-      runCount(0),
-      startTime(0),
-      population(0),
-      index(nullptr),
-      result(result),
-      cursor(cursor),
-      sortOrderProperties(sortOrderProperties),
-      limit(limit)
+    int instance) :
+        OpenLoop(table->getName(), oloopPriority_e::realtime),
+        macros(std::move(macros)),
+        shuttle(shuttle),
+        table(table),
+        parts(nullptr),
+        maxLinearId(0),
+        currentLinId(-1),
+        interpreter(nullptr),
+        instance(instance),
+        runCount(0),
+        startTime(0),
+        population(0),
+        index(nullptr),
+        result(result),
+        cursor(cursor),
+        sortOrderProperties(sortOrderProperties),
+        descending(descending),
+        limit(limit)
 {}
 
 OpenLoopCustomerList::~OpenLoopCustomerList()
 {
     if (interpreter)
-    {
-        // free up any segment bits we may have made
-        //for (auto bits : interpreter->segmentIndexes)
-          //  delete bits;
-
         delete interpreter;
-    }
 }
 
 void OpenLoopCustomerList::prepare()
@@ -70,6 +65,8 @@ void OpenLoopCustomerList::prepare()
 
     interpreter = new Interpreter(macros);
     interpreter->setResultObject(result);
+
+    IndexBits testIndex;
 
     // if we are in segment compare mode:
     if (macros.segments.size())
@@ -104,12 +101,18 @@ void OpenLoopCustomerList::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].getBits());
+                segments.push_back(parts->segments[segmentName].getBits(parts->attributes));
 
             }
         }
 
-        interpreter->setCompareSegments(index, segments);
+        //interpreter->setCompareSegments(index, segments);
+        testIndex.opCopy(*index);
+        testIndex.opAnd(*segments[0]);
+    }
+    else
+    {
+        testIndex.opCopy(*index);
     }
 
     // map table, partition and select schema properties to the Customer object
@@ -123,9 +126,9 @@ void OpenLoopCustomerList::prepare()
 
     person.setSessionTime(macros.sessionTime);
 
-
-
     const auto filterAscending = [&](SortKeyOneProp_s* key, int* value) -> bool {
+        if (!testIndex.bitState(*value))
+            return false;
         if (key->value == cursor[0] && key->customerId == cursor[1])
             return false;
         if (key->value < cursor[0])
@@ -135,14 +138,34 @@ void OpenLoopCustomerList::prepare()
         return false;
     };
 
+    const auto filterDescending = [&](SortKeyOneProp_s* key, int* value) -> bool {
+        if (!testIndex.bitState(*value))
+            return false;
+        if (key->value == cursor[0] && key->customerId == cursor[1])
+            return false;
+        if (key->value > cursor[0])
+            return false;
+        if (key->value < cursor[0] || key->customerId <= cursor[1])
+            return true;
+        return false;
+    };
 
-    auto propIndex = parts->table->getProperties()->getProperty("score")->idx;
+    const auto propIndex = macros.vars.columnVars[sortOrderProperties[0]].schemaColumn;
 
-    indexedList = std::move(parts->attributes.customerIndexing.getListAscending(
-        propIndex,
-        limit,
-        filterAscending
-    ));
+    if (descending)
+        indexedList = parts->attributes.customerIndexing.getList(
+            propIndex,
+            true,
+            limit,
+            filterDescending
+        );
+    else
+        indexedList = parts->attributes.customerIndexing.getList(
+            propIndex,
+            false,
+            limit,
+            filterAscending
+        );
 
     iter = indexedList.begin();
 

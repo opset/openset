@@ -12,6 +12,7 @@
 #include "oloop_segment.h"
 #include "oloop_customer.h"
 #include "oloop_customer_list.h"
+#include "oloop_customer_basic.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
 #include "asyncpool.h"
@@ -796,9 +797,8 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
     std::vector<int> sortOrderProperties;
 
 
-    int customerIdIndex = -1;
-
     // validate that sortKeys are in the select statement
+    int customerIdIndex = -1;
     const auto sortKeyParts = split(sortKeyString, ',');
     for (auto key : sortKeyParts)
     {
@@ -854,11 +854,10 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
                 if (column.alias == key)
                 {
-                    found = true;
                     sortOrderProperties.push_back(index);
-
-                    break;
+                    found = true;
                 }
+
                 ++index;
             }
         }
@@ -899,6 +898,9 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
             message);
         return;
     }
+
+    // if the sort is by 'id' we will use the 'OpenLoopCustomerBasicList' iterator
+    auto isBasic = sortKeyParts[0] == "id";
 
     // add customerId as secondary sort
     if (sortOrderProperties.size() == 1)
@@ -949,18 +951,21 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
     if (cursorValues.size() == 0)
     {
-        cursorValues = { LLONG_MIN, LLONG_MIN };
+        if (sortOrder == ResultSortOrder_e::Desc)
+            cursorValues = { LLONG_MAX, LLONG_MAX };
+        else
+            cursorValues = { LLONG_MIN, LLONG_MIN };
     }
-    else if (cursorValues.size() != 2)
+    else if (!isBasic && cursorValues.size() != 2)
     {
-            RpcError(
-                errors::Error {
-                    errors::errorClass_e::query,
-                    errors::errorCode_e::general_error,
-                    "param 'cursor': expecting two numeric values (separated by a comma)"
-                },
-                message);
-            return;
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'cursor': expecting two numeric values (separated by a comma)"
+            },
+            message);
+        return;
     }
 
     if (message->isParam("segments"))
@@ -1144,22 +1149,64 @@ void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcM
 
     auto instance = 0;
 
-    // pass factory function (as lambda) to create new cell objects
-    partitions->cellFactory(
-        activeList,
-        [shuttle, table, queryMacros, resultSets, &instance, sortOrderProperties, cursorValues, trimSize](AsyncLoop* loop) -> OpenLoop*
-        {
-            instance++;
-            return new OpenLoopCustomerList(
+    if (isBasic)
+    {
+        // pass factory function (as lambda) to create new cell objects
+        partitions->cellFactory(
+            activeList,
+            [
                 shuttle,
                 table,
                 queryMacros,
-                resultSets[loop->getWorkerId()],
+                resultSets,
+                &instance,
+                cursorValues,
+                sortOrder,
+                trimSize](AsyncLoop* loop) -> OpenLoop*
+            {
+                instance++;
+                return new OpenLoopCustomerBasicList(
+                    shuttle,
+                    table,
+                    queryMacros,
+                    resultSets[loop->getWorkerId()],
+                    cursorValues,
+                    sortOrder == ResultSortOrder_e::Desc,
+                    trimSize,
+                    instance);
+            }
+        );
+    }
+    else
+    {
+        // pass factory function (as lambda) to create new cell objects
+        partitions->cellFactory(
+            activeList,
+            [
+                shuttle,
+                table,
+                queryMacros,
+                resultSets,
+                &instance,
                 sortOrderProperties,
                 cursorValues,
-                trimSize,
-                instance);
-        });
+                sortOrder,
+                trimSize](AsyncLoop* loop) -> OpenLoop*
+            {
+                instance++;
+                return new OpenLoopCustomerList(
+                    shuttle,
+                    table,
+                    queryMacros,
+                    resultSets[loop->getWorkerId()],
+                    sortOrderProperties,
+                    cursorValues,
+                    sortOrder == ResultSortOrder_e::Desc,
+                    trimSize,
+                    instance);
+            }
+        );
+    }
 }
 
 void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping& matches)

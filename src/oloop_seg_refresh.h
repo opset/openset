@@ -35,7 +35,6 @@ namespace openset
 
             openset::query::Indexing indexing;
             openset::db::IndexBits* index {nullptr};
-            openset::db::IndexBits* bits {nullptr};
 
             std::unordered_map<std::string, SegmentPartitioned_s>::iterator segmentsIter;
 
