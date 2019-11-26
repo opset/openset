@@ -156,7 +156,7 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
 
 Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
 {
-    if (auto& res = results.emplace(key, nullptr); res.second == true)
+    if (const auto& res = results.emplace(key, nullptr); res.second == true)
     {
         const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
         res.first->second = t;
@@ -166,15 +166,6 @@ Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
     {
         return res.first->second;
     }
-
-    /*if (const auto tempPair = results.find(key); tempPair != results.end())
-        return tempPair->second;
-
-    const auto resultBytes = resultWidth * sizeof(Accumulation_s);
-    const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
-    results.emplace(key, t);
-
-    return t;*/
 }
 
 void mergeResultTypes(
