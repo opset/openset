@@ -348,7 +348,7 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
                 macros.vars.columnVars[varIndex].valueInt64 =
                     macros.vars.columnVars[varIndex].propShortcut != -1 ?
                     macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getBool() :
-                    macros.vars.columnVars[varIndex].value = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
+                    (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
                 break;
             default:
                 macros.vars.columnVars[varIndex].valueInt64 = 0;
