@@ -1004,19 +1004,25 @@ Grid::RowType_e Grid::insertParse(Properties* properties, cjson* doc, Col_s* ins
                 if (!propInfo->isCustomerProperty)
                     continue;
 
+                cvar workVar;
+
                 switch (c->type())
                 {
                 case cjson::Types_e::INT:
-                    customerProps.setProp(table, propIndex, cvar(c->getInt()));
+                    workVar = c->getInt();
+                    customerProps.setProp(table, propIndex, workVar);
                     break;
                 case cjson::Types_e::DBL:
-                    customerProps.setProp(table, propIndex, cvar(c->getDouble()));
+                    workVar = c->getDouble();
+                    customerProps.setProp(table, propIndex, workVar);
                     break;
                 case cjson::Types_e::STR:
-                    customerProps.setProp(table, propIndex, cvar(c->getString()));
+                    workVar = c->getString();
+                    customerProps.setProp(table, propIndex, workVar);
                     break;
                 case cjson::Types_e::BOOL:
-                    customerProps.setProp(table, propIndex, cvar(c->getBool()));
+                    workVar = c->getBool();
+                    customerProps.setProp(table, propIndex, workVar);
                     break;
                 case cjson::Types_e::ARRAY:
                     {
