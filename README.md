@@ -680,6 +680,14 @@ Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
 
 # Release Notes
 
+### 0.4.5
+
+- the `event` query endpoint has been renamed `report`. The new name expresses the purpose of the endpoint better, as events play a role in all queries.
+- `id_type` is
+- added `customers` query. The customer query returns a list of customer id's and selected `customer properties` or computed values for each customer. The list can be paginated, and sorted on alternate indexes (defined when a table is created).
+- faster smaller indexes. The old index caused lots of memory reallocation as indexes grew. An LRU was also added to the indexing system to keep hot indexes in an uncompressed state.
+- added lamda functions in select statements. A lambda allows a select parameter to get it's value from a code. This could makes it possible to select the value of a variable or inline aggregation.
+
 ### 0.4.4
 
 -   added `id_type` to switch in create table. This is now required and allows you to specify `numeric` or `textual` customer ids.
