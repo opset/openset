@@ -1289,7 +1289,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table->setSegmentTtl(r.sectionName, r.flags["ttl"]);
         }
 
-        const auto alwaysFresh = r.flags.contains("always_fresh") ? r.flags["use_cached"].getBool() : false;
+        const auto alwaysFresh = r.flags.contains("always_fresh") ? r.flags["always_fresh"].getBool() : false;
 
         // item is cached for subsequent queries, but generates a fresh copy when queried
         if (alwaysFresh)

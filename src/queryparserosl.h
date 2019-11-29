@@ -4265,6 +4265,10 @@ namespace openset::query
                                         flags["use_cached"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
                                             't');
 
+                                    else if (keyVal[0] == "always_fresh")
+                                        flags["always_fresh"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
+                                            't');
+
                                     else if (keyVal[0] == "on_insert")
                                         flags["on_insert"] = (keyVal[1].length() == 0 || keyVal[1][0] == 'T' || keyVal[1][0] ==
                                             't');
