@@ -2,6 +2,7 @@
 #include <vector>
 #include <mutex>
 #include "threads/locks.h"
+#include "../heapstack/heapstack.h"
 
 namespace MemConstants
 {
@@ -30,9 +31,11 @@ private:
         int32_t index{ 0 };
         const int64_t maxSize;
         std::vector<alloc_s*> freed;
+        HeapStack* heap;
 
         memory_s(const int64_t maxSize) :
-            maxSize(maxSize)
+            maxSize(maxSize),
+            heap(new HeapStack())
         {}
     };
 
@@ -70,22 +73,6 @@ private:
         { 12544 },
         { 14400 },
         { 16384 },
-/*		{ 18496 },
-        { 20736 },
-        { 23104 },
-        { 25600 },
-        { 28224 },
-        { 30976 },
-        { 33856 },
-        { 36864 },
-        { 40000 },
-        { 43264 },
-        { 46656 },
-        { 50176 },
-        { 53824 },
-        { 57600 },
-        { 61504 },
-        { 65536 }, */
     };
 
     std::vector<int> bucketLookup;
@@ -102,7 +89,7 @@ public:
         return pool;
     }
 
-    void* getPtr(int64_t size);
+    void* getPtr(const int64_t size);
     void freePtr(void* ptr);
 };
 

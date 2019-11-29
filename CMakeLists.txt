@@ -83,10 +83,9 @@ set(SOURCE_FILES
         lib/include/libcommon.h
         lib/mem/bloom.cpp
         lib/mem/bloom.h
-        lib/mem/prequeues.cpp
-        lib/mem/prequeues.h
         lib/mem/ssdict.h
         lib/mem/blhash.h
+        lib/mem/segmented_list.h
         lib/str/strtools.cpp
         lib/str/strtools.h
         lib/threads/spinlock.h

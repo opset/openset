@@ -1289,10 +1289,20 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table->setSegmentTtl(r.sectionName, r.flags["ttl"]);
         }
 
+        const auto alwaysFresh = r.flags.contains("always_fresh") ? r.flags["use_cached"].getBool() : false;
+
+        // item is cached for subsequent queries, but generates a fresh copy when queried
+        if (alwaysFresh)
+        {
+            r.flags["use_cached"] = true;
+            r.flags["refresh"] = 86400000;
+        }
+
         const auto zIndex    = r.flags.contains("z_index") ? r.flags["z_index"].getInt32() : 100;
         const auto onInsert  = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
         const auto useCached = r.flags.contains("use_cached") ? r.flags["use_cached"].getBool() : false;
 
+        queryMacros.alwaysFresh = alwaysFresh;
         queryMacros.useCached = useCached;
         queryMacros.isSegment = true;
 

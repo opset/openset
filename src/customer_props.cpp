@@ -1,9 +1,76 @@
 #include <cmath>
+#include <limits>
 
 #include "customer_props.h"
 #include "table.h"
 #include "properties.h"
 #include "dbtypes.h"
+
+enum PackingSize_e : int8_t
+{
+    bits8 = 0,
+    bits16 = 1,
+    bits32 = 2,
+    bits64 = 3
+};
+
+void openset::db::CustomerProps::encodeValue(const int64_t value)
+{
+    if (value >= SCHAR_MIN && value <= SCHAR_MAX)
+    {
+        *mem.newInt8() = static_cast<int8_t>(PackingSize_e::bits8);
+        *mem.newInt8() = value;
+        return;
+    }
+
+    if (value >= SHRT_MIN && value <= SHRT_MAX)
+    {
+        *mem.newInt8() = static_cast<int8_t>(PackingSize_e::bits16);
+        *mem.newInt16() = value;
+        return;
+    }
+
+    if (value >= LONG_MIN && value <= LONG_MAX)
+    {
+        *mem.newInt8() = static_cast<int8_t>(PackingSize_e::bits32);
+        *mem.newInt32() = value;
+        return;
+    }
+
+    *mem.newInt8() = static_cast<int8_t>(PackingSize_e::bits64);
+    *mem.newInt64() = value;
+}
+
+int64_t openset::db::CustomerProps::decodeValue(char*& data)
+{
+    const auto size = *reinterpret_cast<PackingSize_e*>(data);
+    ++data;
+
+    int64_t value;
+
+    switch (size)
+    {
+    case bits8:
+        value = *reinterpret_cast<int8_t*>(data);
+        data += sizeof(int8_t);
+        break;
+    case bits16:
+        value = *reinterpret_cast<int16_t*>(data);
+        data += sizeof(int16_t);
+        break;
+    case bits32:
+        value = *reinterpret_cast<int32_t*>(data);
+        data += sizeof(int32_t);
+        break;
+    case bits64:
+    default:
+        value = *reinterpret_cast<int64_t*>(data);
+        data += sizeof(int64_t);
+        break;
+    }
+
+    return value;
+}
 
 void openset::db::CustomerProps::reset()
 {
@@ -23,7 +90,7 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
 
     auto tableProps = table->getProperties();
 
-    const auto count = mem.newInt32();
+    const auto count = mem.newInt16();
     *count = 0;
 
     for (auto& prop : props)
@@ -64,12 +131,10 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
         }
 
         // store column index
-        *mem.newInt32() = static_cast<int>(info->idx);
-        // store column type
-        *mem.newInt32() = static_cast<int>(info->type);
+        *mem.newInt16() = static_cast<int16_t>(info->idx);
 
         // placeholder size
-        const auto size = mem.newInt32();
+        //const auto size = mem.newInt32();
 
         const auto startOffset = mem.getBytes();
 
@@ -79,50 +144,50 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
             if (info->isSet)
             {
                 // store number of elements
-                *mem.newInt32() = prop.second.len();
+                *mem.newInt16() = prop.second.len();
                 for (auto& item : *var.getSet())
-                    *mem.newInt64() = item.getInt64();
+                    encodeValue(item.getInt64());
             }
             else
             {
-                *mem.newInt64() = var.getInt64(); // copy the union in cvar
+                encodeValue(var.getInt64()); // copy the union in cvar
             }
             break;
         case openset::db::PropertyTypes_e::doubleProp:
             if (info->isSet)
             {
                 // store number of elements
-                *mem.newInt32() = prop.second.len();
+                *mem.newInt16() = prop.second.len();
                 for (auto& item : *var.getSet())
-                    *mem.newInt64() = round(item.getDouble() * 10000);
+                    encodeValue(round(item.getDouble() * 10000));
             }
             else
             {
-                *mem.newInt64() = round(var.getDouble() * 10000); // copy the union in cvar
+                encodeValue(round(var.getDouble() * 10000)); // copy the union in cvar
             }
             break;
         case openset::db::PropertyTypes_e::boolProp:
             if (info->isSet)
             {
                 // store number of elements
-                *mem.newInt32() = prop.second.len();
+                *mem.newInt16() = prop.second.len();
                 for (auto& item : *var.getSet())
-                    *mem.newInt64() = item.getBool() ? 1 : 0;
+                    encodeValue(item.getBool() ? 1 : 0);
             }
             else
             {
-                *mem.newInt64() = var.getBool() ? 1 : 0; // copy the union in cvar
+                encodeValue(var.getBool() ? 1 : 0); // copy the union in cvar
             }
             break;
         case openset::db::PropertyTypes_e::textProp:
             if (info->isSet)
             {
                 // store number of elements
-                *mem.newInt32() = prop.second.len();
+                *mem.newInt16() = prop.second.len();
                 for (auto& item : *var.getSet())
                 {
                     const auto text = item.getString();
-                    *mem.newInt32() = text.length();
+                    *mem.newInt16() = text.length();
                     const auto buffer = mem.newPtr(text.length());
                     memcpy(buffer, text.c_str(), text.length());
                 }
@@ -130,7 +195,7 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
             else
             {
                 const auto text = var.getString();
-                *mem.newInt32() = text.length();
+                *mem.newInt16() = text.length();
                 const auto buffer = mem.newPtr(text.length());
                 memcpy(buffer, text.c_str(), text.length());
             }
@@ -138,7 +203,7 @@ char* openset::db::CustomerProps::encodeCustomerProps(openset::db::Table* table)
         }
 
         // update size of data
-        *size = mem.getBytes() - startOffset;
+        //ize = mem.getBytes() - startOffset;
 
         ++(*count);
     }
@@ -154,111 +219,96 @@ void openset::db::CustomerProps::decodeCustomerProps(openset::db::Table* table, 
         return;
 
     auto tableProps = table->getProperties();
-    const auto count = static_cast<int32_t>(*data);
-    data += sizeof(int32_t);
+    const auto count = static_cast<int16_t>(*data);
+    data += sizeof(int16_t);
 
     for (auto i = 0; i < count; ++i)
     {
-        const auto propIndex = *reinterpret_cast<int32_t*>(data);
-        data += sizeof(int32_t);
-        const auto propType = *reinterpret_cast<openset::db::PropertyTypes_e*>(data);
-        data += sizeof(int32_t);
-        const auto recordSize = *reinterpret_cast<int32_t*>(data);
-        data += sizeof(int32_t);
+        const auto propIndex = *reinterpret_cast<int16_t*>(data);
+        data += sizeof(int16_t);
+
+        //const auto prop16 = *reinterpret_cast<int16_t*>(data);
+
+        //const auto propType = static_cast<openset::db::PropertyTypes_e>(prop16);
+        //data += sizeof(int32_t);
+
+        //const auto recordSize = *reinterpret_cast<int32_t*>(data);
+        //data += sizeof(int32_t);
 
         const auto info = tableProps->getProperty(propIndex);
 
-        // skip if something has changed (dropped or redefined column?)
-        if (!info->isCustomerProperty || info->type != propType)
-        {
-            data += recordSize;
-            continue;
-        }
-
-        switch (propType)
+        switch (info->type)
         {
         case openset::db::PropertyTypes_e::intProp:
             if (info->isSet)
             {
-                const auto elements = *reinterpret_cast<int32_t*>(data);
-                data += sizeof(int32_t);
+                const auto elements = *reinterpret_cast<int16_t*>(data);
+                data += sizeof(int16_t);
 
                 cvar set;
                 set.set();
 
                 for (auto e = 0; e < elements; ++e)
-                {
-                    set += *reinterpret_cast<int64_t*>(data);
-                    data += sizeof(int64_t);
-                }
+                    set += decodeValue(data);
 
                 props[propIndex] = std::move(set);
             }
             else
             {
-                props[propIndex] = *reinterpret_cast<int64_t*>(data);
-                data += sizeof(int64_t);
+                props[propIndex] = decodeValue(data);
             }
             break;
         case openset::db::PropertyTypes_e::doubleProp:
             if (info->isSet)
             {
-                const auto elements = *reinterpret_cast<int32_t*>(data);
-                data += sizeof(int32_t);
+                const auto elements = *reinterpret_cast<int16_t*>(data);
+                data += sizeof(int16_t);
 
                 cvar set;
                 set.set();
 
                 for (auto e = 0; e < elements; ++e)
-                {
-                    set += (static_cast<double>(*reinterpret_cast<int64_t*>(data)) / 10000.0);
-                    data += sizeof(int64_t);
-                }
+                    set += (static_cast<double>(decodeValue(data)) / 10000.0);
 
                 props[propIndex] = std::move(set);
             }
             else
             {
-                props[propIndex] = (static_cast<double>(*reinterpret_cast<int64_t*>(data)) / 10000.0);
-                data += sizeof(int64_t);
+                props[propIndex] = (static_cast<double>(decodeValue(data)) / 10000.0);
             }
             break;
         case openset::db::PropertyTypes_e::boolProp:
             if (info->isSet)
             {
-                const auto elements = *reinterpret_cast<int32_t*>(data);
-                data += sizeof(int32_t);
+                const auto elements = *reinterpret_cast<int16_t*>(data);
+                data += sizeof(int16_t);
 
                 cvar set;
                 set.set();
 
                 for (auto e = 0; e < elements; ++e)
-                {
-                    set += *reinterpret_cast<int64_t*>(data) ? true : false;
-                    data += sizeof(int64_t);
-                }
+                    set += decodeValue(data) ? true : false;
 
                 props[propIndex] = std::move(set);
             }
             else
             {
-                props[propIndex] = *reinterpret_cast<int64_t*>(data) ? true : false;
-                data += sizeof(int64_t);
+                props[propIndex] = decodeValue(data) ? true : false;
             }
             break;
         case openset::db::PropertyTypes_e::textProp:
             if (info->isSet)
             {
-                const auto elements = *reinterpret_cast<int32_t*>(data);
-                data += sizeof(int32_t);
+                const auto elements = *reinterpret_cast<int16_t*>(data);
+                data += sizeof(int16_t);
 
                 cvar set;
                 set.set();
 
                 for (auto e = 0; e < elements; ++e)
                 {
-                    const auto textLength = *reinterpret_cast<int32_t*>(data);
-                    data += sizeof(int32_t);
+                    const auto textLength = *reinterpret_cast<int16_t*>(data);
+                    data += sizeof(int16_t);
                     set += std::string(data, textLength);
                     data += textLength;
                 }
@@ -267,8 +317,8 @@ void openset::db::CustomerProps::decodeCustomerProps(openset::db::Table* table, 
             }
             else
             {
-                const auto textLength = *reinterpret_cast<int32_t*>(data);
-                data += sizeof(int32_t);
+                const auto textLength = *reinterpret_cast<int16_t*>(data);
+                data += sizeof(int16_t);
                 props[propIndex] = std::string(data, textLength);
                 data += textLength;
             }

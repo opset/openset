@@ -105,7 +105,7 @@ openset::query::Interpreter* TablePartitioned::getInterpreter(const std::string&
     return segments[segmentName].getInterpreter(attributes, people.customerCount());
 }
 
-void TablePartitioned::checkForSegmentChanges()
+void TablePartitioned::syncPartitionSegmentsWithTableSegments()
 {
     // if segment calculations are taking place in an open-loop
     // we will not change or invalidate any segment records
@@ -169,7 +169,11 @@ void TablePartitioned::checkForSegmentChanges()
 
     // delete any segments in the cleanup list
     for (auto &segName : orphanedSegments)
+    {
         segments.erase(segName);
+        segmentRefresh.erase(segName);
+        segmentTTL.erase(segName);
+    }
 
     std::sort(
         onInsertList.begin(),

@@ -928,6 +928,7 @@ namespace openset
             bool writesProps { true };    // script can change props
             bool useGlobals { false };    // uses global for table
             bool useCached { false };     // for segments allow use of cached values within TTL
+            bool alwaysFresh { false };   // cached, but always calculated fresh on query
             bool isSegmentMath { false }; // for segments, the index has the value, script execution not required
             bool useSessions { false };   // uses session functions, we can cache these
             bool useStampedRowIds { false }; // count using row stamp rather than row uniqueness

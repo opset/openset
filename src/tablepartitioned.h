@@ -93,7 +93,6 @@ namespace openset
             AttributeBlob* attributeBlob;
             Customers people;
             openset::async::AsyncLoop* asyncLoop;
-            //openset::revent::ReventManager* triggers;
 
             // map of segment names to expire times
             std::unordered_map<std::string, int64_t> segmentRefresh;
@@ -116,7 +115,7 @@ namespace openset
             // when an open-loop is using segments it will increment this value
             // when it is done it will decrement this value.
             //
-            // checkForSegmentChanges will not invalidate segments that have changed
+            // syncPartitionSegmentsWithTableSegments will not invalidate segments that have changed
             // if this is a non-zero value... instead they will be invalidated at the
             // next opportunity
             int segmentUsageCount {0};
@@ -175,7 +174,7 @@ namespace openset
 
             openset::query::Interpreter* getInterpreter(const std::string& segmentName, int64_t maxLinearId);
 
-            void checkForSegmentChanges();
+            void syncPartitionSegmentsWithTableSegments();
 
             InterpreterList& getOnInsertSegments()
             {

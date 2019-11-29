@@ -7,6 +7,7 @@
 #include "grid.h"
 
 #include <vector>
+#include "mem/segmented_list.h"
 
 using namespace std;
 
@@ -20,7 +21,7 @@ namespace openset
         {
         public:
             BinaryListHash<int64_t, int32_t> customerMap;
-            vector<PersonData_s*> customerLinear;
+            SegmentedList<PersonData_s*, 512> customerLinear;
             int partition;
 
             explicit Customers(int partition);

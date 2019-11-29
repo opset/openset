@@ -41,7 +41,7 @@ void OpenLoopInsert::prepare()
         return;
     }
 
-    tablePartitioned->checkForSegmentChanges();
+    tablePartitioned->syncPartitionSegmentsWithTableSegments();
 }
 
 void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* segment)
@@ -68,7 +68,7 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
     auto returns = segment->interpreter->getLastReturn();
 
     // set bit according to interpreter results
-    auto bits = segment->getBits(tablePartitioned->attributes);
+    const auto bits = segment->getBits(tablePartitioned->attributes);
     const auto stateChange = segment->setBit(bits, personData->linId, returns.size() && returns[0].getBool() == true);
     if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
     {
@@ -81,7 +81,7 @@ bool OpenLoopInsert::run()
     const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
     // check partition segment data against master and update if necessary
-    tablePartitioned->checkForSegmentChanges();
+    tablePartitioned->syncPartitionSegmentsWithTableSegments();
 
     if (mapInfo != openset::mapping::NodeState_e::active_owner &&
         mapInfo != openset::mapping::NodeState_e::active_clone)

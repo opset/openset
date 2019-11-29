@@ -62,7 +62,7 @@ void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
     rowKey.key[0] = nameHash;
     rowKey.types[0] = ResultTypes_e::Text;
 
-    auto aggs = result->getMakeAccumulator(rowKey);
+    const auto aggs = result->getMakeAccumulator(rowKey);
     set_cb(aggs);
 }
 
@@ -134,7 +134,6 @@ bool OpenLoopSegment::nextMacro()
             );
 
             parts->attributes.clearDirty();
-
             suicide();
 
             return false;
@@ -158,13 +157,13 @@ bool OpenLoopSegment::nextMacro()
         beforeBits.opCopy(*bits);
 
         // should we return these bits, as a cached copy?
-        if (macros.useCached && !parts->isRefreshDue(segmentName))
+        if (macros.useCached && !macros.alwaysFresh && !parts->isRefreshDue(segmentName))
         {
             if (bits)
             {
                 storeResult(segmentName, bits->population(maxLinearId));
                 ++macroIter;
-                continue; // try another index
+                continue; // done, move to next index
             }
             // cached copy not found... carry on!
         }
@@ -250,7 +249,7 @@ void OpenLoopSegment::prepare()
         return;
     }
 
-    parts->checkForSegmentChanges();
+    parts->syncPartitionSegmentsWithTableSegments();
     ++parts->segmentUsageCount;
 
     maxLinearId = parts->people.customerCount();

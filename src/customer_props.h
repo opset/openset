@@ -30,6 +30,9 @@ namespace openset
 
             void reset();
 
+            void encodeValue(int64_t value);
+            static int64_t decodeValue(char*& data);
+
             char* encodeCustomerProps(openset::db::Table* table);
             void decodeCustomerProps(openset::db::Table* table, char* data);
 
@@ -55,5 +58,6 @@ namespace openset
 
             CustomerPropMap* getCustomerProps();
         };
+
     };
 };

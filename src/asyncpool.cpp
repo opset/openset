@@ -84,7 +84,7 @@ void AsyncPool::resumeAsync()
     if (globalAsyncLockDepth == 0)
         globalAsyncInitSuspend = false;
 
-    while (globalAsyncSuspendedWorkerCount != 0)
+    while (globalAsyncLockDepth == 0 && globalAsyncSuspendedWorkerCount != 0)
         this_thread::sleep_for(chrono::milliseconds(1));
 }
 

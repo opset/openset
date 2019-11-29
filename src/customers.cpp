@@ -11,8 +11,12 @@ Customers::Customers(const int partition) :
 
 Customers::~Customers()
 {
-    for (const auto &person: customerLinear)
-        PoolMem::getPool().freePtr(person);
+    for (auto i = 0; i < customerLinear.size(); ++i)
+    {
+        PoolMem::getPool().freePtr(customerLinear.at(i));
+    }
+    //for (const auto &person: customerLinear)
+        //PoolMem::getPool().freePtr(person);
 }
 
 PersonData_s* Customers::getCustomerByID(int64_t userId)
@@ -53,7 +57,7 @@ PersonData_s* Customers::getCustomerByLIN(const int64_t linId)
     if (linId < 0 || linId >= customerLinear.size())
         return nullptr;
 
-    return customerLinear[linId];
+    return customerLinear.at(linId);
 }
 
 PersonData_s* Customers::createCustomer(int64_t userId)
@@ -73,7 +77,7 @@ PersonData_s* Customers::createCustomer(int64_t userId)
     newUser->props = nullptr;
 
     customerMap.set(userId, newUser->linId);
-    customerLinear.emplace_back(newUser);
+    customerLinear.push_back(newUser);
     return newUser;
 
     /*
@@ -127,7 +131,7 @@ PersonData_s* Customers::createCustomer(string userIdString)
             newUser->setIdStr(userIdString);
 
             customerMap.set(hashId, newUser->linId);
-            customerLinear.emplace_back(newUser);
+            customerLinear.push_back(newUser);
 
             return newUser;
         }
@@ -143,8 +147,8 @@ PersonData_s* Customers::createCustomer(string userIdString)
 
 void Customers::replaceCustomerRecord(PersonData_s* newRecord)
 {
-    if (newRecord && customerLinear[newRecord->linId] != newRecord)
-        customerLinear[newRecord->linId] = newRecord;
+    if (newRecord && customerLinear.at(newRecord->linId) != newRecord)
+        customerLinear.at(newRecord->linId) = newRecord;
 }
 
 int64_t Customers::customerCount() const
@@ -159,9 +163,9 @@ void Customers::drop(const int64_t userId)
     if (!info)
         return;
 
+    // TODO - fix
     //customerMap.erase(userId);
-
-    customerLinear[info->linId] = nullptr;
+    //customerLinear.at(info->linId) = nullptr;
 
     PoolMem::getPool().freePtr(info);
 }
@@ -169,7 +173,8 @@ void Customers::drop(const int64_t userId)
 void Customers::serialize(HeapStack* mem)
 {
     // grab 8 bytes, and set the block type at that address
-    *recast<serializedBlockType_e*>(mem->newPtr(sizeof(int64_t))) = serializedBlockType_e::people;
+    /*
+     recast<serializedBlockType_e*>(mem->newPtr(sizeof(int64_t))) = serializedBlockType_e::people;
 
     // grab 8 more bytes, this will be the length of the attributes data within the block
     const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
@@ -186,10 +191,12 @@ void Customers::serialize(HeapStack* mem)
         memcpy(serializedPerson, person, size);
         *sectionLength += size;
     }
+    */
 }
 
 int64_t Customers::deserialize(char* mem)
 {
+    /*
     auto read = mem;
 
     if (*recast<serializedBlockType_e*>(read) != serializedBlockType_e::people)
@@ -234,4 +241,6 @@ int64_t Customers::deserialize(char* mem)
     }
 
     return sectionLength + 16;
+    */
+    return 0;
 }

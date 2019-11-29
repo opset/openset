@@ -93,7 +93,13 @@ bool OpenLoopSegmentRefresh::nextExpired()
         macros = segmentsIter->second.macros;
         segmentInfo = &parts->segments[segmentName];
 
-        //cout << "segment refresh: " << segmentName << endl;
+        if (macros.alwaysFresh)
+        {
+            parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
+            parts->setSegmentTTL(segmentName, macros.segmentTTL);
+            ++segmentsIter;
+            continue;
+        }
 
         // generate the index for this query
         indexing.mount(table.get(), macros, loop->partition, maxLinearId);
@@ -184,7 +190,7 @@ void OpenLoopSegmentRefresh::prepare()
         return;
     }
 
-    parts->checkForSegmentChanges();
+    parts->syncPartitionSegmentsWithTableSegments();
     ++parts->segmentUsageCount;
 
     segmentsIter = parts->segments.begin();
