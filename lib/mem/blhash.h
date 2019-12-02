@@ -465,21 +465,9 @@ private:
 
         // on a short list scanning sequentially is more efficient
         // because the data is fits in a cache line.
-        // iterating the first dozen or is most efficient
-        // and is quicker than list sub-division on my i7 type processor.
-        // Some of the newer server processors might benefit from a
-        // higher setting.
-        //
-        //  bl_element_s = 10 bytes
-        //  cache line   = 64 bytes.
-        //  6 elements per cache line.
-        //
-        //  testing showed a positive gain for on my processor
-        //  at two cache lines worth of elements.
 
         if (node->used <= 8)
         {
-            ++first; // we just checked index 0 above, so skip it
             for (; first <= last; ++first)
             {
                 // nesting these conditions netted 15% speed improvement
@@ -490,7 +478,6 @@ private:
                     return -(first + 1);
                 }
             }
-
             return -(last + 2);
         }
 
