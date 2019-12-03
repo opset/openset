@@ -10,12 +10,9 @@ PoolMem::PoolMem()
     for (auto &b : breakPoints)
     {
         b.index = idx;
+        bucketLookup.push_back(b.maxSize);
         ++idx;
     }
-
-    // build the reverse lookup - once
-    for (auto &b : breakPoints)
-       bucketLookup.push_back(b.maxSize);
 }
 
 void* PoolMem::getPtr(const int64_t size)

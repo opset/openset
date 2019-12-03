@@ -10,7 +10,7 @@ namespace openset
 {
     namespace db
     {
-        const int64_t BitArraySize = 128;
+        const int64_t BitArraySize = 126;
 
         struct IndexPageMemory_s
         {

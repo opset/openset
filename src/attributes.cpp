@@ -11,7 +11,7 @@ Attributes::Attributes(const int partition, Table* table, AttributeBlob* attribu
     blob(attributeBlob),
     properties(properties),
     partition(partition),
-    indexCache(64)
+    indexCache(128)
 {}
 
 Attributes::~Attributes()

@@ -24,6 +24,8 @@ void IndexMemory::decompress(char* compressedData)
             reinterpret_cast<char*>(indexPage->bitArray),
             IndexPageDataSize);
 
+        rawPages.push_back(rawPage);
+
         // next block
         rawPage = rawPage->next;
     }
@@ -35,11 +37,12 @@ char* IndexMemory::compress()
 
     RawPageList newRawPages;
 
+    int64_t totalSize = 0;
+
     auto pageIdx = -1;
     for (auto indexPage : indexPages)
     {
         ++pageIdx;
-
         const auto rawPage = getRawPage(pageIdx);
 
         // we have no bits in this page (skip, and cleanup the old page)
@@ -68,7 +71,7 @@ char* IndexMemory::compress()
             compBuffer,
             IndexPageDataSize,
             IndexPageDataSize + Overflow,
-            5
+            1
         );
 
         const auto newRawPage = static_cast<CompPageMemory_s*>(PoolMem::getPool().getPtr(CompPageHeaderSize + compressedSize));
@@ -77,9 +80,7 @@ char* IndexMemory::compress()
         newRawPage->next = nullptr;
         memcpy(newRawPage->compressedData, compBuffer, compressedSize);
 
-        if (newRawPages.size())
-            newRawPages.back()->next = newRawPage;
-
+        totalSize += compressedSize + CompPageHeaderSize;
         newRawPages.push_back(newRawPage);
     }
 
@@ -88,7 +89,12 @@ char* IndexMemory::compress()
     rawPages = std::move(newRawPages);
 
     if (rawPages.size())
+    {
+        // relink raw pages
+        for (auto i = 0; i < rawPages.size() - 1; ++i)
+            rawPages[i]->next = rawPages[i+1];
         return reinterpret_cast<char*>(rawPages.front());
+    }
 
     return nullptr;
 }
