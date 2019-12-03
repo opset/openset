@@ -292,7 +292,7 @@ namespace openset
                 if (keyValuesMap.size() > cacheSize)
                 {
                     const auto evictedKey = items.back();
-                    const auto evicted    = keyValuesMap[items.back()].first;
+                    const auto evicted    = keyValuesMap[evictedKey].first;
                     keyValuesMap.erase(items.back());
                     items.pop_back();
                     return { evictedKey.first, evictedKey.second, evicted };

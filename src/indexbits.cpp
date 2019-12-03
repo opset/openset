@@ -88,7 +88,7 @@ char* IndexMemory::compress()
     rawPages = std::move(newRawPages);
 
     if (rawPages.size())
-        return reinterpret_cast<char*>(newRawPages.front());
+        return reinterpret_cast<char*>(rawPages.front());
 
     return nullptr;
 }

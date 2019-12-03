@@ -11,7 +11,7 @@ Attributes::Attributes(const int partition, Table* table, AttributeBlob* attribu
     blob(attributeBlob),
     properties(properties),
     partition(partition),
-    indexCache(50)
+    indexCache(64)
 {}
 
 Attributes::~Attributes()
@@ -44,8 +44,7 @@ IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
         const auto& evictAttribute = attrPair->second;
 
         // compress the data, get it back in a pool ptr
-        evictAttribute->data = bits->store();
-
+        evictAttribute->data = evictBits->store();
         delete evictBits;
     }
 
@@ -77,7 +76,7 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
 {
     auto key = attr_key_s( propIndex, value );
 
-    if (auto res = propertyIndex.emplace(key, nullptr); res.second == true)
+    if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         res.first->second = attr;
@@ -93,7 +92,7 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
     auto key = attr_key_s( propIndex,  MakeHash(value) );
 
-    if (auto res = propertyIndex.emplace(key, nullptr); res.second == true)
+    if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
         attr->text = blob->storeValue(propIndex, value);
