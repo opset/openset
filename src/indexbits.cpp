@@ -37,8 +37,6 @@ char* IndexMemory::compress()
 
     RawPageList newRawPages;
 
-    int64_t totalSize = 0;
-
     auto pageIdx = -1;
     for (auto indexPage : indexPages)
     {
@@ -80,7 +78,6 @@ char* IndexMemory::compress()
         newRawPage->next = nullptr;
         memcpy(newRawPage->compressedData, compBuffer, compressedSize);
 
-        totalSize += compressedSize + CompPageHeaderSize;
         newRawPages.push_back(newRawPage);
     }
 
