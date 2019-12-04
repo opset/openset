@@ -90,6 +90,7 @@ public:
     }
 
     void* getPtr(const int64_t size);
+    int getSize(void* ptr);
     void freePtr(void* ptr);
 };
 

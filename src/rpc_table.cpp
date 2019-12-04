@@ -7,6 +7,8 @@
 #include "common.h"
 
 #include "cjson/cjson.h"
+#include "threads/locks.h"
+
 #include "oloop_insert.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
@@ -29,12 +31,16 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
+CriticalSection RpcTableCs;
+
 void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
+
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
     const auto request = message->getJSON();
@@ -298,6 +304,8 @@ void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr& messag
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
 
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
     const auto request = message->getJSON();
     const auto tableName = matches.find("table"s)->second;
@@ -334,6 +342,8 @@ void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr& messag
 
 void RpcTable::table_describe(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -421,16 +431,16 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
     const auto settings = response.setObject("settings");
     table->serializeSettings(settings);
 
-    Logger::get().info("describe table '" + tableName + "'.");
     message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
-
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
+
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
 
@@ -538,6 +548,8 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
 
 void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -609,6 +621,8 @@ void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMap
 
 void RpcTable::table_settings(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -651,7 +665,7 @@ void RpcTable::table_settings(const openset::web::MessagePtr& message, const Rpc
 
 void openset::comms::RpcTable::table_list(const openset::web::MessagePtr & message, const RpcMapping & matches)
 {
-    // lock the table object
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
     const auto names = database->getTableNames();

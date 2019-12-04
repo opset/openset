@@ -9,10 +9,10 @@ using namespace openset::db;
 
 void IndexMemory::decompress(char* compressedData)
 {
+    reset();
+
     if (!compressedData)
         return;
-
-    reset();
 
     auto rawPage = reinterpret_cast<CompPageMemory_s*>(compressedData);
 
@@ -33,63 +33,42 @@ void IndexMemory::decompress(char* compressedData)
 
 char* IndexMemory::compress()
 {
-    const auto compBuffer = static_cast<char*>(PoolMem::getPool().getPtr(IndexPageDataSize + Overflow));
+    const auto bufferSize = LZ4_compressBound(IndexPageDataSize);
+    const auto compBuffer = static_cast<char*>(PoolMem::getPool().getPtr(bufferSize));
 
-    RawPageList newRawPages;
+    for (auto rawPage : rawPages)
+        PoolMem::getPool().freePtr(rawPage);
+    rawPages.clear();
 
-    auto pageIdx = -1;
+    auto pageNumber = -1;
     for (auto indexPage : indexPages)
     {
-        ++pageIdx;
-        const auto rawPage = getRawPage(pageIdx);
+        ++pageNumber;
 
-        // we have no bits in this page (skip, and cleanup the old page)
-        if (!pagePopulation(indexPage))
-        {
-            if (rawPage)
-                PoolMem::getPool().freePtr(rawPage);
-            continue;
-        }
-
-        // use existing if we already have compressed version of this and nothing changed
-        if (rawPage)
-        {
-            if (!indexPage->dirty)
-            {
-                newRawPages.push_back(rawPage);
-                continue;
-            }
-            PoolMem::getPool().freePtr(rawPage);
-        }
-
-        indexPage->dirty = false;
-
-        const auto compressedSize = LZ4_compress_fast(
+        const auto compressedSize = LZ4_compress_default(
             reinterpret_cast<char*>(indexPage->bitArray),
             compBuffer,
             IndexPageDataSize,
-            IndexPageDataSize + Overflow,
-            1
+            bufferSize
         );
 
         const auto newRawPage = static_cast<CompPageMemory_s*>(PoolMem::getPool().getPtr(CompPageHeaderSize + compressedSize));
 
-        newRawPage->index = pageIdx;
+        newRawPage->index = pageNumber;
         newRawPage->next = nullptr;
         memcpy(newRawPage->compressedData, compBuffer, compressedSize);
 
-        newRawPages.push_back(newRawPage);
+        rawPages.push_back(newRawPage);
     }
 
     PoolMem::getPool().freePtr(compBuffer);
 
-    rawPages = std::move(newRawPages);
-
     if (rawPages.size())
     {
         // relink raw pages
-        for (auto i = 0; i < rawPages.size() - 1; ++i)
-            rawPages[i]->next = rawPages[i+1];
+        for (auto i = 0; i < rawPages.size(); ++i)
+            rawPages[i]->next = (i == rawPages.size() - 1) ? nullptr : rawPages[i+1];
+
         return reinterpret_cast<char*>(rawPages.front());
     }
 
@@ -190,7 +169,6 @@ void IndexBits::bitSet(const int64_t index)
 {
     const auto bits = data.getBitInt(index);
     *bits |= BITMASK[index & 63ULL]; // mod 64
-    data.setDirty();
 }
 
 void IndexBits::setSizeByBit(const int64_t index)
@@ -202,7 +180,6 @@ void IndexBits::bitClear(const int64_t index)
 {
     const auto bits = data.getBitInt(index);
     *bits &= ~(BITMASK[index & 63ULL]); // mod 64
-    data.setDirty();
 }
 
 bool IndexBits::bitState(const int64_t index)
@@ -255,7 +232,6 @@ void IndexBits::opCopy(const IndexBits& source)
     reset();
     data = source.data;
     placeHolder = source.placeHolder;
-    data.setDirtyAllPages();
 }
 
 void IndexBits::opCopyNot(IndexBits& source)
@@ -276,7 +252,6 @@ void IndexBits::opAnd(IndexBits& source)
     {
         const auto dest = data.getInt(index);
         *dest &= *source.data.getInt(index);
-        data.setDirty();
         ++index;
     }
 }
@@ -293,7 +268,6 @@ void IndexBits::opOr(IndexBits& source)
     {
         const auto dest = data.getInt(index);
         *dest |= *source.data.getInt(index);
-        data.setDirty();
         ++index;
     }
 }
@@ -310,7 +284,6 @@ void IndexBits::opAndNot(IndexBits& source)
     {
         const auto dest = data.getInt(index);
         *dest = *dest & ~(*source.data.getInt(index));
-        data.setDirty();
         ++index;
     }
 }
@@ -327,7 +300,6 @@ void IndexBits::opNot()
     {
         const auto dest = data.getInt(index);
         *dest = ~(*dest);
-        data.setDirty();
         ++index;
     }
 }

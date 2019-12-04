@@ -14,8 +14,6 @@ namespace openset
 
         struct IndexPageMemory_s
         {
-            bool dirty { false };
-            // 4096 bytes
             int64_t bitArray[BitArraySize];
         };
 
@@ -24,16 +22,14 @@ namespace openset
         const int64_t IndexBitsPerPage = BitArraySize * 64;
         const int64_t Overflow = 64;
 
-#pragma pack(push,1)
         struct CompPageMemory_s
         {
-            int index { 0 };
+            int64_t index { 0 };
             CompPageMemory_s* next { nullptr };
             char compressedData[IndexPageDataSize];
         };
-#pragma pack(pop)
 
-        const int64_t CompPageHeaderSize = sizeof(int) + sizeof(CompPageMemory_s*);
+        const int64_t CompPageHeaderSize = 16;
 
         class IndexMemory
         {
@@ -142,18 +138,6 @@ namespace openset
                 const auto indexInPage = intIndex % BitArraySize;
 
                 return page->bitArray + indexInPage;
-            }
-
-            void setDirty() const
-            {
-                if (lastIndex)
-                    lastIndex->dirty = true;
-            }
-
-            void setDirtyAllPages()
-            {
-                for (const auto page : indexPages)
-                    page->dirty = true;
             }
 
             IndexPageMemory_s* getPage(const int64_t bitIndex)
@@ -293,7 +277,7 @@ namespace openset
                 {
                     const auto evictedKey = items.back();
                     const auto evicted    = keyValuesMap[evictedKey].first;
-                    keyValuesMap.erase(items.back());
+                    keyValuesMap.erase(evictedKey);
                     items.pop_back();
                     return { evictedKey.first, evictedKey.second, evicted };
                 }
@@ -305,7 +289,7 @@ namespace openset
             {
                 const Key key(propIndex, value);
 
-                if (auto iter = keyValuesMap.find(key); iter != keyValuesMap.end())
+                if (const auto& iter = keyValuesMap.find(key); iter != keyValuesMap.end())
                 {
                     items.erase(iter->second.second);
                     items.push_front(key);

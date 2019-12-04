@@ -1863,14 +1863,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 auto colValue = NONE; // extract property value from grid->propRow
 
-                //if (macros.vars.tableVars[inst->index].isCustomerProperty)
-                //{
-                //    colValue = propRow->cols[macros.vars.tableVars[inst->index].property];
-                // }
-                //else
-                //{
+                if (readRow >= rowCount)
+                {
+                    *stackPtr = None;
+                    ++stackPtr;
+                    break;
+                }
+
                 colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
-                //}
 
                 switch (macros.vars.tableVars[inst->index].schemaType)
                 {

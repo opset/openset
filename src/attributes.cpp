@@ -40,10 +40,7 @@ IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
     // if anything got squeezed out compress it
     if (evictBits)
     {
-        const auto& attrPair = propertyIndex.find({ static_cast<int>(evictPropIndex), evictValue });
-        const auto& evictAttribute = attrPair->second;
-
-        // compress the data, get it back in a pool ptr
+        const auto evictAttribute = Attributes::getMake(static_cast<int>(evictPropIndex), evictValue);
         evictAttribute->data = evictBits->store();
         delete evictBits;
     }
@@ -79,6 +76,8 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
     if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
+        attr->data = nullptr;
+        attr->text = nullptr;
         res.first->second = attr;
         return attr;
     }
@@ -95,6 +94,7 @@ Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
     if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
+        attr->data = nullptr;
         attr->text = blob->storeValue(propIndex, value);
         res.first->second = attr;
         return attr;
