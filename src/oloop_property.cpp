@@ -95,43 +95,7 @@ void OpenLoopProperty::prepare()
         return;
     }
 
-    rowKey.clear();
-
-    const auto hash = MakeHash(config.propName);
-    result->addLocalText(MakeHash(config.propName), config.propName);
-
-    rowKey.key[0] = hash;
-    rowKey.types[0] = ResultTypes_e::Text;
-
-    // assign the type for the value to the key
-    switch (config.propType)
-    {
-        case db::PropertyTypes_e::intProp:
-            rowKey.types[1] = ResultTypes_e::Int;
-        break;
-        case db::PropertyTypes_e::doubleProp:
-            rowKey.types[1] = ResultTypes_e::Double;
-        break;
-        case db::PropertyTypes_e::boolProp:
-            rowKey.types[1] = ResultTypes_e::Bool;
-        break;
-        case db::PropertyTypes_e::textProp:
-            rowKey.types[1] = ResultTypes_e::Text;
-        break;
-        default: ;
-    }
-
-    const auto aggs = result->getMakeAccumulator(rowKey);
-
-    auto idx = 0;
-    for (auto s : segments)
-    {
-        auto bits = allBits;
-        bits->opAnd(*parts->getSegmentBits(s));
-        aggs->columns[idx].value = bits->population(stopBit);
-
-        ++idx;
-    }
+    addRootTotal();
 
     // turn ints and doubles into their bucketed name
     const auto toBucket = [&](const int64_t value)->int64_t
@@ -218,6 +182,45 @@ void OpenLoopProperty::prepare()
     groupsIter = groups.begin();
 }
 
+void OpenLoopProperty::addRootTotal()
+{
+    rowKey.clear();
+
+    rowKey.key[0] = result->addLocalTextAndHash(config.propName);
+    rowKey.types[0] = ResultTypes_e::Text;
+
+    // assign the type for the value to the key
+    switch (config.propType)
+    {
+        case db::PropertyTypes_e::intProp:
+            rowKey.types[1] = ResultTypes_e::Int;
+        break;
+        case db::PropertyTypes_e::doubleProp:
+            rowKey.types[1] = ResultTypes_e::Double;
+        break;
+        case db::PropertyTypes_e::boolProp:
+            rowKey.types[1] = ResultTypes_e::Bool;
+        break;
+        case db::PropertyTypes_e::textProp:
+            rowKey.types[1] = ResultTypes_e::Text;
+        break;
+        default: ;
+    }
+
+    const auto aggs = result->getMakeAccumulator(rowKey);
+
+    auto idx = 0;
+    for (auto &segmentName : segments)
+    {
+        db::IndexBits* segmentBits = segmentName == "*" ? &all : parts->getSegmentBits(segmentName);
+        db::IndexBits bits;
+        bits.opCopy(rootCount);
+        bits.opAnd(*segmentBits);
+        aggs->columns[idx].value = bits.population(stopBit);
+        ++idx;
+    }
+}
+
 bool OpenLoopProperty::run()
 {
 
@@ -241,21 +244,13 @@ bool OpenLoopProperty::run()
             }
 
             auto columnIndex = 0;
-            for (auto segmentName : segments)
+            for (const auto& segmentName : segments)
             {
-
                 // here we are setting the key for the bucket,
                 // this is under our root which is the property name
                 rowKey.key[1] = bucket; // value hash (or value)
 
-                db::IndexBits* sourceBits;
-
-                if (segmentName == "*")
-                    sourceBits = &all;
-                else
-                    sourceBits = parts->getSegmentBits(segmentName);
-
-
+                const auto segmentBits = segmentName == "*" ? &all : parts->getSegmentBits(segmentName);
                 const auto aggs = result->getMakeAccumulator(rowKey);
 
                 auto sumBits = new db::IndexBits();
@@ -270,8 +265,10 @@ bool OpenLoopProperty::run()
                     sumBits->opOr(*bits);
                 }
 
+                rootCount.opOr(*sumBits);
+
                 // remove bits not in the segment
-                sumBits->opAnd(*sourceBits);
+                sumBits->opAnd(*segmentBits);
 
                 aggs->columns[columnIndex].value = sumBits->population(stopBit);
                 delete sumBits;
@@ -294,6 +291,8 @@ bool OpenLoopProperty::run()
 
         if (groupsIter == groups.end())
         {
+            addRootTotal();
+
             shuttle->reply(
                 0,
                 result::CellQueryResult_s{
@@ -302,6 +301,7 @@ bool OpenLoopProperty::run()
                 errors::Error{}
             }
             );
+
             suicide();
             return false;
         }

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "sba/sba.h"
 #include <cassert>
+#include "dbtypes.h"
 
 namespace openset
 {
@@ -40,6 +41,8 @@ namespace openset
             RawPageList rawPages;
 
             IndexPageMemory_s* lastIndex { nullptr };
+
+            bool dirty { false };
 
         public:
 
@@ -114,12 +117,23 @@ namespace openset
                     PoolMem::getPool().freePtr(page);
                 indexPages.clear();
                 rawPages.clear();
+                dirty = false;
                 lastIndex = nullptr;
             }
 
             int64_t intCount() const
             {
                 return BitArraySize * static_cast<int64_t>(indexPages.size());
+            }
+
+            void setDirty()
+            {
+                dirty = true;
+            }
+
+            bool isDirty() const
+            {
+                return dirty;
             }
 
             int64_t* getBitInt(const int64_t bitIndex)
@@ -234,9 +248,25 @@ namespace openset
             char* store();
 
             void setSizeByBit(int64_t index);
-            void bitSet(int64_t index);
-            void bitClear(int64_t index);
-            bool bitState(int64_t index);
+            void bitSet(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                *bits |= BITMASK[index & 63ULL]; // mod 64
+                data.setDirty();
+            }
+
+            void bitClear(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                *bits &= ~(BITMASK[index & 63ULL]); // mod 64
+                data.setDirty();
+            }
+
+            bool bitState(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                return ((*bits) & BITMASK[index & 63ULL]);
+            }
 
             int64_t population(const int64_t stopBit);
 

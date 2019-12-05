@@ -74,6 +74,7 @@ namespace openset
             result::ResultSet* result;
 
             db::IndexBits all;
+            db::IndexBits rootCount;
 
             int64_t stopBit{ 0 };
             int64_t instance{ 0 };
@@ -99,6 +100,7 @@ namespace openset
 
             void prepare() final;
             bool run() final;
+            void addRootTotal();
             void partitionRemoved() final;
         };
 

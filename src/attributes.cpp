@@ -40,8 +40,11 @@ IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
     // if anything got squeezed out compress it
     if (evictBits)
     {
-        const auto evictAttribute = Attributes::getMake(static_cast<int>(evictPropIndex), evictValue);
-        evictAttribute->data = evictBits->store();
+        if (evictBits->data.isDirty())
+        {
+            const auto evictAttribute = Attributes::getMake(static_cast<int>(evictPropIndex), evictValue);
+            evictAttribute->data = evictBits->store();
+        }
         delete evictBits;
     }
 

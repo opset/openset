@@ -33,6 +33,8 @@ void IndexMemory::decompress(char* compressedData)
 
 char* IndexMemory::compress()
 {
+    dirty = false;
+
     const auto bufferSize = LZ4_compressBound(IndexPageDataSize);
     const auto compBuffer = static_cast<char*>(PoolMem::getPool().getPtr(bufferSize));
 
@@ -44,6 +46,9 @@ char* IndexMemory::compress()
     for (auto indexPage : indexPages)
     {
         ++pageNumber;
+
+        if (!pagePopulation(indexPage))
+            continue;
 
         const auto compressedSize = LZ4_compress_default(
             reinterpret_cast<char*>(indexPage->bitArray),
@@ -76,8 +81,7 @@ char* IndexMemory::compress()
 }
 
 IndexBits::IndexBits()
-    : data(),
-      placeHolder(false)
+    : placeHolder(false)
 {}
 
 // move constructor
@@ -152,6 +156,8 @@ void IndexBits::makeBits(const int64_t index, const int state)
         for (auto i = index; i < lastBit; i++)
             bitClear(i);
     }
+
+    data.setDirty();
 }
 
 void IndexBits::mount(char* compressedData)
@@ -165,27 +171,9 @@ char* IndexBits::store()
     return data.compress();
 }
 
-void IndexBits::bitSet(const int64_t index)
-{
-    const auto bits = data.getBitInt(index);
-    *bits |= BITMASK[index & 63ULL]; // mod 64
-}
-
 void IndexBits::setSizeByBit(const int64_t index)
 {
     data.getBitInt(index);
-}
-
-void IndexBits::bitClear(const int64_t index)
-{
-    const auto bits = data.getBitInt(index);
-    *bits &= ~(BITMASK[index & 63ULL]); // mod 64
-}
-
-bool IndexBits::bitState(const int64_t index)
-{
-    const auto bits = data.getBitInt(index);
-    return ((*bits) & BITMASK[index & 63ULL]);
 }
 
 /*
@@ -232,6 +220,7 @@ void IndexBits::opCopy(const IndexBits& source)
     reset();
     data = source.data;
     placeHolder = source.placeHolder;
+    data.setDirty();
 }
 
 void IndexBits::opCopyNot(IndexBits& source)
@@ -246,7 +235,10 @@ void IndexBits::opAnd(IndexBits& source)
         return;
 
     auto index = 0;
-    const auto end = source.data.intCount();
+    auto end = source.data.intCount();
+    // whichever is bigger
+    if (data.intCount() > end)
+        end = data.intCount();
 
     while (index < end)
     {
@@ -254,6 +246,7 @@ void IndexBits::opAnd(IndexBits& source)
         *dest &= *source.data.getInt(index);
         ++index;
     }
+    data.setDirty();
 }
 
 void IndexBits::opOr(IndexBits& source)
@@ -262,7 +255,7 @@ void IndexBits::opOr(IndexBits& source)
         return;
 
     auto index = 0;
-    const auto end = source.data.intCount();
+    auto end = source.data.intCount();
 
     while (index < end)
     {
@@ -270,6 +263,7 @@ void IndexBits::opOr(IndexBits& source)
         *dest |= *source.data.getInt(index);
         ++index;
     }
+    data.setDirty();
 }
 
 void IndexBits::opAndNot(IndexBits& source)
@@ -278,7 +272,10 @@ void IndexBits::opAndNot(IndexBits& source)
         return;
 
     auto index = 0;
-    const auto end = source.data.intCount();
+    auto end = source.data.intCount();
+    // whichever is bigger
+    if (data.intCount() > end)
+        end = data.intCount();
 
     while (index < end)
     {
@@ -286,6 +283,7 @@ void IndexBits::opAndNot(IndexBits& source)
         *dest = *dest & ~(*source.data.getInt(index));
         ++index;
     }
+    data.setDirty();
 }
 
 void IndexBits::opNot()
@@ -302,6 +300,7 @@ void IndexBits::opNot()
         *dest = ~(*dest);
         ++index;
     }
+    data.setDirty();
 }
 
 /*
