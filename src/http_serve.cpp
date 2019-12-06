@@ -146,7 +146,7 @@ namespace openset::web
 
     void HttpServe::makeWorkers()
     {
-        const auto workerCount = 8; // TODO make a switch std::thread::hardware_concurrency();
+        const auto workerCount = 16; // TODO make a switch std::thread::hardware_concurrency();
 
         workers.reserve(workerCount);
         threads.reserve(workerCount);

@@ -86,6 +86,10 @@ namespace openset
                 int limit,
                 const std::function<bool(SortKeyOneProp_s*, int*)>& filterCallback)
             {
+                if (limit < 0)
+                    limit = 10;
+                if (limit > 10000)
+                    limit = 10000;
                 if (const auto& iter = indexes.find(propIndex); iter != indexes.end())
                     return iter->second->serialize(descending, limit, filterCallback);
                 return {};

@@ -367,7 +367,7 @@ public:
         serializeOver.set(&key);
 
         serializeList.clear();
-        serializeList.reserve(distinct);
+        serializeList.reserve(limit);
 
         serializeLimit = limit;
         serializeCB = filterCallBack;
