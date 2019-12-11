@@ -193,6 +193,14 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
         }
 
         columns->setProperty(columnEnum, name, colType, isSet, isProp);
+
+        const auto bucket = n->xPathInt("/bucket", 1);
+        if (colType == PropertyTypes_e::doubleProp)
+        {
+            const auto prop = columns->getProperty(name);
+            prop->bucket = bucket * 10000;
+        }
+
         ++columnEnum;
     }
 
@@ -416,6 +424,10 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
                 columnRecord->set("is_set", true);
             if (c.isCustomerProperty)
                 columnRecord->set("is_customer", true);
+
+            if (c.type == PropertyTypes_e::doubleProp)
+                columnRecord->set("bucket", static_cast<int64_t>(c.bucket / 10000));
+
         }
 
     auto eventOrder = response.setArray("event_order");

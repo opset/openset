@@ -6,6 +6,8 @@
 #include "common.h"
 #include "cjson/cjson.h"
 #include "str/strtools.h"
+#include "threads/spinlock.h"
+#include "threads/locks.h"
 #include "sba/sba.h"
 #include "oloop_insert.h"
 #include "oloop_query.h"
@@ -43,7 +45,9 @@ enum class queryFunction_e : int32_t
     status,
     query,
     count,
-}; /*
+};
+
+/*
 * The magic FORK function.
 *
 * This will add a `is_fork: true` member to the request
@@ -56,7 +60,7 @@ enum class queryFunction_e : int32_t
 * Note: a single node could have any number of partitions, these partitions
 * are merged into a single result by `is_fork` nodes before return the
 * result set. This greatly reduces the number of data sets that need to be held
-* in memory and marged by the originator.
+* in memory and merged by the originator.
 */
 shared_ptr<cjson> forkQuery(
     const Database::TablePtr& table,
@@ -120,6 +124,7 @@ shared_ptr<cjson> forkQuery(
     {
         const auto backOff = (retryCount * retryCount) * 20;
         ThreadSleep( backOff < 10000 ? backOff : 10000);
+
         return forkQuery(
             table,
             message,
@@ -166,6 +171,7 @@ shared_ptr<cjson> forkQuery(
                         // clean up all those resultSet*
                         for (auto res : resultSets)
                             delete res;
+
                         return nullptr;
                     }
                     result.routeError = true;
@@ -190,15 +196,17 @@ shared_ptr<cjson> forkQuery(
             // clean up all those resultSet*
             for (auto res : resultSets)
                 delete res;
+
             return nullptr;
         }
     }
 
     const auto gatherEndTime = Now();
+    auto resultJson = make_shared<cjson>();
 
     if (scriptMode == openset::query::ScriptMode_e::customers)
     {
-        auto resultJson = make_shared<cjson>();
+
         const auto toJsonStartTime = Now();
         ResultMuxDemux::resultFlatColumnsToJson(resultColumnCount, setCount, resultSets, resultJson.get());
         const auto toJsonEndTime = Now();
@@ -247,7 +255,6 @@ shared_ptr<cjson> forkQuery(
         return resultJson;
     }
 
-    auto resultJson = make_shared<cjson>();
     ResultMuxDemux::resultSetToJson(resultColumnCount, setCount, resultSets, resultJson.get());
 
     // free up the responses
@@ -270,10 +277,12 @@ shared_ptr<cjson> forkQuery(
     default: ;
     }
 
-    ResultMuxDemux::jsonResultTrim(resultJson.get(), trim); // local function to fill Meta data in result JSON
+    ResultMuxDemux::jsonResultTrim(resultJson.get(), trim);
+
+    // local function to fill Meta data in result JSON
     const auto fillMeta = [](const openset::query::VarList& mapping, cjson* jsonArray)
     {
-        for (auto c : mapping)
+        for (auto& c : mapping)
         {
             auto tNode = jsonArray->pushObject();
             if (c.modifier == openset::query::Modifiers_e::var)
@@ -335,7 +344,9 @@ shared_ptr<cjson> forkQuery(
                 }
             }
         }
-    }; // add status nodes to JSON document
+    };
+
+    // add status nodes to JSON document
 
     //auto metaJson = resultJson->setObject("info");
     //auto dataJson = metaJson->setObject("data");
@@ -348,6 +359,7 @@ shared_ptr<cjson> forkQuery(
     //metaJson->set("serialize_time", serialTime);
     //metaJson->set("total_time", elapsed);
     Logger::get().info("RpcQuery on " + table->getName());
+
     return resultJson;
 }
 
@@ -598,6 +610,7 @@ void RpcQuery::report(const openset::web::MessagePtr& message, const RpcMapping&
     //
     std::vector<ResultSet*> resultSets;
     resultSets.reserve(partitions->getWorkerCount());
+
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
             new ResultSet(
@@ -1853,6 +1866,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
                 bufferLength);
 
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+            PoolMem::getPool().freePtr(buffer);
 
             Logger::get().info("Fork query on " + table->getName());
 
@@ -2282,13 +2296,13 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
                 bufferLength);
 
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+            PoolMem::getPool().freePtr(buffer);
 
             Logger::get().info("Fork query on " + table->getName());
 
             // clean up stray resultSets
             for (auto resultSet : resultSets)
                 delete resultSet;
-            PoolMem::getPool().freePtr(buffer);
 
             // this will delete the shuttle, and clear up the CellQueryResult_s vector
             release_cb();

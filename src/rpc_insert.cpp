@@ -151,7 +151,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         else
             uuid = personNode->getInt();
 
-        const auto destination = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
+        const auto destination = cast<int32_t>(MakeHash(uuid) % partitions->getPartitionMax());
 
         int64_t len;
         auto logSize = SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));

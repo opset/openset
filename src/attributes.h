@@ -140,11 +140,11 @@ namespace openset::db
         explicit Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties);
         ~Attributes();
 
-        IndexBits* getBits(const int32_t propIndex, const int64_t value);
+        IndexBits* getBits(const int32_t propIndex, int64_t value);
 
         void addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state);
 
-        Attr_s* getMake(const int32_t propIndex, const int64_t value);
+        Attr_s* getMake(const int32_t propIndex, int64_t value);
         Attr_s* getMake(const int32_t propIndex, const string& value);
 
         Attr_s* get(const int32_t propIndex, const int64_t value) const;

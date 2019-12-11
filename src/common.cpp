@@ -22,6 +22,11 @@ int64_t MakeHash(const char* buffer)
     return XXH64(buffer, strlen(buffer), HASH_SEED);
 }
 
+int64_t MakeHash(const int64_t value)
+{
+    return XXH64(static_cast<const void*>(&value), sizeof(int64_t), HASH_SEED);
+}
+
 int64_t MakeHash(const std::string& buffer)
 {
     return XXH64(buffer.c_str(), buffer.length(), HASH_SEED);

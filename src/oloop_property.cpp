@@ -23,7 +23,8 @@ OpenLoopProperty::OpenLoopProperty(
         table(table),
         result(result),
         instance(instance)
-{}
+{
+}
 
 OpenLoopProperty::~OpenLoopProperty()
 {
@@ -95,7 +96,7 @@ void OpenLoopProperty::prepare()
         return;
     }
 
-    addRootTotal();
+    createRootNode();
 
     // turn ints and doubles into their bucketed name
     const auto toBucket = [&](const int64_t value)->int64_t
@@ -182,7 +183,7 @@ void OpenLoopProperty::prepare()
     groupsIter = groups.begin();
 }
 
-void OpenLoopProperty::addRootTotal()
+void OpenLoopProperty::createRootNode()
 {
     rowKey.clear();
 
@@ -206,6 +207,16 @@ void OpenLoopProperty::addRootTotal()
         break;
         default: ;
     }
+
+    result->getMakeAccumulator(rowKey);
+}
+
+void OpenLoopProperty::addRootTotal()
+{
+    rowKey.clear();
+
+    rowKey.key[0] = result->addLocalTextAndHash(config.propName);
+    rowKey.types[0] = ResultTypes_e::Text;
 
     const auto aggs = result->getMakeAccumulator(rowKey);
 

@@ -9,6 +9,8 @@
 const int MAX_RECURSE_COUNT = 10;
 const int STACK_DEPTH       = 64;
 
+const int64_t StarHash = MakeHash("*");
+
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode)
     : macros(macros),
       rowKey(),
@@ -29,6 +31,15 @@ void openset::query::Interpreter::setResultObject(result::ResultSet* resultSet)
 {
     result = resultSet;
     result->addLocalText(NONE, "n/a");
+    result->addLocalText(StarHash, "*");
+
+    if (macros.fastTally)
+    {
+        rowKey.clear();
+        rowKey.key[0] = StarHash;
+        rowKey.types[0] = result::ResultTypes_e::Text;
+        fastTallyAccumulator = result->getMakeAccumulator(rowKey);
+    }
 }
 
 void openset::query::Interpreter::configure()
@@ -170,7 +181,7 @@ void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 
 void openset::query::Interpreter::tally(const int paramCount, const Col_s* columns, const int currentRow)
 {
-    if (paramCount <= 0)
+    if (paramCount <= 0 && !macros.fastTally)
         return;
 
     // this will ensure non-int types are represented as ints
@@ -315,8 +326,6 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
         }
     };
 
-    rowKey.clear();
-
     // run lambdas result columns
     if (macros.vars.columnLambdas.size())
     {
@@ -356,6 +365,15 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
         }
     }
 
+    if (macros.fastTally)
+    {
+        aggColumns(fastTallyAccumulator);
+        return;
+    }
+
+     rowKey.clear();
+
+
     if (macros.scriptMode == ScriptMode_e::customers)
     {
         auto depth = 0;
@@ -375,7 +393,7 @@ void openset::query::Interpreter::tally(const int paramCount, const Col_s* colum
         {
             if (depth == paramCount || (item.typeOf() != cvar::valueType::STR && item == NONE))
                 break;
-            rowKey.key[depth]   = fixToInt(item, rowKey.types[depth]);
+            rowKey.key[depth] = fixToInt(item, rowKey.types[depth]);
             aggColumns(result->getMakeAccumulator(rowKey));
             ++depth;
         }
@@ -2064,7 +2082,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             ++stackPtr;
             break;
         case OpCode_e::PSHLITFLT: // push a floating point value
-            *stackPtr = cast<double>(inst->value) / cast<double>(1'000'000);
+            *stackPtr = cast<double>(inst->value) / cast<double>(10'000);
             ++stackPtr;
             break;
         case OpCode_e::PSHLITNUL: // push a null/none

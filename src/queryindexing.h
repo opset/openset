@@ -54,12 +54,12 @@ namespace openset
                 int partitionNumber,
                 int stopAtBit);
 
-            openset::db::IndexBits compositeBits(const db::Attributes::listMode_e mode);
+            openset::db::IndexBits compositeBits(const db::Attributes::listMode_e mode, bool& countable);
 
-            openset::db::IndexBits* getIndex(std::string name, bool &countable);
+            openset::db::IndexBits* getIndex(const std::string& name, bool &countable);
 
         private:
-            openset::db::IndexBits buildIndex(HintOpList &index, bool countable);
+            openset::db::IndexBits buildIndex(HintOpList &index, bool& countable);
         };
     };
 };

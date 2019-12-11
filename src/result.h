@@ -55,29 +55,16 @@ namespace openset
                 key[1]   = NONE;
                 key[2]   = NONE;
                 key[3]   = NONE;
-                //key[4]   = NONE;
-                //key[5]   = NONE;
-                //key[6]   = NONE;
-                //key[7]   = NONE;
                 types[0] = ResultTypes_e::Int;
                 types[1] = ResultTypes_e::Int;
                 types[2] = ResultTypes_e::Int;
                 types[3] = ResultTypes_e::Int;
-                //types[4] = ResultTypes_e::Int;
-                //types[5] = ResultTypes_e::Int;
-                //types[6] = ResultTypes_e::Int;
-                //types[7] = ResultTypes_e::Int;
             }
 
             void clearFrom(const int index)
             {
                 for (auto iter = key + index; iter < key + keyDepth; ++iter)
                     *iter = NONE;
-            }
-
-            void makeReady()
-            {
-                //hash = MakeHash(reinterpret_cast<char*>(key), keyDepth * sizeof(int64_t));
             }
 
             size_t makeHash() const

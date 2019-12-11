@@ -99,6 +99,7 @@ namespace openset
             ~OpenLoopProperty() final;
 
             void prepare() final;
+            void createRootNode();
             bool run() final;
             void addRootTotal();
             void partitionRemoved() final;

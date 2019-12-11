@@ -293,6 +293,7 @@ namespace openset::query
 
         db::Properties* tableColumns { nullptr };
         bool usesSessions { false };
+        bool fastTally { false };
         std::string rawScript;
 
         Blocks blocks;
@@ -2974,12 +2975,13 @@ namespace openset::query
         {
 
             if (words.size() == 1)
-                throw QueryParse2Error_s {
+                fastTally = true;
+                /*throw QueryParse2Error_s {
                     errors::errorClass_e::parse,
                     errors::errorCode_e::syntax_error,
                     "expecting at least one group after `<<`",
                     lastDebug
-                };
+                };*/
 
             // the `<<` statement doesn't take brackets, so we are adding them before
             // we call parseParams
@@ -3188,7 +3190,7 @@ namespace openset::query
                     finCode.emplace_back(
                         OpCode_e::PSHLITFLT,
                         0,
-                        static_cast<int64_t>(midOp.value1 * 1'000'000.0), // float value
+                        static_cast<int64_t>(midOp.value1 * 10'000.0), // float value
                         0,
                         debug);
                     break;
@@ -3518,6 +3520,7 @@ namespace openset::query
 
             // lets us know if we are read-only
             inMacros.writesProps = writesProps;
+            inMacros.fastTally = fastTally;
 
             index = 0;
             for (auto& v : stringLiterals)

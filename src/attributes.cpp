@@ -23,8 +23,11 @@ Attributes::~Attributes()
     }
 }
 
-IndexBits* Attributes::getBits(const int32_t propIndex, const int64_t value)
+IndexBits* Attributes::getBits(const int32_t propIndex, int64_t value)
 {
+    // apply bucketing to double values
+    if (const auto propInfo = properties->getProperty(propIndex); propInfo && propInfo->type == PropertyTypes_e::doubleProp)
+        value = static_cast<int64_t>(value / propInfo->bucket) * propInfo->bucket;
 
     if (const auto bits = indexCache.get(propIndex, value); bits)
         return bits;
@@ -72,8 +75,11 @@ void Attributes::addChange(const int64_t customerId, const int32_t propIndex, co
     changeIndex.emplace(key, std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
-Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
+Attr_s* Attributes::getMake(const int32_t propIndex, int64_t value)
 {
+    if (const auto propInfo = properties->getProperty(propIndex); propInfo && propInfo->type == PropertyTypes_e::doubleProp)
+        value = static_cast<int64_t>(value / propInfo->bucket) * propInfo->bucket;
+
     auto key = attr_key_s( propIndex, value );
 
     if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)

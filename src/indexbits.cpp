@@ -255,7 +255,7 @@ void IndexBits::opOr(IndexBits& source)
         return;
 
     auto index = 0;
-    auto end = source.data.intCount();
+    const auto end = source.data.intCount();
 
     while (index < end)
     {

@@ -23,6 +23,11 @@ namespace openset
         class AttributeBlob;
         class IndexBits;
     }
+
+    namespace result
+    {
+        class Accumulator;
+    }
 }
 
 namespace openset
@@ -153,6 +158,8 @@ namespace openset
 
             bool propsChanged{ false };
 
+            result::Accumulator* fastTallyAccumulator { nullptr };
+
             // counters
             int loopCount{ 0 };
             int recursion{ 0 };
@@ -184,7 +191,6 @@ namespace openset
             // object global non-heap container for marhal function parameters
             // regular function local vectors were impacting performance > 6%
             MarshalParams marshalParams = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
 
             // distinct counting (with property as key)
             ValuesSeen eventDistinct; // distinct to group id

@@ -647,7 +647,7 @@ namespace openset
             HintOp_s(const HintOp_e op, const double value)
                 : op(op),
                   value(value),
-                  hash(static_cast<int64_t>(value * 1'000'000LL))
+                  hash(static_cast<int64_t>(value * 10'000LL))
             {}
 
             HintOp_s(const HintOp_e op, const string& text)
@@ -912,7 +912,6 @@ namespace openset
             std::string capturedIndex;
             std::string rawIndex;
             HintOpList index;
-            bool indexIsCountable { false };
             string segmentName;
             SegmentList segments;
             MarshalSet marshalsReferenced;
@@ -923,6 +922,7 @@ namespace openset
 
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
+            bool fastTally { false };
             bool isSegment { false };
             bool useProps { false };      // uses customer props
             bool writesProps { true };    // script can change props
@@ -933,6 +933,7 @@ namespace openset
             bool useSessions { false };   // uses session functions, we can cache these
             bool useStampedRowIds { false }; // count using row stamp rather than row uniqueness
             bool onInsert { false };
+            bool indexIsCountable { false };
             int zIndex { 100 };
         };
 
