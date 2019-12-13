@@ -151,7 +151,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         else
             uuid = personNode->getInt();
 
-        const auto destination = cast<int32_t>(MakeHash(uuid) % partitions->getPartitionMax());
+        const auto destination = cast<int32_t>(cast<uint64_t>(MakeHash(uuid)) % partitions->getPartitionMax());
 
         int64_t len;
         auto logSize = SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));
@@ -216,7 +216,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         }
     }
 
-    if (SideLog::getSideLog().getLogSize() < 25000)
+    if (SideLog::getSideLog().getLogSize() < 50000)
     {
         message->reply(http::StatusCode::success_ok, response);
     }
@@ -224,7 +224,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
     {
         thread work([=]()
         {
-            while (SideLog::getSideLog().getLogSize() > 25000)
+            while (SideLog::getSideLog().getLogSize() > 50000)
                 ThreadSleep(5);
 
             message->reply(http::StatusCode::success_ok, response);

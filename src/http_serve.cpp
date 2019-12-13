@@ -200,11 +200,8 @@ namespace openset::web
 
     void HttpServe::makeWorkers()
     {
-        otherWorkers.reserve(32);
-        queryWorkers.reserve(8);
-        threads.reserve(40);
 
-        for (auto i = 0; i < 32; i++)
+        for (auto i = 0; i < 64; i++)
         {
             otherWorkers.emplace_back(std::make_shared<webWorker>(this, i, false));
             threads.emplace_back(thread(&webWorker::runner, otherWorkers[i]));

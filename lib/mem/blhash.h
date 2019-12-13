@@ -397,7 +397,7 @@ private:
                     serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
                 {
                     serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));
-                    if (serializeList.size() == serializeLimit)
+                    if (serializeList.size() >= serializeLimit)
                     {
                         serializeLimit = -1;
                         return;
@@ -426,7 +426,7 @@ private:
                     serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
                 {
                     serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));
-                    if (serializeList.size() == serializeLimit)
+                    if (serializeList.size() >= serializeLimit)
                     {
                         serializeLimit = -1;
                         return;
