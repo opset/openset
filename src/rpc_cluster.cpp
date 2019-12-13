@@ -62,20 +62,32 @@ void RpcCluster::init(const openset::web::MessagePtr message, const RpcMapping& 
     // update config
     {
         csLock lock(globals::running->cs);
+
+        if (partitions->isRunning())
+        {
+            RpcError(
+                openset::errors::Error{
+                    openset::errors::errorClass_e::config,
+                    openset::errors::errorCode_e::general_config_error,
+                    "This instance is already part of a cluster (2)" },
+                    message);
+            return;
+        }
+
         globals::running->setNodeName(openset::config::createName());
         globals::running->state = openset::config::NodeState_e::active;
         globals::running->partitionMax = partitionMax;
         Logger::get().info("instance has been named '" + globals::running->nodeName + "'.");
+
+        openset::globals::mapper->partitionMap.clear();
+        for (auto i = 0; i < partitionMax; ++i)
+            openset::globals::mapper->partitionMap.setOwner(i, globals::running->nodeId);
+
+        // set number of partitions
+        partitions->setPartitionMax(partitionMax);
+        // set them running - this returns right away
+        partitions->startAsync();
     }
-
-    openset::globals::mapper->partitionMap.clear();
-    for (auto i = 0; i < partitionMax; ++i)
-        openset::globals::mapper->partitionMap.setOwner(i, globals::running->nodeId);
-
-    // set number of partitions
-    partitions->setPartitionMax(partitionMax);
-    // set them running - this return right away
-    partitions->startAsync();
 
     partitions->mapPartitionsToAsyncWorkers();
 

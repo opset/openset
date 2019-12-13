@@ -1,16 +1,228 @@
 #pragma once
 
+#include <list>
+
 #include "common.h"
+#include "sba/sba.h"
+#include <cassert>
+#include "dbtypes.h"
 
 namespace openset
 {
     namespace db
     {
+        const int64_t BitArraySize = 126;
+
+        struct IndexPageMemory_s
+        {
+            int64_t bitArray[BitArraySize];
+        };
+
+        const int64_t IndexPageRecordSize = sizeof(IndexPageMemory_s);
+        const int64_t IndexPageDataSize = sizeof(uint64_t) * BitArraySize;
+        const int64_t IndexBitsPerPage = BitArraySize * 64;
+        const int64_t Overflow = 64;
+
+        struct CompPageMemory_s
+        {
+            int64_t index { 0 };
+            CompPageMemory_s* next { nullptr };
+            char compressedData[IndexPageDataSize];
+        };
+
+        const int64_t CompPageHeaderSize = 16;
+
+        class IndexMemory
+        {
+            using IndexPageList = std::vector<IndexPageMemory_s*>;
+            using RawPageList = std::vector<CompPageMemory_s*>;
+
+            IndexPageList indexPages;
+            RawPageList rawPages;
+
+            IndexPageMemory_s* lastIndex { nullptr };
+
+            bool dirty { false };
+
+        public:
+
+            IndexMemory() = default;
+
+            IndexMemory(IndexMemory&& source) noexcept
+            {
+                lastIndex = nullptr;
+                indexPages = std::move(source.indexPages);
+                rawPages = std::move(source.rawPages);
+            }
+
+            IndexMemory(const IndexMemory& source)
+            {
+                // raw pages are not copied
+                lastIndex = nullptr;
+
+                for (auto sourcePage : source.indexPages)
+                {
+                    const auto page = reinterpret_cast<IndexPageMemory_s*>(PoolMem::getPool().getPtr(IndexPageRecordSize));
+                    memcpy(page, sourcePage, IndexPageRecordSize);
+                    indexPages.push_back(page);
+                }
+            }
+
+            IndexMemory(IndexMemory* source)
+            {
+                // raw pages are not copied
+                lastIndex = nullptr;
+
+                for (auto sourcePage : source->indexPages)
+                {
+                    const auto page = reinterpret_cast<IndexPageMemory_s*>(PoolMem::getPool().getPtr(IndexPageRecordSize));
+                    memcpy(page, sourcePage, IndexPageRecordSize);
+                    indexPages.push_back(page);
+                }
+            }
+
+            IndexMemory& operator=(IndexMemory&& source) noexcept
+            {
+                lastIndex = nullptr;
+                indexPages = std::move(source.indexPages);
+                rawPages = std::move(source.rawPages);
+
+                return *this;
+            }
+
+            IndexMemory& operator=(const IndexMemory& source)
+            {
+                // raw pages are not copied
+                reset();
+                lastIndex = nullptr;
+
+                for (auto sourcePage : source.indexPages)
+                {
+                    const auto page = reinterpret_cast<IndexPageMemory_s*>(PoolMem::getPool().getPtr(IndexPageRecordSize));
+                    memcpy(page, sourcePage, IndexPageRecordSize);
+                    indexPages.push_back(page);
+                }
+
+                return *this;
+            }
+
+            ~IndexMemory()
+            {
+                reset();
+            }
+
+            void reset()
+            {
+                for (auto page : indexPages)
+                    PoolMem::getPool().freePtr(page);
+                indexPages.clear();
+                rawPages.clear();
+                dirty = false;
+                lastIndex = nullptr;
+            }
+
+            int64_t intCount() const
+            {
+                return BitArraySize * static_cast<int64_t>(indexPages.size());
+            }
+
+            void setDirty()
+            {
+                dirty = true;
+            }
+
+            bool isDirty() const
+            {
+                return dirty;
+            }
+
+            int64_t* getBitInt(const int64_t bitIndex)
+            {
+                const auto page = getPage(bitIndex);
+                lastIndex = page;
+                const auto intIndex = (bitIndex / 64LL) % BitArraySize; // convert bit index into int64 index
+
+                return page->bitArray + intIndex;
+            }
+
+            int64_t* getInt(const int64_t intIndex)
+            {
+                const auto page = getPage(intIndex * 64LL);
+                lastIndex = page;
+                const auto indexInPage = intIndex % BitArraySize;
+
+                return page->bitArray + indexInPage;
+            }
+
+            IndexPageMemory_s* getPage(const int64_t bitIndex)
+            {
+                const auto pageIndex = bitIndex / IndexBitsPerPage; // convert bit index into page in dex
+
+                while (pageIndex >= static_cast<int64_t>(indexPages.size()))
+                {
+                    const auto page = reinterpret_cast<IndexPageMemory_s*>(PoolMem::getPool().getPtr(IndexPageRecordSize));
+                    memset(page->bitArray, 0, IndexPageDataSize);
+                    indexPages.push_back(page);
+                }
+
+                return indexPages.at(pageIndex);
+            }
+
+            IndexPageMemory_s* getPageByPageIndex(const int64_t pageIndex, const bool clean = true)
+            {
+                while (pageIndex >= static_cast<int64_t>(indexPages.size()))
+                {
+                    const auto page = reinterpret_cast<IndexPageMemory_s*>(PoolMem::getPool().getPtr(IndexPageRecordSize));
+                    if (clean)
+                        memset(page->bitArray, 0, IndexPageDataSize);
+                    indexPages.push_back(page);
+                }
+
+                return indexPages.at(pageIndex);
+            }
+
+            CompPageMemory_s* getRawPage(const int pageIndex)
+            {
+                for (auto page : rawPages)
+                {
+                    if (page->index > pageIndex)
+                        break;
+                    if (page->index == pageIndex)
+                        return page;
+                }
+
+                return nullptr;
+            }
+
+            static int pagePopulation(IndexPageMemory_s* page)
+            {
+                auto source = static_cast<int64_t*>(page->bitArray);
+                const auto end = source + BitArraySize;
+
+                int64_t pop = 0;
+
+                while (source < end)
+                {
+            #ifdef _MSC_VER
+                    pop += __popcnt64(*source);
+            #else
+                    pop += __builtin_popcountll(*source);
+            #endif
+                    ++source;
+                }
+
+                return static_cast<int>(pop);
+            }
+
+            void decompress(char* compressedData);
+            char* compress();
+        };
+
+
         class IndexBits
         {
         public:
-            uint64_t* bits;
-            int32_t ints; // length in int64's
+            IndexMemory data;
             bool placeHolder;
 
             IndexBits();
@@ -30,77 +242,93 @@ namespace openset
 
             // takes buffer to compressed data and actual size as parameters
             // note: actual size is number of long longs (in64_t)
-            void mount(char* compressedData, int32_t integers, int32_t offset, int32_t length, int32_t linId);
-
-            int64_t getSizeBytes() const;
+            void mount(char* compressedData);
 
             // returns a POOL buffer ptr, and the number of bytes
-            char* store(int64_t& compressedBytes, int64_t& linId, int32_t& offset, int32_t& length, int compRatio = 1);
+            char* store();
 
-            void grow(int64_t required, bool exact = true);
+            void setSizeByBit(int64_t index);
+            void bitSet(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                *bits |= BITMASK[index & 63ULL]; // mod 64
+                data.setDirty();
+            }
 
-            void lastBit(int64_t index);
-            void bitSet(int64_t index);
-            void bitClear(int64_t index);
-            bool bitState(int64_t index) const;
+            void bitClear(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                *bits &= ~(BITMASK[index & 63ULL]); // mod 64
+                data.setDirty();
+            }
 
-            int64_t population(int stopBit) const;
+            bool bitState(const int64_t index)
+            {
+                const auto bits = data.getBitInt(index);
+                return ((*bits) & BITMASK[index & 63ULL]);
+            }
+
+            int64_t population(const int64_t stopBit);
 
             void opCopy(const IndexBits& source);
             void opCopyNot(IndexBits& source);
             void opAnd(IndexBits& source);
             void opOr(IndexBits& source);
             void opAndNot(IndexBits& source);
-            void opNot() const;
+            void opNot();
 
-            bool linearIter(int64_t& linId, int64_t stopBit) const;
+            bool linearIter(int64_t& linId, int64_t stopBit);
+        };
 
-            class BitProxy
+        class IndexLRU
+        {
+            using Key = std::pair<int64_t, int64_t>;
+            using Value = std::pair<IndexBits*, std::list<Key>::iterator>;
+
+            std::list<Key> items;
+            unordered_map <Key, Value> keyValuesMap;
+            int cacheSize;
+
+        public:
+            IndexLRU(int cacheSize) :
+                cacheSize(cacheSize)
+            {}
+
+            std::tuple<int64_t, int64_t, IndexBits*> set(const int64_t propIndex, const int64_t value, IndexBits* bits)
             {
-            public:
-                IndexBits* bits;
-                int idx;
-                int value;
+                const Key key(propIndex, value);
 
-                BitProxy(IndexBits* bits, const int idx)
-                    : bits(bits),
-                      idx(idx)
+                items.push_front(key);
+
+                const Value listMap(bits, items.begin());
+                keyValuesMap[key] = listMap;
+
+                if (keyValuesMap.size() > cacheSize)
                 {
-                    value = bits->bitState(idx);
+                    const auto evictedKey = items.back();
+                    const auto evicted    = keyValuesMap[evictedKey].first;
+                    keyValuesMap.erase(evictedKey);
+                    items.pop_back();
+                    return { evictedKey.first, evictedKey.second, evicted };
                 }
 
-                ~BitProxy()
-                {
-                    cout << "destroyed" << endl;
-                }
-
-                void operator=(const int rhs)
-                {
-                    value = rhs;
-                    if (rhs)
-                        bits->bitSet(idx);
-                    else
-                        bits->bitClear(idx);
-                }
-
-                operator int() const
-                {
-                    return value;
-                }
-            };
-
-            static string debugBits(const IndexBits& bits, int limit = 64);
-
-            BitProxy operator[](const int idx)
-            {
-                return BitProxy(this, idx);
+                return { 0, 0, nullptr };
             }
 
-            friend std::ostream& operator<<(std::ostream& os, const IndexBits& source)
+            IndexBits* get(const int64_t propIndex, const int64_t value)
             {
-                os << debugBits(source, static_cast<int>(os.width() ? os.width() : 128));
-                return os;
+                const Key key(propIndex, value);
+
+                if (const auto& iter = keyValuesMap.find(key); iter != keyValuesMap.end())
+                {
+                    items.erase(iter->second.second);
+                    items.push_front(key);
+                    iter->second.second = items.begin();
+                    return iter->second.first;
+                }
+                return nullptr;
             }
+
         };
     };
 };

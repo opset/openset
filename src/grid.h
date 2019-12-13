@@ -6,12 +6,12 @@
 
 #include "common.h"
 #include "property_mapping.h"
-
 #include "var/var.h"
 #include "cjson/cjson.h"
 
 #include "robin_hood.h"
-
+#include "customer_props.h"
+#include "../lib/sba/sba.h"
 
 namespace openset
 {
@@ -22,6 +22,7 @@ namespace openset
         class Attributes;
         class AttributeBlob;
         class PropertyMapping;
+        class CustomerProps;
         class Grid;
         struct PropertyMap_s;
         const int64_t int16_min = numeric_limits<int16_t>::min();
@@ -122,7 +123,6 @@ namespace openset
         {
         private:
             using LineNodes = vector<cjson*>;
-            using ExpandedRows = vector<LineNodes>;
             using SetVector = vector<int64_t>;
 #pragma pack(push,1)
             struct Cast_s
@@ -134,7 +134,8 @@ namespace openset
 
             const static int sizeOfCastHeader = sizeof(Cast_s::propIndex);
             const static int sizeOfCast = sizeof(Cast_s);
-            PropertyMap_s* propertyMap { nullptr }; // we will get our memory via stack
+            PropertyMap_s* propertyMap { nullptr };
+            // we will get our memory via stack
             // so rows have tight cache affinity
             HeapStack mem;
             Rows rows;
@@ -148,15 +149,13 @@ namespace openset
             Table* table { nullptr };
             Attributes* attributes { nullptr };
             AttributeBlob* blob { nullptr };
-
             bool hasInsert { false };
+
+            CustomerProps customerProps;
 
             mutable IndexDiffing diff;
 
-            // mutable - sorry
-            mutable int64_t propHash { 0 };
-            mutable HeapStack propMem;
-        public:
+            public:
             Grid() = default;
             ~Grid();
 
@@ -171,8 +170,6 @@ namespace openset
             bool mapSchema(Table* tablePtr, Attributes* attributesPtr);
             bool mapSchema(Table* tablePtr, Attributes* attributesPtr, const vector<string>& propertyNames);
             void setSessionTime(const int64_t sessionTime) { this->sessionTime = sessionTime; }
-            cvar getProps(const bool propsMayChange);
-            void setProps(cvar& var);
             void mount(PersonData_s* personData);
             void prepare();
         private:
@@ -225,6 +222,11 @@ namespace openset
             PersonData_s* getMeta() const { return rawData; }
             PropertyMap_s* getPropertyMap() const { return propertyMap; }
             AttributeBlob* getAttributeBlob() const;
+
+            openset::db::CustomerProps * getCustomerPropsManager();
+
+            openset::db::CustomerPropMap* getCustomerProps();
+            void setCustomerProps();
 
             cjson toJSON(); // brings object back to zero state
             void reinitialize();

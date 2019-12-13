@@ -49,6 +49,7 @@ void openset::db::Table::initialize()
     properties.setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 
     createMissingPartitionObjects();
+    Logger::get().info("table created '" + name + "'.");
 }
 
 void Table::createMissingPartitionObjects()
@@ -98,6 +99,12 @@ void Table::releasePartitionObjects(const int32_t partition)
         zombies.push(part->second);
         partitions.erase(partition);
     }
+}
+
+void Table::propagateCustomerIndexes()
+{
+    for (auto& part : partitions)
+        part.second->attributes.createCustomerPropIndexes();
 }
 
 void Table::setSegmentRefresh(

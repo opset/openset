@@ -68,47 +68,95 @@ namespace openset::web
 
             std::shared_ptr<Message> message;
 
-            { // scope for lock
+            if (queryWorker)
+            {
                 // wait on a job to appear, verify it's there, and run it.
-                unique_lock<std::mutex> waiter(server->readyLock);
-                if (server->messagesQueued == 0)
-                    server->messageReady.wait(waiter,
-                        [&]()
-                { // oh yeah a lambda!
-                    return static_cast<int32_t>(server->messagesQueued) != 0;
-                });
+                {
+                    unique_lock<std::mutex> waiter(server->queryReadyLock);
+                    if (server->queryMessagesQueued == 0 || server->runningQueries >= 3)
+                        server->queryMessageReady.wait(waiter,
+                            [&]()
+                    {
+                        return static_cast<int32_t>(server->queryMessagesQueued) != 0 && server->runningQueries < 3;
+                    });
 
-                message = server->getQueuedMessage();
-                if (!message)
-                    continue;
+                    message = server->getQueuedQueryMessage();
+                    if (!message)
+                        continue;
+                }
+
+                ++server->jobsRun;
+                ++server->runningQueries;
+                openset::comms::Dispatch(message);
+                --server->runningQueries;
+
+            }
+            else
+            {
+                {
+                    // wait on a job to appear, verify it's there, and run it.
+                    unique_lock<std::mutex> waiter(server->otherReadyLock);
+                    if (server->otherMessagesQueued == 0)
+                        server->otherMessageReady.wait(waiter,
+                            [&]()
+                    {
+                        return static_cast<int32_t>(server->otherMessagesQueued) != 0;
+                    });
+
+                    message = server->getQueuedOtherMessage();
+                    if (!message)
+                        continue;
+                }
+
+                ++server->jobsRun;
+                openset::comms::Dispatch(message);
 
             } // unlock out of scope
 
-            ++server->jobsRun;
-
-            openset::comms::Dispatch(message);
         }
     }
 
-    void HttpServe::queueMessage(std::shared_ptr<Message> message)
+    void HttpServe::queueQueryMessage(std::shared_ptr<Message> message)
     {
         csLock lock(messagesLock);
-        ++messagesQueued;
-        messages.emplace(message);
-        messageReady.notify_one();
+        ++queryMessagesQueued;
+        queryMessages.emplace(message);
+        queryMessageReady.notify_one();
     }
 
-    std::shared_ptr<Message> HttpServe::getQueuedMessage()
+    void HttpServe::queueOtherMessage(std::shared_ptr<Message> message)
+    {
+        csLock lock(messagesLock);
+        ++otherMessagesQueued;
+        otherMessages.emplace(message);
+        otherMessageReady.notify_one();
+    }
+
+    std::shared_ptr<Message> HttpServe::getQueuedOtherMessage()
     {
         csLock lock(messagesLock);
 
-        if (messages.empty())
+        if (otherMessages.empty())
             return nullptr;
 
-        --messagesQueued;
+        --otherMessagesQueued;
 
-        auto result = messages.front();
-        messages.pop();
+        auto result = otherMessages.front();
+        otherMessages.pop();
+        return result;
+    }
+
+    std::shared_ptr<Message> HttpServe::getQueuedQueryMessage()
+    {
+        csLock lock(messagesLock);
+
+        if (queryMessages.empty())
+            return nullptr;
+
+        --queryMessagesQueued;
+
+        auto result = queryMessages.front();
+        queryMessages.pop();
         return result;
     }
 
@@ -120,19 +168,25 @@ namespace openset::web
         using SharedRequestT = std::shared_ptr<typename T::Request>;
 
         server.resource["^/v1/.*$"]["GET"] = [&](SharedResponseT response, SharedRequestT request) {
-            queueMessage(std::move(MakeMessage(response, request)));
+            if (request->path.find("/v1/query/") == 0 && request->query_string.find("fork=true") == -1)
+                queueQueryMessage(std::move(MakeMessage(response, request)));
+            else
+                queueQueryMessage(std::move(MakeMessage(response, request)));
         };
 
         server.resource["^/v1/.*$"]["POST"] = [&](SharedResponseT response, SharedRequestT request) {
-            queueMessage(std::move(MakeMessage(response, request)));
+            if (request->path.find("/v1/query/") == 0 && request->query_string.find("fork=true") == -1)
+                queueQueryMessage(std::move(MakeMessage(response, request)));
+            else
+                queueOtherMessage(std::move(MakeMessage(response, request)));
         };
 
         server.resource["^/v1/.*$"]["PUT"] = [&](SharedResponseT response, SharedRequestT request) {
-            queueMessage(std::move(MakeMessage(response, request)));
+            queueOtherMessage(std::move(MakeMessage(response, request)));
         };
 
         server.resource["^/v1/.*$"]["DELETE"] = [&](SharedResponseT response, SharedRequestT request) {
-            queueMessage(std::move(MakeMessage(response, request)));
+            queueOtherMessage(std::move(MakeMessage(response, request)));
         };
 
         server.resource["^/ping$"]["GET"] = [&](SharedResponseT response, SharedRequestT request) {
@@ -146,22 +200,24 @@ namespace openset::web
 
     void HttpServe::makeWorkers()
     {
-        const auto workerCount = std::thread::hardware_concurrency();
 
-        workers.reserve(workerCount);
-        threads.reserve(workerCount);
-
-        for (auto i = 0; i < static_cast<int>(workerCount); i++)
+        for (auto i = 0; i < 64; i++)
         {
-            workers.emplace_back(std::make_shared<webWorker>(this, i));
-            threads.emplace_back(thread(&webWorker::runner, workers[i]));
+            otherWorkers.emplace_back(std::make_shared<webWorker>(this, i, false));
+            threads.emplace_back(thread(&webWorker::runner, otherWorkers[i]));
         }
 
-        Logger::get().info(to_string(workerCount) + " HTTP REST workers created.");
+        for (auto i = 0; i < 8; i++)
+        {
+            queryWorkers.emplace_back(std::make_shared<webWorker>(this, i, true));
+            threads.emplace_back(thread(&webWorker::runner, queryWorkers[i]));
+        }
+
+        Logger::get().info(" HTTP REST server created.");
 
         // detach these threads, let them do their thing in the background
-        for (auto i = 0; i < workerCount; i++)
-            threads[i].detach();
+        for (auto& thread : threads)
+            thread.detach();
     }
 
     void HttpServe::serve(const std::string& ip, const int port)

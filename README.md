@@ -8,10 +8,10 @@
 
 | Platform    | Version | Info                            | Status                                                                                                                                                                     |
 | :---------- | :-----: | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux x64   |  0.4.4  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
-| Windows x64 |  0.4.4  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
+| Linux x64   |  0.4.5  | gcc 7.2, release, debug         | [![Build Status](https://travis-ci.org/opset/openset.svg?branch=master)](https://travis-ci.org/opset/openset)                                                              |
+| Windows x64 |  0.4.5  | Visual C++ 2017, release, debug | [![Build status](https://ci.appveyor.com/api/projects/status/pr8jrhfth2bt7j6r/branch/master?svg=true)](https://ci.appveyor.com/project/SethHamilton/openset/branch/master) |
 
-:coffee: OpenSet is currently in alpha. Please see v0.4.4 release notes below.
+:coffee: OpenSet is currently in alpha. Please see v0.4.5 release notes below.
 
 # What's it do?
 
@@ -62,7 +62,7 @@ git clone https://github.com/opset/openset_samples.git
 **2. Install [Docker](https://www.docker.com/) and start OpenSet (in interactive mode).**
 
 ```bash
-docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.4
+docker run -p 8080:8080 -e OS_HOST=127.0.0.1 -e OS_PORT=8080 --rm=true -it opset/openset_x64_rel:0.4.5
 ```
 
 > **Note** The OpenSet images can always be found on [dockerhub](https://cloud.docker.com/u/opset/repository/docker/opset/openset_x64_rel).
@@ -146,7 +146,7 @@ response:
 
 > :bulb: view the event data [here](https://github.com/opset/openset_samples/blob/master/data/highstreet_events.json)
 
-**7. Let's perform an `event` query.**
+**7. Let's generate a report.**
 
 This query searches through each customer looking for matching events in a customers history.
 
@@ -156,7 +156,7 @@ A cool feature of OpenSet grouping is that all branches of the result set will b
 
 ```ruby
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/event \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/report \
 --data-binary @- << EOF | json_pp
 
 # define which properties we want to aggregate
@@ -527,7 +527,7 @@ The query then searches for the next subsequent `purchase` event and records the
 
 ```ruby
 curl \
--X POST http://127.0.0.1:8080/v1/query/highstreet/event \
+-X POST http://127.0.0.1:8080/v1/query/highstreet/report \
 --data-binary @- << EOF | json_pp
 # our osl script
 
@@ -679,6 +679,14 @@ The problem wasn't mining the data, the problem was doing so in a timely fashion
 Ultimately DeepMetrix had to say no to Bud, but that failure planted a seed.
 
 # Release Notes
+
+### 0.4.5
+
+- the `event` query endpoint has been renamed `report`. The new name expresses the purpose of the endpoint better, as events play a role in all queries.
+- `id_type` is
+- added `customers` query. The customer query returns a list of customer id's and selected `customer properties` or computed values for each customer. The list can be paginated, and sorted on alternate indexes (defined when a table is created).
+- faster smaller indexes. The old index caused lots of memory reallocation as indexes grew. An LRU was also added to the indexing system to keep hot indexes in an uncompressed state.
+- added lamda functions in select statements. A lambda allows a select parameter to get it's value from a code. This could makes it possible to select the value of a variable or inline aggregation.
 
 ### 0.4.4
 

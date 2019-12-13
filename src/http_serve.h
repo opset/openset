@@ -174,10 +174,12 @@ namespace openset::web
     {
         HttpServe* server;
         int instance;
+        bool queryWorker;
     public:
-        webWorker(HttpServe* server, const int instance) :
+        webWorker(HttpServe* server, const int instance, bool queryWorker) :
             server(server),
-            instance(instance)
+            instance(instance),
+            queryWorker(queryWorker)
         {};
         void runner();
     };
@@ -185,22 +187,30 @@ namespace openset::web
     class HttpServe
     {
     public:
-        atomic<int> messagesQueued{ 0 };
+        atomic<int> queryMessagesQueued{ 0 };
+        atomic<int> otherMessagesQueued{ 0 };
         atomic<int64_t> jobsRun{ 0 };
+        atomic<int> runningQueries{ 0 };
         CriticalSection messagesLock;
-        queue<shared_ptr<Message>> messages;
+        queue<shared_ptr<Message>> queryMessages;
+        queue<shared_ptr<Message>> otherMessages;
 
-        mutex readyLock;
-        condition_variable messageReady;
+        mutex otherReadyLock;
+        mutex queryReadyLock;
+        condition_variable queryMessageReady;
+        condition_variable otherMessageReady;
 
         // worker pools
-        vector<shared_ptr<webWorker>> workers;
+        vector<shared_ptr<webWorker>> otherWorkers;
+        vector<shared_ptr<webWorker>> queryWorkers;
         vector<thread> threads;
 
         HttpServe() = default;
 
-        void queueMessage(std::shared_ptr<Message> message);
-        std::shared_ptr<Message> getQueuedMessage();
+        void queueQueryMessage(std::shared_ptr<Message> message);
+        void queueOtherMessage(std::shared_ptr<Message> message);
+        std::shared_ptr<Message> getQueuedOtherMessage();
+        std::shared_ptr<Message> getQueuedQueryMessage();
 
         template<typename T>
         void mapEndpoints(T& server);

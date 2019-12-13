@@ -6,11 +6,15 @@
 #include "common.h"
 #include "cjson/cjson.h"
 #include "str/strtools.h"
+#include "threads/spinlock.h"
+#include "threads/locks.h"
 #include "sba/sba.h"
 #include "oloop_insert.h"
 #include "oloop_query.h"
 #include "oloop_segment.h"
 #include "oloop_customer.h"
+#include "oloop_customer_list.h"
+#include "oloop_customer_basic.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
 #include "asyncpool.h"
@@ -41,7 +45,9 @@ enum class queryFunction_e : int32_t
     status,
     query,
     count,
-}; /*
+};
+
+/*
 * The magic FORK function.
 *
 * This will add a `is_fork: true` member to the request
@@ -54,37 +60,39 @@ enum class queryFunction_e : int32_t
 * Note: a single node could have any number of partitions, these partitions
 * are merged into a single result by `is_fork` nodes before return the
 * result set. This greatly reduces the number of data sets that need to be held
-* in memory and marged by the originator.
+* in memory and merged by the originator.
 */
 shared_ptr<cjson> forkQuery(
     const Database::TablePtr& table,
     const openset::web::MessagePtr& message,
     const int resultColumnCount,
     const int resultSetCount,
+    const openset::query::ScriptMode_e scriptMode,
     const ResultSortMode_e sortMode   = ResultSortMode_e::column,
     const ResultSortOrder_e sortOrder = ResultSortOrder_e::Desc,
-    const int sortColumn              = 0,
+    const vector<int> sortColumn      = {0},
     const int trim                    = -1,
     const int64_t bucket              = 0,
     const int64_t forceMin            = std::numeric_limits<int64_t>::min(),
-    const int64_t forceMax            = std::numeric_limits<int64_t>::min(),
+    const int64_t forceMax            = std::numeric_limits<int64_t>::max(),
     const int64_t retryCount          = 1)
 {
     auto newParams = message->getQuery();
     newParams.emplace("fork", "true");
-    const auto startTime = Now(); // special case... if we ran this query during a map change, run it again (re-fork)
+    const auto startTime = Now();
+
+    // special case... if we ran this query during a map change, run it again (re-fork)
     if (openset::globals::sentinel->wasDuringMapChange(startTime - 1, startTime))
     {
         const auto backOff = (retryCount * retryCount) * 20;
-        ThreadSleep(
-            backOff < 10'000
-                ? backOff
-                : 10'000);
+        ThreadSleep(backOff < 10'000 ? backOff : 10'000);
+
         return forkQuery(
             table,
             message,
             resultColumnCount,
             resultSetCount,
+            scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -94,9 +102,12 @@ shared_ptr<cjson> forkQuery(
             forceMax,
             retryCount + 1);
     }
-    const auto setCount = resultSetCount
-                              ? resultSetCount
-                              : 1; // call all nodes and gather results - JSON is what's coming back
+
+    const auto setCount = resultSetCount ? resultSetCount : 1;
+
+    const auto dispatchStartTime = Now();
+
+    // call all nodes and gather results - JSON is what's coming back
     // NOTE - it would be fully possible to flatten results to binary
     auto result = openset::globals::mapper->dispatchCluster(
         message->getMethod(),
@@ -105,20 +116,21 @@ shared_ptr<cjson> forkQuery(
         message->getPayload(),
         message->getPayloadLength(),
         true);
+
     const auto dispatchEndTime = Now();
+
     // special case... if we ran this query during a map change, run it again (re-fork)
     if (openset::globals::sentinel->wasDuringMapChange(startTime, dispatchEndTime))
     {
         const auto backOff = (retryCount * retryCount) * 20;
-        ThreadSleep(
-            backOff < 10000
-                ? backOff
-                : 10000);
+        ThreadSleep( backOff < 10000 ? backOff : 10000);
+
         return forkQuery(
             table,
             message,
             resultColumnCount,
             resultSetCount,
+            scriptMode,
             sortMode,
             sortOrder,
             sortColumn,
@@ -128,6 +140,10 @@ shared_ptr<cjson> forkQuery(
             forceMax,
             retryCount + 1);
     }
+
+    const auto gatherStartTime = Now();
+
+
     std::vector<ResultSet*> resultSets;
     for (auto& r : result.responses)
     {
@@ -135,14 +151,14 @@ shared_ptr<cjson> forkQuery(
             resultSets.push_back(ResultMuxDemux::internodeToResultSet(r.data, r.length));
         else
         {
-            // there is an error message from one of the participing nodes
+            // there is an error message from one of the participating nodes
             if (!r.data || !r.length)
             {
                 result.routeError = true;
             }
             else if (r.code != openset::http::StatusCode::success_ok)
             {
-                // try to capture a json error that has perculated up from the forked call.
+                // try to capture a json error that has peculated up from the forked call.
                 if (r.data && r.length && r.data[0] == '{')
                 {
                     cjson error(std::string(r.data, r.length), cjson::Mode_e::string);
@@ -150,9 +166,12 @@ shared_ptr<cjson> forkQuery(
                     {
                         message->reply(openset::http::StatusCode::client_error_bad_request, error);
                         // free up the responses
-                        openset::globals::mapper->releaseResponses(result); // clean up all those resultSet*
+                        openset::globals::mapper->releaseResponses(result);
+
+                        // clean up all those resultSet*
                         for (auto res : resultSets)
                             delete res;
+
                         return nullptr;
                     }
                     result.routeError = true;
@@ -161,6 +180,7 @@ shared_ptr<cjson> forkQuery(
                     result.routeError = true; // this will trigger the next error
             }
         }
+
         if (result.routeError)
         {
             RpcError(
@@ -169,35 +189,100 @@ shared_ptr<cjson> forkQuery(
                     openset::errors::errorCode_e::route_error,
                     "potential node failure - please re-issue the request"
                 },
-                message);                                       // free up the responses
-            openset::globals::mapper->releaseResponses(result); // clean up all those resultSet*
+                message);
+
+            // free up the responses
+            openset::globals::mapper->releaseResponses(result);
+            // clean up all those resultSet*
             for (auto res : resultSets)
                 delete res;
+
             return nullptr;
         }
     }
+
+    const auto gatherEndTime = Now();
     auto resultJson = make_shared<cjson>();
-    ResultMuxDemux::resultSetToJson(resultColumnCount, setCount, resultSets, resultJson.get()); // free up the responses
+
+    if (scriptMode == openset::query::ScriptMode_e::customers)
+    {
+
+        const auto toJsonStartTime = Now();
+        ResultMuxDemux::resultFlatColumnsToJson(resultColumnCount, setCount, resultSets, resultJson.get());
+        const auto toJsonEndTime = Now();
+
+        const auto resultNode = resultJson.get()->find("_");
+        const auto rowsInResult = resultNode ? resultNode->memberCount : 0;
+
+        // free up the responses
+        openset::globals::mapper->releaseResponses(result);
+        // clean up all those resultSet*
+        for (auto res : resultSets)
+            delete res;
+
+        const auto sortStartTime = Now();
+        ResultMuxDemux::flatColumnMultiSort(resultJson.get(), sortOrder, sortColumn);
+        const auto sortEndTime = Now();
+
+        const auto trimStartTime = Now();
+        ResultMuxDemux::jsonResultTrim(resultJson.get(), trim); // local function to fill Meta data in result JSON
+        const auto trimEndTime = Now();
+
+        cout << "dispatch: " << (dispatchEndTime - dispatchStartTime) <<
+                " gather: " << (gatherEndTime - gatherStartTime) <<
+                " json: " << (toJsonEndTime - toJsonStartTime) <<
+                " sort: " << (sortEndTime - sortStartTime) <<
+                " trim: " << (trimEndTime - trimStartTime) << endl;
+
+        const auto rowsAfterTrim = resultNode ? resultNode->memberCount : 0;
+
+        const auto info = resultJson.get()->setObject("info");
+
+        if (rowsAfterTrim != 0 && rowsInResult == rowsAfterTrim)
+        {
+            info->set("more", true);
+
+            std::string cursor =
+                to_string(resultNode->membersTail->at(sortColumn[0])->getInt()) + "," +
+                to_string(resultNode->membersTail->at(sortColumn[1])->getInt());
+            info->set("cursor", cursor);
+        }
+        else
+        {
+            info->set("more", false);
+        }
+
+        return resultJson;
+    }
+
+    ResultMuxDemux::resultSetToJson(resultColumnCount, setCount, resultSets, resultJson.get());
+
+    // free up the responses
     openset::globals::mapper->releaseResponses(result);
     // clean up all those resultSet*
-    for (auto r : resultSets)
-        delete r;
+    for (auto res : resultSets)
+        delete res;
+
     if (bucket)
         ResultMuxDemux::jsonResultHistogramFill(resultJson.get(), bucket, forceMin, forceMax);
+
     switch (sortMode)
     {
     case ResultSortMode_e::key:
         ResultMuxDemux::jsonResultSortByGroup(resultJson.get(), sortOrder);
         break;
     case ResultSortMode_e::column:
-        ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn);
+        ResultMuxDemux::jsonResultSortByColumn(resultJson.get(), sortOrder, sortColumn[0]);
         break;
     default: ;
     }
-    ResultMuxDemux::jsonResultTrim(resultJson.get(), trim); // local function to fill Meta data in result JSON
+
+    ResultMuxDemux::jsonResultTrim(resultJson.get(), trim);
+
+    // local function to fill Meta data in result JSON
     const auto fillMeta = [](const openset::query::VarList& mapping, cjson* jsonArray)
     {
-        for (auto c : mapping)
+        for (auto& c : mapping)
         {
             auto tNode = jsonArray->pushObject();
             if (c.modifier == openset::query::Modifiers_e::var)
@@ -259,7 +344,9 @@ shared_ptr<cjson> forkQuery(
                 }
             }
         }
-    }; // add status nodes to JSON document
+    };
+
+    // add status nodes to JSON document
 
     //auto metaJson = resultJson->setObject("info");
     //auto dataJson = metaJson->setObject("data");
@@ -272,6 +359,7 @@ shared_ptr<cjson> forkQuery(
     //metaJson->set("serialize_time", serialTime);
     //metaJson->set("total_time", elapsed);
     Logger::get().info("RpcQuery on " + table->getName());
+
     return resultJson;
 }
 
@@ -317,7 +405,7 @@ openset::query::ParamVars getInlineVaraibles(const openset::web::MessagePtr& mes
     return paramVars;
 }
 
-void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& matches)
+void RpcQuery::report(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
     auto database             = globals::database;
     const auto partitions     = globals::async;
@@ -329,8 +417,9 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
     const auto useStampCounts = message->getParamBool("stamp_counts");
     const auto trimSize       = message->getParamInt("trim", -1);
     const auto sortOrder      = message->getParamString("order", "desc") == "asc"
-                                    ? ResultSortOrder_e::Asc
-                                    : ResultSortOrder_e::Desc;
+        ? ResultSortOrder_e::Asc
+        : ResultSortOrder_e::Desc;
+
     auto sortColumnName = ""s;
     auto sortMode       = ResultSortMode_e::column;
     if (message->isParam("sort"))
@@ -339,10 +428,10 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
         if (sortColumnName == "group")
             sortMode = ResultSortMode_e::key;
     }
-    const auto log = "Inbound events query (fork: "s + (isFork
-                                                            ? "true"s
-                                                            : "false"s) + ")"s;
+
+    const auto log = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
+
     if (!tableName.length())
     {
         RpcError(
@@ -354,6 +443,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             message);
         return;
     }
+
     if (!queryCode.length())
     {
         RpcError(
@@ -365,6 +455,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             message);
         return;
     }
+
     auto table = database->getTable(tableName);
     if (!table)
     {
@@ -376,8 +467,9 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             },
             message);
         return;
-    } // override session time if provided, otherwise use table default
+    }
 
+    // override session time if provided, otherwise use table default
     const auto sessionTime     = message->getParamInt("session_time", table->getSessionTime());
     query::ParamVars paramVars = getInlineVaraibles(message);
     query::Macro_s queryMacros; // this is our compiled code block
@@ -398,12 +490,14 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             message);
         return;
     }
+
     if (p.error.inError())
     {
         Logger::get().error(p.error.getErrorJSON());
         message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
         return;
     }
+
     if (message->isParam("segments"))
     {
         const auto segmentText = message->getParamString("segments");
@@ -426,7 +520,9 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 message);
             return;
         }
-    } // set the sessionTime (timeout) value, this will get relayed
+    }
+
+    // set the sessionTime (timeout) value, this will get relayed
     // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
@@ -482,20 +578,25 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             message,
             queryMacros.vars.columnVars.size(),
             queryMacros.segments.size(),
+            queryMacros.scriptMode,
             sortMode,
             sortOrder,
-            sortColumn,
+            {sortColumn},
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
-    } // We are a Fork!
-    // create list of active_owner parititions for factory function
+    }
+
+    // We are a Fork!
+
+    // create list of active_owner partitions for factory function
     auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
         {
             mapping::NodeState_e::active_owner
         });
+
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
     //      thread as they are executed serially, rather than in parallel.
@@ -509,36 +610,47 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
     //
     std::vector<ResultSet*> resultSets;
     resultSets.reserve(partitions->getWorkerCount());
+
     for (auto i = 0; i < partitions->getWorkerCount(); ++i)
         resultSets.push_back(
             new ResultSet(
                 queryMacros.vars.columnVars.size() * (queryMacros.segments.size()
-                                                          ? queryMacros.segments.size()
-                                                          : 1))); // nothing active - return an empty set - not an error
+                  ? queryMacros.segments.size()
+                  : 1)));
+
+    // nothing active - return an empty set - not an error
     if (!activeList.size())
     {
         // 1. Merge Macro Literals
-        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets); // 2. Merge the rows
+        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
+        // 2. Merge the rows
         int64_t bufferLength = 0;
         const auto buffer    = ResultMuxDemux::multiSetToInternode(
             queryMacros.vars.columnVars.size(),
             queryMacros.segments.size(),
             resultSets,
-            bufferLength); // reply will be responsible for buffer
+            bufferLength);
+
+        // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-        PoolMem::getPool().freePtr(buffer); // clean up stray resultSets
+        PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
         Logger::get().info("event query on " + table->getName());
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
-    } /*
+    }
+
+    /*
     *  this Shuttle will gather our result sets roll them up and spit them back
     *
     *  note that queryMacros are captured with a copy, this is because a reference
     *  version will have had it's destructor called when the function exits.
     *
     *  Note: ShuttleLamda comes in two versions,
-    */ //auto shuttle = new ShuttleLambdaAsync<CellQueryResult_s>(
+    */
     const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
@@ -567,9 +679,9 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             }
 
             // 1. Merge the Macro Literals
-            // 2. Merge the rows
             ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
 
+            // 2. Merge the rows
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 queryMacros.vars.columnVars.size(),
@@ -577,16 +689,7 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
                 //queryMacros.indexes.size(),
                 resultSets,
                 bufferLength);
-            /*
-            cjson tDoc;
-            ResultMuxDemux::resultSetToJson(
-                queryMacros.vars.columnVars.size(),
-                queryMacros.indexes.size(),
-                resultSets,
-                &tDoc);
 
-            cout << cjson::stringify(&tDoc, true );
-            */
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
             PoolMem::getPool().freePtr(buffer);
 
@@ -596,10 +699,13 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             for (auto resultSet : resultSets)
                 delete resultSet;
 
-            release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
+            // this will delete the shuttle, and clear up the CellQueryResult_s vector
+            release_cb();
         });
 
-    auto instance = 0; // pass factory function (as lambda) to create new cell objects
+    auto instance = 0;
+
+    // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
         [shuttle, table, queryMacros, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
@@ -607,6 +713,513 @@ void RpcQuery::event(const openset::web::MessagePtr& message, const RpcMapping& 
             instance++;
             return new OpenLoopQuery(shuttle, table, queryMacros, resultSets[loop->getWorkerId()], instance);
         });
+}
+
+void RpcQuery::customer_list(const openset::web::MessagePtr& message, const RpcMapping& matches)
+{
+    auto database         = globals::database;
+    const auto partitions = globals::async;
+    const auto request    = message->getJSON();
+    const auto tableName  = matches.find("table"s)->second;
+    const auto queryCode  = std::string { message->getPayload(), message->getPayloadLength() };
+    const auto debug      = message->getParamBool("debug");
+    const auto isFork     = message->getParamBool("fork");
+    const auto trimSize   = message->getParamInt("trim", -1);
+    const auto sortMode = ResultSortMode_e::key;
+    const auto sortOrder  = message->getParamString("order", "desc") == "asc"
+        ? ResultSortOrder_e::Asc
+        : ResultSortOrder_e::Desc;
+    auto sortKeyString    = message->getParamString("sort", "");
+    auto cursorString    = message->getParamString("cursor", "");
+
+    if (!sortKeyString.length())
+        sortKeyString = "id";
+
+    const auto log = "Inbound counts query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
+    Logger::get().info(log);
+
+    if (!tableName.length())
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "missing or invalid table name"
+            },
+            message);
+        return;
+    }
+
+    if (!queryCode.length())
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "missing query code (POST query as text)"
+            },
+            message);
+        return;
+    }
+
+    auto table = database->getTable(tableName);
+
+    if (!table)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "table could not be found"
+            },
+            message);
+        return;
+    }
+
+    // override session time if provided, otherwise use table default
+    const auto sessionTime     = message->getParamInt("session_time", table->getSessionTime());
+    query::ParamVars paramVars = getInlineVaraibles(message);
+    query::Macro_s queryMacros; // this is our compiled code block
+    query::QueryParser p;
+
+    try
+    {
+        // compile in customers mode
+        p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars, query::ScriptMode_e::customers);
+    }
+    catch (const std::runtime_error& ex)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::parse,
+                errors::errorCode_e::syntax_error,
+                std::string { ex.what() }
+            },
+            message);
+        return;
+    }
+
+    if (p.error.inError())
+    {
+        Logger::get().error(p.error.getErrorJSON());
+        message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
+        return;
+    }
+
+    // Ordering keys (at this point we only use one)
+    std::vector<int> sortOrderProperties;
+
+
+    // validate that sortKeys are in the select statement
+    int customerIdIndex = -1;
+    const auto sortKeyParts = split(sortKeyString, ',');
+    for (auto key : sortKeyParts)
+    {
+        key = trim(key);
+        auto found = false;
+
+        if (key.length())
+        {
+
+            auto propInfo = table->getProperties()->getProperty(key);
+
+            if (!propInfo)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' not found"
+                    },
+                    message);
+                return;
+            }
+
+            if (propInfo->isSet)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' cannot be a 'set' type"
+                    },
+                    message);
+                return;
+            }
+
+            if (propInfo->type != PropertyTypes_e::intProp && propInfo->type != PropertyTypes_e::doubleProp)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'sort': property '" + key + "' must be an 'int' or 'double' type"
+                    },
+                    message);
+                return;
+            }
+
+            auto index = 0;
+            for (auto& column : queryMacros.vars.columnVars)
+            {
+                if (column.alias == "id")
+                    customerIdIndex = index;
+
+                if (column.alias == key)
+                {
+                    sortOrderProperties.push_back(index);
+                    found = true;
+                }
+
+                ++index;
+            }
+        }
+
+        if (key.length() == 0 || !found)
+        {
+            RpcError(
+                errors::Error {
+                    errors::errorClass_e::query,
+                    errors::errorCode_e::general_error,
+                    "param 'sort': sort property must be part of query 'select' statement"
+                },
+                message);
+            return;
+        }
+    }
+
+    if (customerIdIndex == -1)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'sort': sorting requires that customer 'id' is part of a 'select' statement"
+            },
+            message);
+        return;
+    }
+
+    if (sortOrderProperties.size() > 1)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'sort': currently only 1 sort property can be specified"
+            },
+            message);
+        return;
+    }
+
+    // if the sort is by 'id' we will use the 'OpenLoopCustomerBasicList' iterator
+    auto isBasic = sortKeyParts[0] == "id";
+
+    // add customerId as secondary sort
+    if (sortOrderProperties.size() == 1)
+        sortOrderProperties.push_back(customerIdIndex);
+
+    for (const auto propIndex: sortOrderProperties)
+        queryMacros.vars.autoGrouping.push_back(propIndex);
+
+    std::vector<int64_t> cursorValues;
+
+        // validate that sortKeys are in the select statement
+    const auto cursorParts = split(cursorString, ',');
+    for (auto key : cursorParts)
+    {
+        key = trim(key);
+        auto found = false;
+
+        if (key.length())
+        {
+            try
+            {
+                cursorValues.push_back(stoll(key));
+            }
+            catch (const std::runtime_error&)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'cursor': expecting a numeric value"
+                    },
+                    message);
+                return;
+            }
+            catch (...)
+            {
+                RpcError(
+                    errors::Error {
+                        errors::errorClass_e::query,
+                        errors::errorCode_e::general_error,
+                        "param 'cursor': expecting a numeric value"
+                    },
+                    message);
+                return;
+            }
+        }
+    }
+
+    if (cursorValues.size() == 0)
+    {
+        if (sortOrder == ResultSortOrder_e::Desc)
+            cursorValues = { LLONG_MAX, LLONG_MAX };
+        else
+            cursorValues = { LLONG_MIN, LLONG_MIN };
+    }
+    else if (!isBasic && cursorValues.size() != 2)
+    {
+        RpcError(
+            errors::Error {
+                errors::errorClass_e::query,
+                errors::errorCode_e::general_error,
+                "param 'cursor': expecting two numeric values (separated by a comma)"
+            },
+            message);
+        return;
+    }
+
+    if (message->isParam("segments"))
+    {
+        const auto segmentText = message->getParamString("segments");
+        auto parts             = split(segmentText, ',');
+        queryMacros.segments.clear();
+        for (const auto& part : parts)
+        {
+            const auto trimmedPart = trim(part);
+            if (trimmedPart.length())
+                queryMacros.segments.push_back(trimmedPart);
+        }
+        if (!queryMacros.segments.size())
+        {
+            RpcError(
+                errors::Error {
+                    errors::errorClass_e::query,
+                    errors::errorCode_e::syntax_error,
+                    "no segment names specified"
+                },
+                message);
+            return;
+        }
+    }
+
+    // set the sessionTime (timeout) value, this will get relayed
+    // through the to oloop_query, the customer object and finally the grid
+    queryMacros.sessionTime = sessionTime;
+    if (debug)
+    {
+        auto debugOutput = MacroDbg(queryMacros); // reply as text
+        message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
+        return;
+    }
+    auto sortColumn = 0;
+
+    /*
+    * We are originating the query.
+    *
+    * At this point in the function we have validated that the
+    * script compiles, maps to the schema, is on a valid table,
+    * etc.
+    *
+    * We will call our forkQuery function.
+    *
+    * forQuery will call all the nodes (including this one) with the
+    * `is_fork` variable set to true.
+    */
+
+    if (!isFork)
+    {
+        const auto json = forkQuery(
+            table,
+            message,
+            queryMacros.vars.columnVars.size(),
+            queryMacros.segments.size(),
+            queryMacros.scriptMode,
+            sortMode,
+            sortOrder,
+            sortOrderProperties,
+            trimSize);
+        if (json) // if null/empty we had an error
+            message->reply(http::StatusCode::success_ok, *json);
+        return;
+    }
+
+    // We are a Fork!
+
+    // create list of active_owner partitions for factory function
+    auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
+        globals::running->nodeId,
+        {
+            mapping::NodeState_e::active_owner
+        });
+
+    // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
+    //      we don't have to worry about locking anything shared between partitions in the same
+    //      thread as they are executed serially, rather than in parallel.
+    //
+    //      By creating one result set for each AsyncLoop thread we can have a lockless ResultSet
+    //      as well as generally reduce the number of ResultSets needed (especially when partition
+    //      counts are high).
+    //
+    //      Note: These are heap objects because we lose scope, as this function
+    //            exits before the result objects are used.
+    //
+    std::vector<ResultSet*> resultSets;
+    resultSets.reserve(partitions->getWorkerCount());
+    for (auto i = 0; i < partitions->getWorkerCount(); ++i)
+        resultSets.push_back(
+            new ResultSet(
+                queryMacros.vars.columnVars.size() * (queryMacros.segments.size()
+                  ? queryMacros.segments.size()
+                  : 1)));
+
+    // nothing active - return an empty set - not an error
+    if (!activeList.size())
+    {
+        // 1. Merge Macro Literals
+        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
+        // 2. Merge the rows
+        int64_t bufferLength = 0;
+        const auto buffer    = ResultMuxDemux::multiSetToInternode(
+            queryMacros.vars.columnVars.size(),
+            queryMacros.segments.size(),
+            resultSets,
+            bufferLength);
+
+        // reply will be responsible for buffer
+        message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+        PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
+        Logger::get().info("event query on " + table->getName());
+        for (auto resultSet : resultSets)
+            delete resultSet;
+        return;
+    }
+
+    /*
+    *  this Shuttle will gather our result sets roll them up and spit them back
+    *
+    *  note that queryMacros are captured with a copy, this is because a reference
+    *  version will have had it's destructor called when the function exits.
+    *
+    *  Note: ShuttleLamda comes in two versions,
+    */
+    const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
+        message,
+        activeList.size(),
+        [queryMacros, table, resultSets](
+        vector<response_s<CellQueryResult_s>>& responses,
+        web::MessagePtr message,
+        voidfunc release_cb) mutable
+        {
+            // process the data and respond
+            // check for errors, add up totals
+            for (const auto& r : responses)
+            {
+                if (r.data.error.inError())
+                {
+                    // any error that is recorded should be considered a hard error, so report it
+                    const auto errorMessage = r.data.error.getErrorJSON();
+                    Logger::get().error(errorMessage);
+                    message->reply(http::StatusCode::client_error_bad_request, errorMessage);
+                    // clean up stray resultSets
+                    for (auto resultSet : resultSets)
+                        delete resultSet;
+
+                    release_cb();
+                    return;
+                }
+            }
+
+            // 1. Merge the Macro Literals
+            ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
+            // 2. Merge the rows
+            int64_t bufferLength = 0;
+            const auto buffer    = ResultMuxDemux::multiSetToInternode(
+                queryMacros.vars.columnVars.size(),
+                queryMacros.segments.size(),
+                //queryMacros.indexes.size(),
+                resultSets,
+                bufferLength);
+
+            message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+            PoolMem::getPool().freePtr(buffer);
+
+            Logger::get().info("event query on " + table->getName());
+
+            // clean up stray resultSets
+            for (auto resultSet : resultSets)
+                delete resultSet;
+
+            // this will delete the shuttle, and clear up the CellQueryResult_s vector
+            release_cb();
+        });
+
+    auto instance = 0;
+
+    if (isBasic)
+    {
+        // pass factory function (as lambda) to create new cell objects
+        partitions->cellFactory(
+            activeList,
+            [
+                shuttle,
+                table,
+                queryMacros,
+                resultSets,
+                &instance,
+                cursorValues,
+                sortOrder,
+                trimSize](AsyncLoop* loop) -> OpenLoop*
+            {
+                instance++;
+                return new OpenLoopCustomerBasicList(
+                    shuttle,
+                    table,
+                    queryMacros,
+                    resultSets[loop->getWorkerId()],
+                    cursorValues,
+                    sortOrder == ResultSortOrder_e::Desc,
+                    trimSize,
+                    instance);
+            }
+        );
+    }
+    else
+    {
+        // pass factory function (as lambda) to create new cell objects
+        partitions->cellFactory(
+            activeList,
+            [
+                shuttle,
+                table,
+                queryMacros,
+                resultSets,
+                &instance,
+                sortOrderProperties,
+                cursorValues,
+                sortOrder,
+                trimSize](AsyncLoop* loop) -> OpenLoop*
+            {
+                instance++;
+                return new OpenLoopCustomerList(
+                    shuttle,
+                    table,
+                    queryMacros,
+                    resultSets[loop->getWorkerId()],
+                    sortOrderProperties,
+                    cursorValues,
+                    sortOrder == ResultSortOrder_e::Desc,
+                    trimSize,
+                    instance);
+            }
+        );
+    }
 }
 
 void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping& matches)
@@ -672,7 +1285,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             continue;
         query::Macro_s queryMacros; // this is our compiled code block
         query::QueryParser p;
-        p.compileQuery(r.code.c_str(), table->getProperties(), queryMacros, &paramVars);
+        p.compileQuery(r.code.c_str(), table->getProperties(), queryMacros, &paramVars, query::ScriptMode_e::segment);
 
         if (p.error.inError())
         {
@@ -689,10 +1302,20 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table->setSegmentTtl(r.sectionName, r.flags["ttl"]);
         }
 
+        const auto alwaysFresh = r.flags.contains("always_fresh") ? r.flags["always_fresh"].getBool() : false;
+
+        // item is cached for subsequent queries, but generates a fresh copy when queried
+        if (alwaysFresh)
+        {
+            r.flags["use_cached"] = true;
+            r.flags["refresh"] = 86400000;
+        }
+
         const auto zIndex    = r.flags.contains("z_index") ? r.flags["z_index"].getInt32() : 100;
         const auto onInsert  = r.flags.contains("on_insert") ? r.flags["on_insert"].getBool() : false;
         const auto useCached = r.flags.contains("use_cached") ? r.flags["use_cached"].getBool() : false;
 
+        queryMacros.alwaysFresh = alwaysFresh;
         queryMacros.useCached = useCached;
         queryMacros.isSegment = true;
 
@@ -761,7 +1384,10 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             table,
             message,
             queries.front().second.vars.columnVars.size(),
-            queries.front().second.segments.size());
+            queries.front().second.segments.size(),
+            queries.front().second.scriptMode
+        );
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
@@ -783,15 +1409,18 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
     if (!activeList.size())
     {
         // 1. Merge Macro Literals
-        ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets); // 2. Merge the rows
+        ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets);
+
+        // 2. Merge the rows
         int64_t bufferLength = 0;
-        const auto buffer    = ResultMuxDemux::multiSetToInternode(1, 1, resultSets, bufferLength);
+        const auto buffer = ResultMuxDemux::multiSetToInternode(1, 1, resultSets, bufferLength);
 
         // reply is responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
         PoolMem::getPool().freePtr(buffer);
-        Logger::get().info("No active workers for " + table->getName()); // clean up stray resultSets
+        Logger::get().info("No active workers for " + table->getName());
 
+        // clean up stray resultSets
         for (auto resultSet : resultSets)
             delete resultSet;
 
@@ -813,6 +1442,7 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
                 {
                     // any error that is recorded should be considered a hard error, so report it
                     message->reply(http::StatusCode::client_error_bad_request, r.data.error.getErrorJSON());
+
                     // clean up stray resultSets
                     for (auto resultSet : resultSets)
                         delete resultSet;
@@ -823,9 +1453,9 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
             }
 
             // 1. Merge Macro Literals
-            // 2. Merge the rows
             ResultMuxDemux::mergeMacroLiterals(queries.front().second, resultSets);
 
+            // 2. Merge the rows
             int64_t bufferLength = 0;
             const auto buffer    = ResultMuxDemux::multiSetToInternode(
                 queries.front().second.vars.columnVars.size(),
@@ -846,8 +1476,9 @@ void RpcQuery::segment(const openset::web::MessagePtr& message, const RpcMapping
         });
 
     auto instance = 0;
-    auto workers  = 0; // pass factory function (as lambda) to create new cell objects
+    auto workers  = 0;
 
+    // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
         [shuttle, table, queries, resultSets, &workers, &instance](AsyncLoop* loop) -> OpenLoop*
@@ -1128,9 +1759,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
     * We will call our forkQuery function.
     *
     * forQuery will call all the nodes (including this one) with the
-    * `is_fork` varaible set to true.
-    *
-    *
+    * `is_fork` variable set to true.
     */
     if (!isFork)
     {
@@ -1139,21 +1768,23 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             message,
             1,
             queryInfo.segments.size(),
+            query::ScriptMode_e::report,
             ResultSortMode_e::column,
             sortOrder,
-            0,
+            {0},
             trimSize);
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
         return;
     }
 
-    // create list of active_owner parititions for factory function
+    // create list of active_owner partitions for factory function
     const auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
         {
             mapping::NodeState_e::active_owner
         });
+
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
     //      thread as they are executed serially, rather than in parallel.
@@ -1182,9 +1813,12 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
             queryInfo.segments.size(),
             resultSets,
             bufferLength);
+
         // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-        PoolMem::getPool().freePtr(buffer); // clean up stray resultSets
+        PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
@@ -1196,7 +1830,7 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
     *  note that queryMacros are captured with a copy, this is because a reference
     *  version will have had it's destructor called when the function exits.
     *
-    *  Note: ShuttleLamda comes in two versions,
+    *  Note: ShuttleLambda comes in two versions,
     */
     const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
@@ -1232,15 +1866,20 @@ void RpcQuery::property(openset::web::MessagePtr& message, const RpcMapping& mat
                 bufferLength);
 
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
+            PoolMem::getPool().freePtr(buffer);
 
-            Logger::get().info("Fork query on " + table->getName()); // clean up all those resultSet*
+            Logger::get().info("Fork query on " + table->getName());
 
+            // clean up all those resultSet*
             for (auto r : resultSets)
                 delete r;
 
             release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
         });
-    auto instance = 0; // pass factory function (as lambda) to create new cell objects
+
+    auto instance = 0;
+
+    // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
         [shuttle, table, queryInfo, resultSets, &instance](AsyncLoop* loop) -> OpenLoop*
@@ -1265,6 +1904,7 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
             message);
         return;
     }
+
     const auto tableName = matches.find("table"s)->second;
     if (!tableName.length())
     {
@@ -1277,6 +1917,7 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
             message);
         return;
     }
+
     const auto table = globals::database->getTable(tableName);
     if (!table)
     {
@@ -1290,7 +1931,7 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
         return;
     }
 
-    int64_t uuid = 0;
+    int64_t uuid = std::numeric_limits<int64_t>::min();
 
     if (table->numericCustomerIds)
     {
@@ -1300,6 +1941,7 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
         }
         catch (...)
         {
+            // error returned below in `if (uuid == ::min())
         }
     }
     else
@@ -1308,13 +1950,13 @@ void RpcQuery::customer(openset::web::MessagePtr& message, const RpcMapping& mat
         uuid = MakeHash(uuString);
     }
 
-    if  (uuid == 0)
+    if (uuid == std::numeric_limits<int64_t>::min())
     {
         RpcError(
             errors::Error {
                 errors::errorClass_e::query,
                 errors::errorCode_e::general_error,
-                "invalid id"
+                "invalid customer id"
             },
             message);
         return;
@@ -1390,17 +2032,18 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
     const auto tableName  = matches.find("table"s)->second;
     const auto groupName  = matches.find("name"s)->second;
     const auto queryCode  = std::string { message->getPayload(), message->getPayloadLength() };
+
     const auto debug      = message->getParamBool("debug");
     const auto isFork     = message->getParamBool("fork");
     const auto trimSize   = message->getParamInt("trim", -1);
     const auto sortOrder  = message->getParamString("order", "desc") == "asc"
-                                ? ResultSortOrder_e::Asc
-                                : ResultSortOrder_e::Desc;
+        ? ResultSortOrder_e::Asc
+        : ResultSortOrder_e::Desc;
     const auto sortMode = ResultSortMode_e::key;
-    const auto log      = "Inbound events query (fork: "s + (isFork
-                                                                 ? "true"s
-                                                                 : "false"s) + ")"s;
+
+    const auto log      = "Inbound events query (fork: "s + (isFork ? "true"s : "false"s) + ")"s;
     Logger::get().info(log);
+
     if (!tableName.length())
     {
         RpcError(
@@ -1412,6 +2055,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message);
         return;
     }
+
     if (!queryCode.length())
     {
         RpcError(
@@ -1423,6 +2067,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message);
         return;
     }
+
     auto table = database->getTable(tableName);
     if (!table)
     {
@@ -1434,11 +2079,14 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             },
             message);
         return;
-    } // override session time if provided, otherwise use table default
+    }
+
+    // override session time if provided, otherwise use table default
     const auto sessionTime     = message->getParamInt("session_time", table->getSessionTime());
     query::ParamVars paramVars = getInlineVaraibles(message);
     query::Macro_s queryMacros; // this is our compiled code block
     query::QueryParser p;
+
     try
     {
         p.compileQuery(queryCode.c_str(), table->getProperties(), queryMacros, &paramVars);
@@ -1454,12 +2102,15 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message);
         return;
     }
+
     if (p.error.inError())
     {
         Logger::get().error(p.error.getErrorJSON());
         message->reply(http::StatusCode::client_error_bad_request, p.error.getErrorJSON());
         return;
-    } // Histogram querys must call tally
+    }
+
+    // Histogram querys must call tally
     if (queryMacros.marshalsReferenced.count(query::Marshals_e::marshal_tally))
     {
         RpcError(
@@ -1471,6 +2122,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message);
         return;
     }
+
     if (message->isParam("segments"))
     {
         const auto segmentText = message->getParamString("segments");
@@ -1493,24 +2145,32 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
                 message);
             return;
         }
-    } // set the sessionTime (timeout) value, this will get relayed
+    }
+
+    // set the sessionTime (timeout) value, this will get relayed
     // through the to oloop_query, the customer object and finally the grid
     queryMacros.sessionTime = sessionTime;
     if (debug)
     {
-        auto debugOutput = MacroDbg(queryMacros); // reply as text
+        auto debugOutput = MacroDbg(queryMacros);
+        // reply as text
         message->reply(http::StatusCode::success_ok, &debugOutput[0], debugOutput.length());
         return;
     }
+
     int64_t bucket = 0;
     if (message->isParam("bucket"))
         bucket = static_cast<int64_t>(stod(message->getParamString("bucket", "0")) * 10000.0);
+
     auto forceMin = std::numeric_limits<int64_t>::min();
     if (message->isParam("min"))
         forceMin = static_cast<int64_t>(stod(message->getParamString("min", "0")) * 10000.0);
+
     auto forceMax = std::numeric_limits<int64_t>::min();
     if (message->isParam("max"))
-        forceMax = static_cast<int64_t>(stod(message->getParamString("max", "0")) * 10000.0); /*
+        forceMax = static_cast<int64_t>(stod(message->getParamString("max", "0")) * 10000.0);
+
+    /*
     * We are originating the query.
     *
     * At this point in the function we have validated that the
@@ -1520,9 +2180,7 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
     * We will call our forkQuery function.
     *
     * forQuery will call all the nodes (including this one) with the
-    * `is_fork` varaible set to true.
-    *
-    *
+    * `is_fork` variable set to true.
     */
     if (!isFork)
     {
@@ -1531,23 +2189,29 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
             message,
             1,
             queryMacros.segments.size(),
+            openset::query::ScriptMode_e::report,
             sortMode,
             sortOrder,
-            0,
+            {0},
             trimSize,
             bucket,
             forceMin,
             forceMax);
+
         if (json) // if null/empty we had an error
             message->reply(http::StatusCode::success_ok, *json);
+
         return;
-    } // We are a Fork!
+    }
+
+    // We are a Fork!
     // create list of active_owner parititions for factory function
     auto activeList = globals::mapper->partitionMap.getPartitionsByNodeIdAndStates(
         globals::running->nodeId,
         {
             mapping::NodeState_e::active_owner
         });
+
     // Shared Results - Partitions spread across working threads (AsyncLoop's made by AsyncPool)
     //      we don't have to worry about locking anything shared between partitions in the same
     //      thread as they are executed serially, rather than in parallel.
@@ -1565,31 +2229,41 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
         resultSets.push_back(
             new ResultSet(
                 queryMacros.vars.columnVars.size() * (queryMacros.segments.size()
-                                                          ? queryMacros.segments.size()
-                                                          : 1))); // nothing active - return an empty set - not an error
+                    ? queryMacros.segments.size()
+                    : 1)));
+
+    // nothing active - return an empty set - not an error
     if (activeList.empty())
     {
         // 1. Merge Macro Literals
-        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets); // 2. Merge the rows
+        ResultMuxDemux::mergeMacroLiterals(queryMacros, resultSets);
+
+        // 2. Merge the rows
         int64_t bufferLength = 0;
         const auto buffer    = ResultMuxDemux::multiSetToInternode(
             queryMacros.vars.columnVars.size(),
             queryMacros.segments.size(),
             resultSets,
-            bufferLength); // reply will be responsible for buffer
+            bufferLength);
+
+        // reply will be responsible for buffer
         message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-        PoolMem::getPool().freePtr(buffer); // clean up stray resultSets
+        PoolMem::getPool().freePtr(buffer);
+
+        // clean up stray resultSets
         for (auto resultSet : resultSets)
             delete resultSet;
         return;
-    } /*
+    }
+
+    /*
     *  this Shuttle will gather our result sets roll them up and spit them back
     *
     *  note that queryMacros are captured with a copy, this is because a reference
     *  version will have had it's destructor called when the function exits.
     *
     *  Note: ShuttleLamda comes in two versions,
-    */ //auto shuttle = new ShuttleLambdaAsync<CellQueryResult_s>(
+    */
     const auto shuttle = new ShuttleLambda<CellQueryResult_s>(
         message,
         activeList.size(),
@@ -1620,17 +2294,24 @@ void RpcQuery::histogram(openset::web::MessagePtr& message, const RpcMapping& ma
                 queryMacros.segments.size(),
                 resultSets,
                 bufferLength);
+
             message->reply(http::StatusCode::success_ok, buffer, bufferLength);
-            Logger::get().info("Fork query on " + table->getName()); // clean up stray resultSets
+            PoolMem::getPool().freePtr(buffer);
+
+            Logger::get().info("Fork query on " + table->getName());
+
+            // clean up stray resultSets
             for (auto resultSet : resultSets)
                 delete resultSet;
-            PoolMem::getPool().freePtr(buffer);
-            release_cb(); // this will delete the shuttle, and clear up the CellQueryResult_s vector
+
+            // this will delete the shuttle, and clear up the CellQueryResult_s vector
+            release_cb();
         });
-    auto forEach = message->isParam("foreach")
-                       ? message->getParamString("foreach")
-                       : ""s;
-    auto instance = 0; // pass factory function (as lambda) to create new cell objects
+
+    auto forEach = message->isParam("foreach") ? message->getParamString("foreach") : ""s;
+    auto instance = 0;
+
+    // pass factory function (as lambda) to create new cell objects
     partitions->cellFactory(
         activeList,
         [shuttle, table, queryMacros, resultSets, groupName, bucket, forEach, &instance](AsyncLoop* loop) -> OpenLoop*
@@ -1679,20 +2360,25 @@ openset::mapping::Mapper::Responses queryDispatch(
         {
             if (doneSending)
                 return false;
-            csLock lock(cs); //if (running > runMax) // send up to RunMax, fill any that are complete
-            //  return;
+
+            csLock lock(cs);
+
             if (iter == queries.end() || result.routeError)
             {
                 doneSending = true;
                 return false;
             }
             ++running;
-            ++sendCount; // convert captures in Section Defintion to REST params
-            for (auto p : *(iter->params.getDict()))
+            ++sendCount;
+
+            // convert captures in section definition and converts to REST params
+            for (auto &p : *(iter->params.getDict()))
                 if (p.first.getString() != "each")                             // missing a char* != ???
                     params.emplace(p.first.getString(), p.second.getString()); // add a segments param
+
             if (segments.size())
                 params.emplace("segments"s, join(segments)); // make queries
+
             if (iter->sectionType == "segment")
             {
                 method              = "POST";
@@ -1715,7 +2401,9 @@ openset::mapping::Mapper::Responses queryDispatch(
                 payload = std::move(iter->code); // eat it
             }
             ++iter;
-        } // fire these queries off
+        }
+
+        // fire these queries off
         const auto success = openset::globals::mapper->dispatchAsync(
             openset::globals::running->nodeId,
             // fork to self
@@ -1724,17 +2412,22 @@ openset::mapping::Mapper::Responses queryDispatch(
             params,
             payload,
             completeCallback);
+
         if (!success)
-            result.routeError = true; //nextQuery();
+            result.routeError = true;
+
         return true;
     };
+
     while (sendOne())
     {
         while (running > runMax)
             ThreadSleep(55);
     }
+
     while (!doneSending && sendCount != receivedCount)
-        ThreadSleep(50); // replace with semaphore
+        ThreadSleep(50); // TODO replace with semaphore
+
     return result;
 }
 
@@ -1745,7 +2438,9 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
     const auto tableName = matches.find("table"s)->second;
     const auto queryCode = std::string { message->getPayload(), message->getPayloadLength() };
     const auto debug     = message->getParamBool("debug");
+
     Logger::get().info("Inbound multi query"s);
+
     if (!tableName.length())
     {
         RpcError(
@@ -1757,6 +2452,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
             message);
         return;
     }
+
     if (!queryCode.length())
     {
         RpcError(
@@ -1768,6 +2464,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
             message);
         return;
     }
+
     const auto table = database->getTable(tableName);
     if (!table)
     {
@@ -1780,6 +2477,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
             message);
         return;
     }
+
     thread runner(
         [=]()
         {
@@ -1788,20 +2486,25 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
             query::QueryParser::SectionDefinitionList segmentList;
             query::QueryParser::SectionDefinitionList queryList;
             query::QueryParser::SectionDefinition_s useSection;
-            query::SegmentList segments; // extract the
+            query::SegmentList segments;
+
             for (auto& s : subQueries)
+            {
                 if (s.sectionType == "segment")
                     segmentList.push_back(s);
                 else if (s.sectionType == "use")
                     useSection = s;
                 else
                     queryList.push_back(s);
+            }
+
             if (useSection.sectionType == "use" && useSection.sectionName.length())
             {
                 segments.push_back(useSection.sectionName);
                 for (const auto& p : *useSection.params.getDict())
                     segments.push_back(p.first);
             }
+
             if (segmentList.size())
             {
                 auto results = queryDispatch(tableName, segments, segmentList);
@@ -1836,6 +2539,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
                     return;
                 }
             }
+
             if (queryList.size())
             {
                 auto results = queryDispatch(tableName, segments, queryList);
@@ -1858,6 +2562,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
                             results.routeError = true; // this will trigger the next error
                     }
                 }
+
                 if (results.routeError)
                 {
                     RpcError(
@@ -1869,6 +2574,7 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
                         message);
                     return;
                 }
+
                 cjson responseJson;
                 auto resultBranch = responseJson.setArray("_");
                 for (auto& r : results.responses)
@@ -1878,8 +2584,10 @@ void RpcQuery::batch(openset::web::MessagePtr& message, const RpcMapping& matche
                     if (const auto item = resultItemJson.xPath("/_/0"); item)
                         cjson::parse(cjson::stringify(item), insertAt, true);
                 }
+
                 message->reply(http::StatusCode::success_ok, responseJson);
             }
         });
+
     runner.detach();
 }

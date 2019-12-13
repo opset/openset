@@ -9,10 +9,12 @@
 const int MAX_RECURSE_COUNT = 10;
 const int STACK_DEPTH       = 64;
 
+const int64_t StarHash = MakeHash("*");
+
 openset::query::Interpreter::Interpreter(Macro_s& macros, const InterpretMode_e interpretMode)
     : macros(macros),
-      interpretMode(interpretMode),
-      rowKey()
+      rowKey(),
+      interpretMode(interpretMode)
 
 {
     stack    = new cvar[STACK_DEPTH];
@@ -28,6 +30,16 @@ openset::query::Interpreter::~Interpreter()
 void openset::query::Interpreter::setResultObject(result::ResultSet* resultSet)
 {
     result = resultSet;
+    result->addLocalText(NONE, "n/a");
+    result->addLocalText(StarHash, "*");
+
+    if (macros.fastTally)
+    {
+        rowKey.clear();
+        rowKey.key[0] = StarHash;
+        rowKey.types[0] = result::ResultTypes_e::Text;
+        fastTallyAccumulator = result->getMakeAccumulator(rowKey);
+    }
 }
 
 void openset::query::Interpreter::configure()
@@ -129,7 +141,9 @@ void openset::query::Interpreter::mount(Customer* person)
         uuid  = person->getUUID();
         linid = person->getMeta()->linId;
     }
+
     stackPtr = stack;
+
     if (!isConfigured && rows->size())
         configure();
 }
@@ -156,7 +170,8 @@ void openset::query::Interpreter::extractMarshalParams(const int paramCount)
 {
     for (auto i = 0; i < paramCount; ++i) // PERF
     {
-        --stackPtr; // if any of these params are undefined, exit
+        --stackPtr;
+        // if any of these params are undefined, exit
         if (stackPtr->typeOf() != cvar::valueType::STR && *stackPtr == NONE)
             marshalParams[i] = NONE;
         else
@@ -164,36 +179,35 @@ void openset::query::Interpreter::extractMarshalParams(const int paramCount)
     }
 }
 
-void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+void openset::query::Interpreter::tally(const int paramCount, const Col_s* columns, const int currentRow)
 {
-    if (paramCount <= 0)
-        return;                       // pop the stack into a pre-allocated array of cvars in reverse order
-    extractMarshalParams(paramCount); // strings, doubles, and bools are all ints internally,
+    if (paramCount <= 0 && !macros.fastTally)
+        return;
+
     // this will ensure non-int types are represented as ints
     // during grouping
-    const auto fixToInt = [&](const cvar& value) -> int64_t
+    const auto fixToInt = [&](const cvar& value, result::ResultTypes_e& type) -> int64_t
     {
         switch (value.typeOf())
         {
         case cvar::valueType::INT32: case cvar::valueType::INT64:
+            type = result::ResultTypes_e::Int;
             return value.getInt64();
         case cvar::valueType::FLT: case cvar::valueType::DBL:
+            type = result::ResultTypes_e::Double;
             return value.getDouble() * 10000;
         case cvar::valueType::STR:
-        {
-            const auto tString = value.getString();
-            const auto hash    = MakeHash(tString);
-            result->addLocalText(hash, tString); // cache this text
-            return hash;
-        }
+            type = result::ResultTypes_e::Text;
+            return result->addLocalTextAndHash(value.getString()); // cache this text
         case cvar::valueType::BOOL:
-            return value.getBool()
-                       ? 1
-                       : 0;
+            type = result::ResultTypes_e::Bool;
+            return value.getBool() ? 1 : 0;
         default:
+            type = result::ResultTypes_e::None;
             return NONE;
         }
     };
+    /*
     const auto getType = [&](const cvar& value) -> result::ResultTypes_e
     {
         switch (value.typeOf())
@@ -212,6 +226,8 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
             return result::ResultTypes_e::None;
         }
     };
+    */
+
     const auto aggColumns = [&](result::Accumulator* resultColumns)
     {
         for (auto& resCol : macros.vars.columnVars)
@@ -241,96 +257,230 @@ void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_
                  */
                 distinctKey.set(
                     resCol.index,
-                    (resCol.modifier == Modifiers_e::var) ?
-                        fixToInt(resCol.value) :
+                    (resCol.lambdaIndex != -1) ?
+                        resCol.valueInt64 :
                         columns->cols[resCol.distinctColumn],
-                    (resCol.schemaColumn == PROP_UUID || resCol.modifier == Modifiers_e::dist_count_person) ?
+                    (resCol.aggOnce) ?
                         0 :
                        (macros.useStampedRowIds ?
                                columns->cols[PROP_STAMP] :
                                currentRow),
                     reinterpret_cast<int64_t>(resultColumns));
-                if (eventDistinct.count(distinctKey))
+
+                if (eventDistinct.emplace(distinctKey, 1).second == false)
                     continue;
-                eventDistinct.emplace(distinctKey, 1);
             }
-            const auto resultIndex = resCol.index + segmentColumnShift;
+
+            auto& resultColumnValue = resultColumns->columns[resCol.index + segmentColumnShift].value;
+            auto& resultColumnCount = resultColumns->columns[resCol.index + segmentColumnShift].count;
+
+            const auto aggValue = resCol.propShortcut == -1 && resCol.lambdaIndex == -1 ?
+                columns->cols[resCol.column] :
+                resCol.valueInt64;
+
+            if (resCol.column == PROP_UUID)
+                exportCustomerId = true;
+
             switch (resCol.modifier)
             {
+            case Modifiers_e::avg:
             case Modifiers_e::sum:
-                if (columns->cols[resCol.column] != NONE)
+                if (aggValue != NONE)
                 {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                        resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                    if (resultColumnValue == NONE)
+                    {
+                        resultColumnValue = aggValue;
+                        resultColumnCount = 1;
+                    }
                     else
-                        resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
+                    {
+                        resultColumnValue += aggValue;
+                        ++resultColumnCount;
+                    }
                 }
                 break;
             case Modifiers_e::min:
-                if (columns->cols[resCol.column] != NONE && (resultColumns->columns[resultIndex].value == NONE ||
-                    resultColumns->columns[resultIndex].value > columns->cols[resCol.column]))
-                    resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                if (aggValue != NONE && (resultColumnValue == NONE || resultColumnValue > aggValue))
+                    resultColumnValue = aggValue;
                 break;
             case Modifiers_e::max:
-                if (columns->cols[resCol.column] != NONE && (resultColumns->columns[resultIndex].value == NONE ||
-                    resultColumns->columns[resultIndex].value < columns->cols[resCol.column]))
-                    resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
+                if (aggValue != NONE && (resultColumnValue == NONE || resultColumnValue < aggValue))
+                    resultColumnValue = aggValue;
                 break;
-            case Modifiers_e::avg:
-                if (columns->cols[resCol.column] != NONE)
+            case Modifiers_e::dist_count_person:
+            case Modifiers_e::count:
+                if (aggValue != NONE)
                 {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                    {
-                        resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
-                        resultColumns->columns[resultIndex].count = 1;
-                    }
+                    if (resultColumnValue == NONE)
+                        resultColumnValue = 1;
                     else
-                    {
-                        resultColumns->columns[resultIndex].value += columns->cols[resCol.column];
-                        resultColumns->columns[resultIndex].count++;
-                    }
-                }
-                break;
-            case Modifiers_e::dist_count_person: case Modifiers_e::count:
-                if (columns->cols[resCol.column] != NONE)
-                {
-                    if (resultColumns->columns[resultIndex].value == NONE)
-                        resultColumns->columns[resultIndex].value = 1;
-                    else
-                        resultColumns->columns[resultIndex].value++;
+                        ++resultColumnValue;
                 }
                 break;
             case Modifiers_e::value:
-                resultColumns->columns[resultIndex].value = columns->cols[resCol.column];
-                break;
-            case Modifiers_e::var:
-                if (resultColumns->columns[resultIndex].value == NONE)
-                    resultColumns->columns[resultIndex].value = 1; //fixToInt(resCol.value);
-                else
-                    resultColumns->columns[resultIndex].value++; //+= fixToInt(resCol.value);
+                resultColumnValue = aggValue;
                 break;
             default:
                 break;
             }
         }
     };
-    rowKey.clear(); // run property lambdas!
+
+    // run lambdas result columns
     if (macros.vars.columnLambdas.size())
-        for (auto lambdaIndex : macros.vars.columnLambdas)
-            opRunner(
-                // call the property lambda
-                &macros.code.front() + lambdaIndex,
-                currentRow);
-    auto depth = 0;
-    for (const auto& item : marshalParams)
     {
-        if (depth == paramCount || (item.typeOf() != cvar::valueType::STR && item == NONE))
-            break;
-        rowKey.key[depth]   = fixToInt(item);
-        rowKey.types[depth] = getType(item); //result->setAtDepth(rowKey, set_cb);
-        aggColumns(result->getMakeAccumulator(rowKey));
-        ++depth;
+        for (auto varIndex : macros.vars.columnLambdas)
+        {
+            switch (macros.vars.columnVars[varIndex].schemaType)
+            {
+            case PropertyTypes_e::intProp:
+                macros.vars.columnVars[varIndex].valueInt64 =
+                    macros.vars.columnVars[varIndex].propShortcut != -1 ?
+                    macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getInt64() :
+                    (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getInt64();
+                break;
+            case PropertyTypes_e::doubleProp:
+                macros.vars.columnVars[varIndex].valueInt64 =
+                    macros.vars.columnVars[varIndex].propShortcut != -1 ?
+                    round(macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getDouble() * 10000.0) :
+                    round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getDouble() * 10000.0);
+                break;
+            case PropertyTypes_e::textProp:
+                macros.vars.columnVars[varIndex].valueInt64 =
+                    result->addLocalTextAndHash(
+                        macros.vars.columnVars[varIndex].propShortcut != -1 ?
+                        macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getString() :
+                        (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, currentRow)).getString()
+                    ); // cache this text
+                break;
+            case PropertyTypes_e::boolProp:
+                macros.vars.columnVars[varIndex].valueInt64 =
+                    macros.vars.columnVars[varIndex].propShortcut != -1 ?
+                    macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getBool() :
+                    (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
+                break;
+            default:
+                macros.vars.columnVars[varIndex].valueInt64 = 0;
+            }
+        }
     }
+
+    if (macros.fastTally)
+    {
+        aggColumns(fastTallyAccumulator);
+        return;
+    }
+
+     rowKey.clear();
+
+
+    if (macros.scriptMode == ScriptMode_e::customers)
+    {
+        auto depth = 0;
+        for (const auto& item : marshalParams)
+        {
+            if (depth == paramCount || (item.typeOf() != cvar::valueType::STR && item == NONE))
+                break;
+            rowKey.key[depth] = fixToInt(item, rowKey.types[depth]);
+            ++depth;
+        }
+        aggColumns(result->getMakeAccumulator(rowKey));
+    }
+    else
+    {
+        auto depth = 0;
+        for (const auto& item : marshalParams)
+        {
+            if (depth == paramCount || (item.typeOf() != cvar::valueType::STR && item == NONE))
+                break;
+            rowKey.key[depth] = fixToInt(item, rowKey.types[depth]);
+            aggColumns(result->getMakeAccumulator(rowKey));
+            ++depth;
+        }
+    }
+}
+
+void openset::query::Interpreter::autoTally()
+{
+    // the script is in an exit state because it terminated, we are going to resurrect it.
+    loopState = LoopState_e::run;
+
+    const auto paramCount = static_cast<int>(macros.vars.autoGrouping.size());
+    auto index = 0;
+    for (const auto varIndex : macros.vars.autoGrouping)
+    {
+        if (macros.vars.columnVars[varIndex].propShortcut != -1)
+        {
+            switch (macros.vars.columnVars[varIndex].schemaType)
+            {
+            case PropertyTypes_e::intProp:
+                marshalParams[index] =  macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getInt64();
+                break;
+            case PropertyTypes_e::doubleProp:
+                marshalParams[index] = round(macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getDouble() * 10000.0);
+                break;
+            case PropertyTypes_e::textProp:
+                marshalParams[index] =  macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getString();
+                break;
+            case PropertyTypes_e::boolProp:
+                marshalParams[index] =  macros.vars.userVars[macros.vars.columnVars[varIndex].propShortcut].value.getBool();
+                break;
+            default:
+                marshalParams[index] = NONE;
+            }
+        }
+        else if (macros.vars.columnVars[varIndex].lambdaIndex != -1)
+        {
+            switch (macros.vars.columnVars[varIndex].schemaType)
+            {
+            case PropertyTypes_e::intProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getInt64();
+                break;
+            case PropertyTypes_e::doubleProp:
+                marshalParams[index] = round((*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getDouble() * 10000.0);
+                break;
+            case PropertyTypes_e::textProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getString();
+                break;
+            case PropertyTypes_e::boolProp:
+                marshalParams[index] = (*lambda(macros.vars.columnVars[varIndex].lambdaIndex, 0)).getBool();
+                break;
+            default:
+                marshalParams[index] = NONE;
+            }
+        }
+        else
+        {
+            if (macros.vars.columnVars[varIndex].schemaColumn == PROP_UUID)
+            {
+                if (grid->getTable()->numericCustomerIds)
+                {
+                   marshalParams[index] = this->grid->getUUID();
+                }
+                else
+                {
+                    const auto id = this->grid->getUUIDString();
+                    result->addLocalTextAndHash(id);
+                    marshalParams[index] = id;
+                }
+            }
+            else
+            {
+                cout << "hmmm" << endl;
+            }
+
+        }
+
+        ++index;
+    }
+
+    tally(paramCount, grid->getEmptyRow(), 0);
+}
+
+void openset::query::Interpreter::marshal_tally(const int paramCount, const Col_s* columns, const int currentRow)
+{
+    extractMarshalParams(paramCount);
+    tally(paramCount, columns, currentRow);
 }
 
 void __nestItercvar(const cvar* value, string& result)
@@ -1731,14 +1881,14 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             {
                 auto colValue = NONE; // extract property value from grid->propRow
 
-                //if (macros.vars.tableVars[inst->index].isCustomerProperty)
-                //{
-                //    colValue = propRow->cols[macros.vars.tableVars[inst->index].property];
-                // }
-                //else
-                //{
+                if (readRow >= rowCount)
+                {
+                    *stackPtr = None;
+                    ++stackPtr;
+                    break;
+                }
+
                 colValue = (*rows)[readRow]->cols[macros.vars.tableVars[inst->index].column];
-                //}
 
                 switch (macros.vars.tableVars[inst->index].schemaType)
                 {
@@ -1932,7 +2082,7 @@ void openset::query::Interpreter::opRunner(Instruction_s* inst, int64_t currentR
             ++stackPtr;
             break;
         case OpCode_e::PSHLITFLT: // push a floating point value
-            *stackPtr = cast<double>(inst->value) / cast<double>(1'000'000);
+            *stackPtr = cast<double>(inst->value) / cast<double>(10'000);
             ++stackPtr;
             break;
         case OpCode_e::PSHLITNUL: // push a null/none
@@ -2936,7 +3086,7 @@ void openset::query::Interpreter::setBits(IndexBits* indexBits, const int maxPop
 {
     bits      = indexBits;
     maxBitPop = maxPopulation;
-    bits->lastBit(maxBitPop);
+    bits->setSizeByBit(maxBitPop);
 }
 
 void openset::query::Interpreter::setCompareSegments(IndexBits* querySegment, std::vector<IndexBits*> segments)
@@ -2961,15 +3111,14 @@ void openset::query::Interpreter::execReset()
     recursion    = 0;
     nestDepth    = 0;
     breakDepth   = 0;
-    eventCount   = -1;
     inReturn     = false;
     propsChanged = false;
     loopState    = LoopState_e::run;
     stackPtr     = stack;
     eventDistinct.clear();
 
-    for (auto i = 0; i < STACK_DEPTH; ++i)
-        stack[i].clear();
+    //for (auto i = 0; i < STACK_DEPTH; ++i)
+      //  stack[i].clear();
 }
 
 void openset::query::Interpreter::exec()
@@ -3007,6 +3156,9 @@ void openset::query::Interpreter::exec()
             else
                 returns.push_back(*(stackPtr - 1)); // capture last value on stack
         }
+
+        if (macros.scriptMode == ScriptMode_e::customers)
+            autoTally();
 
         setGridProps();
     }
@@ -3101,6 +3253,10 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
                     "unknown run-time error (3)",
                     additional);
             }
+
+            if (macros.scriptMode == ScriptMode_e::customers)
+                autoTally();
+
             // write back props (checks for change by hashing)
             setGridProps();
 
@@ -3115,11 +3271,19 @@ void openset::query::Interpreter::exec(const int64_t functionHash)
 
 void openset::query::Interpreter::setGridProps()
 {
+    auto table = grid->getTable();
+
+    if (exportCustomerId && !table->numericCustomerIds)
+    {
+        result->addLocalTextAndHash(this->grid->getUUIDString()); // cache this text
+        exportCustomerId = false;
+    }
+
     // write back props (checks for change by hashing)
     if (!macros.writesProps || !propsChanged)
         return;
 
-    auto schema = grid->getTable()->getProperties();
+    auto schema = table->getProperties();
 
     for (auto& var : macros.vars.userVars)
     {
@@ -3127,115 +3291,11 @@ void openset::query::Interpreter::setGridProps()
         if (!var.isProp)
             continue;
 
-        if (!var.value.isContainer() && var.value.typeOf() != cvar::valueType::BOOL && var.value == NONE)
-        {
-            props[var.actual] = NONE;
-            continue;
-        }
-
-        if (!var.value.isContainer() && var.value.typeOf() == cvar::valueType::BOOL && var.value.getInt64() == NONE)
-        {
-            props[var.actual] = NONE;
-            continue;
-        }
-
-        // validate the props against the schema
-        const auto propInfo = schema->getProperty(var.actual);
-
-        // skip of the property no longer exists or is no longer a prop, skip empty sets
-        if (!propInfo || !propInfo->isCustomerProperty || (propInfo->isSet && !var.value.len()))
-        {
-            props[var.actual] = NONE;
-            continue;
-        }
-
-        if (!propInfo->isSet && var.value.isContainer())
-            throw std::runtime_error("property '" + var.actual + "' is not defined as a 'set' type.");
-
-        if (propInfo->isSet && !var.value.isContainer())
-            throw std::runtime_error("property '" + var.actual + "' is a set type. Values must be 'List' or 'Set'");
-
-        if (propInfo->isSet && var.value.typeOf() == cvar::valueType::DICT)
-            throw std::runtime_error(
-                "property '" + var.actual + "' cannot be a Dict, valid input types are values, Lists or Sets.");
-
-        if (propInfo->isSet)
-        {
-            cvar set;
-            set.set();
-
-            if (var.value.typeOf() == cvar::valueType::LIST)
-            {
-                for (auto& v : *var.value.getList())
-                {
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                        set += v.getInt64();
-                        break;
-                    case PropertyTypes_e::doubleProp:
-                        set += v.getDouble();
-                        break;
-                    case PropertyTypes_e::boolProp:
-                        set += v.getBool();
-                        break;
-                    case PropertyTypes_e::textProp:
-                        set += v.getString();
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                for (auto& v : *var.value.getSet())
-                {
-                    if (v == NONE) // skip nil/none values
-                        continue;
-
-                    switch (propInfo->type)
-                    {
-                    case PropertyTypes_e::intProp:
-                        set += v.getInt64();
-                        break;
-                    case PropertyTypes_e::doubleProp:
-                        set += v.getDouble();
-                        break;
-                    case PropertyTypes_e::boolProp:
-                        set += v.getBool();
-                        break;
-                    case PropertyTypes_e::textProp:
-                        set += v.getString();
-                        break;
-                    }
-                }
-            }
-
-            // if it had any values
-            if (set.len())
-                props[var.actual] = set;
-        }
-        else
-        {
-            switch (propInfo->type)
-            {
-            case PropertyTypes_e::intProp:
-                props[var.actual] = var.value.getInt64();
-                break;
-            case PropertyTypes_e::doubleProp:
-                props[var.actual] = var.value.getDouble();
-                break;
-            case PropertyTypes_e::boolProp:
-                props[var.actual] = var.value.getBool();
-                break;
-            case PropertyTypes_e::textProp:
-                props[var.actual] = var.value.getString();
-                break;
-            }
-        }
+        grid->getCustomerPropsManager()->setProp(table, var.schemaColumn, var.value);
     }
 
     // encode
-    grid->setProps(props);
+    grid->setCustomerProps();
 }
 
 void openset::query::Interpreter::getGridProps()
@@ -3243,23 +3303,12 @@ void openset::query::Interpreter::getGridProps()
     if (!macros.useProps)
         return;
 
-    props.dict();
-
-    // no props? clean props is userVars
-    if (propsIndex != -1 && grid)
-    {
-        for (auto varIndex : macros.props)
-            macros.vars.userVars[varIndex].value = NONE;
-        return;
-    }
-
-    props = grid->getProps(macros.writesProps);
+    grid->getCustomerProps();
 
     // copy props into userVars
     for (auto varIndex : macros.props)
-        macros.vars.userVars[varIndex].value = props.contains(macros.vars.userVars[varIndex].actual)
-                                                   ? props[macros.vars.userVars[varIndex].actual]
-                                                   : cvar(NONE);
+        macros.vars.userVars[varIndex].value = grid->getCustomerPropsManager()->getProp(
+            grid->getTable(), macros.vars.userVars[varIndex].schemaColumn);
 }
 
 openset::query::Interpreter::Returns& openset::query::Interpreter::getLastReturn()

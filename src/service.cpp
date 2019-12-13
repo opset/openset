@@ -21,7 +21,6 @@ namespace openset
 	{
 		const auto ip = globals::running->host;
 		const auto port = globals::running->port;
-		const auto pool = std::thread::hardware_concurrency(); // set to number of cores
 
 		const auto partitionTotal = globals::running->partitionMax;
 
@@ -30,7 +29,7 @@ namespace openset
 #endif
 
 		// generate our async workers, we are going to use one worker per core
-		openset::async::AsyncPool async(partitionTotal, std::thread::hardware_concurrency());
+		openset::async::AsyncPool async(partitionTotal, 32 ); // TODO make this a switch std::thread::hardware_concurrency());
 		// DEBUG OpenSet::async::AsyncPool async(partitionTotal, 1);
 
 		openset::mapping::Mapper mapper;

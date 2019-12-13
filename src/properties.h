@@ -34,6 +34,7 @@ namespace openset
                 bool isSet{ false };
                 bool isCustomerProperty{ false };
                 bool deleted{ false };
+                int64_t bucket {1};
             };
 
             using PropsMap = robin_hood::unordered_map<std::string, Property_s*, robin_hood::hash<std::string>>;

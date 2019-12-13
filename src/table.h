@@ -9,6 +9,7 @@
 #include "querycommon.h"
 #include "var/var.h"
 #include "property_mapping.h"
+#include "robin_hood.h"
 
 using namespace std;
 
@@ -20,6 +21,9 @@ namespace openset
         class Database;
         class PropertyMapping;
         class TablePartitioned;
+        class AttributeBlob;
+
+        using CustomerIndexProps = std::vector<int>;
 
         struct SegmentTtl_s
         {
@@ -84,9 +88,15 @@ namespace openset
             // segmentRefresh maps
             CriticalSection segmentCS;
             // map of segments, their TTLs, last refresh times, etc
-            std::unordered_map<std::string, SegmentTtl_s> segmentTTL;
+            using SegmentTtl = robin_hood::unordered_map<std::string, SegmentTtl_s, robin_hood::hash<string>>;
+            using SegmentRefresh = robin_hood::unordered_map<std::string, SegmentRefresh_s, robin_hood::hash<string>>;
+
+            SegmentTtl segmentTTL;
             // list of segments that auto update and the code to update them
-            std::unordered_map<std::string, SegmentRefresh_s> segmentRefresh;
+            SegmentRefresh segmentRefresh;
+
+            // customer list ordering indexes
+            CustomerIndexProps indexedProps;
 
             // global variables
             CriticalSection globalVarCS;
@@ -97,9 +107,9 @@ namespace openset
             PropertyMapping propertyMap;
             openset::revent::MessageBroker messages;
 
-            using EventOrderMapStr = std::unordered_map<string, int>;
-            using EventOrderMapHash = std::unordered_map<int64_t, int>;
-            using PartitionMap = unordered_map<int, TablePartitioned*>;
+            using EventOrderMapStr = robin_hood::unordered_map<string, int, robin_hood::hash<string>>;
+            using EventOrderMapHash = robin_hood::unordered_map<int64_t, int, robin_hood::hash<int>>;
+            using PartitionMap = robin_hood::unordered_map<int, TablePartitioned*, robin_hood::hash<int>>;
             using ZombiePartitions = std::queue<TablePartitioned*>;
 
             EventOrderMapStr eventOrderStrings;
@@ -141,6 +151,8 @@ namespace openset
             TablePartitioned* getPartitionObjects(const int32_t partition, const bool create);
             void releasePartitionObjects(const int32_t partition);
 
+            void propagateCustomerIndexes();
+
             int64_t getSessionTime() const
             {
                 return sessionTime;
@@ -159,6 +171,11 @@ namespace openset
             EventOrderMapHash* getEventOrderHashes()
             {
                 return &eventOrderInts;
+            }
+
+            CustomerIndexProps* getCustomerIndexProps()
+            {
+                return &indexedProps;
             }
 
             EventOrderMapStr* getEventOrderStrings()
@@ -198,12 +215,12 @@ namespace openset
                 return &segmentCS;
             }
 
-            std::unordered_map<std::string, SegmentTtl_s>* getSegmentTTL()
+            SegmentTtl* getSegmentTTL()
             {
                 return &segmentTTL;
             }
 
-            std::unordered_map<std::string, SegmentRefresh_s>* getSegmentRefresh()
+            SegmentRefresh* getSegmentRefresh()
             {
                 return &segmentRefresh;
             }

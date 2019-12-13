@@ -101,7 +101,7 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
 
     for (auto row : rows)
     {
-        const auto personNode = row->xPath("/id");
+        const auto personNode = row->find("id");
 
         if (!personNode)
         {
@@ -151,10 +151,10 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         else
             uuid = personNode->getInt();
 
-        const auto destination = cast<int32_t>((std::abs(uuid) % 13337) % partitions->getPartitionMax());
+        const auto destination = cast<int32_t>(cast<uint64_t>(MakeHash(uuid)) % partitions->getPartitionMax());
 
         int64_t len;
-        SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));
+        auto logSize = SideLog::getSideLog().add(table.get(), destination, cjson::stringifyCstr(row, len));
     }
 
     SideLog::getSideLog().unlock();
@@ -216,7 +216,21 @@ void RpcInsert::insertRetry(const openset::web::MessagePtr& message, const RpcMa
         }
     }
 
-    message->reply(http::StatusCode::success_ok, response);
+    if (SideLog::getSideLog().getLogSize() < 50000)
+    {
+        message->reply(http::StatusCode::success_ok, response);
+    }
+    else
+    {
+        thread work([=]()
+        {
+            while (SideLog::getSideLog().getLogSize() > 50000)
+                ThreadSleep(5);
+
+            message->reply(http::StatusCode::success_ok, response);
+        });
+        work.detach();
+    }
 }
 
 void RpcInsert::insert(const openset::web::MessagePtr& message, const RpcMapping& matches)

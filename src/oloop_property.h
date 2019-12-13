@@ -73,10 +73,13 @@ namespace openset
             db::TablePartitioned* parts;
             result::ResultSet* result;
 
+            db::IndexBits all;
+            db::IndexBits rootCount;
+
             int64_t stopBit{ 0 };
             int64_t instance{ 0 };
 
-            std::vector<db::IndexBits*> segments;
+            std::vector<std::string> segments;
 
             // loop locals
             result::RowKey rowKey;
@@ -96,7 +99,9 @@ namespace openset
             ~OpenLoopProperty() final;
 
             void prepare() final;
+            void createRootNode();
             bool run() final;
+            void addRootTotal();
             void partitionRemoved() final;
         };
 

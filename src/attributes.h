@@ -1,5 +1,6 @@
 #pragma once
 
+#include "common.h"
 #include <vector>
 //#include "mem/bigring.h"
 #include "mem/blhash.h"
@@ -8,6 +9,7 @@
 #include "robin_hood.h"
 #include "dbtypes.h"
 #include "indexbits.h"
+#include "customer_index.h"
 
 using namespace std;
 
@@ -81,17 +83,10 @@ namespace openset::db
          *   each int32_t is a linear_id (linear user id).
          *
          */
-        //Attr_changes_s* changeTail{ nullptr };
         char* text{ nullptr };
-        int32_t ints{ 0 }; // number of unsigned int64 integers uncompressed data uses
-        int32_t ofs{ 0 };
-        int32_t len{ 0 };
-        int32_t comp{ 0 }; // compressed size in bytes
-        int32_t linId{ -1 };
-        char index[1]{ 0 }; // char* (1st byte) of packed index bits struct
+        char* data{ nullptr };
 
         Attr_s() = default;
-        IndexBits* getBits();
     };
 #pragma pack(pop)
 
@@ -125,15 +120,17 @@ namespace openset::db
         };
 
         using AttrListExpanded = vector<std::pair<int64_t,Attr_s*>>; // pair, value and bits
-        using AttrList = vector<Attr_s*>;
+        using AttrList = vector<attr_key_s>;
 
         // value and attribute info
         using ColumnIndex = robin_hood::unordered_map<attr_key_s, Attr_s*, robin_hood::hash<attr_key_s>>;
         using ChangeIndex = robin_hood::unordered_map<attr_key_s, std::vector<Attr_changes_s>, robin_hood::hash<attr_key_s>>;
         using AttrPair = pair<attr_key_s, Attr_s*>;
 
-        ColumnIndex propertyIndex;//{ ringHint_e::lt_5_million };
-        ChangeIndex changeIndex;//{ ringHint_e::lt_5_million };
+        ColumnIndex propertyIndex; // prop/value store
+        ChangeIndex changeIndex; // cache for property changes
+        CustomerIndexing customerIndexing; // indexes for customer_list sort ordering
+        IndexLRU indexCache;
 
         Table* table;
         AttributeBlob* blob;
@@ -143,9 +140,11 @@ namespace openset::db
         explicit Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties);
         ~Attributes();
 
-        void addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state);
+        IndexBits* getBits(const int32_t propIndex, int64_t value);
 
-        Attr_s* getMake(const int32_t propIndex, const int64_t value);
+        void addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state);
+
+        Attr_s* getMake(const int32_t propIndex, int64_t value);
         Attr_s* getMake(const int32_t propIndex, const string& value);
 
         Attr_s* get(const int32_t propIndex, const int64_t value) const;
@@ -153,11 +152,11 @@ namespace openset::db
 
         void drop(const int32_t propIndex, const int64_t value);
 
-        void setDirty(const int32_t linId, const int32_t propIndex, const int64_t value, const bool on = true);
+        void setDirty(const int64_t customerId, const int32_t linId, const int32_t propIndex, const int64_t value, const bool on);
         void clearDirty();
 
         // replace an indexes bits with new ones, used when generating segments
-        void swap(const int32_t propIndex, const int64_t value, IndexBits* newBits);
+        //void swap(const int32_t propIndex, const int64_t value, IndexBits* newBits);
 
         AttributeBlob* getBlob() const;
 
@@ -168,6 +167,8 @@ namespace openset::db
         {
             return (partition == other.partition);
         }
+
+        void createCustomerPropIndexes();
 
         void serialize(HeapStack* mem);
         int64_t deserialize(char* mem);

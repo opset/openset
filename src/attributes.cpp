@@ -6,20 +6,12 @@
 
 using namespace openset::db;
 
-IndexBits* Attr_s::getBits()
-{
-    auto bits = new IndexBits();
-
-    bits->mount(index, ints, ofs, len, linId);
-
-    return bits;
-}
-
 Attributes::Attributes(const int partition, Table* table, AttributeBlob* attributeBlob, Properties* properties) :
     table(table),
     blob(attributeBlob),
     properties(properties),
-    partition(partition)
+    partition(partition),
+    indexCache(128)
 {}
 
 Attributes::~Attributes()
@@ -31,9 +23,48 @@ Attributes::~Attributes()
     }
 }
 
-void Attributes::addChange(const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
+IndexBits* Attributes::getBits(const int32_t propIndex, int64_t value)
 {
-    const auto key = attr_key_s{ propIndex, value };
+    // apply bucketing to double values
+    if (const auto propInfo = properties->getProperty(propIndex); propInfo && propInfo->type == PropertyTypes_e::doubleProp)
+        value = static_cast<int64_t>(value / propInfo->bucket) * propInfo->bucket;
+
+    if (const auto bits = indexCache.get(propIndex, value); bits)
+        return bits;
+
+    const auto attribute = Attributes::getMake(propIndex, value);
+
+    auto bits = new IndexBits();
+    bits->mount(attribute->data);
+
+    // cache these bits
+    const auto [evictPropIndex, evictValue, evictBits] = indexCache.set(propIndex, value, bits);
+
+    // if anything got squeezed out compress it
+    if (evictBits)
+    {
+        if (evictBits->data.isDirty())
+        {
+            const auto evictAttribute = Attributes::getMake(static_cast<int>(evictPropIndex), evictValue);
+            evictAttribute->data = evictBits->store();
+        }
+        delete evictBits;
+    }
+
+    return bits;
+}
+
+void Attributes::addChange(const int64_t customerId, const int32_t propIndex, const int64_t value, const int32_t linearId, const bool state)
+{
+    if (propIndex == PROP_STAMP || propIndex == PROP_UUID || propIndex == PROP_SESSION)
+        return;
+
+    const auto key = attr_key_s( propIndex, value );
+
+    if (state)
+        customerIndexing.insert(propIndex, customerId, linearId, value);
+    else
+        customerIndexing.erase(propIndex, customerId, value);
 
     if (auto changeRecord = changeIndex.find(key); changeRecord != changeIndex.end())
     {
@@ -41,38 +72,45 @@ void Attributes::addChange(const int32_t propIndex, const int64_t value, const i
         return;
     }
 
-    changeIndex.emplace(key,  std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
+    changeIndex.emplace(key, std::vector<Attr_changes_s>{Attr_changes_s{linearId, state}});
 }
 
-
-Attr_s* Attributes::getMake(const int32_t propIndex, const int64_t value)
+Attr_s* Attributes::getMake(const int32_t propIndex, int64_t value)
 {
-    if (auto attrPair = propertyIndex.find({ propIndex, value }); attrPair == propertyIndex.end())
+    if (const auto propInfo = properties->getProperty(propIndex); propInfo && propInfo->type == PropertyTypes_e::doubleProp)
+        value = static_cast<int64_t>(value / propInfo->bucket) * propInfo->bucket;
+
+    auto key = attr_key_s( propIndex, value );
+
+    if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
-        propertyIndex.emplace(attr_key_s{ propIndex, value }, attr);
+        attr->data = nullptr;
+        attr->text = nullptr;
+        res.first->second = attr;
         return attr;
     }
     else
     {
-        return attrPair->second;
+        return res.first->second;
     }
 }
 
 Attr_s* Attributes::getMake(const int32_t propIndex, const string& value)
 {
-    const auto valueHash = MakeHash(value);
+    auto key = attr_key_s( propIndex,  MakeHash(value) );
 
-    if (auto attrPair = propertyIndex.find({ propIndex, valueHash }); attrPair == propertyIndex.end())
+    if (const auto& res = propertyIndex.emplace(key, nullptr); res.second == true)
     {
         const auto attr = new(PoolMem::getPool().getPtr(sizeof(Attr_s)))Attr_s();
+        attr->data = nullptr;
         attr->text = blob->storeValue(propIndex, value);
-        propertyIndex.insert({attr_key_s{ propIndex, valueHash }, attr});
+        res.first->second = attr;
         return attr;
     }
     else
     {
-        return attrPair->second;
+        return res.first->second;
     }
 }
 
@@ -97,113 +135,27 @@ void Attributes::drop(const int32_t propIndex, const int64_t value)
     propertyIndex.erase({ propIndex, value });
 }
 
-void Attributes::setDirty(const int32_t linId, const int32_t propIndex, const int64_t value, const bool on)
+void Attributes::setDirty(const int64_t customerId, const int32_t linId, const int32_t propIndex, const int64_t value, const bool on)
 {
-    addChange(propIndex, value, linId, on);
+    addChange(customerId, propIndex, value, linId, on);
 }
 
 void Attributes::clearDirty()
 {
-    IndexBits bits;
-
     for (auto& change : changeIndex)
     {
-        const auto attrPair = propertyIndex.find({ change.first.index, change.first.value });
+        const auto bits = getBits(change.first.index, change.first.value);
 
-        if (attrPair == propertyIndex.end() || !attrPair->second)
-            continue;
-
-        const auto attr = attrPair->second;
-
-        bits.mount(attr->index, attr->ints, attr->ofs, attr->len, attr->linId);
-
-        for (const auto& t : change.second)
+        for (const auto t : change.second)
         {
             if (t.state)
-                bits.bitSet(t.linId);
+                bits->bitSet(t.linId);
             else
-                bits.bitClear(t.linId);
-        }
-
-        if (!bits.population(bits.ints * 64)) //pop count zero? remove this
-        {
-            drop(change.first.index, change.first.value );
-            PoolMem::getPool().freePtr(attr);
-        }
-        else
-        {
-            int64_t compBytes = 0; // OUT value via reference
-            int64_t linId;
-            int32_t ofs, len;
-
-            // compress the data, get it back in a pool ptr
-            const auto compData = bits.store(compBytes, linId, ofs, len, table->indexCompression);
-            const auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
-
-            // copy header
-            memcpy(destAttr, attr, sizeof(Attr_s));
-            if (compData)
-            {
-                memcpy(destAttr->index, compData, compBytes);
-                // return work buffer from bits.store to the pool
-                PoolMem::getPool().freePtr(compData);
-            }
-
-            destAttr->ints = bits.ints;//(isList) ? 0 : bits.ints;
-            destAttr->comp = static_cast<int>(compBytes);
-            destAttr->linId = linId;
-            destAttr->ofs = ofs;
-            destAttr->len = len;
-
-            // if we made a new destination, we have to update the
-            // index to point to it, and free the old one up.
-            // update the Attr pointer directly in the index
-            attrPair->second = destAttr;
-            PoolMem::getPool().freePtr(attr);
+                bits->bitClear(t.linId);
         }
     }
+
     changeIndex.clear();
-}
-
-void Attributes::swap(const int32_t propIndex, const int64_t value, IndexBits* newBits)
-{
-    auto attrPair = propertyIndex.find(attr_key_s{ propIndex, value });
-
-    if (attrPair == propertyIndex.end())
-        return;
-
-    const auto attr = attrPair->second;
-
-    int64_t compBytes = 0; // OUT value
-    int64_t linId = -1;
-    int32_t len, ofs;
-
-    // compress the data, get it back in a pool ptr, size returned in compBytes
-    const auto compData = newBits->store(compBytes, linId, ofs, len);
-    auto destAttr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + compBytes));
-
-    // copy header
-    memcpy(destAttr, attr, sizeof(Attr_s));
-    if (compData)
-    {
-        memcpy(destAttr->index, compData, compBytes);
-        // return work buffer from bits.store to the pool
-        PoolMem::getPool().freePtr(compData);
-    }
-
-    destAttr->text = attr->text;
-    destAttr->ints = (compBytes) ? newBits->ints: 0;//asList ? 0 : newBits->ints;
-    destAttr->comp = static_cast<int32_t>(compBytes); // TODO - check for overflow
-    destAttr->linId = linId;
-    destAttr->ofs = ofs;
-    destAttr->len = len;
-
-    // if we made a new destination, we have to update the
-    // index to point to it, and free the old one up.
-    propertyIndex.insert({attr_key_s{ propIndex, value }, destAttr});
-
-    // FIX - memory leak
-    PoolMem::getPool().freePtr(attr);
 }
 
 AttributeBlob* Attributes::getBlob() const
@@ -233,12 +185,8 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
     case listMode_e::NEQ:
     case listMode_e::EQ:
         if (const auto tAttr = get(propIndex, value); tAttr)
-            result.push_back(tAttr);
+            result.emplace_back(propIndex, value);
         return result;
-    //case listMode_e::PRESENT_FAST: // fast for reducing set in `!= nil` test
-    //    if (const auto tAttr = get(propIndex, NONE); tAttr)
-    //        result.push_back(tAttr);
-    //    return result;
         default: ;
     }
 
@@ -250,23 +198,23 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
         switch (mode)
         {
         case listMode_e::PRESENT: // sum of all indexes - slow but accurate for `== nil` test
-            result.push_back(kv.second);
+            result.push_back(kv.first);
         break;
         case listMode_e::GT:
             if (kv.first.value > value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::GTE:
             if (kv.first.value >= value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::LT:
             if (kv.first.value < value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         case listMode_e::LTE:
             if (kv.first.value <= value)
-                result.push_back(kv.second);
+                result.push_back(kv.first);
             break;
         default:
             // never happens
@@ -275,6 +223,13 @@ Attributes::AttrList Attributes::getPropertyValues(const int32_t propIndex, cons
     }
 
     return result;
+}
+
+void Attributes::createCustomerPropIndexes()
+{
+    const auto props = table->getCustomerIndexProps();
+    for (auto prop : *props)
+        customerIndexing.createIndex(prop);
 }
 
 void Attributes::serialize(HeapStack* mem)
@@ -286,54 +241,12 @@ void Attributes::serialize(HeapStack* mem)
     const auto sectionLength = recast<int64_t*>(mem->newPtr(sizeof(int64_t)));
     (*sectionLength) = 0;
 
-    for (auto& kv : propertyIndex)
-    {
-        /* STL ugliness - I wish they let you alias these names somehow
-         *
-         * kv.first is property and value
-         * kv.second is Attr_s*
-         *
-         * so
-         *
-         * kv.first.first is property
-         * kv.first.second is value
-         */
-
+    //for (auto& kv : propertyIndex)
+    //{
         // add a header to the HeapStack
-        const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
+        //const auto blockHeader = recast<serializedAttr_s*>(mem->newPtr(sizeof(serializedAttr_s)));
+    //}
 
-        // fill in the header
-        blockHeader->column = kv.first.index;
-        blockHeader->hashValue = kv.first.value;
-        blockHeader->ints = kv.second->ints;
-        blockHeader->ofs = kv.second->ofs;
-        blockHeader->len = kv.second->len;
-        blockHeader->linId = kv.second->linId;
-        const auto text = this->blob->getValue(kv.first.index, kv.first.value);
-        blockHeader->textSize = text ? strlen(text) : 0;
-        //blockHeader->textSize = item.second->text ? strlen(item.second->text) : 0;
-        blockHeader->compSize = kv.second->comp;
-
-        // copy a text/blob value if any
-        if (blockHeader->textSize)
-        {
-            const auto textData = recast<char*>(mem->newPtr(blockHeader->textSize));
-            memcpy(textData, text, blockHeader->textSize);
-            //memcpy(textData, item.second->text, blockHeader->textSize);
-        }
-
-        // copy the compressed data
-        if (blockHeader->compSize)
-        {
-            const auto blockData = recast<char*>(mem->newPtr(blockHeader->compSize));
-            memcpy(blockData, kv.second->index, blockHeader->compSize);
-        }
-
-        (*sectionLength) +=
-            sizeof(serializedAttr_s) +
-            blockHeader->textSize +
-            blockHeader->compSize;
-    }
 }
 
 int64_t Attributes::deserialize(char* mem)
@@ -377,14 +290,8 @@ int64_t Attributes::deserialize(char* mem)
         // create an attr_s object
         const auto attr = recast<Attr_s*>(PoolMem::getPool().getPtr(sizeof(Attr_s) + blockHeader->compSize));
         attr->text = blobPtr;
-        attr->ints = blockHeader->ints;
-        attr->ofs = blockHeader->ofs;
-        attr->len = blockHeader->len;
-        attr->comp = blockHeader->compSize;
-        attr->linId = blockHeader->linId;
 
-        // copy the data in
-        memcpy(attr->index, dataPtr, blockHeader->compSize);
+        // TODO - copy the data
 
         // add it to the index
         propertyIndex.emplace(attr_key_s{ blockHeader->column, blockHeader->hashValue }, attr);

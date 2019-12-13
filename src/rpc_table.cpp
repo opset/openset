@@ -7,6 +7,8 @@
 #include "common.h"
 
 #include "cjson/cjson.h"
+#include "threads/locks.h"
+
 #include "oloop_insert.h"
 #include "oloop_property.h"
 #include "oloop_histogram.h"
@@ -29,12 +31,16 @@ using namespace openset::comms;
 using namespace openset::db;
 using namespace openset::result;
 
+CriticalSection RpcTableCs;
+
 void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
 
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
+
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
     const auto request = message->getJSON();
@@ -92,6 +98,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
     }
 
     const auto sourceEventOrder = request.xPath("/event_order");
+    const auto sourcePropIndexes = request.xPath("/prop_indexes");
     const auto sourceSettings = request.xPath("/settings");
 
     auto sourcePropsList = sourceProps->getNodes();
@@ -138,7 +145,6 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
 
     }
 
-
     globals::async->suspendAsync();
     auto table = database->newTable(tableName, useNumericIds);
     auto columns = table->getProperties();
@@ -149,7 +155,7 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
     // set the default required properties
     columns->setProperty(PROP_STAMP, "stamp", PropertyTypes_e::intProp, false);
     columns->setProperty(PROP_EVENT, "event", PropertyTypes_e::textProp, false);
-    columns->setProperty(PROP_UUID, "id", PropertyTypes_e::intProp, false);
+    columns->setProperty(PROP_UUID, "id", useNumericIds ? PropertyTypes_e::intProp : PropertyTypes_e::textProp, false);
     columns->setProperty(PROP_SEGMENT, "__segment", PropertyTypes_e::textProp, false);
     columns->setProperty(PROP_SESSION, "session", PropertyTypes_e::intProp, false);
 
@@ -181,10 +187,20 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
                     "invalid property type" },
                     message);
 
+            database->dropTable(tableName);
+            globals::async->resumeAsync();
             return;
         }
 
         columns->setProperty(columnEnum, name, colType, isSet, isProp);
+
+        const auto bucket = n->xPathInt("/bucket", 1);
+        if (colType == PropertyTypes_e::doubleProp)
+        {
+            const auto prop = columns->getProperty(name);
+            prop->bucket = bucket * 10000;
+        }
+
         ++columnEnum;
     }
 
@@ -202,6 +218,77 @@ void RpcTable::table_create(const openset::web::MessagePtr& message, const RpcMa
             eventOrderHashes->emplace(MakeHash(n->getString()), idx);
             ++idx;
         }
+    }
+
+    if (sourcePropIndexes)
+    {
+
+        auto props = table->getCustomerIndexProps();
+        auto propNodes = sourcePropIndexes->getNodes();
+
+        auto idx = 0;
+        for (auto n : propNodes)
+        {
+            const auto propName = n->getString();
+            const auto propInfo = columns->getProperty(propName);
+
+            if (!propInfo)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' not found" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (!propInfo->isCustomerProperty)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' must be configured as a 'customer_property'" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (propInfo->isSet)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' cannot be a 'set' type" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            if (propInfo->type != PropertyTypes_e::intProp && propInfo->type != PropertyTypes_e::doubleProp)
+            {
+                RpcError(
+                    openset::errors::Error{
+                        openset::errors::errorClass_e::config,
+                        openset::errors::errorCode_e::general_config_error,
+                        "prop_indexes: property '" + propName + "' must be an 'int' or 'double' type" },
+                        message);
+                database->dropTable(tableName);
+                globals::async->resumeAsync();
+                return;
+            }
+
+            props->push_back(propInfo->idx);
+        }
+
+        table->propagateCustomerIndexes();
+
     }
 
     if (sourceSettings)
@@ -224,6 +311,8 @@ void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr& messag
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
+
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
     const auto request = message->getJSON();
@@ -261,6 +350,8 @@ void openset::comms::RpcTable::table_drop(const openset::web::MessagePtr& messag
 
 void RpcTable::table_describe(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -333,6 +424,10 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
                 columnRecord->set("is_set", true);
             if (c.isCustomerProperty)
                 columnRecord->set("is_customer", true);
+
+            if (c.type == PropertyTypes_e::doubleProp)
+                columnRecord->set("bucket", static_cast<int64_t>(c.bucket / 10000));
+
         }
 
     auto eventOrder = response.setArray("event_order");
@@ -348,16 +443,16 @@ void RpcTable::table_describe(const openset::web::MessagePtr& message, const Rpc
     const auto settings = response.setObject("settings");
     table->serializeSettings(settings);
 
-    Logger::get().info("describe table '" + tableName + "'.");
     message->reply(http::StatusCode::success_ok, response);
 }
 
 void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
-
     // this request must be forwarded to all the other nodes
     if (ForwardRequest(message) != ForwardStatus_e::alreadyForwarded)
         return;
+
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
 
@@ -465,6 +560,8 @@ void RpcTable::column_add(const openset::web::MessagePtr& message, const RpcMapp
 
 void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -536,6 +633,8 @@ void RpcTable::column_drop(const openset::web::MessagePtr& message, const RpcMap
 
 void RpcTable::table_settings(const openset::web::MessagePtr& message, const RpcMapping& matches)
 {
+    csLock rpcLock(RpcTableCs);
+
     auto database = openset::globals::database;
 
     const auto request = message->getJSON();
@@ -578,7 +677,7 @@ void RpcTable::table_settings(const openset::web::MessagePtr& message, const Rpc
 
 void openset::comms::RpcTable::table_list(const openset::web::MessagePtr & message, const RpcMapping & matches)
 {
-    // lock the table object
+    csLock rpcLock(RpcTableCs);
 
     auto database = openset::globals::database;
     const auto names = database->getTableNames();

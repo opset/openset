@@ -81,7 +81,8 @@ namespace openset
             intProp = 1,
             doubleProp = 2,
             boolProp = 3,
-            textProp = 4
+            textProp = 4,
+            runTimeTypeProp = 5
         };
 
 #pragma pack(push,1)
@@ -125,7 +126,14 @@ namespace std
     {
         size_t operator()(const openset::db::attr_key_s& x) const
         {
-            return (uint64_t(x.index) << 32) + x.value;
+            return static_cast<size_t>(XXH64(
+                reinterpret_cast<const void*>(&x.index),
+                4,
+                XXH64(
+                        reinterpret_cast<const void*>(&x.value),
+                    8,
+                    HASH_SEED)
+            ));
         }
     };
 };

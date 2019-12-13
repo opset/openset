@@ -3,12 +3,11 @@
 #include "common.h"
 #include "logger.h"
 #include "customer.h"
-//#include "mem/bigring.h"
-#include "robin_hood.h"
 #include "mem/blhash.h"
 #include "grid.h"
 
 #include <vector>
+#include "mem/segmented_list.h"
 
 using namespace std;
 
@@ -21,11 +20,10 @@ namespace openset
         class Customers
         {
         public:
-            robin_hood::unordered_map<int64_t, int32_t, robin_hood::hash<int64_t>> customerMap;
-            vector<PersonData_s*> customerLinear;
-            vector<int32_t> reuse;
+            BinaryListHash<int64_t, int32_t> customerMap;
+            SegmentedList<PersonData_s*, 512> customerLinear;
             int partition;
-        public:
+
             explicit Customers(int partition);
             ~Customers();
 

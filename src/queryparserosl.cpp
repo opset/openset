@@ -62,7 +62,7 @@ string openset::query::MacroDbg(Macro_s& macro)
         for (auto& v : macro.vars.userVars)
         {
             ss << padding(v.index, 3, true) << " | ";
-            ss << padding("'" + v.actual + "'", 20, false, ' ') << " | " <<
+            ss << padding("'" + v.actual + "'", 22, false, ' ') << " | " <<
                 (v.isProp ? "is property" : "");
             ss << endl;
         }

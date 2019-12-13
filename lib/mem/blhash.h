@@ -24,8 +24,10 @@ THE SOFTWARE.
 
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <stack>
+#include <functional>
 #include "../heapstack/heapstack.h"
 
 typedef uint16_t tBranch;
@@ -99,8 +101,12 @@ public:
 template <typename tKey, typename tVal>
 class BinaryListHash
 {
-#pragma pack(push,1)
+public:
+    using FilterCB = std::function<bool(tKey*, tVal*)>;
 
+private:
+
+#pragma pack(push,1)
     struct bl_element_s
     {
         tBranch valueWord;
@@ -162,12 +168,18 @@ class BinaryListHash
             return static_cast<tBranch*>(&words);
         }
 
-        tKey getKey() 
+        tKey getKey()
         {
-            return *reinterpret_cast<tVal*>(words);
+            tKey key;
+            memcpy(&key, words, sizeof(tKey));
+            return key;
+        }
+
+        tKey* getKeyPtr()
+        {
+            return reinterpret_cast<tKey*>(words);
         }
     };
-
 #pragma pack(pop)
 
     bl_array_s* root; // root node for hash tree
@@ -175,9 +187,16 @@ class BinaryListHash
 
     int32_t distinct {0};
 
+    // serialize variables (passing them as params is just really slow)
+    overlay serializeOver;
+    int serializeLimit;
+    FilterCB serializeCB;
+
 public:
 
-    using HashVector = std::vector<std::pair<tKey, tVal>>;
+    using ResultItem = std::pair<tKey, tVal>;
+    using HashVector = std::vector<ResultItem>;
+    HashVector serializeList;
 
     BinaryListHash()
         : root(nullptr)
@@ -194,7 +213,7 @@ public:
     }
 
     // debug - dumps usage data for the memory manager
-    // 
+    //
     // shows how many cached/recycled lists are available
     //
     void debug()
@@ -241,7 +260,7 @@ public:
 
                 // make a space in current node
                 node = makeGap(node, index, lastNode, lastIndex);
-                
+
                 if (iter == words) // we are at the end
                 {
                     memcpy(static_cast<void*>(&node->nodes[index].next), &value, sizeof(tVal));
@@ -276,7 +295,7 @@ public:
     //
     //  if (hash.get( someKey, someValue ))
     //  {
-    //     //do something with some val. 
+    //     //do something with some val.
     //  };
     //
     //  save a check then a second lookup to get
@@ -311,7 +330,7 @@ public:
         }
     };
 
-    // exists - is key in hash 
+    // exists - is key in hash
     //
     bool exists(tKey key)
     {
@@ -341,44 +360,84 @@ public:
         }
     };
 
-  
-    std::vector<std::pair<tKey, tVal>> serialize()
+
+    HashVector& serialize(bool descending, int limit, FilterCB filterCallBack)
     {
-
-        tBranch *iter;
-        int64_t index, lastIndex;
-
         tKey key;
-        overlay over(&key);
- 
-        HashVector result;
-        result.reserve(distinct);
+        serializeOver.set(&key);
 
-        serializeRecurse(root, result, over, 0);
+        serializeList.clear();
+        serializeList.reserve(limit);
 
-        return result;
+        serializeLimit = limit;
+        serializeCB = filterCallBack;
+
+        if (descending)
+            serializeRecurseDescending(root, 0);
+        else
+            serializeRecurseAscending(root, 0);
+
+        return serializeList;
     }
 
 private:
 
-    static void serializeRecurse(bl_array_s* node, HashVector& result, overlay& over, int depth)
+    void serializeRecurseAscending(bl_array_s* node, int depth)
     {
         for (auto idx = 0; idx < node->used; ++idx)
         {
-            over.words[over.elements - 1 - depth] = node->nodes[idx].valueWord;
+            if (serializeLimit == -1)
+                return;
 
-            if (depth == over.elements - 1)
+            serializeOver.words[serializeOver.elements - 1 - depth] = node->nodes[idx].valueWord;
+
+            if (depth == serializeOver.elements - 1)
             {
-                tVal value; // = reinterpret_cast<tVal*>(node->nodes[idx].next);
-                memcpy(&value, &node->nodes[idx].next, sizeof(tVal));
-                result.emplace_back(over.getKey(), value);
+                if (//serializeOver > serializeStart &&
+                    serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
+                {
+                    serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));
+                    if (serializeList.size() >= serializeLimit)
+                    {
+                        serializeLimit = -1;
+                        return;
+                    }
+                }
             }
             else
             {
-                serializeRecurse(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), result, over, depth+1);
+                serializeRecurseAscending(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), depth + 1);
             }
-        }            
-       
+        }
+    }
+
+    void serializeRecurseDescending(bl_array_s* node, int depth)
+    {
+        for (auto idx = node->used - 1; idx >= 0; --idx)
+        {
+            if (serializeLimit == -1)
+                return;
+
+            serializeOver.words[serializeOver.elements - 1 - depth] = node->nodes[idx].valueWord;
+
+            if (depth == serializeOver.elements - 1)
+            {
+                if (//serializeOver > serializeStart &&
+                    serializeCB(serializeOver.getKeyPtr(), reinterpret_cast<tVal*>(&node->nodes[idx].next)))
+                {
+                    serializeList.emplace_back(*serializeOver.getKeyPtr(), *reinterpret_cast<tVal*>(&node->nodes[idx].next));
+                    if (serializeList.size() >= serializeLimit)
+                    {
+                        serializeLimit = -1;
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                serializeRecurseDescending(reinterpret_cast<bl_array_s*>(node->nodes[idx].next), depth + 1);
+            }
+        }
     }
 
     // this is a fairly common binary search. Google will find you serveral
@@ -405,22 +464,10 @@ private:
             return valWord;
 
         // on a short list scanning sequentially is more efficient
-        // because the data is fits in a cache line. 
-        // iterating the first dozen or is most efficient 
-        // and is quicker than list sub-division on my i7 type processor.
-        // Some of the newer server processors might benefit from a 
-        // higher setting.
-        //
-        //  bl_element_s = 10 bytes
-        //  cache line   = 64 bytes. 
-        //  6 elements per cache line.
-        //  
-        //  testing showed a positive gain for on my processor
-        //  at two cache lines worth of elements.
+        // because the data is fits in a cache line.
 
         if (node->used <= 8)
         {
-            ++first; // we just checked index 0 above, so skip it
             for (; first <= last; ++first)
             {
                 // nesting these conditions netted 15% speed improvement
@@ -431,7 +478,6 @@ private:
                     return -(first + 1);
                 }
             }
-
             return -(last + 2);
         }
 
@@ -453,7 +499,7 @@ private:
             else
                 return mid; // found
 
-            mid = (first + last) >> 1; // usually written like first + ((last - first) / 2)			
+            mid = (first + last) >> 1; // usually written like first + ((last - first) / 2)
         }
 
         return -(first + 1);
@@ -464,7 +510,7 @@ private:
     {
         auto length = 1 << static_cast<int>(node->pageBits);
 
-        // this node is full, so we will make a new one, and copy 
+        // this node is full, so we will make a new one, and copy
         if (node->used == length)
         {
             bl_array_s* newNode = createNode(node->pageBits + 1);
@@ -491,7 +537,7 @@ private:
             return newNode;
         }
 
-        // mem move will copy overlapped. 
+        // mem move will copy overlapped.
         if (index < node->used)
             memmove(&node->nodes[index + 1], &node->nodes[index], sizeof(bl_element_s) * (node->used - index));
 

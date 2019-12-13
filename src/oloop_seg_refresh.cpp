@@ -28,25 +28,20 @@ OpenLoopSegmentRefresh::~OpenLoopSegmentRefresh()
     {
        if (prepared)
         --parts->segmentUsageCount;
-
-        parts->storeAllChangedSegments();
         parts->flushMessageMessages();
     }
 }
 
 void OpenLoopSegmentRefresh::storeSegment() const
 {
-    // store any changes we've made to the segments
-    parts->storeAllChangedSegments();
-
-    const auto delta = bits->population(maxLinearId) - startPopulation;
+    const auto delta = parts->getSegmentBits(segmentName)->population(maxLinearId) - startPopulation;
 
     // update the segment refresh
     parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
     parts->setSegmentTTL(segmentName, macros.segmentTTL);
 
     if (delta != 0)
-        Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName + ". (delta " + to_string(delta) + ")");
+        Logger::get().info("segment refresh on " + table->getName() + "/" + segmentName );
 }
 
 void OpenLoopSegmentRefresh::emitSegmentDifferences(openset::db::IndexBits* before, openset::db::IndexBits* after) const
@@ -98,7 +93,13 @@ bool OpenLoopSegmentRefresh::nextExpired()
         macros = segmentsIter->second.macros;
         segmentInfo = &parts->segments[segmentName];
 
-        //cout << "segment refresh: " << segmentName << endl;
+        if (macros.alwaysFresh)
+        {
+            parts->setSegmentRefresh(segmentName, macros.segmentRefresh);
+            parts->setSegmentTTL(segmentName, macros.segmentTTL);
+            ++segmentsIter;
+            continue;
+        }
 
         // generate the index for this query
         indexing.mount(table.get(), macros, loop->partition, maxLinearId);
@@ -106,7 +107,7 @@ bool OpenLoopSegmentRefresh::nextExpired()
         index = indexing.getIndex("_", countable);
 
         // get bits for this segment
-        bits = parts->getBits(segmentName);
+        auto bits = parts->getSegmentBits(segmentName);
         startPopulation = bits->population(maxLinearId);
 
         auto getSegmentCB = parts->getSegmentCallback();
@@ -189,7 +190,7 @@ void OpenLoopSegmentRefresh::prepare()
         return;
     }
 
-    parts->checkForSegmentChanges();
+    parts->syncPartitionSegmentsWithTableSegments();
     ++parts->segmentUsageCount;
 
     segmentsIter = parts->segments.begin();
@@ -218,6 +219,11 @@ bool OpenLoopSegmentRefresh::run()
     }
 
     openset::db::PersonData_s* personData;
+
+    // get a fresh pointer to bits on each entry in case they left the LRU
+    maxLinearId = parts->people.customerCount();
+    segmentName = segmentsIter->first;
+    interpreter->setBits(parts->getSegmentBits(segmentName), maxLinearId);
 
     while (true)
     {
@@ -261,7 +267,7 @@ bool OpenLoopSegmentRefresh::run()
                 auto returns = interpreter->getLastReturn();
 
                 // any returns, are they true?
-                const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+                const auto stateChange = segmentInfo->setBit(interpreter->bits, currentLinId, returns.size() && returns[0].getBool() == true);
                 if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
                     parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
             }

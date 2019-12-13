@@ -6,14 +6,21 @@
 #include <utility>
 #include "errors.h"
 #include "dbtypes.h"
-#include "attributes.h"
 #include "var/var.h"
+#include "attributes.h"
 #include "../lib/str/strtools.h"
 
 namespace openset
 {
     namespace query
     {
+        enum class ScriptMode_e
+        {
+            report,
+            segment,
+            customers
+        };
+
         enum class BlockType_e
         {
             code,
@@ -49,6 +56,7 @@ namespace openset
             quarter_date,
             year_number,
             year_date,
+            //lambda,
         };
 
         enum class OpCode_e : int32_t
@@ -312,7 +320,7 @@ namespace openset
             { "val", Modifiers_e::value },
             { "variable", Modifiers_e::var },
             { "var", Modifiers_e::var },
-            { "lambda", Modifiers_e::var },
+            //{ "lambda", Modifiers_e::lambda },
         }; // Modifier to String (for debug output)
         static const unordered_map<Modifiers_e, string> ModifierDebugStrings = {
             { Modifiers_e::sum, "SUM" },
@@ -340,6 +348,7 @@ namespace openset
             { Modifiers_e::quarter_date, "DT_QUARTER" },
             { Modifiers_e::year_number, "YEAR" },
             { Modifiers_e::year_date, "DT_YEAR" },
+            //{ Modifiers_e::lambda, "LAMBDA"}
         }; // opCode to String (for debug output)
         static const unordered_map<OpCode_e, string> OpDebugStrings = {
             { OpCode_e::NOP, "NOP" },
@@ -638,7 +647,7 @@ namespace openset
             HintOp_s(const HintOp_e op, const double value)
                 : op(op),
                   value(value),
-                  hash(static_cast<int64_t>(value * 1'000'000LL))
+                  hash(static_cast<int64_t>(value * 10'000LL))
             {}
 
             HintOp_s(const HintOp_e op, const string& text)
@@ -670,13 +679,15 @@ namespace openset
             bool isSet { false };
             bool isProp { false };
             bool isRowObject { false };
+            bool aggOnce { false }; // customer props, distinct counts and value selects are counted once per branch per person in a result
             int popRefs { 0 };      // reference counter for pops
             int pushRefs { 0 };     // reference counter for pushes
             int sortOrder { -1 };   // used for sorting in property order
             int lambdaIndex { -1 }; // used for variable assignment by lambada
+            int propShortcut { -1 };
             bool nonDistinct { false };
             cvar value { NONE };
-            cvar startingValue { NONE };
+            int64_t valueInt64 { NONE };
             Variable_s() = default;
 
             Variable_s(const string& actual, const string& space, const int sortOrder = -1)
@@ -714,13 +725,14 @@ namespace openset
                 isSet              = source.isSet;
                 isProp             = source.isProp;
                 isRowObject        = source.isRowObject;
+                aggOnce            = source.aggOnce;
                 popRefs            = source.popRefs;
                 pushRefs           = source.pushRefs;
                 sortOrder          = source.sortOrder;
                 lambdaIndex        = source.lambdaIndex;
+                propShortcut       = source.propShortcut;
                 nonDistinct        = source.nonDistinct;
                 value              = source.value;
-                startingValue      = source.startingValue;
             }
         };
 
@@ -863,15 +875,18 @@ namespace openset
             int64_t withinWindow {LLONG_MAX};
             int64_t continueFrom {0};
         };
+
         using FilterList = vector<Filter_s>;
         using CountList = vector<Count_S>; // structure for variables
         using BlockMap = vector<int>;
+        using AutoGrouping = vector<int>;
 
         struct Variables_S
         {
             VarList userVars;
             VarList tableVars;
             VarList columnVars;
+            AutoGrouping autoGrouping;
             BlockMap blockList;
             ColumnLambdas columnLambdas;
             FunctionList functions;
@@ -897,25 +912,28 @@ namespace openset
             std::string capturedIndex;
             std::string rawIndex;
             HintOpList index;
-            bool indexIsCountable { false };
             string segmentName;
             SegmentList segments;
             MarshalSet marshalsReferenced;
             int64_t segmentTTL { -1 };
             int64_t segmentRefresh { -1 };
             int sessionColumn { -1 };
+            ScriptMode_e scriptMode;
 
             int64_t sessionTime { 60'000LL * 30LL }; // 30 minutes
             std::string rawScript;
+            bool fastTally { false };
             bool isSegment { false };
             bool useProps { false };      // uses customer props
             bool writesProps { true };    // script can change props
             bool useGlobals { false };    // uses global for table
             bool useCached { false };     // for segments allow use of cached values within TTL
+            bool alwaysFresh { false };   // cached, but always calculated fresh on query
             bool isSegmentMath { false }; // for segments, the index has the value, script execution not required
             bool useSessions { false };   // uses session functions, we can cache these
             bool useStampedRowIds { false }; // count using row stamp rather than row uniqueness
             bool onInsert { false };
+            bool indexIsCountable { false };
             int zIndex { 100 };
         };
 

@@ -84,7 +84,7 @@ void AsyncPool::resumeAsync()
     if (globalAsyncLockDepth == 0)
         globalAsyncInitSuspend = false;
 
-    while (globalAsyncSuspendedWorkerCount != 0)
+    while (globalAsyncLockDepth == 0 && globalAsyncSuspendedWorkerCount != 0)
         this_thread::sleep_for(chrono::milliseconds(1));
 }
 
@@ -441,10 +441,14 @@ void AsyncPool::startAsync()
             workerNumber));
     }
 
+    // detach and return
+    for (auto &w : workers)
+        w.detach();
+
     Logger::get().info(to_string(workerMax) + " async workers created.");
 
     running = true;
-    ThreadSleep(1000);
+    ThreadSleep(500);
 
     auto maintThread = thread(
         &AsyncPool::maint,
@@ -452,9 +456,6 @@ void AsyncPool::startAsync()
 
     maintThread.detach();
 
-    // detach and return
-    for (auto &w : workers)
-        w.detach();
 }
 
 

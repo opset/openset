@@ -42,6 +42,7 @@ TestEngineContainer_s* TestScriptRunner(const std::string& tableName, const std:
 
     // this mounts the now decompressed data (in the customer overlay)
     // into the interpreter
+    engine->interpreter->setBits(new IndexBits(), parts->people.customerCount());
     engine->interpreter->mount(&person); // run it
     engine->interpreter->exec();
 

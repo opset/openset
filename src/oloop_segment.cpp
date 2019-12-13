@@ -4,6 +4,7 @@
 #include "tablepartitioned.h"
 #include "queryparserosl.h"
 #include "internoderouter.h"
+#include "queryinterpreter.h"
 
 using namespace openset::async;
 using namespace openset::query;
@@ -39,14 +40,13 @@ OpenLoopSegment::~OpenLoopSegment()
     {
         if (prepared)
             --parts->segmentUsageCount;
-        parts->storeAllChangedSegments();
         parts->flushMessageMessages();
     }
 }
 
 void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
 {
-    const auto nameHash = MakeHash(name);
+    const auto nameHash = result->addLocalTextAndHash(name);
 
     const auto set_cb = [count](openset::result::Accumulator* resultColumns)
     {
@@ -61,9 +61,8 @@ void OpenLoopSegment::storeResult(std::string& name, int64_t count) const
     rowKey.clear();
     rowKey.key[0] = nameHash;
     rowKey.types[0] = ResultTypes_e::Text;
-    result->addLocalText(nameHash, name);
 
-    auto aggs = result->getMakeAccumulator(rowKey);
+    const auto aggs = result->getMakeAccumulator(rowKey);
     set_cb(aggs);
 }
 
@@ -78,18 +77,9 @@ void OpenLoopSegment::storeSegments()
      *  are local to the partition
      */
 
-    // store any changes we've made to the segments
-    parts->storeAllChangedSegments();
-
     for (auto& macro : macrosList)
     {
         const auto &segmentName = macro.first;
-
-        if (macro.second.segmentRefresh != -1)
-            parts->setSegmentRefresh(segmentName, macro.second.segmentRefresh);
-
-        if (macro.second.segmentTTL != -1)
-            parts->setSegmentTTL(segmentName, macro.second.segmentTTL);
     }
 }
 
@@ -144,7 +134,6 @@ bool OpenLoopSegment::nextMacro()
             );
 
             parts->attributes.clearDirty();
-
             suicide();
 
             return false;
@@ -164,20 +153,24 @@ bool OpenLoopSegment::nextMacro()
         index = indexing.getIndex("_", countable);
 
         // get the bits for this segment
-        auto bits = parts->getBits(segmentName);
+        auto bits = parts->getSegmentBits(segmentName);
         beforeBits.opCopy(*bits);
 
         // should we return these bits, as a cached copy?
-        if (macros.useCached && !parts->isRefreshDue(segmentName))
+        if (macros.useCached && !macros.alwaysFresh && !parts->isRefreshDue(segmentName))
         {
             if (bits)
             {
                 storeResult(segmentName, bits->population(maxLinearId));
                 ++macroIter;
-                continue; // try another index
+                continue; // done, move to next index
             }
             // cached copy not found... carry on!
         }
+
+        // we will refresh now, so we will move the refresh time down
+        if (macroIter->second.segmentRefresh != -1)
+           parts->setSegmentRefresh(segmentName, macroIter->second.segmentRefresh);
 
         // is this something we can calculate using purely
         // indexes? (nifty)
@@ -189,7 +182,7 @@ bool OpenLoopSegment::nextMacro()
             bits->opCopy(*index);
 
             // add to resultBits upon query completion
-            storeResult(segmentName, index->population(maxLinearId));
+            storeResult(segmentName, bits->population(maxLinearId));
 
             ++macroIter;
             continue; // try another index
@@ -198,6 +191,7 @@ bool OpenLoopSegment::nextMacro()
         interpreter = parts->getInterpreter(segmentName, maxLinearId);
         auto getSegmentCB = parts->getSegmentCallback();
         interpreter->setGetSegmentCB(getSegmentCB);
+        interpreter->setBits(bits, maxLinearId);
 
         auto mappedColumns = interpreter->getReferencedColumns();
 
@@ -255,7 +249,7 @@ void OpenLoopSegment::prepare()
         return;
     }
 
-    parts->checkForSegmentChanges();
+    parts->syncPartitionSegmentsWithTableSegments();
     ++parts->segmentUsageCount;
 
     maxLinearId = parts->people.customerCount();
@@ -269,15 +263,22 @@ void OpenLoopSegment::prepare()
 
 bool OpenLoopSegment::run()
 {
-
     openset::db::PersonData_s* personData;
+
+    // get a fresh pointer to bits on each entry in case they left the LRU
+    maxLinearId = parts->people.customerCount();
+    interpreter->setBits(parts->getSegmentBits(segmentName), maxLinearId);
+
     while (true)
     {
         if (sliceComplete())
             return true; // let some other cells run
 
         if (!interpreter)
+        {
+            suicide();
             return false;
+        }
 
         // if there was an error, exit
         if (interpreter->error.inError())
@@ -326,8 +327,7 @@ bool OpenLoopSegment::run()
 
             if (interpreter->error.inError())
             {
-                openset::errors::Error error;
-                error = interpreter->error;
+                const openset::errors::Error error = interpreter->error;
                 interpreter = nullptr;
 
                 storeSegments();
@@ -353,7 +353,7 @@ bool OpenLoopSegment::run()
             auto returns = interpreter->getLastReturn();
 
             // any returns, are they true?
-            const auto stateChange = segmentInfo->setBit(currentLinId, returns.size() && returns[0].getBool() == true);
+            const auto stateChange = segmentInfo->setBit(interpreter->bits, currentLinId, returns.size() && returns[0].getBool() == true);
             if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
                 parts->pushMessage(segmentHash, stateChange, personData->getIdStr());
         }

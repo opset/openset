@@ -16,9 +16,9 @@ namespace openset
 {
     namespace result
     {
-        const int keyDepth = 8;
+        const int keyDepth = 4;
 
-        enum class ResultTypes_e : int
+        enum class ResultTypes_e : int8_t
         {
             Int = 0,
             Double = 1,
@@ -41,8 +41,11 @@ namespace openset
 
         struct RowKey
         {
+#pragma pack(push,1)
+            //size_t hash;
             int64_t key[keyDepth];
             ResultTypes_e types[keyDepth];
+#pragma pack(pop)
 
             RowKey() = default;
 
@@ -52,24 +55,21 @@ namespace openset
                 key[1]   = NONE;
                 key[2]   = NONE;
                 key[3]   = NONE;
-                key[4]   = NONE;
-                key[5]   = NONE;
-                key[6]   = NONE;
-                key[7]   = NONE;
                 types[0] = ResultTypes_e::Int;
                 types[1] = ResultTypes_e::Int;
                 types[2] = ResultTypes_e::Int;
                 types[3] = ResultTypes_e::Int;
-                types[4] = ResultTypes_e::Int;
-                types[5] = ResultTypes_e::Int;
-                types[6] = ResultTypes_e::Int;
-                types[7] = ResultTypes_e::Int;
             }
 
             void clearFrom(const int index)
             {
                 for (auto iter = key + index; iter < key + keyDepth; ++iter)
                     *iter = NONE;
+            }
+
+            size_t makeHash() const
+            {
+                return MakeHash(reinterpret_cast<const char*>(key), keyDepth * sizeof(int64_t));
             }
 
             RowKey keyFrom(const int index) const
@@ -116,6 +116,29 @@ namespace openset
             }
             return false;
         }
+
+        inline bool operator>(const RowKey& left, const RowKey& right)
+        {
+            for (auto i = 0; i < keyDepth; ++i)
+            {
+                if (left.key[i] < right.key[i])
+                    return false;
+                if (left.key[i] > right.key[i])
+                    return true;
+            }
+            return false;
+        }
+
+        inline bool operator<=(const RowKey& left, const RowKey& right)
+        {
+            for (auto i = 0; i < keyDepth; ++i)
+            {
+                if (left.key[i] > right.key[i])
+                    return false;
+            }
+            return true;
+        }
+
     }
 }
 
@@ -125,9 +148,11 @@ namespace std
     template <>
     struct hash<openset::result::RowKey>
     {
-        size_t operator()(const openset::result::RowKey key) const noexcept
+        size_t operator()(const openset::result::RowKey& key) const noexcept
         {
-            auto hash  = key.key[0];
+            return key.makeHash();
+            //return key.hash;
+            /*auto hash  = key.key[0];
             auto count = 1;
             for (auto iter = key.key + 1; iter < key.key + openset::result::keyDepth; ++iter, ++count)
             {
@@ -135,7 +160,7 @@ namespace std
                     return hash;
                 hash = (hash << count) + key.key[1];
             }
-            return hash;
+            return hash;*/
         }
     };
 }
@@ -164,23 +189,33 @@ namespace openset
 
             Accumulator(const int64_t resultWidth)
             {
+                auto columnIter = columns;
+
+                while (columnIter < columns + resultWidth)
+                {
+                    columnIter->value = NONE;
+                    columnIter->count = 0;
+                    ++columnIter;
+                }
+                /*
                 for (auto i = 0; i < resultWidth; ++i)
                 {
                     columns[i].value = NONE;
                     columns[i].count = 0;
-                }
+                }*/
             }
         };
 
         class ResultSet
         {
         public:
-            robin_hood::unordered_map<RowKey, Accumulator*, robin_hood::hash<RowKey>> results;
+            robin_hood::unordered_map<RowKey, Accumulator*> results;
             using RowPair = pair<RowKey, Accumulator*>;
             using RowVector = vector<RowPair>;
             vector<RowPair> sortedResult;
             HeapStack mem;
             int64_t resultWidth { 1 };
+            int64_t resultBytes { 8 };
 
             CriticalSection cs;
 
@@ -238,6 +273,13 @@ namespace openset
                     localText.emplace(hashId, textPtr);
                 }
             }
+
+             int64_t addLocalTextAndHash(const std::string& value)
+            {
+                const auto hash = MakeHash(value);
+                addLocalText(hash, value);
+                return hash;
+            }
         };
 
         struct CellQueryResult_s
@@ -285,7 +327,7 @@ namespace openset
             // JSON
         public:
             static void mergeMacroLiterals(
-                query::Macro_s macros,
+                const query::Macro_s& macros,
                 std::vector<ResultSet*>& resultSets);
 
             static char* multiSetToInternode(
@@ -300,6 +342,12 @@ namespace openset
                 char* data,
                 int64_t blockLength);
 
+            static void resultFlatColumnsToJson(
+                int resultColumnCount,
+                int resultSetCount,
+                std::vector<openset::result::ResultSet*>& resultSets,
+                cjson* doc);
+
             static void resultSetToJson(
                 int resultColumnCount,
                 int resultSetCount,
@@ -311,6 +359,7 @@ namespace openset
                 int64_t bucket,
                 int64_t forceMin = std::numeric_limits<int64_t>::min(),
                 int64_t forceMax = std::numeric_limits<int64_t>::min());
+            static void flatColumnMultiSort(cjson* doc, ResultSortOrder_e sort, std::vector<int> sortProps);
 
             static void jsonResultSortByColumn(cjson* doc, ResultSortOrder_e sort, int column);
             static void jsonResultSortByGroup(cjson* doc, ResultSortOrder_e sort);

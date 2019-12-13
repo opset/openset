@@ -1,4 +1,4 @@
-#include "oloop_query.h"
+#include "oloop_customer_basic.h"
 #include "indexbits.h"
 #include "asyncpool.h"
 #include "tablepartitioned.h"
@@ -9,42 +9,41 @@ using namespace openset::query;
 using namespace openset::result;
 
 // yes, we are passing queryMacros by value to get a copy
-OpenLoopQuery::OpenLoopQuery(
+OpenLoopCustomerBasicList::OpenLoopCustomerBasicList(
     ShuttleLambda<CellQueryResult_s>* shuttle,
     Database::TablePtr table,
     Macro_s macros,
     openset::result::ResultSet* result,
-    int instance)
-    : OpenLoop(table->getName(), oloopPriority_e::realtime),
-      // queries are high priority and will preempt other running cells
-      macros(std::move(macros)),
-      shuttle(shuttle),
-      table(table),
-      parts(nullptr),
-      maxLinearId(0),
-      currentLinId(-1),
-      interpreter(nullptr),
-      instance(instance),
-      runCount(0),
-      startTime(0),
-      population(0),
-      index(nullptr),
-      result(result)
+    const std::vector<int64_t> &cursor,
+    const bool descending,
+    const int limit,
+    int instance) :
+        OpenLoop(table->getName(), oloopPriority_e::realtime),
+        macros(std::move(macros)),
+        shuttle(shuttle),
+        table(table),
+        parts(nullptr),
+        maxLinearId(0),
+        currentLinId(-1),
+        interpreter(nullptr),
+        instance(instance),
+        runCount(0),
+        startTime(0),
+        population(0),
+        index(nullptr),
+        result(result),
+        cursor(cursor),
+        descending(descending),
+        limit(limit)
 {}
 
-OpenLoopQuery::~OpenLoopQuery()
+OpenLoopCustomerBasicList::~OpenLoopCustomerBasicList()
 {
     if (interpreter)
-    {
-        // free up any segment bits we may have made
-        //for (auto bits : interpreter->segmentIndexes)
-          //  delete bits;
-
         delete interpreter;
-    }
 }
 
-void OpenLoopQuery::prepare()
+void OpenLoopCustomerBasicList::prepare()
 {
     parts = table->getPartitionObjects(loop->partition, false);
 
@@ -64,6 +63,8 @@ void OpenLoopQuery::prepare()
 
     interpreter = new Interpreter(macros);
     interpreter->setResultObject(result);
+
+    IndexBits testIndex;
 
     // if we are in segment compare mode:
     if (macros.segments.size())
@@ -99,10 +100,17 @@ void OpenLoopQuery::prepare()
                 }
 
                 segments.push_back(parts->segments[segmentName].getBits(parts->attributes));
+
             }
         }
 
-        interpreter->setCompareSegments(index, segments);
+        //interpreter->setCompareSegments(index, segments);
+        testIndex.opCopy(*index);
+        testIndex.opAnd(*segments[0]);
+    }
+    else
+    {
+        testIndex.opCopy(*index);
     }
 
     // map table, partition and select schema properties to the Customer object
@@ -116,22 +124,50 @@ void OpenLoopQuery::prepare()
 
     person.setSessionTime(macros.sessionTime);
 
+    const auto filterAscending = [&](int64_t* key, int* value) -> bool {
+        if (!testIndex.bitState(*value))
+            return false;
+        if (*key > cursor[0])
+            return true;
+        return false;
+    };
+
+    const auto filterDescending = [&](int64_t* key, int* value) -> bool {
+        if (!testIndex.bitState(*value))
+            return false;
+        if (*key < cursor[0])
+            return true;
+        return false;
+    };
+
+    if (descending)
+        indexedList = parts->people.customerMap.serialize(
+            true,
+            limit,
+            filterDescending
+        );
+    else
+        indexedList = parts->people.customerMap.serialize(
+            false,
+            limit,
+            filterAscending
+        );
+
+    iter = indexedList.begin();
+
     startTime = Now();
 }
 
-bool OpenLoopQuery::run()
+bool OpenLoopCustomerBasicList::run()
 {
-    int count = 0;
     while (true)
     {
-        if (count % 50 == 0 && sliceComplete())
+        if (sliceComplete())
             return true;
-
-        ++count;
 
         // are we done? This will return the index of the
         // next set bit until there are no more, or maxLinId is met
-        if (interpreter->error.inError() || !index->linearIter(currentLinId, maxLinearId))
+        if (interpreter->error.inError() || iter == indexedList.end())
         {
             result->setAccTypesFromMacros(macros);
 
@@ -149,7 +185,7 @@ bool OpenLoopQuery::run()
             return false;
         }
 
-        if (const auto personData = parts->people.getCustomerByLIN(currentLinId); personData != nullptr)
+        if (const auto personData = parts->people.getCustomerByLIN(iter->second); personData != nullptr)
         {
             ++runCount;
             person.mount(personData);
@@ -157,10 +193,12 @@ bool OpenLoopQuery::run()
             interpreter->mount(&person);
             interpreter->exec(); // run the script on this customer - do some magic
         }
+
+        ++iter;
     }
 }
 
-void OpenLoopQuery::partitionRemoved()
+void OpenLoopCustomerBasicList::partitionRemoved()
 {
     shuttle->reply(
         0,

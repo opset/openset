@@ -33,7 +33,7 @@ void Indexing::mount(Table* tablePtr, Macro_s& queryMacros, int partitionNumber,
 }
 
 // returns an index by name
-openset::db::IndexBits* Indexing::getIndex(std::string name, bool &countable)
+openset::db::IndexBits* Indexing::getIndex(const std::string& name, bool &countable)
 {
     for (auto &idx:indexes)
     {
@@ -54,7 +54,7 @@ and returns values that match the condition.
 In getBits we take the last item on the stack and apply all matching indexes to
 the bits in the stack entry.
  */
-openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
+openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode, bool& countable)
 {
 
     auto& entry = stack.back();
@@ -62,7 +62,6 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
     const auto propInfo = table->getProperties()->getProperty(entry.columnName);
 
     // if the value side is NONE we go check for presence
-
     auto negate = false;
 
     if (mode == Attributes::listMode_e::EQ && entry.hash == NONE)
@@ -78,16 +77,29 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
             negate = true; // != VAL -- anything other than VAL
     }
 
+    if (propInfo->type == PropertyTypes_e::doubleProp)
+    {
+        // double types are not automatically countable due to bucketing
+        countable = false;
+
+        entry.hash = static_cast<int64_t>(entry.hash / propInfo->bucket) * propInfo->bucket;
+
+        if (mode == Attributes::listMode_e::GT)
+            mode = Attributes::listMode_e::GTE;
+        else if (mode == Attributes::listMode_e::LT)
+            mode = Attributes::listMode_e::LTE;
+    }
+
     auto attrList = parts->attributes.getPropertyValues(propInfo->idx, mode, entry.hash);
 
     auto& resultBits = entry.bits; // where our bits will all accumulate
     resultBits.reset();
     auto initialized = false;
 
-    for (auto attr: attrList)
+    for (const auto attr: attrList)
     {
         // get the bits
-        const auto workBits = attr->getBits();
+        const auto workBits = parts->attributes.getBits(attr.index, attr.value);
 
         if (initialized)
         {
@@ -98,9 +110,6 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
             resultBits.opCopy(*workBits);
             initialized = true;
         }
-
-        // clean up them bits
-        delete workBits;
     }
 
     if (!initialized)
@@ -108,7 +117,7 @@ openset::db::IndexBits Indexing::compositeBits(Attributes::listMode_e mode)
 
     if (negate)
     {
-        resultBits.grow((stopBit / 64) + 1); // grow it to it's fullest size before we flip them all
+        resultBits.setSizeByBit(stopBit); // grow it to it's fullest size before we flip them all
         resultBits.opNot();
     }
 
@@ -144,8 +153,10 @@ OR             |
 OR             |
 OR             |
  */
-IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
+IndexBits Indexing::buildIndex(HintOpList &index, bool& countable)
 {
+
+    countable = true;
 
     struct IndexStack_s
     {
@@ -174,27 +185,27 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
         {
         case HintOp_e::UNSUPPORTED: break;
         case HintOp_e::EQ:
-            compositeBits(Attributes::listMode_e::EQ);
+            compositeBits(Attributes::listMode_e::EQ, countable);
             ++count;
             break;
         case HintOp_e::NEQ:
-            compositeBits(Attributes::listMode_e::NEQ);
+            compositeBits(Attributes::listMode_e::NEQ, countable);
             ++count;
             break;
         case HintOp_e::GT:
-            compositeBits(Attributes::listMode_e::GT);
+            compositeBits(Attributes::listMode_e::GT, countable);
             ++count;
             break;
         case HintOp_e::GTE:
-            compositeBits(Attributes::listMode_e::GTE);
+            compositeBits(Attributes::listMode_e::GTE, countable);
             ++count;
             break;
         case HintOp_e::LT:
-            compositeBits(Attributes::listMode_e::LT);
+            compositeBits(Attributes::listMode_e::LT, countable);
             ++count;
             break;
         case HintOp_e::LTE:
-            compositeBits(Attributes::listMode_e::LTE);
+            compositeBits(Attributes::listMode_e::LTE, countable);
             ++count;
             break;
         case HintOp_e::PUSH_VAL:
@@ -247,7 +258,6 @@ IndexBits Indexing::buildIndex(HintOpList &index, bool countable)
     }
 
     auto res = stack.back().bits;
-    res.grow((stopBit / 64) + 1);
+    res.setSizeByBit(stopBit);
     return res;
-
 }

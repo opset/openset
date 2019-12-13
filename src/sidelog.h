@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <limits>
+#include <atomic>
 
 #include "sba/sba.h"
 #include "threads/locks.h"
@@ -72,10 +73,10 @@ namespace openset::db
 
     class SideLog
     {
-        const int64_t LOG_MAX_AGE = 15'000;
+        //const int64_t LOG_MAX_AGE = 1'000;
         const int64_t MIN_LOG_SIZE = 1'000;
 
-        int64_t logSize{ 0 };
+        atomic<int64_t> logSize{ 0 };
         int64_t lastLogSize{ 0 };
 
         SideLogCursor_s* head { nullptr };
@@ -137,7 +138,7 @@ namespace openset::db
                 lastLogSize = logSize;
             }
 
-            const auto keepStamp = Now() - LOG_MAX_AGE;
+            //const auto keepStamp = Now() - LOG_MAX_AGE;
             const auto referencedEntries = getReferencedEntries();
 
             if (referencedEntries.count(nullptr))
@@ -149,7 +150,7 @@ namespace openset::db
 
             while (cursor &&
                    logSize > MIN_LOG_SIZE &&
-                   cursor->stamp < keepStamp &&
+                   //cursor->stamp < keepStamp &&
                    referencedEntries.count(cursor) == 0)
             {
                 const auto nextEntry = cursor->next;
@@ -198,8 +199,13 @@ namespace openset::db
             cs.unlock();
         }
 
+        int64_t getLogSize() const
+        {
+            return logSize;
+        }
+
         // lock/unlock from caller using lock() and unlock() to accelerate inserts
-        void add(const Table* table, const int32_t partition, char* json)
+        int add(const Table* table, const int32_t partition, char* json)
         {
             const auto tableHash = table->getTableHash();
 
@@ -218,6 +224,8 @@ namespace openset::db
                 tail->next = newEntry;
 
             tail = newEntry;
+
+            return logSize;
         }
 
         JsonList read(const Table* table, const int32_t partition, const int limit, int64_t& readPosition)

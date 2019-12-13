@@ -7,6 +7,7 @@
 #include "xxhash.h"
 #include "robin_hood.h"
 
+#include "customer_props.h"
 #include "querycommon.h"
 #include "result.h"
 #include "errors.h"
@@ -21,6 +22,11 @@ namespace openset
         class Grid;
         class AttributeBlob;
         class IndexBits;
+    }
+
+    namespace result
+    {
+        class Accumulator;
     }
 }
 
@@ -150,9 +156,9 @@ namespace openset
             IndexBits* bits{ nullptr };
             int maxBitPop{ 0 }; // largest linear user_id in table/partition
 
-            cvar props;
-            int propsIndex{ -1 };
             bool propsChanged{ false };
+
+            result::Accumulator* fastTallyAccumulator { nullptr };
 
             // counters
             int loopCount{ 0 };
@@ -173,7 +179,6 @@ namespace openset
             // debug - log entries are entered in order by calling debug
             DebugLog debugLog;
             errors::Error error;
-            int32_t eventCount{ -1 }; // -1 is uninitialized, calculation cached here
 
             // callbacks to external code (i.e. triggers)
             function<IndexBits*(const string&, bool&)> getSegment_cb{ nullptr };
@@ -187,15 +192,14 @@ namespace openset
             // regular function local vectors were impacting performance > 6%
             MarshalParams marshalParams = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
-
             // distinct counting (with property as key)
             ValuesSeen eventDistinct; // distinct to group id
             ValuesSeenKey distinctKey;
 
             // used to load global variables into user variable space
             bool firstRun{ true };
-
             bool inReturn{ false };
+            bool exportCustomerId { false };
 
             // this will always point to the last debug message
             Debug_s* lastDebug{ nullptr };
@@ -235,8 +239,10 @@ namespace openset
 
             void extractMarshalParams(const int paramCount);
 
-            void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
+            void tally(const int paramCount, const Col_s* columns, const int currentRow);
+            void autoTally();
 
+            void marshal_tally(const int paramCount, const Col_s* columns, const int currentRow);
             void marshal_log(const int paramCount);
             void marshal_break(const int paramCount);
             void marshal_dt_within(const int paramCount, const int64_t rowStamp);
@@ -245,24 +251,19 @@ namespace openset
             void marshal_bucket(const int paramCount);
             void marshal_round(const int paramCount);
             void marshal_fix(const int paramCount);
-
             void marshal_makeDict(const int paramCount);
             void marshal_makeList(const int paramCount);
             void marshal_makeSet(const int paramCount);
-
             void marshal_population(const int paramCount);
             void marshal_intersection(const int paramCount);
             void marshal_union(const int paramCount);
             void marshal_compliment(const int paramCount);
             void marshal_difference(const int paramCount);
-
             void marshal_slice(const int paramCount);
             void marshal_find(const int paramCount, const bool reverse = false);
             void marshal_split(const int paramCount) const;
             void marshal_strip(const int paramCount) const;
-
             void marshal_url_decode(const int paramCount) const;
-
             void marshal_get_row(const int paramCount) const;
 
             // get a string from the literals script block by ID

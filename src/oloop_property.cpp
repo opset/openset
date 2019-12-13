@@ -23,7 +23,8 @@ OpenLoopProperty::OpenLoopProperty(
         table(table),
         result(result),
         instance(instance)
-{}
+{
+}
 
 OpenLoopProperty::~OpenLoopProperty()
 {
@@ -50,9 +51,8 @@ void OpenLoopProperty::prepare()
         {
             if (segmentName == "*")
             {
-                auto bits = new db::IndexBits();
-                bits->makeBits(stopBit, 1); // make an index of all ones.
-                segments.push_back(bits);
+                all.makeBits(stopBit, 1); // make an index of all ones.
+                segments.push_back(segmentName);
             }
             else
             {
@@ -74,15 +74,15 @@ void OpenLoopProperty::prepare()
                     return;
                 }
 
-                segments.push_back(parts->segments[segmentName].bits);
+                segments.push_back(segmentName);
             }
         }
     }
 
     // get the root value
-    const auto all = parts->attributes.get(config.propIndex, NONE);
+    const auto allBits = parts->attributes.getBits(config.propIndex, NONE);
 
-    if (!all)
+    if (!allBits)
     {
         shuttle->reply(
             0,
@@ -96,47 +96,10 @@ void OpenLoopProperty::prepare()
         return;
     }
 
-    rowKey.clear();
-
-    const auto hash = MakeHash(config.propName);
-    result->addLocalText(MakeHash(config.propName), config.propName);
-
-    rowKey.key[0] = hash;
-    rowKey.types[0] = ResultTypes_e::Text;
-
-    // assign the type for the value to the key
-    switch (config.propType)
-    {
-        case db::PropertyTypes_e::intProp:
-            rowKey.types[1] = ResultTypes_e::Int;
-        break;
-        case db::PropertyTypes_e::doubleProp:
-            rowKey.types[1] = ResultTypes_e::Double;
-        break;
-        case db::PropertyTypes_e::boolProp:
-            rowKey.types[1] = ResultTypes_e::Bool;
-        break;
-        case db::PropertyTypes_e::textProp:
-            rowKey.types[1] = ResultTypes_e::Text;
-        break;
-        default: ;
-    }
-
-    const auto aggs = result->getMakeAccumulator(rowKey);
-
-    auto idx = 0;
-    for (auto s : segments)
-    {
-        auto bits = all->getBits();
-        bits->opAnd(*s);
-        aggs->columns[idx].value = bits->population(stopBit);
-        delete bits;
-
-        ++idx;
-    }
+    createRootNode();
 
     // turn ints and doubles into their bucketed name
-    auto toBucket = [&](const int64_t value)->int64_t
+    const auto toBucket = [&](const int64_t value)->int64_t
     {
         if (config.bucket == 0)
             return value;
@@ -220,6 +183,55 @@ void OpenLoopProperty::prepare()
     groupsIter = groups.begin();
 }
 
+void OpenLoopProperty::createRootNode()
+{
+    rowKey.clear();
+
+    rowKey.key[0] = result->addLocalTextAndHash(config.propName);
+    rowKey.types[0] = ResultTypes_e::Text;
+
+    // assign the type for the value to the key
+    switch (config.propType)
+    {
+        case db::PropertyTypes_e::intProp:
+            rowKey.types[1] = ResultTypes_e::Int;
+        break;
+        case db::PropertyTypes_e::doubleProp:
+            rowKey.types[1] = ResultTypes_e::Double;
+        break;
+        case db::PropertyTypes_e::boolProp:
+            rowKey.types[1] = ResultTypes_e::Bool;
+        break;
+        case db::PropertyTypes_e::textProp:
+            rowKey.types[1] = ResultTypes_e::Text;
+        break;
+        default: ;
+    }
+
+    result->getMakeAccumulator(rowKey);
+}
+
+void OpenLoopProperty::addRootTotal()
+{
+    rowKey.clear();
+
+    rowKey.key[0] = result->addLocalTextAndHash(config.propName);
+    rowKey.types[0] = ResultTypes_e::Text;
+
+    const auto aggs = result->getMakeAccumulator(rowKey);
+
+    auto idx = 0;
+    for (auto &segmentName : segments)
+    {
+        db::IndexBits* segmentBits = segmentName == "*" ? &all : parts->getSegmentBits(segmentName);
+        db::IndexBits bits;
+        bits.opCopy(rootCount);
+        bits.opAnd(*segmentBits);
+        aggs->columns[idx].value = bits.population(stopBit);
+        ++idx;
+    }
+}
+
 bool OpenLoopProperty::run()
 {
 
@@ -243,33 +255,31 @@ bool OpenLoopProperty::run()
             }
 
             auto columnIndex = 0;
-            for (auto s : segments)
+            for (const auto& segmentName : segments)
             {
-
                 // here we are setting the key for the bucket,
                 // this is under our root which is the property name
                 rowKey.key[1] = bucket; // value hash (or value)
 
-
+                const auto segmentBits = segmentName == "*" ? &all : parts->getSegmentBits(segmentName);
                 const auto aggs = result->getMakeAccumulator(rowKey);
 
                 auto sumBits = new db::IndexBits();
 
                 for (auto value : groupsIter->second)
                 {
+                    const auto bits = parts->attributes.getBits(config.propIndex, value);
 
-                    auto attr = parts->attributes.get(config.propIndex, value);
-
-                    if (!attr)
+                    if (!bits)
                         continue;
 
-                    const auto bits = attr->getBits();
                     sumBits->opOr(*bits);
-                    delete bits;
                 }
 
+                rootCount.opOr(*sumBits);
+
                 // remove bits not in the segment
-                sumBits->opAnd(*s);
+                sumBits->opAnd(*segmentBits);
 
                 aggs->columns[columnIndex].value = sumBits->population(stopBit);
                 delete sumBits;
@@ -292,6 +302,8 @@ bool OpenLoopProperty::run()
 
         if (groupsIter == groups.end())
         {
+            addRootTotal();
+
             shuttle->reply(
                 0,
                 result::CellQueryResult_s{
@@ -300,6 +312,7 @@ bool OpenLoopProperty::run()
                 errors::Error{}
             }
             );
+
             suicide();
             return false;
         }

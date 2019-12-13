@@ -134,6 +134,34 @@ cjson::cjson(HeapStack* mem) :
     scratchPad = mem->firstBlock()->data;
 }
 
+cjson::cjson(const cjson& other)
+{
+    auto newNode = parse(stringify(const_cast<cjson*>(&other)));
+
+    mem = newNode->mem;
+    nodeType = newNode->nodeType;
+    nodeName = newNode->nodeName;
+    nodeData = newNode->nodeData;
+    membersHead = newNode->membersHead;
+    membersTail = newNode->membersTail;
+    memberCount = newNode->memberCount;
+    scratchPad = newNode->scratchPad;
+    siblingPrev = newNode->siblingPrev;
+    siblingNext = newNode->siblingNext;
+    parentNode = newNode->parentNode;
+    selfConstructed = newNode->selfConstructed;
+
+    newNode->selfConstructed = false;
+    newNode->mem = nullptr;
+    newNode->membersHead = nullptr;
+    newNode->membersTail = nullptr;
+    newNode->scratchPad = nullptr;
+    newNode->siblingNext = nullptr;
+    newNode->siblingPrev = nullptr;
+    newNode->parentNode = nullptr;
+    newNode->nodeType = Types_e::VOIDED;
+}
+
 cjson::cjson(cjson&& other) noexcept :
     mem(other.mem),
     nodeType(other.nodeType),

@@ -9,8 +9,9 @@ using namespace openset::result;
 
 static char NA_TEXT[] = "n/a";
 
-ResultSet::ResultSet(const int64_t resultWidth)
-    : resultWidth(resultWidth)
+ResultSet::ResultSet(const int64_t resultWidth) :
+    resultWidth(resultWidth),
+    resultBytes(resultWidth * sizeof(Accumulation_s))
 {
     accTypes.resize(resultWidth, ResultTypes_e::Int);
     accModifiers.resize(resultWidth, query::Modifiers_e::sum);
@@ -20,6 +21,7 @@ ResultSet::ResultSet(ResultSet&& other) noexcept
     : results(std::move(other.results)),
       mem(std::move(other.mem)),
       resultWidth(other.resultWidth),
+      resultBytes(other.resultBytes),
       localText(std::move(other.localText)),
       accTypes(std::move(other.accTypes)),
       accModifiers(std::move(other.accModifiers))
@@ -136,10 +138,10 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
                     accTypes[dataIndex] = ResultTypes_e::Double;
                     break;
                 case db::PropertyTypes_e::boolProp:
-                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    accTypes[dataIndex] = ResultTypes_e::Bool;
                     break;
                 case db::PropertyTypes_e::textProp:
-                    accTypes[dataIndex] = ResultTypes_e::Int;
+                    accTypes[dataIndex] = ResultTypes_e::Text;
                     break;
                 case db::PropertyTypes_e::freeProp:
                 default:
@@ -154,14 +156,16 @@ void ResultSet::setAccTypesFromMacros(const openset::query::Macro_s &macros)
 
 Accumulator* ResultSet::getMakeAccumulator(RowKey& key)
 {
-    if (const auto tempPair = results.find(key); tempPair != results.end())
-        return tempPair->second;
-
-    const auto resultBytes = resultWidth * sizeof(Accumulation_s);
-    const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
-    results.emplace(key, t);
-
-    return t;
+    if (const auto& res = results.emplace(key, nullptr); res.second == true)
+    {
+        const auto t = new(mem.newPtr(resultBytes)) openset::result::Accumulator(resultWidth);
+        res.first->second = t;
+        return t;
+     }
+    else
+    {
+        return res.first->second;
+    }
 }
 
 void mergeResultTypes(
@@ -210,7 +214,7 @@ robin_hood::unordered_map<int64_t, const char*, robin_hood::hash<int64_t>> merge
 * merge performs a sync merge on a vector of sorted results.
 *
 * STL was used here because it has great iterators, but a little is lost in
-* readabilty. I apologize in advance for the **blah stuff.
+* readability. I apologize in advance for the **blah stuff.
 *
 * Step one make a vector of iterators for each result in the results vector.
 * (note, the results vector contains vectors of sorted results).
@@ -237,13 +241,38 @@ ResultSet::RowVector mergeResultSets(
 
     vector<ResultSet::RowVector*> mergeList;
 
-    auto count = 0;
-
+    /*
     for (auto& r : resultSets)
     {
         // sort the list
         r->makeSortedList();
 
+        // if no data, skip
+        if (!r->sortedResult.size())
+            continue;
+
+        // add it the merge list
+        mergeList.push_back(&r->sortedResult);
+        count += static_cast<int>(r->sortedResult.size());
+    }*/
+
+    std::vector<std::thread> threads;
+    //create threads
+    threads.reserve(resultSets.size());
+    for (auto& r : resultSets)
+        threads.emplace_back(std::thread([](ResultSet* set)
+        {
+            set->makeSortedList();
+        }, r)
+    );
+
+    //wait for them to complete
+    for (auto& th : threads)
+        th.join();
+
+    auto count = 0;
+    for (auto& r : resultSets)
+    {
         // if no data, skip
         if (!r->sortedResult.size())
             continue;
@@ -290,8 +319,8 @@ ResultSet::RowVector mergeResultSets(
             // is it less than equal or
             // not set (lowestIdx defaults to end(), so not set)
             if (lowestIdx == iterators.end() ||
-                (*t).first < (**lowestIdx).first ||
-                (*t).first == (**lowestIdx).first)
+                (*t).first <= (**lowestIdx).first) //||
+                //(*t).first == (**lowestIdx).first)
             {
                 lowestIdx = it;
             }
@@ -345,7 +374,6 @@ ResultSet::RowVector mergeResultSets(
                                         }
                                         break;
                                     case openset::query::Modifiers_e::value:
-
                                         left->columns[valueIndex].value = right->columns[valueIndex].value;
                                         left->columns[valueIndex].count = right->columns[valueIndex].count;
                                         break;
@@ -384,10 +412,10 @@ ResultSet::RowVector mergeResultSets(
 }
 
 void ResultMuxDemux::mergeMacroLiterals(
-    const openset::query::Macro_s macros,
+    const openset::query::Macro_s& macros,
     std::vector<openset::result::ResultSet*>& resultSets)
 {
-    // copy literals from macros into a localtext object
+    // copy literals from macros into a local text object
     for (auto& l : macros.vars.literals)
         resultSets.front()->addLocalText(l.hashValue, l.value);
 }
@@ -560,6 +588,116 @@ openset::result::ResultSet* ResultMuxDemux::internodeToResultSet(
     }
 
     return result;
+}
+
+void ResultMuxDemux::resultFlatColumnsToJson(
+    const int resultColumnCount,
+    const int resultSetCount,
+    std::vector<openset::result::ResultSet*>& resultSets,
+    cjson* doc)
+{
+
+    auto mergedText = mergeResultText(resultSets);
+    auto rows       = mergeResultSets(resultColumnCount, resultSetCount, resultSets);
+
+    const auto shiftIterations = resultSetCount ? resultSetCount : 1;
+    const auto shiftSize       = resultColumnCount;
+
+    // this will retrieve either the string literals from the macros,
+    // the merged localText or exorcise a lock and look in the blob
+    const auto getText = [&](int64_t valueHash) -> const char*
+    {
+        if (const auto textPair = mergedText.find(valueHash); textPair != mergedText.end())
+            return textPair->second;
+
+        // nothing found, NA_TEXT
+        return NA_TEXT;
+    };
+
+    auto current = doc->pushArray();
+    current->setName("_");
+
+    auto& modifiers = resultSets[0]->accModifiers;
+    auto& types     = resultSets[0]->accTypes;
+
+    auto rowCounter = -1;
+    for (auto& r : rows)
+    {
+        ++rowCounter;
+
+        const auto shiftOffset = 0;
+
+        auto array = current->pushArray();
+
+        for (auto dataIndex = shiftOffset, colIndex = 0;
+             dataIndex < shiftOffset + shiftSize;
+            ++dataIndex, ++colIndex)
+        {
+            const auto& value = r.second->columns[dataIndex].value;
+            const auto& count = r.second->columns[dataIndex].count;
+
+            // Is this a null, a double, a string or anything else (ints)
+            if (r.second->columns[dataIndex].value == NONE)
+            {
+                if (types[colIndex] == ResultTypes_e::Double ||
+                    types[colIndex] == ResultTypes_e::Int)
+                    array->push(static_cast<int64_t>(0));
+                else
+                    array->pushNull();
+            }
+            else
+            {
+                switch (modifiers[colIndex])
+                {
+                case query::Modifiers_e::sum:
+                case query::Modifiers_e::min:
+                case query::Modifiers_e::max:
+                    if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else
+                        array->push(value);
+                    break;
+                case query::Modifiers_e::avg:
+                    if (!count)
+                        array->pushNull();
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push((value / 10000.0) / static_cast<double>(count));
+                    else
+                        array->push(value / static_cast<double>(count));
+                    break;
+                case query::Modifiers_e::count:
+                case query::Modifiers_e::dist_count_person:
+                    array->push(value);
+                    break;
+                case query::Modifiers_e::value:
+                    if (types[colIndex] == ResultTypes_e::Text)
+                        array->push(getText(value));
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else if (types[colIndex] == ResultTypes_e::Bool)
+                        array->push(value ? true : false);
+                    else
+                        array->push(value);
+                    break;
+                case query::Modifiers_e::var:
+                {
+                    if (types[colIndex] == ResultTypes_e::Text)
+                        array->push(getText(value));
+                    else if (types[colIndex] == ResultTypes_e::Double)
+                        array->push(value / 10000.0);
+                    else if (types[colIndex] == ResultTypes_e::Bool)
+                        array->push(value ? true : false);
+                    else
+                        array->push(value);
+                }
+                break;
+
+                default:
+                    array->push(value);
+                }
+            }
+        }
+    }
 }
 
 void ResultMuxDemux::resultSetToJson(
@@ -941,14 +1079,91 @@ void ResultMuxDemux::jsonResultHistogramFill(
     }
 }
 
+void ResultMuxDemux::flatColumnMultiSort(cjson* doc, const ResultSortOrder_e sort, std::vector<int> sortProps)
+{
+    if (sortProps.size() == 1)
+    {
+        const auto column = sortProps[0];
+        doc->recurseSort(
+            "_",
+            [&](const cjson* left, const cjson* right) -> bool
+            {
+                switch (left->at(column)->type())
+                {
+                case cjson::Types_e::BOOL:
+                case cjson::Types_e::INT:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getInt() < right->at(column)->getInt());
+                    return (left->at(column)->getInt() > right->at(column)->getInt());
+                case cjson::Types_e::DBL:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getDouble() < right->at(column)->getDouble());
+                    return (left->at(column)->getDouble() > right->at(column)->getDouble());
+                case cjson::Types_e::STR:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return (left->at(column)->getString() < right->at(column)->getString());
+                    return (left->at(column)->getString() > right->at(column)->getString());
+                default:
+                    return false;
+                }
+            }
+        );
+    }
+    else if (sortProps.size() == 2)
+    {
+        const auto firstColumn = sortProps[0];
+        const auto secondColumn = sortProps[1];
+
+        doc->recurseSort(
+            "_",
+            [&](const cjson* left, const cjson* right) -> bool
+            {
+                switch (left->at(firstColumn)->type())
+                {
+                case cjson::Types_e::BOOL:
+                case cjson::Types_e::INT:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getInt() < right->at(firstColumn)->getInt()) ||
+                                (left->at(firstColumn)->getInt() == right->at(firstColumn)->getInt() &&
+                                 left->at(secondColumn)->getInt() < right->at(secondColumn)->getInt()));
+
+                    return ((left->at(firstColumn)->getInt() > right->at(firstColumn)->getInt()) ||
+                            (left->at(firstColumn)->getInt() == right->at(firstColumn)->getInt() &&
+                             left->at(secondColumn)->getInt() > right->at(secondColumn)->getInt()));
+                case cjson::Types_e::DBL:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getDouble() < right->at(firstColumn)->getDouble()) ||
+                                (left->at(firstColumn)->getDouble() == right->at(firstColumn)->getDouble() &&
+                                 left->at(secondColumn)->getDouble() < right->at(secondColumn)->getDouble()));
+
+                    return ((left->at(firstColumn)->getDouble() > right->at(firstColumn)->getDouble()) ||
+                            (left->at(firstColumn)->getDouble() == right->at(firstColumn)->getDouble() &&
+                             left->at(secondColumn)->getDouble() > right->at(secondColumn)->getDouble()));
+                case cjson::Types_e::STR:
+                    if (sort == ResultSortOrder_e::Asc)
+                        return ((left->at(firstColumn)->getString() < right->at(firstColumn)->getString()) ||
+                                (left->at(firstColumn)->getString() == right->at(firstColumn)->getString() &&
+                                 left->at(secondColumn)->getString() < right->at(secondColumn)->getString()));
+
+                    return ((left->at(firstColumn)->getString() > right->at(firstColumn)->getString()) ||
+                            (left->at(firstColumn)->getString() == right->at(firstColumn)->getString() &&
+                             left->at(secondColumn)->getString() > right->at(secondColumn)->getString()));
+                default:
+                    return false;
+                }
+            }
+        );
+    }
+}
+
 void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e sort, const int column)
 {
     doc->recurseSort(
         "_",
         [&](const cjson* left, const cjson* right) -> bool
         {
-            auto colLeft  = left->xPath("/c");
-            auto colRight = right->xPath("/c");
+            const auto colLeft  = left->find("c");
+            const auto colRight = right->find("c");
 
             switch (colLeft->at(column)->type())
             {
@@ -965,11 +1180,6 @@ void ResultMuxDemux::jsonResultSortByColumn(cjson* doc, const ResultSortOrder_e 
                 if (sort == ResultSortOrder_e::Asc)
                     return (colLeft->at(column)->getString() < colRight->at(column)->getString());
                 return (colLeft->at(column)->getString() > colRight->at(column)->getString());
-
-            case cjson::Types_e::OBJECT:
-            case cjson::Types_e::ARRAY:
-            case cjson::Types_e::VOIDED:
-            case cjson::Types_e::NUL:
             default:
                 return false;
             }
@@ -982,8 +1192,8 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
         "_",
         [&](const cjson* left, const cjson* right) -> bool
         {
-            auto colLeft  = left->xPath("/g");
-            auto colRight = right->xPath("/g");
+            auto colLeft  = left->find("g");
+            auto colRight = right->find("/g");
 
             cvar leftValue;
             cvar rightValue;
@@ -1030,8 +1240,7 @@ void ResultMuxDemux::jsonResultSortByGroup(cjson* doc, const ResultSortOrder_e s
 
             if (sort == ResultSortOrder_e::Asc)
                 return (leftValue < rightValue);
-            else
-                return (leftValue > rightValue);
+             return (leftValue > rightValue);
         });
 }
 

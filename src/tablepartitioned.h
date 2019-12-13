@@ -45,9 +45,8 @@ namespace openset
             int64_t lastModified {0};
             bool    onInsert {false};
             query::Interpreter* interpreter { nullptr };
-            IndexBits* bits { nullptr };
 
-            int changeCount {0};
+            //Attributes* attributes;
 
             SegmentPartitioned_s(
                     const std::string& segmentName,
@@ -75,12 +74,12 @@ namespace openset
              *
              * setBit - flips a bit to the desired state and returns the state change that took place
              */
-            IndexBits* prepare(Attributes& attributes); // mounts bits, if they are not already
-            void commit(Attributes& attributes); // commits changed bits, if any
-            SegmentChange_e setBit(int64_t linearId, bool state); // flip bits by persion linear id
+            //void prepare(Attributes& attributes); // mounts bits, if they are not already
+            IndexBits* getBits(Attributes& attributes);
+            SegmentChange_e setBit(IndexBits* bits, int64_t linearId, bool state); // flip bits by persion linear id
 
             // returns a new or cached interpreter. Call prepare before calling get Interpreter
-            query::Interpreter* getInterpreter(int64_t maxLinearId);
+            query::Interpreter* getInterpreter(Attributes& attributes, int64_t maxId);
 
         };
 
@@ -94,7 +93,6 @@ namespace openset
             AttributeBlob* attributeBlob;
             Customers people;
             openset::async::AsyncLoop* asyncLoop;
-            //openset::revent::ReventManager* triggers;
 
             // map of segment names to expire times
             std::unordered_map<std::string, int64_t> segmentRefresh;
@@ -117,7 +115,7 @@ namespace openset
             // when an open-loop is using segments it will increment this value
             // when it is done it will decrement this value.
             //
-            // checkForSegmentChanges will not invalidate segments that have changed
+            // syncPartitionSegmentsWithTableSegments will not invalidate segments that have changed
             // if this is a non-zero value... instead they will be invalidated at the
             // next opportunity
             int segmentUsageCount {0};
@@ -176,7 +174,7 @@ namespace openset
 
             openset::query::Interpreter* getInterpreter(const std::string& segmentName, int64_t maxLinearId);
 
-            void checkForSegmentChanges();
+            void syncPartitionSegmentsWithTableSegments();
 
             InterpreterList& getOnInsertSegments()
             {
@@ -192,9 +190,7 @@ namespace openset
             // The Interpreter needs this callback to operate when performing segment math
             std::function<openset::db::IndexBits*(const string&, bool&)> getSegmentCallback();
 
-            void storeAllChangedSegments();
-
-            openset::db::IndexBits* getBits(std::string& segmentName);
+            openset::db::IndexBits* getSegmentBits(const std::string& segmentName);
 
             void pushMessage(const int64_t segmentHash, const SegmentPartitioned_s::SegmentChange_e state, std::string uuid);
 

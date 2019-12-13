@@ -2,6 +2,8 @@
 #include "cjson/cjson.h"
 #include "str/strtools.h"
 
+#include "robin_hood.h"
+
 #include "customers.h"
 #include "customer.h"
 #include "database.h"
@@ -39,7 +41,7 @@ void OpenLoopInsert::prepare()
         return;
     }
 
-    tablePartitioned->checkForSegmentChanges();
+    tablePartitioned->syncPartitionSegmentsWithTableSegments();
 }
 
 void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* segment)
@@ -52,7 +54,10 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
         return;
 
     // mount the customer
-    const auto personData = tablePartitioned->people.createCustomer(uuid);
+    const auto personData = tablePartitioned->table->numericCustomerIds ?
+        tablePartitioned->people.createCustomer(stoll(uuid)) :
+        tablePartitioned->people.createCustomer(uuid);
+
     person.mount(personData);
     person.prepare();
 
@@ -63,7 +68,8 @@ void OpenLoopInsert::OnInsert(const std::string& uuid, SegmentPartitioned_s* seg
     auto returns = segment->interpreter->getLastReturn();
 
     // set bit according to interpreter results
-    const auto stateChange = segment->setBit(personData->linId, returns.size() && returns[0].getBool() == true);
+    const auto bits = segment->getBits(tablePartitioned->attributes);
+    const auto stateChange = segment->setBit(bits, personData->linId, returns.size() && returns[0].getBool() == true);
     if (stateChange != SegmentPartitioned_s::SegmentChange_e::noChange)
     {
         tablePartitioned->pushMessage(segment->segmentHash, stateChange, personData->getIdStr());
@@ -75,7 +81,7 @@ bool OpenLoopInsert::run()
     const auto mapInfo = globals::mapper->partitionMap.getState(tablePartitioned->partition, globals::running->nodeId);
 
     // check partition segment data against master and update if necessary
-    tablePartitioned->checkForSegmentChanges();
+    tablePartitioned->syncPartitionSegmentsWithTableSegments();
 
     if (mapInfo != openset::mapping::NodeState_e::active_owner &&
         mapInfo != openset::mapping::NodeState_e::active_clone)
@@ -83,8 +89,7 @@ bool OpenLoopInsert::run()
         // if we are not in owner or clone state we are just going to backlog
         // the inserts until our state changes, then we will perform inserts
         Logger::get().info("skipping partition " + to_string(tablePartitioned->partition) + " not active or clone.");
-        this->scheduleFuture(1000);
-        sleepCounter = 0;
+        this->scheduleFuture(250);
 
         tablePartitioned->attributes.clearDirty();
 
@@ -92,20 +97,16 @@ bool OpenLoopInsert::run()
     }
 
     int64_t readHandle = 0;
-    auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 25 : 250, readHandle);
+    auto inserts = SideLog::getSideLog().read(table.get(), loop->partition, inBypass() ? 25 : 50, readHandle);
 
     if (inserts.empty())
     {
         SideLog::getSideLog().updateReadHead(table.get(), loop->partition, readHandle);
-        scheduleFuture((sleepCounter > 10 ? 10 : sleepCounter) * 100); // lazy back-off function
-        ++sleepCounter; // inc after, this will make it run one more time before sleeping
-
+        scheduleFuture(250); // lazy back-off function
         tablePartitioned->attributes.clearDirty();
 
         return false;
     }
-
-    sleepCounter = 0;
 
     // reusable object representing a customer
     Customer person;
@@ -126,7 +127,7 @@ bool OpenLoopInsert::run()
     // pass. This can greatly reduce redundant calls to Mount and Commit
     // which can be expensive as they both call LZ4 (which is fast, but still
     // has it's overhead)
-    std::unordered_map < std::string, std::vector<cjson>> evtByPerson;
+    robin_hood::unordered_map < std::string, std::vector<cjson>, robin_hood::hash<std::string>> evtByPerson;
     auto insertIter = inserts.begin();
 
     for (; insertIter != inserts.end(); ++insertIter)
@@ -167,10 +168,8 @@ bool OpenLoopInsert::run()
         const auto insertSegments = tablePartitioned->getOnInsertSegments();
         for (auto segment : insertSegments)
         {
-            // ensure we have bits mounted for this segment
-            segment->prepare(tablePartitioned->attributes);
             // get a cached interpreter (or make one) and set the bits
-            const auto interpreter = segment->getInterpreter(tablePartitioned->people.customerCount());
+            const auto interpreter = segment->getInterpreter(tablePartitioned->attributes, tablePartitioned->people.customerCount());
 
             // we can't crunch segment math on refresh, but we can expire it, so it crunches the next time it's used
             if (interpreter->macros.isSegmentMath)

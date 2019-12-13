@@ -83,10 +83,9 @@ set(SOURCE_FILES
         lib/include/libcommon.h
         lib/mem/bloom.cpp
         lib/mem/bloom.h
-        lib/mem/prequeues.cpp
-        lib/mem/prequeues.h
         lib/mem/ssdict.h
         lib/mem/blhash.h
+        lib/mem/segmented_list.h
         lib/str/strtools.cpp
         lib/str/strtools.h
         lib/threads/spinlock.h
@@ -108,6 +107,10 @@ set(SOURCE_FILES
         src/attributes.h
         src/config.cpp
         src/config.h
+        src/customer_index.cpp
+        src/customer_index.h
+        src/customer_props.cpp
+        src/customer_props.h
         src/database.cpp
         src/database.h
         src/dbtypes.h
@@ -136,6 +139,10 @@ set(SOURCE_FILES
         src/oloop_cleaner.h
         src/oloop_customer.cpp
         src/oloop_customer.h
+        src/oloop_customer_basic.cpp
+        src/oloop_customer_basic.h
+        src/oloop_customer_list.cpp
+        src/oloop_customer_list.h
         src/oloop_histogram.cpp
         src/oloop_histogram.h
         src/oloop_insert.cpp
