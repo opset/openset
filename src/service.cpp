@@ -29,7 +29,7 @@ namespace openset
 #endif
 
 		// generate our async workers, we are going to use one worker per core
-		openset::async::AsyncPool async(partitionTotal, 16 ); // TODO make this a switch std::thread::hardware_concurrency());
+		openset::async::AsyncPool async(partitionTotal, 32 ); // TODO make this a switch std::thread::hardware_concurrency());
 		// DEBUG OpenSet::async::AsyncPool async(partitionTotal, 1);
 
 		openset::mapping::Mapper mapper;

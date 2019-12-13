@@ -39,8 +39,8 @@ void StartOpenSet(openset::config::CommandlineArgs args)
     Logger::get().info("OpenSet v" + __version__);
     Logger::get().info("OpenSet, Copyright(c) 2015 - 2019, Seth Hamilton.");
 
-    const auto workerCount = 16;// TODO make this a switch std::thread::hardware_concurrency();
-    Logger::get().info(to_string(workerCount) + " processor cores available.");
+    //const auto workerCount = 16;// TODO make this a switch std::thread::hardware_concurrency();
+    //Logger::get().info(to_string(workerCount) + " processor cores available.");
 
     args.fix(); // fix the default startup arguments after WSAStartup (on windows)
 
